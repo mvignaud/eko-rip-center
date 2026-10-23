@@ -239,6 +239,18 @@ pub struct Decoupe {
     pub hauteur: f64,
 }
 
+impl Decoupe {
+    /// Déplace les tracés comme le contenu de la page (repérage) et prend la nouvelle page.
+    pub fn decaler(&mut self, (dx, dy): (f64, f64), (largeur, hauteur): (f64, f64)) {
+        for t in &mut self.traces {
+            for p in &mut t.points {
+                *p = (p.0 + dx, p.1 + dy);
+            }
+        }
+        (self.largeur, self.hauteur) = (largeur, hauteur);
+    }
+}
+
 /// Tracés de découpe de la première page d'un PDF (ou d'un fichier Illustrator
 /// enregistré avec « Créer un fichier compatible PDF »).
 // ponytail: première page seulement, comme le rendu ; le multipage viendra avec la file.

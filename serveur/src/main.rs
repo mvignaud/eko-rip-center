@@ -4,6 +4,7 @@
 mod decoupe;
 mod plotter;
 mod render;
+mod reperage;
 
 use axum::{
     Json, Router,
@@ -66,6 +67,9 @@ struct Travail {
     /// Découper tous les tracés, pas seulement ceux des tons de découpe.
     #[serde(default)]
     tous_les_traces: bool,
+    /// Repères imprimés pour la découpe sur le Kona (mode Imprimer).
+    #[serde(default)]
+    reperage: reperage::Reperage,
     statut: Statut,
     /// Code stable traduit par l'écran (`rendu_echoue`, `interrompu`).
     #[serde(default)]
@@ -207,7 +211,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     }
     let provisoire = rep.join("source.tmp");
     let (mut nom, mut dpi, mut format) = (String::new(), 720u32, None);
-    let (mut mode, mut tous_les_traces) = (Mode::Imprimer, false);
+    let (mut mode, mut tous_les_traces, mut reperage) = (Mode::Imprimer, false, reperage::Reperage::Aucun);
 
     loop {
         let champ = match form.next_field().await {
@@ -236,6 +240,14 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                     _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
                 };
             }
+            Some("reperage") => {
+                reperage = match champ.text().await.ok().as_deref().map(str::trim) {
+                    Some("aucun") => reperage::Reperage::Aucun,
+                    Some("manuel") => reperage::Reperage::Manuel,
+                    Some("cadre") => reperage::Reperage::Cadre,
+                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
+                };
+            }
             Some("fichier") => {
                 nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
                 match enregistrer(champ, &provisoire).await {
@@ -253,12 +265,16 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     if format == Format::Svg && mode == Mode::Imprimer {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("svg_decoupe_seulement", None)).await;
     }
+    // Rien n'est imprimé en découpe seule : pas de repères à poser.
+    if mode == Mode::Decouper {
+        reperage = reperage::Reperage::Aucun;
+    }
     if let Err(e) = tokio::fs::rename(&provisoire, rep.join(format.fichier())).await {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], traces_decoupe: 0, envoi_decoupe: None, cree_le };
+    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], traces_decoupe: 0, envoi_decoupe: None, cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
@@ -327,13 +343,16 @@ async fn traiter(etat: Partage, mut t: Travail) {
 
     let rep = dossier(donnees, t.id);
     let rendu = match t.mode {
-        Mode::Imprimer => render::rendre(&etat.config.gs, &rep.join(t.format.fichier()), &rep, t.dpi, etat.config.delai).await.map(|r| r.plaques),
-        Mode::Decouper => Ok(vec![]),
+        Mode::Imprimer => match preparer_impression(&rep, t.reperage).await {
+            Ok((pdf, mise)) => render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, etat.config.delai).await.map(|r| (r.plaques, mise)),
+            Err(e) => Err(e),
+        },
+        Mode::Decouper => Ok((vec![], None)),
     };
     match rendu {
-        Ok(plaques) => {
+        Ok((plaques, mise)) => {
             t.plaques = plaques;
-            match preparer_decoupe(&rep, t.format, t.tous_les_traces).await {
+            match preparer_decoupe(&rep, t.format, t.tous_les_traces, mise.as_ref()).await {
                 Ok(n) => {
                     t.statut = Statut::Termine;
                     t.traces_decoupe = n;
@@ -362,9 +381,22 @@ fn png(octets: Vec<u8>) -> Response {
     ([(header::CONTENT_TYPE, "image/png")], octets).into_response()
 }
 
+/// PDF à rendre : la source telle quelle, ou `imprime.pdf` agrandi avec ses repères.
+async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Option<reperage::Mise>), String> {
+    let source = rep.join(Format::Pdf.fichier());
+    if choix == reperage::Reperage::Aucun {
+        return Ok((source, None));
+    }
+    let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
+    let (imprime, mise) = tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??;
+    let chemin = rep.join("imprime.pdf");
+    tokio::fs::write(&chemin, imprime).await.map_err(|e| e.to_string())?;
+    Ok((chemin, Some(mise)))
+}
+
 /// Extrait les tracés à découper ; quand il y en a, écrit `prod/decoupe.plt` (HP-GL)
-/// et `apercu/decoupe.svg`.
-async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool) -> Result<usize, String> {
+/// et `apercu/decoupe.svg`. Avec un repérage, les tracés suivent le décalage de l'image.
+async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mise: Option<&reperage::Mise>) -> Result<usize, String> {
     let source = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| e.to_string())?;
     let d = tokio::task::spawn_blocking(move || match format {
         Format::Pdf => decoupe::extraire(&source, tous),
@@ -372,6 +404,10 @@ async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool) -> 
     })
     .await
     .map_err(|e| e.to_string())??;
+    let mut d = d;
+    if let Some(m) = mise {
+        d.decaler(m.decalage, m.page);
+    }
     if !d.traces.is_empty() {
         for sous in ["prod", "apercu"] {
             tokio::fs::create_dir_all(rep.join(sous)).await.map_err(|e| e.to_string())?;

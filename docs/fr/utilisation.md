@@ -23,6 +23,18 @@ espaces et tirets indifférents). La fiche du travail indique leur nombre et pro
 **Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
 page). Un ton de découpe à 0 % n'est pas découpé.
 
+## Repérage pour le Kona
+
+En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
+- **Croix P1–P4** : quatre croix aux coins, à 10 mm de l'image ; sur le Kona,
+  Actions > Contour Cut > Manual, pointer P1, P2, P3, P4.
+- **Cadre Mutoh (type 1)** : cadre noir de 5 mm, à 10 mm de l'image, intérieur d'au
+  moins 250 × 250 mm, blancs de 25 mm sur les côtés, 30 mm à l'avant, 80 mm à
+  l'arrière (cotes minimales du manuel Kona respectées). Le Kona le mesure seul.
+
+La page imprimée est agrandie d'autant, et le fichier de découpe suit le même décalage.
+Le Kona doit être réglé sur une résolution de **0,010 mm**.
+
 ## Ce qui n'existe pas encore
 
 Les plaques ne partent pas encore vers l'imprimante. Le fichier de découpe ne part pas

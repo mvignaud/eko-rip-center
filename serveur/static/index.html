@@ -41,6 +41,9 @@
     <label><span data-t="traces"></span>
       <select name="traces"><option value="tons" data-t="tons"></option><option value="tous" data-t="tous"></option></select>
     </label>
+    <label><span data-t="reperage"></span>
+      <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option></select>
+    </label>
     <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" required></label>
     <label><span data-t="resolution"></span>
       <select name="dpi"><option>360</option><option selected>720</option><option>1440</option></select>
@@ -54,7 +57,8 @@
 const textes = {
   fr: {
     fichier: "Fichier PDF, AI ou SVG", resolution: "Résolution", mode: "Mode", imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
-    traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe", envoyer: "Envoyer au RIP", autre: "English",
+    traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
+    reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
     en_attente: "En attente", en_cours: "Rendu en cours", termine: "Terminé", echec: "Échec",
     decoupe: (n) => n ? `Découpe : ${n} tracé${n > 1 ? "s" : ""}` : "Aucun tracé de découpe", telecharger: "Télécharger le fichier .plt", plotter: "Envoyer au plotter",
@@ -74,7 +78,8 @@ const textes = {
   },
   en: {
     fichier: "PDF, AI or SVG file", resolution: "Resolution", mode: "Mode", imprimer: "Print (and cut)", decouper: "Cut only",
-    traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut", envoyer: "Send to RIP", autre: "Français",
+    traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
+    reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
     en_attente: "Queued", en_cours: "Rendering", termine: "Done", echec: "Failed",
     decoupe: (n) => n ? `Cutting: ${n} path${n > 1 ? "s" : ""}` : "No cut path", telecharger: "Download the .plt file", plotter: "Send to cutter",

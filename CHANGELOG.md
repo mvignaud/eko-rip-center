@@ -16,6 +16,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   paquet installe une règle udev qui le présente en `/dev/kona` ; réglages du port
   dans `/etc/default/eko-rip-serveur`.
 - Aperçu des tracés à découper dans la fiche du travail.
+- **Repérage Kona à l'impression** : croix P1–P4 (repérage manuel) ou cadre Mutoh de
+  type 1 (lecture automatique, sans code-barres ni CutServer), aux cotes du manuel
+  Kona ; la page est agrandie, l'image décalée, les repères en noir pur, et les tracés
+  de découpe suivent le même décalage.
 
 ### Modifié
 - **HP-GL au pas de 0,010 mm** (100 unités par mm) au lieu de 0,025 mm : c'est le seul
