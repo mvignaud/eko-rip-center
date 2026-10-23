@@ -2,6 +2,7 @@
 name = "eko-rip-serveur"
 version.workspace = true
 edition = "2024"
+description = "Serveur du RIP E-KO RIP Center"
 
 [dependencies]
 axum = { version = "0.8.9", features = ["multipart"] }
