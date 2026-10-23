@@ -35,7 +35,13 @@
 <header class="entete"><h1>E-KO RIP Center</h1><button type="button" id="langue" class="discret"></button></header>
 <main>
   <form id="envoi">
-    <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf" required></label>
+    <label><span data-t="mode"></span>
+      <select name="mode"><option value="imprimer" data-t="imprimer"></option><option value="decouper" data-t="decouper"></option></select>
+    </label>
+    <label><span data-t="traces"></span>
+      <select name="traces"><option value="tons" data-t="tons"></option><option value="tous" data-t="tous"></option></select>
+    </label>
+    <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" required></label>
     <label><span data-t="resolution"></span>
       <select name="dpi"><option>360</option><option selected>720</option><option>1440</option></select>
     </label>
@@ -47,30 +53,42 @@
 <script>
 const textes = {
   fr: {
-    fichier: "Fichier PDF", resolution: "Résolution", envoyer: "Envoyer au RIP", autre: "English",
+    fichier: "Fichier PDF, AI ou SVG", resolution: "Résolution", mode: "Mode", imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
+    traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
     en_attente: "En attente", en_cours: "Rendu en cours", termine: "Terminé", echec: "Échec",
-    decoupe: (n) => n ? `Découpe : ${n} tracé${n > 1 ? "s" : ""}` : "Aucun tracé de découpe", telecharger: "Télécharger le fichier .plt",
+    decoupe: (n) => n ? `Découpe : ${n} tracé${n > 1 ? "s" : ""}` : "Aucun tracé de découpe", telecharger: "Télécharger le fichier .plt", plotter: "Envoyer au plotter",
+    etat_plotter: { en_attente: "Plotter : en attente", en_cours: "Plotter : envoi en cours", termine: "Plotter : envoyé", echec: "Plotter : échec" },
     erreurs: {
-      pas_un_pdf: "Ce fichier n'est pas un PDF.", fichier_vide: "Le fichier est vide.",
+      format_inconnu: "Format non reconnu : envoyer un PDF, un AI ou un SVG.",
+      ai_sans_pdf: "Fichier Illustrator sans compatibilité PDF : l'enregistrer avec « Créer un fichier compatible PDF ».",
+      svg_decoupe_seulement: "Un SVG ne peut qu'être découpé : choisir « Découper seulement ».", mode_invalide: "Mode inconnu.", fichier_vide: "Le fichier est vide.",
       aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
       envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
-      rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
+      rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
+      rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", envoi_en_cours: "Un envoi au plotter est déjà en cours.",
+      envoi_decoupe_echoue: "L'envoi au plotter a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
     },
   },
   en: {
-    fichier: "PDF file", resolution: "Resolution", envoyer: "Send to RIP", autre: "Français",
+    fichier: "PDF, AI or SVG file", resolution: "Resolution", mode: "Mode", imprimer: "Print (and cut)", decouper: "Cut only",
+    traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
     en_attente: "Queued", en_cours: "Rendering", termine: "Done", echec: "Failed",
-    decoupe: (n) => n ? `Cutting: ${n} path${n > 1 ? "s" : ""}` : "No cut path", telecharger: "Download the .plt file",
+    decoupe: (n) => n ? `Cutting: ${n} path${n > 1 ? "s" : ""}` : "No cut path", telecharger: "Download the .plt file", plotter: "Send to cutter",
+    etat_plotter: { en_attente: "Cutter: queued", en_cours: "Cutter: sending", termine: "Cutter: sent", echec: "Cutter: failed" },
     erreurs: {
-      pas_un_pdf: "This file is not a PDF.", fichier_vide: "The file is empty.",
+      format_inconnu: "Unknown format: send a PDF, AI or SVG file.",
+      ai_sans_pdf: "Illustrator file without PDF compatibility: save it with “Create PDF Compatible File”.",
+      svg_decoupe_seulement: "An SVG can only be cut: choose “Cut only”.", mode_invalide: "Unknown mode.", fichier_vide: "The file is empty.",
       aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
       envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
       erreur_interne: "Server error.", introuvable: "Not found.",
-      rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
+      rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
+      rien_a_decouper: "This job has no cut path.", envoi_en_cours: "A cutter job is already being sent.",
+      envoi_decoupe_echoue: "Sending to the cutter failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
     },
   },
@@ -132,21 +150,40 @@ async function rafraichir() {
     const carte = el("article", { className: "travail" },
       el("div", { className: "entete" },
         el("span", { className: "nom" }, t.nom),
-        el("span", { className: "meta" }, `${T()[t.statut]} · ${t.dpi} dpi · ${date}`)));
+        el("span", { className: "meta" }, [T()[t.statut], t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`, date].join(" · "))));
     if (t.statut === "echec") carte.append(el("p", { className: "erreur" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
     if (t.statut === "termine") {
-      const grille = el("div", { className: "plaques" },
-        el("figure", {}, el("img", { src: `/api/travaux/${t.id}/apercu.png`, alt: T().composite }), el("figcaption", {}, T().composite)),
+      const vignettes = t.mode === "decouper" ? [] : [
+        el("figure", {}, el("img", { src: `/api/travaux/${t.id}/apercu.png`, alt: T().composite }), el("figcaption", {}, T().composite))];
+      if (t.traces_decoupe) vignettes.push(el("figure", {}, el("img", { src: `/api/travaux/${t.id}/decoupe.svg`, alt: T().apercu_decoupe }), el("figcaption", {}, T().apercu_decoupe)));
+      const grille = el("div", { className: "plaques" }, ...vignettes,
         ...t.plaques.map((p) => el("figure", {},
           el("img", { src: `/api/travaux/${t.id}/plaques/${encodeURIComponent(p)}`, alt: T().plaque(p) }),
           el("figcaption", {}, p))));
       const ligne = el("p", { className: "meta" }, T().decoupe(t.traces_decoupe));
-      if (t.traces_decoupe) ligne.append(" · ", el("a", { href: `/api/travaux/${t.id}/decoupe.plt`, download: "decoupe.plt" }, T().telecharger));
+      if (t.traces_decoupe) {
+        const envoi = t.envoi_decoupe;
+        const occupe = envoi && (envoi.statut === "en_attente" || envoi.statut === "en_cours");
+        const bouton = el("button", { type: "button", className: "discret", disabled: occupe }, T().plotter);
+        bouton.addEventListener("click", () => decouper(t.id, bouton));
+        ligne.append(" · ", el("a", { href: `/api/travaux/${t.id}/decoupe.plt`, download: "decoupe.plt" }, T().telecharger), " · ", bouton);
+        if (envoi) ligne.append(" · ", el("span", { className: envoi.statut === "echec" ? "erreur" : "" },
+          envoi.statut === "echec" ? `${T().etat_plotter.echec} — ${texteErreur(envoi.code_erreur, envoi.erreur)}` : T().etat_plotter[envoi.statut]));
+      }
       carte.append(ligne, grille);
     }
     return carte;
   }));
 }
+async function decouper(id, bouton) {
+  bouton.disabled = true;
+  try {
+    const r = await fetch(`/api/travaux/${id}/decouper`, { method: "POST" });
+    if (!r.ok) { const c = await r.json().catch(() => ({})); msg.className = "erreur"; msg.textContent = texteErreur(c.code, c.detail); }
+  } catch { msg.className = "erreur"; msg.textContent = texteErreur("reseau"); }
+  rafraichir();
+}
+
 appliquerLangue();
 setInterval(rafraichir, 3000);
 </script>

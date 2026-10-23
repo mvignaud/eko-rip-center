@@ -1,0 +1,7 @@
+# Mutoh Kona : branché en USB, sa puce FTDI FT2232 porte l'identifiant Mutoh 0c30:6010,
+# que le module ftdi_sio ne connaît pas. On le lui déclare, puis l'interface 0 devient
+# /dev/kona, accessible au groupe dialout (celui du service eko-rip-serveur).
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0c30", ATTR{idProduct}=="6010", \
+    RUN+="/bin/sh -c 'modprobe ftdi_sio; echo 0c30 6010 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id || true'"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0c30", ATTRS{idProduct}=="6010", ATTRS{bInterfaceNumber}=="00", \
+    SYMLINK+="kona", GROUP="dialout", MODE="0660"

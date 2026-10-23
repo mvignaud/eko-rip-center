@@ -13,8 +13,10 @@ const TONS_DECOUPE: &[&str] = &["cutcontour", "thrucut", "kisscut", "insidecut",
 /// Écart maximal entre une courbe et ses segments : 0,025 mm, en points PDF.
 const TOLERANCE_PT: f64 = 0.025 * 72.0 / 25.4;
 
-/// Unités HP-GL par point PDF (40 unités par mm).
-const UNITES_PAR_PT: f64 = 40.0 * 25.4 / 72.0;
+/// Unités HP-GL par point PDF : 100 par mm (pas de 0,010 mm). La découpe de contour du
+/// Kona n'accepte que ce pas ; le menu « Resolution » du plotter doit être à 0,010 mm,
+/// sinon tout sort 2,5 fois trop grand ou trop petit (manuel Kona, chap. 4).
+const UNITES_PAR_PT: f64 = 100.0 * 25.4 / 72.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trace {
@@ -71,6 +73,8 @@ struct SousChemin {
 
 struct Lecteur<'a> {
     doc: &'a Document,
+    /// Mode « tous les tracés » : tout chemin peint est découpé, quelle que soit sa couleur.
+    tous: bool,
     traces: Vec<Trace>,
 }
 
@@ -181,8 +185,9 @@ impl<'a> Lecteur<'a> {
                 "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => {
                     let remplissage = matches!(op.operator.as_str(), "f" | "F" | "f*");
                     let ton = match op.operator.as_str() {
-                        "S" | "s" => etat.trait_.clone(),
                         "n" => None,
+                        _ if self.tous => Some(TOUS.to_string()),
+                        "S" | "s" => etat.trait_.clone(),
                         _ if remplissage => etat.fond.clone(),
                         _ => etat.trait_.clone().or_else(|| etat.fond.clone()),
                     };
@@ -224,9 +229,20 @@ impl<'a> Lecteur<'a> {
     }
 }
 
-/// Tracés de découpe de la première page.
+/// Ton attribué aux tracés en mode « tous les tracés » (lame).
+pub const TOUS: &str = "Tous";
+
+/// Tracés à découper et format de la page, en points PDF.
+pub struct Decoupe {
+    pub traces: Vec<Trace>,
+    pub largeur: f64,
+    pub hauteur: f64,
+}
+
+/// Tracés de découpe de la première page d'un PDF (ou d'un fichier Illustrator
+/// enregistré avec « Créer un fichier compatible PDF »).
 // ponytail: première page seulement, comme le rendu ; le multipage viendra avec la file.
-pub fn extraire(pdf: &[u8]) -> Result<Vec<Trace>, String> {
+pub fn extraire(pdf: &[u8], tous: bool) -> Result<Decoupe, String> {
     let doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
     let page = *doc.get_pages().values().next().ok_or("PDF sans page")?;
     let dict_page = doc.get_dictionary(page).map_err(|e| e.to_string())?;
@@ -235,20 +251,106 @@ pub fn extraire(pdf: &[u8]) -> Result<Vec<Trace>, String> {
         (None, ids) => ids.first().and_then(|id| doc.get_dictionary(*id).ok()),
     };
     // Origine au coin bas gauche de la MediaBox.
-    let origine = dict_page
+    let boite = dict_page
         .get(b"MediaBox")
         .and_then(Object::as_array)
         .map(|a| nombres(a))
         .ok()
         .filter(|m| m.len() == 4)
-        .map(|m| (m[0], m[1]))
-        .unwrap_or((0.0, 0.0));
-    let ctm = [1.0, 0.0, 0.0, 1.0, -origine.0, -origine.1];
+        .ok_or("page sans MediaBox")?;
+    let ctm = [1.0, 0.0, 0.0, 1.0, -boite[0], -boite[1]];
     let etat = Etat { ctm, espace_trait: None, espace_fond: None, trait_: None, fond: None };
 
-    let mut lecteur = Lecteur { doc: &doc, traces: vec![] };
+    let mut lecteur = Lecteur { doc: &doc, tous, traces: vec![] };
     lecteur.lire(&doc.get_page_content(page), ressources, etat, 0)?;
-    Ok(lecteur.traces)
+    Ok(Decoupe { traces: lecteur.traces, largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] })
+}
+
+/// Tracés d'un SVG. Sans couleur en Séparation dans ce format, un tracé est « de
+/// découpe » quand son `id` ou celui d'un groupe parent porte un nom de ton : c'est le
+/// nom du calque ou du tracé qu'Illustrator écrit à l'export.
+pub fn extraire_svg(svg: &[u8], tous: bool) -> Result<Decoupe, String> {
+    let arbre = usvg::Tree::from_data(svg, &usvg::Options::default()).map_err(|e| format!("SVG illisible : {e}"))?;
+    // Unités SVG (1/96 pouce, axe y vers le bas) → points PDF (axe y vers le haut).
+    let k = 72.0 / 96.0;
+    let hauteur = arbre.size().height() as f64 * k;
+    let vers_pt = |p: usvg::tiny_skia_path::Point| (p.x as f64 * k, hauteur - p.y as f64 * k);
+    let mut traces = vec![];
+    parcourir_svg(arbre.root(), None, tous, &vers_pt, &mut traces);
+    Ok(Decoupe { traces, largeur: arbre.size().width() as f64 * k, hauteur })
+}
+
+fn parcourir_svg(groupe: &usvg::Group, ton_parent: Option<&str>, tous: bool, vers_pt: &dyn Fn(usvg::tiny_skia_path::Point) -> (f64, f64), traces: &mut Vec<Trace>) {
+    let ton_groupe = Some(groupe.id()).filter(|id| est_ton_de_decoupe(id)).or(ton_parent);
+    for noeud in groupe.children() {
+        match noeud {
+            usvg::Node::Group(g) => parcourir_svg(g, ton_groupe, tous, vers_pt, traces),
+            usvg::Node::Path(chemin) if chemin.is_visible() => {
+                let ton = Some(chemin.id()).filter(|id| est_ton_de_decoupe(id)).or(ton_groupe);
+                let ton = if tous { TOUS } else if let Some(ton) = ton { ton } else { continue };
+                let Some(donnees) = chemin.data().clone().transform(chemin.abs_transform()) else { continue };
+                let mut courant = vec![];
+                let mut depart = (0.0, 0.0);
+                let mut position = (0.0, 0.0);
+                let mut fermer = |points: &mut Vec<(f64, f64)>, ferme: bool| {
+                    if points.len() >= 2 {
+                        traces.push(Trace { ton: ton.to_string(), points: std::mem::take(points), ferme });
+                    }
+                    points.clear();
+                };
+                use usvg::tiny_skia_path::PathSegment as S;
+                for segment in donnees.segments() {
+                    match segment {
+                        S::MoveTo(p) => {
+                            fermer(&mut courant, false);
+                            position = vers_pt(p);
+                            depart = position;
+                            courant.push(position);
+                        }
+                        S::LineTo(p) => {
+                            position = vers_pt(p);
+                            courant.push(position);
+                        }
+                        S::QuadTo(c, p) => {
+                            // Quadratique en cubique : points de contrôle aux deux tiers.
+                            let (c, p) = (vers_pt(c), vers_pt(p));
+                            let c1 = (position.0 + 2.0 / 3.0 * (c.0 - position.0), position.1 + 2.0 / 3.0 * (c.1 - position.1));
+                            let c2 = (p.0 + 2.0 / 3.0 * (c.0 - p.0), p.1 + 2.0 / 3.0 * (c.1 - p.1));
+                            bezier(&mut courant, position, c1, c2, p);
+                            position = p;
+                        }
+                        S::CubicTo(c1, c2, p) => {
+                            let p = vers_pt(p);
+                            bezier(&mut courant, position, vers_pt(c1), vers_pt(c2), p);
+                            position = p;
+                        }
+                        S::Close => {
+                            fermer(&mut courant, true);
+                            position = depart;
+                        }
+                    }
+                }
+                fermer(&mut courant, false);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Aperçu des tracés à découper, à la taille de la page (1 unité = 1 point).
+pub fn apercu_svg(d: &Decoupe) -> String {
+    let mut svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {l:.1} {h:.1}"><rect width="100%" height="100%" fill="#fff"/><g fill="none" stroke="#d62020" stroke-width="{e:.2}" stroke-linejoin="round">"##,
+        l = d.largeur,
+        h = d.hauteur,
+        e = (d.largeur.max(d.hauteur) / 400.0).max(0.5)
+    );
+    for t in &d.traces {
+        let points: Vec<String> = t.points.iter().map(|(x, y)| format!("{x:.1},{:.1}", d.hauteur - y)).collect();
+        let balise = if t.ferme { "polygon" } else { "polyline" };
+        svg += &format!(r#"<{balise} points="{}"/>"#, points.join(" "));
+    }
+    svg + "</g></svg>"
 }
 
 /// Outil du plotter selon le ton : 1 lame, 2 rainage, 3 perforation, 4 coupe en V.
@@ -261,7 +363,7 @@ fn outil(ton: &str) -> u8 {
     }
 }
 
-/// Fichier HP-GL : un `SP` par outil, chaque tracé en `PU` puis `PD`, unités 1/40 mm.
+/// Fichier HP-GL : un `SP` par outil, chaque tracé en `PU` puis `PD`, unités 1/100 mm.
 pub fn hpgl(traces: &[Trace]) -> String {
     let u = |(x, y): (f64, f64)| ((x * UNITES_PAR_PT).round() as i64, (y * UNITES_PAR_PT).round() as i64);
     let mut sortie = String::from("IN;");
@@ -344,7 +446,7 @@ mod tests {
 
     #[test]
     fn seuls_les_tons_de_decoupe_encres_sont_extraits() {
-        let traces = extraire(&pdf_de_test()).unwrap();
+        let traces = extraire(&pdf_de_test(), false).unwrap().traces;
         let tons: Vec<&str> = traces.iter().map(|t| t.ton.as_str()).collect();
         assert_eq!(tons, ["CutContour", "Thrucut", "cut contour"], "Silver, trait noir et Thrucut à 0 % ignorés");
 
@@ -367,12 +469,57 @@ mod tests {
     }
 
     #[test]
-    fn hpgl_en_quarantiemes_de_millimetre() {
+    fn mode_tous_les_traces() {
+        let d = extraire(&pdf_de_test(), true).unwrap();
+        // Carré, fond Silver, deux traits Thrucut (même à 0 %), trait noir, cercle.
+        assert_eq!(d.traces.len(), 6);
+        assert!(d.traces.iter().all(|t| t.ton == TOUS));
+        assert_eq!((d.largeur, d.hauteur), (600.0, 600.0));
+    }
+
+    /// 200 × 100 mm (viewBox en mm), un calque `CutContour` avec un rectangle déplacé et
+    /// un cercle dans un autre calque.
+    const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">
+        <g id="CutContour"><rect x="10" y="10" width="50" height="20" transform="translate(5 0)"/></g>
+        <g id="Visuel"><circle cx="150" cy="50" r="25" fill="red"/></g>
+    </svg>"#;
+
+    #[test]
+    fn svg_calque_de_decoupe() {
+        let d = extraire_svg(SVG.as_bytes(), false).unwrap();
+        let mm = |pt: f64| pt * 25.4 / 72.0;
+        assert!((mm(d.largeur) - 200.0).abs() < 0.01 && (mm(d.hauteur) - 100.0).abs() < 0.01, "format {}×{}", mm(d.largeur), mm(d.hauteur));
+        assert_eq!(d.traces.len(), 1, "seul le calque CutContour");
+        let t = &d.traces[0];
+        assert_eq!(t.ton, "CutContour");
+        assert!(t.ferme);
+        // Rectangle de 15 à 65 mm en x ; en y, 10–30 mm depuis le haut = 70–90 mm depuis le bas.
+        let (xs, ys): (Vec<f64>, Vec<f64>) = t.points.iter().map(|(x, y)| (mm(*x), mm(*y))).unzip();
+        let bornes = |v: &[f64]| (v.iter().cloned().fold(f64::MAX, f64::min), v.iter().cloned().fold(f64::MIN, f64::max));
+        let ((x0, x1), (y0, y1)) = (bornes(&xs), bornes(&ys));
+        for (obtenu, attendu) in [(x0, 15.0), (x1, 65.0), (y0, 70.0), (y1, 90.0)] {
+            assert!((obtenu - attendu).abs() < 0.01, "{obtenu} au lieu de {attendu}");
+        }
+    }
+
+    #[test]
+    fn svg_tous_les_traces() {
+        let d = extraire_svg(SVG.as_bytes(), true).unwrap();
+        assert_eq!(d.traces.len(), 2);
+        let cercle = &d.traces[1];
+        let (cx, cy, r) = (150.0 * 72.0 / 25.4, 50.0 * 72.0 / 25.4, 25.0 * 72.0 / 25.4);
+        for (x, y) in &cercle.points {
+            assert!((((x - cx).powi(2) + (y - cy).powi(2)).sqrt() - r).abs() < 0.1);
+        }
+    }
+
+    #[test]
+    fn hpgl_en_centiemes_de_millimetre() {
         let traces = vec![
             Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (72.0, 0.0), (72.0, 72.0)], ferme: true },
             Trace { ton: "Creasing".into(), points: vec![(0.0, 0.0), (0.0, 72.0)], ferme: false },
         ];
-        // 72 pt = 25,4 mm = 1016 unités.
-        assert_eq!(hpgl(&traces), "IN;SP1;PU0,0;PD1016,0,1016,1016,0,0;SP2;PU0,0;PD0,1016;PU;SP0;");
+        // 72 pt = 25,4 mm = 2540 unités.
+        assert_eq!(hpgl(&traces), "IN;SP1;PU0,0;PD2540,0,2540,2540,0,0;SP2;PU0,0;PD0,2540;PU;SP0;");
     }
 }

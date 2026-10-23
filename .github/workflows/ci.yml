@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  serveur:
+    runs-on: ubuntu-22.04 # même base que les paquets de release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y ghostscript
+      - run: cargo clippy -p eko-rip-serveur --all-targets --locked -- -D warnings
+      - run: cargo test -p eko-rip-serveur --locked
+      - run: cargo install cargo-deb --locked
+      - run: cargo deb -p eko-rip-serveur --locked --output dist/
+      - uses: actions/upload-artifact@v7
+        with: { name: serveur-deb, path: dist/*.deb, retention-days: 14 }

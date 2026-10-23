@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 User=eko-rip
+# Accès au plotter (/dev/kona).
+SupplementaryGroups=dialout
 EnvironmentFile=-/etc/default/eko-rip-serveur
 Environment=EKO_RIP_DATA=/var/lib/eko-rip
 ExecStart=/usr/bin/eko-rip-serveur

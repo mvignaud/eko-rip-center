@@ -5,6 +5,23 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
+## [Non publié]
+
+### Ajouté
+- **Découpe seule** : un fichier AI (enregistré « compatible PDF »), PDF ou SVG est
+  découpé sans être imprimé. Choix des tracés : tons de découpe (`CutContour`…, ou en
+  SVG le nom du calque ou du tracé) ou tous les tracés. Un SVG ne peut être que découpé.
+- **Envoi au plotter** depuis l'écran (« Envoyer au plotter »), avec son état. Le Mutoh
+  Kona, branché en USB, est reconnu par Linux comme un port série (puce FTDI) : le
+  paquet installe une règle udev qui le présente en `/dev/kona` ; réglages du port
+  dans `/etc/default/eko-rip-serveur`.
+- Aperçu des tracés à découper dans la fiche du travail.
+
+### Modifié
+- **HP-GL au pas de 0,010 mm** (100 unités par mm) au lieu de 0,025 mm : c'est le seul
+  pas accepté par la découpe de contour du Kona. Régler le menu « Resolution » du Kona
+  sur 0,010 mm.
+
 ## [0.2.0] — 2026-10-23
 
 ### Ajouté
