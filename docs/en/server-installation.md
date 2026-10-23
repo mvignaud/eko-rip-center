@@ -3,7 +3,27 @@
 The server runs on Linux. Printers and cutters are connected to it; workshop
 computers reach it over the network.
 
-Three ways to install it.
+Four ways to install it.
+
+## 0. Dedicated PC: installation image
+
+> ⚠️ **Installing wipes the PC's whole disk.**
+
+For an x86_64 PC used only for the RIP. Download
+`eko-rip-center-serveur-<version>-amd64.iso` from the releases page and write it to a
+USB stick (balenaEtcher, or `dd` on Linux and macOS).
+
+1. Connect the PC to the workshop network (wired is best: the installer downloads
+   Debian packages).
+2. Boot from the stick and pick **Installer E-KO RIP - EFFACE LE DISQUE**.
+3. Answer the only two questions: the `eko` account password (twice), then **Oui**
+   (yes) to “Faut-il appliquer les changements sur les disques ?” (write the changes
+   to disk?).
+4. Remove the stick when the installer reboots the machine.
+
+The PC boots into Debian 13 (French) with the server running. The console login
+screen shows the address to open from workstations, for example
+`http://192.168.1.20:8640`. Administration goes through SSH: `ssh eko@<address>`.
 
 ## 1. Debian package (recommended)
 

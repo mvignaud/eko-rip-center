@@ -4,9 +4,9 @@ RIP d'impression grand format, usage interne. Un serveur Linux reçoit les PDF d
 postes (Mac, Linux, Windows) par le navigateur et pilote les machines qui lui sont
 branchées.
 
-État : phase P0. Le PDF reçu est rendu en plaques d'encre (CMJN + une plaque par ton
-direct, `White` et `Silver` compris) avec un aperçu dans l'écran. Aucun pilote de
-machine pour l'instant.
+État : le PDF reçu est rendu en plaques d'encre (CMJN + une plaque par ton direct,
+`White` et `Silver` compris) avec un aperçu dans l'écran, et ses tracés de découpe sont
+convertis en HP-GL. Aucun envoi direct aux machines pour l'instant.
 
 Deux paquets : le **serveur** (Linux : `.deb`, Docker, binaire) et le **client** de
 bureau (macOS, Windows, Linux), qui ouvre l'écran du serveur dans sa fenêtre.

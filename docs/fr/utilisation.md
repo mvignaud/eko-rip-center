@@ -15,7 +15,16 @@ du PDF. Pour l'Epson SC-S80600 :
 
 Sur l'aperçu d'une plaque, le noir est l'encre et le blanc l'absence d'encre.
 
+## Découpe
+
+Les tracés peints dans un ton de découpe sont repérés : `CutContour`, `Thrucut`,
+`Kisscut`, `Insidecut`, `Perforation`, `Creasing`, `Score`, `Vcut` (majuscules,
+espaces et tirets indifférents). La fiche du travail indique leur nombre et propose
+**Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
+page). Un ton de découpe à 0 % n'est pas découpé.
+
 ## Ce qui n'existe pas encore
 
-Les plaques ne partent pas encore vers l'imprimante ni vers le plotter. Les
+Les plaques ne partent pas encore vers l'imprimante. Le fichier de découpe ne part pas
+encore tout seul vers le plotter : il faut l'envoyer à la main. Les
 couleurs métallisées `MT-*` du nuancier Epson ne sont pas encore converties.

@@ -45,6 +45,31 @@ jobs:
       - uses: actions/upload-artifact@v7
         with: { name: serveur, path: dist/* }
 
+  iso:
+    needs: serveur
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { name: serveur, path: serveur-dist }
+      - run: sudo apt-get update && sudo apt-get install -y xorriso
+      - name: ISO netinst Debian officielle, empreinte vérifiée
+        run: |
+          BASE=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
+          curl -fsSL "$BASE/SHA256SUMS" | grep -E ' debian-[0-9.]+-amd64-netinst\.iso$' > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" = 1
+          ISO=$(awk '{print $2}' SHA256SUMS)
+          curl -fsSL -o "$ISO" "$BASE/$ISO"
+          sha256sum -c SHA256SUMS
+          echo "NETINST=$ISO" >> "$GITHUB_ENV"
+      - name: Image d'installation du serveur
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir iso-dist
+          image/construire-iso.sh "$NETINST" serveur-dist/eko-rip-serveur_*_amd64.deb "iso-dist/eko-rip-center-serveur-$VERSION-amd64.iso"
+      - uses: actions/upload-artifact@v7
+        with: { name: iso, path: iso-dist/*, compression-level: 0 }
+
   image:
     needs: tests
     runs-on: ubuntu-24.04
@@ -110,18 +135,18 @@ jobs:
         with: { name: "client-${{ matrix.os }}", path: dist/* }
 
   release:
-    needs: [serveur, image, client]
+    needs: [serveur, iso, image, client]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         # Seulement nos paquets : build-push-action dépose aussi un artefact *.dockerbuild.
-        with: { path: dist, merge-multiple: true, pattern: "{serveur,client-*}" }
+        with: { path: dist, merge-multiple: true, pattern: "{serveur,iso,client-*}" }
       - name: Notes tirées du changelog
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
-          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" >> notes.md
+          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- Serveur sur un PC dédié : `eko-rip-center-serveur-%s-amd64.iso` (⚠️ efface le disque)\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" "$VERSION" >> notes.md
           cat notes.md
       - name: Publication
         env: { GH_TOKEN: "${{ github.token }}" }

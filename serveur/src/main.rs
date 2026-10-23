@@ -1,6 +1,7 @@
 //! E-KO RIP Center — serveur local : reçoit les PDF des postes clients, les rend en
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
+mod decoupe;
 mod render;
 
 use axum::{
@@ -37,6 +38,9 @@ struct Travail {
     /// Détail technique, non traduit (message de Ghostscript…).
     erreur: Option<String>,
     plaques: Vec<String>,
+    /// Tracés de découpe trouvés dans le PDF (0 : rien à découper).
+    #[serde(default)]
+    traces_decoupe: usize,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
 }
@@ -87,6 +91,7 @@ fn routes(etat: Partage) -> Router {
         .route("/", get(|| async { Html(include_str!("../static/index.html")) }))
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/travaux/{id}/apercu.png", get(apercu))
+        .route("/api/travaux/{id}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/plaques/{nom}", get(plaque))
         .with_state(etat)
 }
@@ -171,7 +176,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], cree_le };
+    let travail = Travail { id, nom, dpi, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], traces_decoupe: 0, cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
@@ -213,8 +218,19 @@ async fn traiter(etat: Partage, mut t: Travail) {
     let rep = dossier(donnees, t.id);
     match render::rendre(&etat.config.gs, &rep.join("source.pdf"), &rep, t.dpi, etat.config.delai).await {
         Ok(r) => {
-            t.statut = Statut::Termine;
             t.plaques = r.plaques;
+            match preparer_decoupe(&rep).await {
+                Ok(n) => {
+                    t.statut = Statut::Termine;
+                    t.traces_decoupe = n;
+                }
+                Err(e) => {
+                    eprintln!("travail {} : {e}", t.id);
+                    t.statut = Statut::Echec;
+                    t.code_erreur = Some("decoupe_illisible".into());
+                    t.erreur = Some(e);
+                }
+            }
         }
         Err(e) => {
             eprintln!("travail {} : {e}", t.id);
@@ -230,6 +246,28 @@ async fn traiter(etat: Partage, mut t: Travail) {
 
 fn png(octets: Vec<u8>) -> Response {
     ([(header::CONTENT_TYPE, "image/png")], octets).into_response()
+}
+
+/// Extrait les tracés de découpe et écrit `prod/decoupe.plt` quand il y en a.
+async fn preparer_decoupe(rep: &std::path::Path) -> Result<usize, String> {
+    let pdf = tokio::fs::read(rep.join("source.pdf")).await.map_err(|e| e.to_string())?;
+    let traces = tokio::task::spawn_blocking(move || decoupe::extraire(&pdf)).await.map_err(|e| e.to_string())??;
+    if !traces.is_empty() {
+        tokio::fs::write(rep.join("prod").join("decoupe.plt"), decoupe::hpgl(&traces)).await.map_err(|e| e.to_string())?;
+    }
+    Ok(traces.len())
+}
+
+async fn fichier_decoupe(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
+    let f = dossier(&etat.config.donnees, id).join("prod").join("decoupe.plt");
+    match tokio::fs::read(f).await {
+        Ok(o) => (
+            [(header::CONTENT_TYPE, "application/vnd.hp-hpgl"), (header::CONTENT_DISPOSITION, "attachment; filename=\"decoupe.plt\"")],
+            o,
+        )
+            .into_response(),
+        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+    }
 }
 
 async fn apercu(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {

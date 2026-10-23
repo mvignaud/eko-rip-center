@@ -3,7 +3,27 @@
 Le serveur tourne sous Linux. Les imprimantes et les plotters lui sont branchés ;
 les postes de l'atelier s'y connectent par le réseau.
 
-Trois façons de l'installer, au choix.
+Quatre façons de l'installer, au choix.
+
+## 0. PC dédié : image d'installation
+
+> ⚠️ **L'installation efface entièrement le disque du PC.**
+
+Pour un PC x86_64 qui ne servira qu'au RIP. Télécharger
+`eko-rip-center-serveur-<version>-amd64.iso` depuis la page des releases et l'écrire
+sur une clé USB (balenaEtcher, ou `dd` sous Linux et macOS).
+
+1. Brancher le PC au réseau de l'atelier (câble conseillé : l'installation télécharge
+   les paquets Debian).
+2. Démarrer sur la clé et choisir **Installer E-KO RIP - EFFACE LE DISQUE**.
+3. Répondre aux deux seules questions : le mot de passe du compte `eko` (deux fois),
+   puis **Oui** à « Faut-il appliquer les changements sur les disques ? ».
+4. Retirer la clé quand l'installation redémarre la machine.
+
+Le PC démarre sous Debian 13, en français, avec le serveur actif. L'écran de
+connexion affiche l'adresse à ouvrir depuis les postes, par exemple
+`http://192.168.1.20:8640`. L'administration se fait par SSH :
+`ssh eko@<adresse>`.
 
 ## 1. Paquet Debian (recommandé)
 

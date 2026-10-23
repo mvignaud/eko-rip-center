@@ -50,12 +50,13 @@ const textes = {
     fichier: "Fichier PDF", resolution: "Résolution", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
     en_attente: "En attente", en_cours: "Rendu en cours", termine: "Terminé", echec: "Échec",
+    decoupe: (n) => n ? `Découpe : ${n} tracé${n > 1 ? "s" : ""}` : "Aucun tracé de découpe", telecharger: "Télécharger le fichier .plt",
     erreurs: {
       pas_un_pdf: "Ce fichier n'est pas un PDF.", fichier_vide: "Le fichier est vide.",
       aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
       envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
-      rendu_echoue: "Le rendu a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
+      rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
     },
   },
@@ -63,12 +64,13 @@ const textes = {
     fichier: "PDF file", resolution: "Resolution", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
     en_attente: "Queued", en_cours: "Rendering", termine: "Done", echec: "Failed",
+    decoupe: (n) => n ? `Cutting: ${n} path${n > 1 ? "s" : ""}` : "No cut path", telecharger: "Download the .plt file",
     erreurs: {
       pas_un_pdf: "This file is not a PDF.", fichier_vide: "The file is empty.",
       aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
       envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
       erreur_interne: "Server error.", introuvable: "Not found.",
-      rendu_echoue: "Rendering failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
+      rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
     },
   },
@@ -138,7 +140,9 @@ async function rafraichir() {
         ...t.plaques.map((p) => el("figure", {},
           el("img", { src: `/api/travaux/${t.id}/plaques/${encodeURIComponent(p)}`, alt: T().plaque(p) }),
           el("figcaption", {}, p))));
-      carte.append(grille);
+      const ligne = el("p", { className: "meta" }, T().decoupe(t.traces_decoupe));
+      if (t.traces_decoupe) ligne.append(" · ", el("a", { href: `/api/travaux/${t.id}/decoupe.plt`, download: "decoupe.plt" }, T().telecharger));
+      carte.append(ligne, grille);
     }
     return carte;
   }));

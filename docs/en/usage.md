@@ -15,7 +15,16 @@ the PDF. For the Epson SC-S80600:
 
 On a plate preview, black is ink and white is no ink.
 
+## Cutting
+
+Paths painted in a cut spot colour are detected: `CutContour`, `Thrucut`, `Kisscut`,
+`Insidecut`, `Perforation`, `Creasing`, `Score`, `Vcut` (case, spaces and hyphens do
+not matter). The job card shows how many and offers **Download the .plt file**
+(HP-GL, 1/40 mm, origin at the page's bottom-left corner). A cut colour at 0% is not
+cut.
+
 ## Not there yet
 
-Plates are not sent to the printer or the cutter yet. The `MT-*` metallic colours
+Plates are not sent to the printer yet. The cut file is not sent to the cutter
+automatically yet: send it by hand. The `MT-*` metallic colours
 of the Epson swatch book are not converted yet.
