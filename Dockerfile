@@ -2,6 +2,7 @@ FROM rust:1-slim-trixie AS construction
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY serveur serveur
+COPY client client
 RUN cargo build --release --locked -p eko-rip-serveur
 
 FROM debian:trixie-slim

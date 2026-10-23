@@ -1,0 +1,4 @@
+target
+**/eko-rip-data
+client/gen
+.git
