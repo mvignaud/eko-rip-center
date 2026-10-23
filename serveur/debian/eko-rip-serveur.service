@@ -1,0 +1,18 @@
+[Unit]
+Description=E-KO RIP Center (serveur)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=eko-rip
+EnvironmentFile=-/etc/default/eko-rip-serveur
+Environment=EKO_RIP_DATA=/var/lib/eko-rip
+ExecStart=/usr/bin/eko-rip-serveur
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/eko-rip
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -31,6 +31,10 @@ struct Travail {
     nom: String,
     dpi: u32,
     statut: Statut,
+    /// Code stable traduit par l'écran (`rendu_echoue`, `interrompu`).
+    #[serde(default)]
+    code_erreur: Option<String>,
+    /// Détail technique, non traduit (message de Ghostscript…).
     erreur: Option<String>,
     plaques: Vec<String>,
     /// Secondes depuis l'époque Unix.
@@ -113,7 +117,7 @@ fn reprendre_travaux_interrompus(donnees: &std::path::Path) {
     for mut t in lire_tous(donnees) {
         if matches!(t.statut, Statut::EnAttente | Statut::EnCours) {
             t.statut = Statut::Echec;
-            t.erreur = Some("interrompu par un arrêt du serveur : renvoyer le fichier".into());
+            t.code_erreur = Some("interrompu".into());
             let _ = ecrire(donnees, &t);
         }
     }
@@ -123,15 +127,18 @@ async fn lister(State(etat): State<Partage>) -> Json<Vec<Travail>> {
     Json(lire_tous(&etat.config.donnees))
 }
 
-fn refus(code: StatusCode, msg: impl Into<String>) -> Response {
-    (code, Json(serde_json::json!({ "erreur": msg.into() }))).into_response()
+/// Réponse d'erreur : `code` est stable et traduit par l'écran, `detail` reste technique.
+fn refus(statut: StatusCode, code: &'static str, detail: Option<String>) -> Response {
+    (statut, Json(serde_json::json!({ "code": code, "detail": detail }))).into_response()
 }
+
+type Refus = (&'static str, Option<String>);
 
 async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let id = Uuid::new_v4();
     let rep = dossier(&etat.config.donnees, id);
     if let Err(e) = tokio::fs::create_dir_all(&rep).await {
-        return refus(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
     let pdf = rep.join("source.pdf");
     let (mut nom, mut dpi, mut recu) = (String::new(), 720u32, false);
@@ -140,19 +147,19 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         let champ = match form.next_field().await {
             Ok(Some(c)) => c,
             Ok(None) => break,
-            Err(e) => return abandon(&rep, StatusCode::BAD_REQUEST, format!("envoi illisible : {e}")).await,
+            Err(e) => return abandon(&rep, StatusCode::BAD_REQUEST, ("envoi_illisible", Some(e.to_string()))).await,
         };
         match champ.name() {
             Some("dpi") => {
                 dpi = match champ.text().await.ok().and_then(|t| t.trim().parse().ok()) {
                     Some(d @ 36..=2880) => d,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, "résolution hors de 36 à 2880 dpi").await,
+                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("dpi_invalide", None)).await,
                 };
             }
             Some("fichier") => {
                 nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
-                if let Err(msg) = enregistrer(champ, &pdf).await {
-                    return abandon(&rep, StatusCode::BAD_REQUEST, msg).await;
+                if let Err(r) = enregistrer(champ, &pdf).await {
+                    return abandon(&rep, StatusCode::BAD_REQUEST, r).await;
                 }
                 recu = true;
             }
@@ -160,40 +167,41 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         }
     }
     if !recu {
-        return abandon(&rep, StatusCode::BAD_REQUEST, "aucun fichier reçu").await;
+        return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, statut: Statut::EnAttente, erreur: None, plaques: vec![], cree_le };
+    let travail = Travail { id, nom, dpi, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
-        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).await;
+        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
     tokio::spawn(traiter(etat.clone(), travail.clone()));
     (StatusCode::ACCEPTED, Json(travail)).into_response()
 }
 
 /// Écrit le fichier au fil de l'eau et refuse ce qui n'est pas un PDF.
-async fn enregistrer(mut champ: axum::extract::multipart::Field<'_>, pdf: &std::path::Path) -> Result<(), String> {
-    let mut f = tokio::fs::File::create(pdf).await.map_err(|e| e.to_string())?;
+async fn enregistrer(mut champ: axum::extract::multipart::Field<'_>, pdf: &std::path::Path) -> Result<(), Refus> {
+    let interne = |e: std::io::Error| ("erreur_interne", Some(e.to_string()));
+    let mut f = tokio::fs::File::create(pdf).await.map_err(interne)?;
     let mut debut = true;
-    while let Some(morceau) = champ.chunk().await.map_err(|e| format!("envoi interrompu : {e}"))? {
+    while let Some(morceau) = champ.chunk().await.map_err(|e| ("envoi_interrompu", Some(e.to_string())))? {
         if debut {
             if !morceau.starts_with(b"%PDF-") {
-                return Err("ce fichier n'est pas un PDF".into());
+                return Err(("pas_un_pdf", None));
             }
             debut = false;
         }
-        f.write_all(&morceau).await.map_err(|e| e.to_string())?;
+        f.write_all(&morceau).await.map_err(interne)?;
     }
     if debut {
-        return Err("fichier vide".into());
+        return Err(("fichier_vide", None));
     }
-    f.flush().await.map_err(|e| e.to_string())
+    f.flush().await.map_err(interne)
 }
 
-async fn abandon(rep: &std::path::Path, code: StatusCode, msg: impl Into<String>) -> Response {
+async fn abandon(rep: &std::path::Path, statut: StatusCode, (code, detail): Refus) -> Response {
     let _ = tokio::fs::remove_dir_all(rep).await;
-    refus(code, msg)
+    refus(statut, code, detail)
 }
 
 async fn traiter(etat: Partage, mut t: Travail) {
@@ -211,6 +219,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
         Err(e) => {
             eprintln!("travail {} : {e}", t.id);
             t.statut = Statut::Echec;
+            t.code_erreur = Some("rendu_echoue".into());
             t.erreur = Some(e);
         }
     }
@@ -227,7 +236,7 @@ async fn apercu(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Respon
     let f = dossier(&etat.config.donnees, id).join("apercu").join("composite.png");
     match tokio::fs::read(f).await {
         Ok(o) => png(o),
-        Err(_) => refus(StatusCode::NOT_FOUND, "aperçu absent"),
+        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
     }
 }
 
@@ -239,10 +248,41 @@ async fn plaque(State(etat): State<Partage>, Chemin((id, nom)): Chemin<(Uuid, St
         .and_then(|b| serde_json::from_slice::<Travail>(&b).ok())
         .is_some_and(|t| t.plaques.contains(&nom));
     if !connu {
-        return refus(StatusCode::NOT_FOUND, "plaque inconnue");
+        return refus(StatusCode::NOT_FOUND, "introuvable", None);
     }
     match tokio::fs::read(render::chemin_apercu_plaque(&dossier(donnees, id), &nom)).await {
         Ok(o) => png(o),
-        Err(_) => refus(StatusCode::NOT_FOUND, "aperçu de plaque absent"),
+        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Chaque code d'erreur émis par ce fichier doit être traduit en FR et en EN dans l'écran.
+    #[test]
+    fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
+        let source = include_str!("main.rs");
+        let page = include_str!("../static/index.html");
+        let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
+        let mut codes: Vec<&str> = vec![];
+        for motif in ["(\"", "Some(\"", "NOT_FOUND, \"", "SERVER_ERROR, \""] {
+            for (i, _) in source.match_indices(motif) {
+                let reste = &source[i + motif.len()..];
+                let fin = reste.find('"').unwrap();
+                let (code, apres) = (&reste[..fin], &reste[fin + 1..]);
+                let est_un_code = apres.starts_with(", ") || apres.starts_with(".into()");
+                if est_un_code
+                    && !code.is_empty() && code.chars().all(|c| c.is_ascii_lowercase() || c == '_') && !codes.contains(&code) {
+                    codes.push(code);
+                }
+            }
+        }
+        for code in ["introuvable", "pas_un_pdf", "rendu_echoue", "interrompu", "dpi_invalide"] {
+            assert!(codes.contains(&code), "le balayage n'a pas trouvé {code} : il est cassé");
+        }
+        for code in codes {
+            assert!(fr.contains(&format!("{code}:")), "{code} non traduit en français");
+            assert!(en.contains(&format!("{code}:")), "{code} non traduit en anglais");
+        }
     }
 }

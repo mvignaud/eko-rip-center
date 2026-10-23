@@ -8,15 +8,23 @@ branchées.
 direct, `White` et `Silver` compris) avec un aperçu dans l'écran. Aucun pilote de
 machine pour l'instant.
 
-## Prérequis
+Deux paquets : le **serveur** (Linux : `.deb`, Docker, binaire) et le **client** de
+bureau (macOS, Windows, Linux), qui ouvre l'écran du serveur dans sa fenêtre.
+
+Documentation : [français](docs/fr/) · [English](docs/en/) ·
+[changelog](CHANGELOG.md).
+
+## Développement
+
+### Prérequis
 
 - Rust stable
 - Ghostscript (`gs` ; il est lancé en `-dSAFER`)
 
-## Lancer le serveur
+### Lancer le serveur
 
 ```bash
-cargo run --release
+cargo run --release -p eko-rip-serveur
 ```
 
 Puis ouvrir `http://<serveur>:8640` depuis un poste.
@@ -32,7 +40,13 @@ Puis ouvrir `http://<serveur>:8640` depuis un poste.
 Le serveur n'a pas d'authentification : il ne doit être joignable que depuis le
 réseau de l'atelier.
 
-## Tests
+### Client
+
+```bash
+cd client && cargo tauri dev
+```
+
+### Tests
 
 ```bash
 cargo test

@@ -1,12 +1,10 @@
-[package]
-name = "eko-rip"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "3"
+members = ["serveur", "client"]
 
-[dependencies]
-axum = { version = "0.8.9", features = ["multipart"] }
-image = { version = "0.25.10", default-features = false, features = ["tiff", "png"] }
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
-tokio = { version = "1.54.1", features = ["full"] }
-uuid = { version = "1.29.0", features = ["serde", "v4"] }
+[workspace.package]
+version = "0.1.0"
+
+[profile.release]
+lto = true
+strip = true

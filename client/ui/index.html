@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-KO RIP Center</title>
+<style>
+  :root { --fond: #f6f7f9; --carte: #fff; --texte: #1d232b; --doux: #66707c; --trait: #dde1e6; --accent: #0b6bcb; --echec: #b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #14181d; --carte: #1d232b; --texte: #e8ebee; --doux: #9aa4ae; --trait: #2f3842; --accent: #5aa7f0; --echec: #f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; font: 15px/1.45 system-ui, sans-serif; background: var(--fond); color: var(--texte); }
+  form { width: min(440px, 100%); display: grid; gap: 12px; background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 24px; }
+  h1 { font-size: 20px; margin: 0; }
+  p { margin: 0; color: var(--doux); }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--doux); }
+  input, button { font: inherit; padding: 8px 10px; border-radius: 6px; }
+  input { border: 1px solid var(--trait); background: var(--fond); color: var(--texte); }
+  button { background: var(--accent); color: #fff; border: 0; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: wait; }
+  button.discret { justify-self: end; background: none; color: var(--accent); border: 1px solid var(--trait); padding: 4px 10px; }
+  #message { min-height: 1.4em; }
+  .erreur { color: var(--echec); }
+</style>
+</head>
+<body>
+<form id="choix">
+  <button type="button" id="langue" class="discret"></button>
+  <h1>E-KO RIP Center</h1>
+  <p data-t="intro"></p>
+  <label><span data-t="adresse"></span>
+    <input name="adresse" required placeholder="192.168.1.20:8640" autocomplete="url" spellcheck="false">
+  </label>
+  <button type="submit" data-t="connecter"></button>
+  <p id="message" role="status"></p>
+</form>
+<script>
+const textes = {
+  fr: { intro: "Adresse du serveur de l'atelier.", adresse: "Serveur", connecter: "Se connecter", autre: "English",
+        essai: "Connexion…", invalide: "Adresse invalide.", injoignable: (a) => `Serveur injoignable : ${a}` },
+  en: { intro: "Address of the workshop server.", adresse: "Server", connecter: "Connect", autre: "Français",
+        essai: "Connecting…", invalide: "Invalid address.", injoignable: (a) => `Server unreachable: ${a}` },
+};
+const lire = (cle) => { try { return localStorage.getItem(cle); } catch { return null; } };
+const garder = (cle, valeur) => { try { localStorage.setItem(cle, valeur); } catch {} };
+let langue = lire("langue") || (navigator.language.startsWith("fr") ? "fr" : "en");
+const T = () => textes[langue];
+const form = document.getElementById("choix"), msg = document.getElementById("message"), champ = form.adresse;
+
+function appliquerLangue() {
+  document.documentElement.lang = langue;
+  document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
+  document.getElementById("langue").textContent = T().autre;
+}
+document.getElementById("langue").addEventListener("click", () => {
+  langue = langue === "fr" ? "en" : "fr"; garder("langue", langue); msg.textContent = ""; appliquerLangue();
+});
+
+/** « 192.168.1.20:8640 » → « http://192.168.1.20:8640 » ; null si l'adresse ne tient pas. */
+function normaliser(saisie) {
+  const s = saisie.trim();
+  try {
+    // Le protocole se teste avant tout nettoyage : « http:// » seul doit rester invalide.
+    const u = new URL(/^https?:\/\//i.test(s) ? s : `http://${s}`);
+    return u.hostname ? u.origin : null;
+  } catch { return null; }
+}
+
+/** Le serveur n'envoie pas d'en-têtes CORS : une réponse opaque suffit à prouver qu'il répond. */
+async function joignable(adresse) {
+  const arret = new AbortController();
+  const minuterie = setTimeout(() => arret.abort(), 5000);
+  try { await fetch(`${adresse}/api/travaux`, { mode: "no-cors", signal: arret.signal }); return true; }
+  catch { return false; }
+  finally { clearTimeout(minuterie); }
+}
+
+async function connecter(adresse) {
+  const bouton = form.querySelector("button[type=submit]");
+  bouton.disabled = true; msg.className = ""; msg.textContent = T().essai;
+  if (await joignable(adresse)) {
+    garder("serveur", adresse);
+    location.replace(adresse);
+    return;
+  }
+  bouton.disabled = false; msg.className = "erreur"; msg.textContent = T().injoignable(adresse);
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const adresse = normaliser(champ.value);
+  if (!adresse) { msg.className = "erreur"; msg.textContent = T().invalide; return; }
+  connecter(adresse);
+});
+
+appliquerLangue();
+const connu = lire("serveur");
+if (connu) champ.value = connu;
+if (connu && !new URLSearchParams(location.search).has("changer")) connecter(connu);
+</script>
+</body>
+</html>

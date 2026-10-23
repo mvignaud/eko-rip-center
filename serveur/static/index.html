@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-KO RIP Center</title>
+<style>
+  :root { --fond: #f6f7f9; --carte: #fff; --texte: #1d232b; --doux: #66707c; --trait: #dde1e6; --accent: #0b6bcb; --echec: #b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #14181d; --carte: #1d232b; --texte: #e8ebee; --doux: #9aa4ae; --trait: #2f3842; --accent: #5aa7f0; --echec: #f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--fond); color: var(--texte); }
+  header, main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 8px 0; }
+  form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 16px; }
+  label { display: grid; gap: 4px; font-size: 13px; color: var(--doux); }
+  input, select, button { font: inherit; }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+  button.discret { background: none; color: var(--accent); border: 1px solid var(--trait); padding: 4px 10px; }
+  button:disabled { opacity: .5; cursor: wait; }
+  #message { width: 100%; margin: 0; min-height: 1.4em; }
+  .erreur { color: var(--echec); }
+  .travail { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 16px; margin-top: 16px; }
+  .entete { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .nom { font-weight: 600; overflow-wrap: anywhere; }
+  .meta { color: var(--doux); font-size: 13px; }
+  .plaques { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+  figure { margin: 0; }
+  figure img { width: 100%; background: #fff; border: 1px solid var(--trait); border-radius: 4px; }
+  figcaption { font-size: 13px; text-align: center; color: var(--doux); }
+</style>
+</head>
+<body>
+<header class="entete"><h1>E-KO RIP Center</h1><button type="button" id="langue" class="discret"></button></header>
+<main>
+  <form id="envoi">
+    <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf" required></label>
+    <label><span data-t="resolution"></span>
+      <select name="dpi"><option>360</option><option selected>720</option><option>1440</option></select>
+    </label>
+    <button type="submit" data-t="envoyer"></button>
+    <p id="message" role="status"></p>
+  </form>
+  <section id="travaux" aria-live="polite"></section>
+</main>
+<script>
+const textes = {
+  fr: {
+    fichier: "Fichier PDF", resolution: "Résolution", envoyer: "Envoyer au RIP", autre: "English",
+    envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
+    en_attente: "En attente", en_cours: "Rendu en cours", termine: "Terminé", echec: "Échec",
+    erreurs: {
+      pas_un_pdf: "Ce fichier n'est pas un PDF.", fichier_vide: "Le fichier est vide.",
+      aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
+      envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
+      erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
+      rendu_echoue: "Le rendu a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
+      trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
+    },
+  },
+  en: {
+    fichier: "PDF file", resolution: "Resolution", envoyer: "Send to RIP", autre: "Français",
+    envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
+    en_attente: "Queued", en_cours: "Rendering", termine: "Done", echec: "Failed",
+    erreurs: {
+      pas_un_pdf: "This file is not a PDF.", fichier_vide: "The file is empty.",
+      aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
+      envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
+      erreur_interne: "Server error.", introuvable: "Not found.",
+      rendu_echoue: "Rendering failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
+      trop_gros: "File too large for the server.", reseau: "Server unreachable.",
+    },
+  },
+};
+let langue = (() => { try { return localStorage.getItem("langue"); } catch { return null; } })()
+  || (navigator.language.startsWith("fr") ? "fr" : "en");
+const T = () => textes[langue];
+const form = document.getElementById("envoi"), msg = document.getElementById("message"), liste = document.getElementById("travaux");
+const boutonLangue = document.getElementById("langue");
+
+function appliquerLangue() {
+  document.documentElement.lang = langue;
+  document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
+  boutonLangue.textContent = T().autre;
+  rafraichir();
+}
+boutonLangue.addEventListener("click", () => {
+  langue = langue === "fr" ? "en" : "fr";
+  try { localStorage.setItem("langue", langue); } catch {}
+  msg.textContent = "";
+  appliquerLangue();
+});
+
+/** Texte traduit d'une erreur : le code est traduit, le détail technique est ajouté tel quel. */
+function texteErreur(code, detail) {
+  const base = T().erreurs[code] || T().erreurs.erreur_interne;
+  return detail ? `${base} (${detail})` : base;
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const bouton = form.querySelector("button[type=submit]");
+  bouton.disabled = true; msg.className = ""; msg.textContent = T().envoi;
+  try {
+    let r;
+    try { r = await fetch("/api/travaux", { method: "POST", body: new FormData(form) }); }
+    catch { throw new Error(texteErreur("reseau")); }
+    const corps = await r.json().catch(() => ({}));
+    if (r.status === 413) throw new Error(texteErreur("trop_gros"));
+    if (!r.ok) throw new Error(texteErreur(corps.code, corps.detail));
+    msg.textContent = T().recu(corps.nom); form.reset(); rafraichir();
+  } catch (err) {
+    msg.className = "erreur"; msg.textContent = err.message;
+  } finally { bouton.disabled = false; }
+});
+
+function el(tag, attrs = {}, ...enfants) {
+  const n = document.createElement(tag);
+  Object.assign(n, attrs);
+  n.append(...enfants);
+  return n;
+}
+
+async function rafraichir() {
+  let travaux;
+  try { travaux = await (await fetch("/api/travaux")).json(); } catch { return; }
+  liste.replaceChildren(...travaux.map((t) => {
+    const date = new Date(t.cree_le * 1000).toLocaleString(langue === "fr" ? "fr-FR" : "en-GB");
+    const carte = el("article", { className: "travail" },
+      el("div", { className: "entete" },
+        el("span", { className: "nom" }, t.nom),
+        el("span", { className: "meta" }, `${T()[t.statut]} · ${t.dpi} dpi · ${date}`)));
+    if (t.statut === "echec") carte.append(el("p", { className: "erreur" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
+    if (t.statut === "termine") {
+      const grille = el("div", { className: "plaques" },
+        el("figure", {}, el("img", { src: `/api/travaux/${t.id}/apercu.png`, alt: T().composite }), el("figcaption", {}, T().composite)),
+        ...t.plaques.map((p) => el("figure", {},
+          el("img", { src: `/api/travaux/${t.id}/plaques/${encodeURIComponent(p)}`, alt: T().plaque(p) }),
+          el("figcaption", {}, p))));
+      carte.append(grille);
+    }
+    return carte;
+  }));
+}
+appliquerLangue();
+setInterval(rafraichir, 3000);
+</script>
+</body>
+</html>
