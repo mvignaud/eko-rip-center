@@ -13,6 +13,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   d'entrée CMJN (par exemple Epson Wide Gamut), profil d'entrée RVB, profil du support
   en sortie, intention de rendu, option « ignorer les profils du PDF ». L'aperçu
   composite simule le support (épreuve écran). Les tons directs ne sont pas convertis.
+- **Imbrication (planche)** : cocher des pages de travaux et leur nombre de copies, choisir
+  la laize et l'espacement, puis « Créer la planche » ; les éléments sont placés en rangées
+  sur la laize, et la planche devient un travail ordinaire (rendu, repérage, découpe de tous
+  ses contours). Un élément plus large que la laize est refusé avec sa largeur.
 - Le CI vérifie la syntaxe JavaScript des pages.
 - Les plaques de découpe (`CutContour`…) sont signalées « découpe, non imprimée » ; la
   liste par page (`plaques_decoupe`) servira au pilote d'impression pour les exclure.

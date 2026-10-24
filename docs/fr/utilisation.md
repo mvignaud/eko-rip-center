@@ -26,6 +26,14 @@ espaces et tirets indifférents). La fiche du travail indique leur nombre et pro
 **Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
 page). Un ton de découpe à 0 % n'est pas découpé.
 
+## Planche (imbrication)
+
+Sur chaque page imprimable, cocher **Planche** et indiquer le nombre de copies. Le
+panneau **Planche** apparaît : régler la **laize** (largeur utile du rouleau, 1600 mm par
+défaut) et l'**espacement**, puis **Créer la planche**. La résolution et le repérage du
+formulaire s'appliquent. Les éléments sont rangés du plus haut au plus bas, de gauche à
+droite ; la planche est un nouveau travail, avec la découpe de tous les contours.
+
 ## Couleur
 
 Bloc **Couleur** (mode Imprimer) :

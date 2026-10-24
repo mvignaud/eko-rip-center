@@ -3,6 +3,7 @@
 
 mod couleur;
 mod decoupe;
+mod imbrication;
 mod plotter;
 mod render;
 mod reperage;
@@ -179,6 +180,7 @@ fn routes(etat: Partage) -> Router {
         .route("/", get(|| async { Html(include_str!("../static/index.html")) }))
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/profils", get(lister_profils).post(deposer_profil))
+        .route("/api/planches", axum::routing::post(creer_planche))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -436,6 +438,96 @@ async fn traiter(etat: Partage, mut t: Travail) {
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
+}
+
+#[derive(Deserialize)]
+struct DemandePlanche {
+    laize_mm: f64,
+    #[serde(default = "espace_defaut")]
+    espacement_mm: f64,
+    #[serde(default = "dpi_defaut")]
+    dpi: u32,
+    #[serde(default)]
+    reperage: reperage::Reperage,
+    elements: Vec<ElementPlanche>,
+}
+
+#[derive(Deserialize)]
+struct ElementPlanche {
+    id: Uuid,
+    page: usize,
+    copies: usize,
+}
+
+fn espace_defaut() -> f64 {
+    5.0
+}
+
+fn dpi_defaut() -> u32 {
+    720
+}
+
+/// Imbrique des pages de travaux existants sur la laize, en un nouveau travail à imprimer.
+async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche>) -> Response {
+    let mauvais = |detail: &str| refus(StatusCode::BAD_REQUEST, "planche_invalide", Some(detail.to_string()));
+    if !(50.0..=5000.0).contains(&d.laize_mm) || !(0.0..=100.0).contains(&d.espacement_mm) || !(36..=2880).contains(&d.dpi) {
+        return mauvais("laize 50–5000 mm, espacement 0–100 mm, 36–2880 dpi");
+    }
+    if d.elements.is_empty() || d.elements.len() > 200 || d.elements.iter().any(|e| !(1..=500).contains(&e.copies)) {
+        return mauvais("1 à 200 éléments, 1 à 500 copies chacun");
+    }
+    let donnees = &etat.config.donnees;
+    let mut pdfs = vec![];
+    for e in &d.elements {
+        let Some((t, _)) = lire_page(donnees, e.id, e.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+        if t.format != Format::Pdf {
+            return mauvais("seules des pages PDF s'imbriquent");
+        }
+        match tokio::fs::read(dossier(donnees, e.id).join(Format::Pdf.fichier())).await {
+            Ok(o) => pdfs.push(o),
+            Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
+        }
+    }
+    let (laize, espace) = (d.laize_mm, d.espacement_mm);
+    let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
+    let compose = tokio::task::spawn_blocking(move || {
+        let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
+        imbrication::composer(&sources, laize, espace)
+    })
+    .await;
+    let planche = match compose {
+        Ok(Ok((pdf, _))) => pdf,
+        Ok(Err(e)) => return mauvais(&e),
+        Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    };
+
+    let id = Uuid::new_v4();
+    let rep = dossier(donnees, id);
+    if let Err(e) = tokio::fs::create_dir_all(&rep).await.and(tokio::fs::write(rep.join(Format::Pdf.fichier()), planche).await) {
+        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
+    }
+    let copies: usize = d.elements.iter().map(|e| e.copies).sum();
+    let travail = Travail {
+        id,
+        nom: format!("Planche {laize:.0} mm — {copies} élément(s)"),
+        dpi: d.dpi,
+        mode: Mode::Imprimer,
+        format: Format::Pdf,
+        tous_les_traces: false,
+        reperage: d.reperage,
+        couleur: couleur::Couleur::default(),
+        statut: Statut::EnAttente,
+        code_erreur: None,
+        erreur: None,
+        pages: vec![],
+        envoi_decoupe: None,
+        cree_le: maintenant(),
+    };
+    if let Err(e) = ecrire(donnees, &travail) {
+        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
+    }
+    tokio::spawn(traiter(etat.clone(), travail.clone()));
+    (StatusCode::ACCEPTED, Json(travail)).into_response()
 }
 
 async fn lister_profils(State(etat): State<Partage>) -> Json<Vec<couleur::Profil>> {

@@ -26,6 +26,13 @@ not matter). The job card shows how many and offers **Download the .plt file**
 (HP-GL, 1/40 mm, origin at the page's bottom-left corner). A cut colour at 0% is not
 cut.
 
+## Sheet (nesting)
+
+On each printable page, tick **Sheet** and set the number of copies. The **Sheet** panel
+appears: set the **roll width** (default 1600 mm) and the **spacing**, then **Build the
+sheet**. The form's resolution and registration apply. Items are placed tallest first,
+left to right; the sheet is a new job, with all contours cut.
+
 ## Colour
 
 **Colour** block (Print mode):
