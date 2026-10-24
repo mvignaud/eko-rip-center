@@ -90,6 +90,16 @@ pub struct Separation {
     pub limite_rd: f32,
     /// Encre totale maximale d'un point, en % cumulé des 9 canaux.
     pub limite_totale: f32,
+    /// Plafond de chaque canal, fraction 0..=1, appliqué avant la limite totale. 0,85 : au
+    /// 1er tirage (25/10), 100 % donnait ~98 % de gros points et des jonctions de passes
+    /// visibles ; le flux de référence observé ne pose pas de gros points en C, M, J et
+    /// couvre ~0,89 en noir plein. Départ prudent, à étalonner sur papier.
+    #[serde(default = "limite_canal_defaut")]
+    pub limite_canal: f32,
+}
+
+fn limite_canal_defaut() -> f32 {
+    0.85
 }
 
 impl Default for Separation {
@@ -98,7 +108,7 @@ impl Default for Separation {
     /// supports éco-solvant parlent de 250 à 320 %. Départ prudent, à étalonner (2.8).
     fn default() -> Self {
         let c = Couple::default();
-        Separation { cyan: c, magenta: c, noir: c, limite_or: 1.0, limite_rd: 1.0, limite_totale: 300.0 }
+        Separation { cyan: c, magenta: c, noir: c, limite_or: 1.0, limite_rd: 1.0, limite_totale: 300.0, limite_canal: limite_canal_defaut() }
     }
 }
 
@@ -131,7 +141,7 @@ pub fn separer(e: &Cmjn, p: &Separation) -> Result<Vec<(Encre, Vec<u8>)>, String
         let (lk, k) = tk[e.k[i] as usize];
         let or = e.or.map_or(0, |s| plafond(s[i], p.limite_or));
         let rd = e.rd.map_or(0, |s| plafond(s[i], p.limite_rd));
-        let mut v = [c, lc, m, lm, e.y[i], k, lk, or, rd];
+        let mut v = [c, lc, m, lm, e.y[i], k, lk, or, rd].map(|x| plafond(x, p.limite_canal));
         let somme: u32 = v.iter().map(|&x| x as u32).sum();
         if somme > limite {
             for x in &mut v {
@@ -167,10 +177,10 @@ mod tests {
             assert!((d[255] - 255.0).abs() <= 0.5, "fin {} ≠ 255 : {c:?}", d[255]);
             assert_eq!(d[0], 0.0);
         }
-        // Par canal logique, à travers `separer` (limite par défaut).
+        // Par canal logique, à travers `separer`, sans plafond par canal (les courbes seules).
         let rampe: Vec<u8> = (0..=255).collect();
         let zero = vec![0u8; 256];
-        let p = Separation::default();
+        let p = Separation { limite_canal: 1.0, ..Separation::default() };
         for canal in 0..3 {
             let mut e = Cmjn { c: &zero, m: &zero, y: &zero, k: &zero, or: None, rd: None };
             match canal {
@@ -185,6 +195,10 @@ mod tests {
             assert_eq!((s[fonce].1[255], s[clair].1[255]), (255, 0), "canal {canal} : 100 % = foncé seul");
             assert!(s[7].1.iter().chain(&s[8].1).all(|&v| v == 0), "Or/Rd inventés");
         }
+        // Plafond par canal par défaut (0,85) : 100 % ne pose plus 255.
+        let s = separer(&Cmjn { c: &rampe, m: &zero, y: &rampe, k: &zero, or: None, rd: None }, &Separation::default()).unwrap();
+        assert_eq!((s[0].1[255], s[4].1[255]), (216, 216), "C et J plafonnés à 85 %");
+        assert!(s.iter().all(|(_, v)| v.iter().all(|&x| x <= 216)));
     }
 
     #[test]
@@ -204,7 +218,7 @@ mod tests {
             assert!(s[7].1[255] >= s[0].1[255]);
         }
         // Plafonds Or et Rd, et tailles incohérentes refusées.
-        let p = Separation { limite_or: 0.5, limite_rd: 0.25, ..Separation::default() };
+        let p = Separation { limite_or: 0.5, limite_rd: 0.25, limite_canal: 1.0, ..Separation::default() };
         let zero = vec![0u8; 256];
         let s = separer(&Cmjn { c: &zero, m: &zero, y: &zero, k: &zero, or: Some(&plein), rd: Some(&plein) }, &p).unwrap();
         assert_eq!((s[7].1[0], s[8].1[0]), (127, 63));

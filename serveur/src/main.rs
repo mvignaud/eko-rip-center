@@ -2337,7 +2337,10 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
         hauteur: 0,
         dpi,
         x: points(m.origine_impression_mm[0]) / 16 * 16,
-        y: points(m.origine_impression_mm[1]),
+        // Tête laissée vide avant l'image (roadmap 2.4, 1er tirage du 25/10) : une image
+        // collée au début de la page donnait une bande foncée, la mise en route des passes ;
+        // le flux de référence observé commence 19,8 mm plus bas. L'origine Y se compte après.
+        y: points(TETE_EPSON_MM + m.origine_impression_mm[1].max(0.0)),
         page_largeur: points(m.laize_mm),
         page_hauteur: 0,
     };
@@ -2387,6 +2390,9 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     }
     Ok(())
 }
+
+/// Tête vide en début de page sur l'Epson (mm), avant l'origine Y de la machine.
+const TETE_EPSON_MM: f64 = 20.0;
 
 /// Découpe : le HP-GL du rendu (0,01 mm) passé au pas de la machine, par sa connexion ;
 /// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
@@ -3890,10 +3896,12 @@ mod tests {
             codes.dedup();
             assert_eq!(codes, [0, 1, 2, 4, 16, 17, 18]);
             assert!(codes.iter().all(|c| escp2::ORDRE.contains(c)), "canal hors des 9 encres");
-            // Toute la page, de la ligne 0 à la dernière bande (10 mm à 720 dpi : 283 lignes).
+            // Toute la page, après la tête vide de 20 mm (10 mm à 720 dpi : 283 lignes).
             let hauteur = (10.0 / 25.4 * dpi as f64).round() as u32;
-            assert_eq!(blocs.iter().map(|b| b.y).min(), Some(0));
-            assert_eq!(blocs.iter().map(|b| b.y).max().map(|y| y / 16), Some((hauteur - 1) / 16));
+            let tete = (TETE_EPSON_MM / 25.4 * dpi as f64).round() as u32;
+            let y0 = blocs.iter().map(|b| b.y).min().unwrap();
+            assert!(y0.abs_diff(tete) <= 1, "tête vide : 1re ligne {y0}, attendu {tete}");
+            assert_eq!(blocs.iter().map(|b| b.y).max().map(|y| (y - y0) / 16), Some((hauteur - 1) / 16));
             // Jaune plein à gauche, absent à droite : ses blocs s'arrêtent à mi-largeur.
             let largeur = (20.0 / 25.4 * dpi as f64).round() as u32;
             assert!(blocs.iter().filter(|b| b.code == 4).all(|b| b.x + 4 * b.octets as u32 <= largeur / 2 + 16), "jaune à droite");

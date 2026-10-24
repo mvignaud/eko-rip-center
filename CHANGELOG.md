@@ -5,6 +5,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
+**Numérotation (décision du 25/10/2026)** : `X.Y.Z` — **X** version majeure, chacune avec un
+nom tiré de l'imprimerie (Gutenberg, Garamond, Cyan, Magenta, Dorure…) ; **Y** fonction,
+pilote ou correctif ordinaire ; **Z** correctif de sécurité seulement. La **1.0.0**, première
+version nommée, sortira quand le RIP couvrira 100 % des fonctions de la feuille de route de
+parité ; d'ici là, 0.Y.Z.
+*Versioning: X major (named after printing), Y features/drivers/fixes, Z security fixes only;
+1.0.0 when feature parity is reached.*
+
 ## [Non publié]
 
 ## [0.18.0] — 2026-10-24
