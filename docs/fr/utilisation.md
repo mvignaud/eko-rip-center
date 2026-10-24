@@ -5,6 +5,9 @@
 3. Le travail apparaît dans la liste : *En attente*, *Rendu en cours*, puis
    *Terminé* avec l'aperçu de chaque plaque.
 
+Un PDF de plusieurs pages donne une ligne par page, avec ses aperçus, sa découpe
+et son bouton d'envoi au plotter.
+
 ## Les plaques
 
 Une plaque par encre : Cyan, Magenta, Jaune, Noir, plus une plaque par ton direct

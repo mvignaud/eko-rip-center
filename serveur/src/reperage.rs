@@ -88,10 +88,24 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64) -> Mise {
     }
 }
 
-/// Réécrit la première page du PDF : nouvelle MediaBox, contenu décalé, repères en noir.
-pub fn envelopper(pdf: &[u8], reperage: Reperage) -> Result<(Vec<u8>, Mise), String> {
+/// Réécrit chaque page du PDF : nouvelle MediaBox, contenu décalé, repères en noir.
+/// Rend une mise en page par page, dans l'ordre.
+pub fn envelopper(pdf: &[u8], reperage: Reperage) -> Result<(Vec<u8>, Vec<Mise>), String> {
     let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
-    let page = *doc.get_pages().values().next().ok_or("PDF sans page")?;
+    let pages: Vec<_> = doc.get_pages().into_values().collect();
+    if pages.is_empty() {
+        return Err("PDF sans page".into());
+    }
+    let mut mises = vec![];
+    for (i, page) in pages.into_iter().enumerate() {
+        mises.push(envelopper_page(&mut doc, page, reperage).map_err(|e| format!("page {} : {e}", i + 1))?);
+    }
+    let mut sortie = vec![];
+    doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
+    Ok((sortie, mises))
+}
+
+fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage) -> Result<Mise, String> {
     let dict = doc.get_dictionary(page).map_err(|e| e.to_string())?;
     let boite: Vec<f64> = dict
         .get(b"MediaBox")
@@ -130,9 +144,7 @@ pub fn envelopper(pdf: &[u8], reperage: Reperage) -> Result<(Vec<u8>, Mise), Str
     for boite in [b"CropBox".as_slice(), b"BleedBox", b"TrimBox", b"ArtBox"] {
         dict.remove(boite);
     }
-    let mut sortie = vec![];
-    doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
-    Ok((sortie, mise))
+    Ok(mise)
 }
 
 #[cfg(test)]
@@ -195,7 +207,8 @@ mod tests {
         let mut octets = vec![];
         doc.save_to(&mut octets).unwrap();
 
-        let (pdf, mise) = envelopper(&octets, Reperage::Cadre).unwrap();
+        let (pdf, mut mises) = envelopper(&octets, Reperage::Cadre).unwrap();
+        let mise = mises.remove(0);
         let chemin = dossier.join("p.pdf");
         std::fs::write(&chemin, &pdf).unwrap();
         let st = std::process::Command::new("gs")

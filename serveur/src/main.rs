@@ -76,10 +76,9 @@ struct Travail {
     code_erreur: Option<String>,
     /// Détail technique, non traduit (message de Ghostscript…).
     erreur: Option<String>,
-    plaques: Vec<String>,
-    /// Tracés de découpe trouvés dans le PDF (0 : rien à découper).
+    /// Pages rendues, dans l'ordre du document.
     #[serde(default)]
-    traces_decoupe: usize,
+    pages: Vec<Page>,
     /// Dernier envoi de la découpe au plotter.
     #[serde(default)]
     envoi_decoupe: Option<EnvoiDecoupe>,
@@ -88,12 +87,27 @@ struct Travail {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+struct Page {
+    /// Plaques de la page (vide en découpe seule).
+    plaques: Vec<String>,
+    /// Tracés de découpe de la page (0 : rien à découper).
+    traces_decoupe: usize,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 struct EnvoiDecoupe {
+    /// Page envoyée (numérotée à partir de 1).
+    #[serde(default = "premiere_page")]
+    page: usize,
     statut: Statut,
     code_erreur: Option<String>,
     erreur: Option<String>,
     /// Secondes depuis l'époque Unix.
     le: u64,
+}
+
+fn premiere_page() -> usize {
+    1
 }
 
 fn maintenant() -> u64 {
@@ -154,11 +168,11 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
-        .route("/api/travaux/{id}/apercu.png", get(apercu))
-        .route("/api/travaux/{id}/decoupe.plt", get(fichier_decoupe))
-        .route("/api/travaux/{id}/decoupe.svg", get(apercu_decoupe))
-        .route("/api/travaux/{id}/decouper", axum::routing::post(decouper))
-        .route("/api/travaux/{id}/plaques/{nom}", get(plaque))
+        .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
+        .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
+        .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
+        .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
+        .route("/api/travaux/{id}/pages/{page}/decouper", axum::routing::post(decouper))
         .with_state(etat)
 }
 
@@ -276,7 +290,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, statut: Statut::EnAttente, code_erreur: None, erreur: None, plaques: vec![], traces_decoupe: 0, envoi_decoupe: None, cree_le };
+    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
@@ -346,27 +360,30 @@ async fn traiter(etat: Partage, mut t: Travail) {
     let rep = dossier(donnees, t.id);
     let rendu = match t.mode {
         Mode::Imprimer => match preparer_impression(&rep, t.reperage).await {
-            Ok((pdf, mise)) => render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, etat.config.delai).await.map(|r| (r.plaques, mise)),
+            Ok((pdf, mises)) => render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, etat.config.delai).await.map(|r| (Some(r.pages), mises)),
             Err(e) => Err(e),
         },
-        Mode::Decouper => Ok((vec![], None)),
+        Mode::Decouper => Ok((None, vec![])),
     };
     match rendu {
-        Ok((plaques, mise)) => {
-            t.plaques = plaques;
-            match preparer_decoupe(&rep, t.format, t.tous_les_traces, mise.as_ref()).await {
-                Ok(n) => {
-                    t.statut = Statut::Termine;
-                    t.traces_decoupe = n;
-                }
-                Err(e) => {
-                    eprintln!("travail {} : {e}", t.id);
-                    t.statut = Statut::Echec;
-                    t.code_erreur = Some("decoupe_illisible".into());
-                    t.erreur = Some(e);
-                }
+        Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.tous_les_traces, &mises).await {
+            Ok(traces) => {
+                // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
+                let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
+                t.pages = plaques
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, plaques)| Page { plaques, traces_decoupe: traces.get(i).copied().unwrap_or(0) })
+                    .collect();
+                t.statut = Statut::Termine;
             }
-        }
+            Err(e) => {
+                eprintln!("travail {} : {e}", t.id);
+                t.statut = Statut::Echec;
+                t.code_erreur = Some("decoupe_illisible".into());
+                t.erreur = Some(e);
+            }
+        },
         Err(e) => {
             eprintln!("travail {} : {e}", t.id);
             t.statut = Statut::Echec;
@@ -383,41 +400,52 @@ fn png(octets: Vec<u8>) -> Response {
     ([(header::CONTENT_TYPE, "image/png")], octets).into_response()
 }
 
-/// PDF à rendre : la source telle quelle, ou `imprime.pdf` agrandi avec ses repères.
-async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Option<reperage::Mise>), String> {
+/// PDF à rendre : la source telle quelle, ou `imprime.pdf` agrandi avec ses repères
+/// (une mise en page par page).
+async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
     let source = rep.join(Format::Pdf.fichier());
     if choix == reperage::Reperage::Aucun {
-        return Ok((source, None));
+        return Ok((source, vec![]));
     }
     let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
-    let (imprime, mise) = tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??;
+    let (imprime, mises) = tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??;
     let chemin = rep.join("imprime.pdf");
     tokio::fs::write(&chemin, imprime).await.map_err(|e| e.to_string())?;
-    Ok((chemin, Some(mise)))
+    Ok((chemin, mises))
 }
 
-/// Extrait les tracés à découper ; quand il y en a, écrit `prod/decoupe.plt` (HP-GL)
-/// et `apercu/decoupe.svg`. Avec un repérage, les tracés suivent le décalage de l'image.
-async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mise: Option<&reperage::Mise>) -> Result<usize, String> {
+fn fichier_plt(rep: &std::path::Path, page: usize) -> PathBuf {
+    rep.join("prod").join(format!("decoupe-{page:03}.plt"))
+}
+
+fn fichier_svg(rep: &std::path::Path, page: usize) -> PathBuf {
+    rep.join("apercu").join(format!("decoupe-{page:03}.svg"))
+}
+
+/// Extrait les tracés à découper de chaque page ; pour une page qui en a, écrit
+/// `prod/decoupe-NNN.plt` (HP-GL) et `apercu/decoupe-NNN.svg`. Avec un repérage, les
+/// tracés suivent le décalage de leur page. Rend le nombre de tracés par page.
+async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mises: &[reperage::Mise]) -> Result<Vec<usize>, String> {
     let source = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| e.to_string())?;
-    let d = tokio::task::spawn_blocking(move || match format {
+    let mut pages = tokio::task::spawn_blocking(move || match format {
         Format::Pdf => decoupe::extraire(&source, tous),
-        Format::Svg => decoupe::extraire_svg(&source, tous),
+        Format::Svg => decoupe::extraire_svg(&source, tous).map(|d| vec![d]),
     })
     .await
     .map_err(|e| e.to_string())??;
-    let mut d = d;
-    if let Some(m) = mise {
-        d.decaler(m.decalage, m.page);
+    for sous in ["prod", "apercu"] {
+        tokio::fs::create_dir_all(rep.join(sous)).await.map_err(|e| e.to_string())?;
     }
-    if !d.traces.is_empty() {
-        for sous in ["prod", "apercu"] {
-            tokio::fs::create_dir_all(rep.join(sous)).await.map_err(|e| e.to_string())?;
+    for (i, d) in pages.iter_mut().enumerate() {
+        if let Some(m) = mises.get(i) {
+            d.decaler(m.decalage, m.page);
         }
-        tokio::fs::write(rep.join("prod").join("decoupe.plt"), decoupe::hpgl(&d.traces)).await.map_err(|e| e.to_string())?;
-        tokio::fs::write(rep.join("apercu").join("decoupe.svg"), decoupe::apercu_svg(&d)).await.map_err(|e| e.to_string())?;
+        if !d.traces.is_empty() {
+            tokio::fs::write(fichier_plt(rep, i + 1), decoupe::hpgl(&d.traces)).await.map_err(|e| e.to_string())?;
+            tokio::fs::write(fichier_svg(rep, i + 1), decoupe::apercu_svg(d)).await.map_err(|e| e.to_string())?;
+        }
     }
-    Ok(d.traces.len())
+    Ok(pages.iter().map(|d| d.traces.len()).collect())
 }
 
 /// Rendu ou envoi au plotter en cours : on ne touche pas au dossier du travail.
@@ -453,7 +481,7 @@ async fn relancer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Resp
     let _ = tokio::fs::remove_file(rep.join("imprime.pdf")).await;
     t.statut = Statut::EnAttente;
     (t.code_erreur, t.erreur, t.envoi_decoupe) = (None, None, None);
-    (t.plaques, t.traces_decoupe) = (vec![], 0);
+    t.pages = vec![];
     if let Err(e) = ecrire(donnees, &t) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
@@ -465,11 +493,18 @@ fn lire_travail(donnees: &std::path::Path, id: Uuid) -> Option<Travail> {
     serde_json::from_slice(&std::fs::read(dossier(donnees, id).join("job.json")).ok()?).ok()
 }
 
-/// Envoie `prod/decoupe.plt` au plotter ; l'état de l'envoi est suivi dans le travail.
-async fn decouper(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
+/// Travail et page demandés, si la page existe (numérotée à partir de 1).
+fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travail, Page)> {
+    let t = lire_travail(donnees, id)?;
+    let p = t.pages.get(page.checked_sub(1)?)?.clone();
+    Some((t, p))
+}
+
+/// Envoie la découpe d'une page au plotter ; l'état de l'envoi est suivi dans le travail.
+async fn decouper(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
     let donnees = &etat.config.donnees;
-    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    if t.traces_decoupe == 0 {
+    let Some((mut t, p)) = lire_page(donnees, id, page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if p.traces_decoupe == 0 {
         return refus(StatusCode::CONFLICT, "rien_a_decouper", None);
     }
     // ponytail: le contrôle puis l'écriture ne sont pas atomiques ; deux clics dans la même
@@ -477,26 +512,26 @@ async fn decouper(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Resp
     if t.envoi_decoupe.as_ref().is_some_and(|e| matches!(e.statut, Statut::EnAttente | Statut::EnCours)) {
         return refus(StatusCode::CONFLICT, "envoi_en_cours", None);
     }
-    t.envoi_decoupe = Some(EnvoiDecoupe { statut: Statut::EnAttente, code_erreur: None, erreur: None, le: maintenant() });
+    t.envoi_decoupe = Some(EnvoiDecoupe { page, statut: Statut::EnAttente, code_erreur: None, erreur: None, le: maintenant() });
     if let Err(e) = ecrire(donnees, &t) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
-    tokio::spawn(envoyer_au_plotter(etat.clone(), id));
+    tokio::spawn(envoyer_au_plotter(etat.clone(), id, page));
     (StatusCode::ACCEPTED, Json(t)).into_response()
 }
 
-async fn envoyer_au_plotter(etat: Partage, id: Uuid) {
+async fn envoyer_au_plotter(etat: Partage, id: Uuid, page: usize) {
     let _jeton = etat.plotter.acquire().await.unwrap();
     let donnees = &etat.config.donnees;
     let maj = |statut: Statut, detail: Option<String>| {
         if let Some(mut t) = lire_travail(donnees, id) {
             let code_erreur = matches!(statut, Statut::Echec).then_some("envoi_decoupe_echoue".to_string());
-            t.envoi_decoupe = Some(EnvoiDecoupe { statut, code_erreur, erreur: detail, le: maintenant() });
+            t.envoi_decoupe = Some(EnvoiDecoupe { page, statut, code_erreur, erreur: detail, le: maintenant() });
             let _ = ecrire(donnees, &t);
         }
     };
     maj(Statut::EnCours, None);
-    let plt = dossier(donnees, id).join("prod").join("decoupe.plt");
+    let plt = fichier_plt(&dossier(donnees, id), page);
     let (port, reglages) = (etat.config.plotter.clone(), etat.config.plotter_stty.clone());
     let resultat = tokio::task::spawn_blocking(move || {
         let octets = std::fs::read(&plt).map_err(|e| format!("lecture de {} : {e}", plt.display()))?;
@@ -513,46 +548,46 @@ async fn envoyer_au_plotter(etat: Partage, id: Uuid) {
     }
 }
 
-async fn apercu_decoupe(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
-    match tokio::fs::read(dossier(&etat.config.donnees, id).join("apercu").join("decoupe.svg")).await {
-        Ok(o) => ([(header::CONTENT_TYPE, "image/svg+xml")], o).into_response(),
-        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+/// Lit un fichier de sortie d'une page existante du travail ; `None` donne un 404.
+async fn servir(donnees: &std::path::Path, id: Uuid, page: usize, chemin: impl FnOnce(&std::path::Path, &Page) -> Option<PathBuf>) -> Option<Vec<u8>> {
+    let (_, p) = lire_page(donnees, id, page)?;
+    tokio::fs::read(chemin(&dossier(donnees, id), &p)?).await.ok()
+}
+
+fn introuvable() -> Response {
+    refus(StatusCode::NOT_FOUND, "introuvable", None)
+}
+
+async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+    match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_svg(rep, page))).await {
+        Some(o) => ([(header::CONTENT_TYPE, "image/svg+xml")], o).into_response(),
+        None => introuvable(),
     }
 }
 
-async fn fichier_decoupe(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
-    let f = dossier(&etat.config.donnees, id).join("prod").join("decoupe.plt");
-    match tokio::fs::read(f).await {
-        Ok(o) => (
-            [(header::CONTENT_TYPE, "application/vnd.hp-hpgl"), (header::CONTENT_DISPOSITION, "attachment; filename=\"decoupe.plt\"")],
-            o,
-        )
-            .into_response(),
-        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+    match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_plt(rep, page))).await {
+        Some(o) => {
+            let nom = format!("attachment; filename=\"decoupe-{page:03}.plt\"");
+            ([(header::CONTENT_TYPE, "application/vnd.hp-hpgl".to_string()), (header::CONTENT_DISPOSITION, nom)], o).into_response()
+        }
+        None => introuvable(),
     }
 }
 
-async fn apercu(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
-    let f = dossier(&etat.config.donnees, id).join("apercu").join("composite.png");
-    match tokio::fs::read(f).await {
-        Ok(o) => png(o),
-        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+async fn apercu(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+    match servir(&etat.config.donnees, id, page, |rep, _| Some(render::chemin_composite(rep, page))).await {
+        Some(o) => png(o),
+        None => introuvable(),
     }
 }
 
-async fn plaque(State(etat): State<Partage>, Chemin((id, nom)): Chemin<(Uuid, String)>) -> Response {
-    let donnees = &etat.config.donnees;
-    // Le nom doit être une plaque connue du travail : jamais un chemin fourni par le client.
-    let connu = std::fs::read(dossier(donnees, id).join("job.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice::<Travail>(&b).ok())
-        .is_some_and(|t| t.plaques.contains(&nom));
-    if !connu {
-        return refus(StatusCode::NOT_FOUND, "introuvable", None);
-    }
-    match tokio::fs::read(render::chemin_apercu_plaque(&dossier(donnees, id), &nom)).await {
-        Ok(o) => png(o),
-        Err(_) => refus(StatusCode::NOT_FOUND, "introuvable", None),
+async fn plaque(State(etat): State<Partage>, Chemin((id, page, nom)): Chemin<(Uuid, usize, String)>) -> Response {
+    // Le nom doit être une plaque connue de la page : jamais un chemin fourni par le client.
+    let chemin = |rep: &std::path::Path, p: &Page| p.plaques.contains(&nom).then(|| render::chemin_apercu_plaque(rep, page, &nom));
+    match servir(&etat.config.donnees, id, page, chemin).await {
+        Some(o) => png(o),
+        None => introuvable(),
     }
 }
 

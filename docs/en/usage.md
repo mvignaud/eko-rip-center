@@ -5,6 +5,9 @@
 3. The job shows up in the list: *Queued*, *Rendering*, then *Done* with a preview
    of each plate.
 
+A multi-page PDF shows one row per page, with its previews, its cut file and its
+send-to-cutter button.
+
 ## Plates
 
 One plate per ink: Cyan, Magenta, Yellow, Black, plus one plate per spot colour in

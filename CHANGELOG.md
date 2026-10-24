@@ -21,6 +21,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   Kona ; la page est agrandie, l'image décalée, les repères en noir pur, et les tracés
   de découpe suivent le même décalage.
 
+- **PDF multipages** : chaque page est rendue avec ses propres plaques (une page sans ton
+  direct n'a pas sa plaque), reçoit ses repères, et a son fichier de découpe et son
+  envoi au plotter. API par page : `/api/travaux/{id}/pages/{n}/…`.
 - **Supprimer** un travail terminé ou en échec, **relancer** un travail en échec (les
   sorties précédentes sont effacées avant le nouveau rendu).
 
@@ -72,7 +75,7 @@ Première version : la chaîne PDF → plaques d'encre fonctionne, sans pilote d
 ### Limites connues
 - Aucun pilote d'imprimante ni de plotter : les plaques ne partent pas encore vers
   les machines.
-- Première page seulement d'un PDF multipage.
+- Première page seulement d'un PDF multipage (corrigé après la 0.2.0).
 - Pas d'authentification : le serveur ne doit être joignable que depuis le réseau
   de l'atelier.
 - Paquets du client non signés : macOS et Windows afficheront un avertissement.

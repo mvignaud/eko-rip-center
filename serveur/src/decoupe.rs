@@ -251,12 +251,18 @@ impl Decoupe {
     }
 }
 
-/// Tracés de découpe de la première page d'un PDF (ou d'un fichier Illustrator
-/// enregistré avec « Créer un fichier compatible PDF »).
-// ponytail: première page seulement, comme le rendu ; le multipage viendra avec la file.
-pub fn extraire(pdf: &[u8], tous: bool) -> Result<Decoupe, String> {
+/// Tracés de découpe de chaque page d'un PDF (ou d'un fichier Illustrator enregistré
+/// avec « Créer un fichier compatible PDF »), dans l'ordre des pages.
+pub fn extraire(pdf: &[u8], tous: bool) -> Result<Vec<Decoupe>, String> {
     let doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
-    let page = *doc.get_pages().values().next().ok_or("PDF sans page")?;
+    let pages: Vec<_> = doc.get_pages().into_values().collect();
+    if pages.is_empty() {
+        return Err("PDF sans page".into());
+    }
+    pages.into_iter().enumerate().map(|(i, page)| extraire_page(&doc, page, tous).map_err(|e| format!("page {} : {e}", i + 1))).collect()
+}
+
+fn extraire_page(doc: &Document, page: lopdf::ObjectId, tous: bool) -> Result<Decoupe, String> {
     let dict_page = doc.get_dictionary(page).map_err(|e| e.to_string())?;
     let ressources = match doc.get_page_resources(page).map_err(|e| e.to_string())? {
         (Some(d), _) => Some(d),
@@ -273,7 +279,7 @@ pub fn extraire(pdf: &[u8], tous: bool) -> Result<Decoupe, String> {
     let ctm = [1.0, 0.0, 0.0, 1.0, -boite[0], -boite[1]];
     let etat = Etat { ctm, espace_trait: None, espace_fond: None, trait_: None, fond: None };
 
-    let mut lecteur = Lecteur { doc: &doc, tous, traces: vec![] };
+    let mut lecteur = Lecteur { doc, tous, traces: vec![] };
     lecteur.lire(&doc.get_page_content(page), ressources, etat, 0)?;
     Ok(Decoupe { traces: lecteur.traces, largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] })
 }
@@ -458,7 +464,7 @@ mod tests {
 
     #[test]
     fn seuls_les_tons_de_decoupe_encres_sont_extraits() {
-        let traces = extraire(&pdf_de_test(), false).unwrap().traces;
+        let traces = extraire(&pdf_de_test(), false).unwrap().remove(0).traces;
         let tons: Vec<&str> = traces.iter().map(|t| t.ton.as_str()).collect();
         assert_eq!(tons, ["CutContour", "Thrucut", "cut contour"], "Silver, trait noir et Thrucut à 0 % ignorés");
 
@@ -482,7 +488,7 @@ mod tests {
 
     #[test]
     fn mode_tous_les_traces() {
-        let d = extraire(&pdf_de_test(), true).unwrap();
+        let d = extraire(&pdf_de_test(), true).unwrap().remove(0);
         // Carré, fond Silver, deux traits Thrucut (même à 0 %), trait noir, cercle.
         assert_eq!(d.traces.len(), 6);
         assert!(d.traces.iter().all(|t| t.ton == TOUS));
