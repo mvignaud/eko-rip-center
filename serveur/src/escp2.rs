@@ -1,5 +1,6 @@
 //! Émetteur ESC/P2 de l'Epson SC-S80600 : plans tramés 2 bits (4 tailles de point) par
-//! encre → flux prêt pour le port 9100. Ni tramage (item 2.3) ni envoi TCP (item 2.4) ici.
+//! encre → flux prêt pour le port 9100, émis bande par bande (`Emetteur`).
+//! Ni tramage (`tramage.rs`) ni connexion (`machines.rs`, piloté par `epson.rs`) ici.
 //!
 //! Sources : documentation publique ESC/P2 d'Epson, structure du pilote libre Gutenprint
 //! (lue, aucun code repris), et structure du flux que notre machine a reçu (capture réseau
@@ -8,6 +9,8 @@
 //! (`(G`, `U`, `(K`, `(i` microweave, `(e` point variable, `(U` unités, `(C/(c/(S` page,
 //! `(D` résolution), puis des bandes de 16 lignes : `(v` avance, et par encre non vide
 //! `($` position, `i` raster 2 bits PackBits, CR ; fin FF puis `LD`/`JE` et `JI`.
+
+use std::io::Write;
 
 /// Encre de l'imprimante ; `code` = numéro de canal de la commande `ESC i`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -48,12 +51,6 @@ pub const LIGNES: usize = 16;
 /// Marge haute et basse de la page, en unités de page (1/360 po) : 5 mm, comme la capture.
 const MARGE: u32 = 71;
 
-/// Un plan tramé : une valeur 0..=3 par point (0 = rien, 3 = gros point), ligne par ligne.
-pub struct Plan {
-    pub encre: Encre,
-    pub points: Vec<u8>,
-}
-
 pub struct Travail {
     /// Nom renvoyé par l'imprimante (`@BDC PS`) ; ASCII, tronqué.
     pub nom: String,
@@ -70,7 +67,6 @@ pub struct Travail {
     /// Page, en points.
     pub page_largeur: u32,
     pub page_hauteur: u32,
-    pub plans: Vec<Plan>,
 }
 
 /// PackBits (TIFF) : répétition `257 - n, octet` (n ≤ 128), littéral `n - 1, octets`.
@@ -134,81 +130,111 @@ fn u32s(a: u32, b: u32) -> Vec<u8> {
     [a.to_le_bytes(), b.to_le_bytes()].concat()
 }
 
-/// Construit le flux complet d'une page.
-pub fn flux(t: &Travail) -> Result<Vec<u8>, String> {
-    if t.dpi < 360 || !2880u32.is_multiple_of(t.dpi) {
-        return Err(format!("résolution {} dpi non prise en charge", t.dpi));
-    }
-    if t.largeur == 0 || t.hauteur == 0 || !t.x.is_multiple_of(16) {
-        return Err("image vide ou position horizontale non multiple de 16 points".into());
-    }
-    if t.x as usize + t.largeur > t.page_largeur as usize || t.y as usize + t.hauteur > t.page_hauteur as usize {
-        return Err("l'image dépasse la page".into());
-    }
-    let mut plans: Vec<&Plan> = t.plans.iter().collect();
-    plans.sort_by_key(|p| ORDRE.iter().position(|&c| c == p.encre.code()));
-    for (i, p) in plans.iter().enumerate() {
-        if p.points.len() != t.largeur * t.hauteur || p.points.iter().any(|&v| v > 3) {
-            return Err(format!("plan {:?} : taille ou valeur hors 0..=3", p.encre));
+/// Émission en flux : l'en-tête à la création, puis les bandes de `LIGNES` lignes dans
+/// l'ordre de la page, puis la fin. Rien de la page n'est gardé : le pilote (`epson.rs`)
+/// écrit chaque bande dans la connexion dès qu'elle est tramée.
+pub struct Emetteur<W: Write> {
+    w: W,
+    largeur: usize,
+    hauteur: usize,
+    x: u32,
+    y: u32,
+    /// Première ligne de la prochaine bande.
+    y0: usize,
+    /// Position verticale de la tête, en points (dernière avance `(v`).
+    courant: u32,
+    ligne: Vec<u8>,
+}
+
+fn ecrire(w: &mut impl Write, octets: &[u8]) -> Result<(), String> {
+    w.write_all(octets).map_err(|e| format!("envoi du flux : {e}"))
+}
+
+impl<W: Write> Emetteur<W> {
+    /// Vérifie la géométrie de `t` et écrit l'en-tête ; les points arrivent par `bande`.
+    pub fn nouveau(mut w: W, t: &Travail) -> Result<Self, String> {
+        if t.dpi < 360 || !2880u32.is_multiple_of(t.dpi) {
+            return Err(format!("résolution {} dpi non prise en charge", t.dpi));
         }
-        if i > 0 && plans[i - 1].encre == p.encre {
-            return Err(format!("encre {:?} en double", p.encre));
+        if t.largeur == 0 || t.hauteur == 0 || !t.x.is_multiple_of(16) {
+            return Err("image vide ou position horizontale non multiple de 16 points".into());
         }
+        if t.x as usize + t.largeur > t.page_largeur as usize || t.y as usize + t.hauteur > t.page_hauteur as usize {
+            return Err("l'image dépasse la page".into());
+        }
+        let mut f = vec![0x11; 16384];
+        f.extend_from_slice(b"\0\0\0\x1b\x01@EJL 1284.4\n@EJL     \n\x1b@");
+        let logiciel = format!("E-KO RIP Center {}", env!("CARGO_PKG_VERSION"));
+        remote(
+            &mut f,
+            &[
+                (b"JS", [prefixe(3, ascii(&t.nom, 200, false)), vec![0]].concat()),
+                (b"JH", prefixe(6, ascii(&t.poste, 64, false))),
+                (b"JU", prefixe(3, ascii(&t.utilisateur, 64, false))),
+                (b"HD", prefixe(1, [vec![1], ascii(&logiciel, 40, true)].concat())),
+                (b"HD", prefixe(1, [vec![2], ascii(std::env::consts::OS, 10, true)].concat())),
+                (b"HD", prefixe(1, [vec![4], ascii("", 10, true)].concat())),
+            ],
+        );
+        // Valeurs relevées telles quelles sur la capture ; sens exact non documenté.
+        remote(
+            &mut f,
+            &[
+                (b"SN", vec![0, 8, 0]),
+                (b"SN", vec![0, 0x82, 0x47]),
+                (b"AC", vec![0, 0x40]),
+                (b"EX", vec![0, 0, 0, 0, 0x14, 0]),
+                (b"DR", vec![0, 1, 0, 0]),
+            ],
+        );
+        f.extend_from_slice(b"\x1b@");
+        cmd(&mut f, b'G', &[1]);
+        f.extend_from_slice(&[0x1b, b'U', 0]);
+        cmd(&mut f, b'K', &[0, 0]);
+        cmd(&mut f, b'i', &[1, 0xf3, 0]);
+        cmd(&mut f, b'e', &[0, 0x11]);
+        let pas = (2880 / t.dpi) as u8;
+        cmd(&mut f, b'U', &[8, pas, pas, 0x40, 0x0b]);
+        let page = |points: u32| (points * 360).div_ceil(t.dpi);
+        let longueur = page(t.page_hauteur);
+        cmd(&mut f, b'C', &longueur.to_le_bytes());
+        cmd(&mut f, b'c', &u32s(MARGE, MARGE + longueur));
+        cmd(&mut f, b'S', &u32s(page(t.page_largeur), longueur + 2 * MARGE));
+        let d = (14400 / t.dpi) as u8;
+        cmd(&mut f, b'D', &[0x40, 0x38, d, d]);
+        ecrire(&mut w, &f)?;
+        let octets = t.largeur.div_ceil(4);
+        Ok(Emetteur { w, largeur: t.largeur, hauteur: t.hauteur, x: t.x, y: t.y, y0: 0, courant: 0, ligne: vec![0; LIGNES * octets] })
     }
 
-    let mut f = vec![0x11; 16384];
-    f.extend_from_slice(b"\0\0\0\x1b\x01@EJL 1284.4\n@EJL     \n\x1b@");
-    let logiciel = format!("E-KO RIP Center {}", env!("CARGO_PKG_VERSION"));
-    remote(
-        &mut f,
-        &[
-            (b"JS", [prefixe(3, ascii(&t.nom, 200, false)), vec![0]].concat()),
-            (b"JH", prefixe(6, ascii(&t.poste, 64, false))),
-            (b"JU", prefixe(3, ascii(&t.utilisateur, 64, false))),
-            (b"HD", prefixe(1, [vec![1], ascii(&logiciel, 40, true)].concat())),
-            (b"HD", prefixe(1, [vec![2], ascii(std::env::consts::OS, 10, true)].concat())),
-            (b"HD", prefixe(1, [vec![4], ascii("", 10, true)].concat())),
-        ],
-    );
-    // Valeurs relevées telles quelles sur la capture ; sens exact non documenté.
-    remote(
-        &mut f,
-        &[
-            (b"SN", vec![0, 8, 0]),
-            (b"SN", vec![0, 0x82, 0x47]),
-            (b"AC", vec![0, 0x40]),
-            (b"EX", vec![0, 0, 0, 0, 0x14, 0]),
-            (b"DR", vec![0, 1, 0, 0]),
-        ],
-    );
-    f.extend_from_slice(b"\x1b@");
-    cmd(&mut f, b'G', &[1]);
-    f.extend_from_slice(&[0x1b, b'U', 0]);
-    cmd(&mut f, b'K', &[0, 0]);
-    cmd(&mut f, b'i', &[1, 0xf3, 0]);
-    cmd(&mut f, b'e', &[0, 0x11]);
-    let pas = (2880 / t.dpi) as u8;
-    cmd(&mut f, b'U', &[8, pas, pas, 0x40, 0x0b]);
-    let page = |points: u32| (points * 360).div_ceil(t.dpi);
-    let longueur = page(t.page_hauteur);
-    cmd(&mut f, b'C', &longueur.to_le_bytes());
-    cmd(&mut f, b'c', &u32s(MARGE, MARGE + longueur));
-    cmd(&mut f, b'S', &u32s(page(t.page_largeur), longueur + 2 * MARGE));
-    let d = (14400 / t.dpi) as u8;
-    cmd(&mut f, b'D', &[0x40, 0x38, d, d]);
-
-    let octets = t.largeur.div_ceil(4);
-    let mut ligne = vec![0u8; LIGNES * octets];
-    let mut courant = 0u32;
-    for y0 in (0..t.hauteur).step_by(LIGNES) {
+    /// Bande suivante : pour chaque encre, ses `min(LIGNES, lignes restantes)` lignes de
+    /// points 0..=3. Une encre vide sur la bande n'est pas émise ; une bande toute vide non
+    /// plus (l'avance `(v` suivante la saute).
+    pub fn bande(&mut self, plans: &[(Encre, &[u8])]) -> Result<(), String> {
+        if self.y0 >= self.hauteur {
+            return Err("bande au-delà de l'image".into());
+        }
+        let (largeur, y0) = (self.largeur, self.y0);
+        let n = LIGNES.min(self.hauteur - y0);
+        let mut plans: Vec<&(Encre, &[u8])> = plans.iter().collect();
+        plans.sort_by_key(|(e, _)| ORDRE.iter().position(|&c| c == e.code()));
+        for (i, (encre, points)) in plans.iter().enumerate() {
+            if points.len() != n * largeur || points.iter().any(|&v| v > 3) {
+                return Err(format!("plan {encre:?} : taille ou valeur hors 0..=3"));
+            }
+            if i > 0 && plans[i - 1].0 == *encre {
+                return Err(format!("encre {encre:?} en double"));
+            }
+        }
+        let octets = largeur.div_ceil(4);
+        let mut f = Vec::new();
         let mut avance_faite = false;
-        for p in &plans {
-            ligne.fill(0);
+        for (encre, points) in plans {
+            self.ligne.fill(0);
             let (mut gauche, mut droite) = (usize::MAX, 0);
-            for r in 0..LIGNES.min(t.hauteur - y0) {
-                let src = &p.points[(y0 + r) * t.largeur..(y0 + r + 1) * t.largeur];
-                for (i, &v) in src.iter().enumerate().filter(|(_, v)| **v != 0) {
-                    ligne[r * octets + i / 4] |= v << (6 - 2 * (i % 4));
+            for r in 0..n {
+                for (i, &v) in points[r * largeur..(r + 1) * largeur].iter().enumerate().filter(|(_, v)| **v != 0) {
+                    self.ligne[r * octets + i / 4] |= v << (6 - 2 * (i % 4));
                     gauche = gauche.min(i);
                     droite = droite.max(i / 4);
                 }
@@ -217,9 +243,9 @@ pub fn flux(t: &Travail) -> Result<Vec<u8>, String> {
                 continue;
             }
             if !avance_faite {
-                let y = t.y + y0 as u32;
-                cmd(&mut f, b'v', &(y - courant).to_le_bytes());
-                courant = y;
+                let y = self.y + y0 as u32;
+                cmd(&mut f, b'v', &(y - self.courant).to_le_bytes());
+                self.courant = y;
                 avance_faite = true;
             }
             let gauche = gauche / 16 * 16;
@@ -228,7 +254,7 @@ pub fn flux(t: &Travail) -> Result<Vec<u8>, String> {
             let brut = droite + 1 - debut;
             let paire = brut.next_multiple_of(2);
             let rangee = |r: usize, n: usize| {
-                let mut v = ligne[r * octets + debut..r * octets + (debut + n).min(octets)].to_vec();
+                let mut v = self.ligne[r * octets + debut..r * octets + (debut + n).min(octets)].to_vec();
                 v.resize(n, 0);
                 v
             };
@@ -241,25 +267,55 @@ pub fn flux(t: &Travail) -> Result<Vec<u8>, String> {
             } else {
                 (0, brut, (0..LIGNES).flat_map(|r| rangee(r, brut)).collect())
             };
-            cmd(&mut f, b'$', &(t.x + gauche as u32).to_le_bytes());
-            f.extend_from_slice(&[0x1b, b'i', p.encre.code(), mode, 2]);
+            cmd(&mut f, b'$', &(self.x + gauche as u32).to_le_bytes());
+            f.extend_from_slice(&[0x1b, b'i', encre.code(), mode, 2]);
             f.extend_from_slice(&(largeur_octets as u16).to_le_bytes());
             f.extend_from_slice(&(LIGNES as u16).to_le_bytes());
             f.extend_from_slice(&donnees);
             f.push(b'\r');
         }
+        self.y0 += LIGNES;
+        ecrire(&mut self.w, &f)
     }
-    f.extend_from_slice(b"\x0c\x1b@");
-    remote(&mut f, &[(b"LD", vec![]), (b"JE", vec![0])]);
-    f.extend_from_slice(b"\x1b@\x1b@");
-    remote(&mut f, &[(b"JI", vec![1, 0])]);
-    f.extend_from_slice(b"\x1b@");
-    Ok(f)
+
+    /// Fin de page et de travail ; refusée si des bandes manquent. Rend l'écrivain.
+    pub fn finir(mut self) -> Result<W, String> {
+        if self.y0 < self.hauteur {
+            return Err(format!("image incomplète : {} lignes sur {}", self.y0, self.hauteur));
+        }
+        let mut f = b"\x0c\x1b@".to_vec();
+        remote(&mut f, &[(b"LD", vec![]), (b"JE", vec![0])]);
+        f.extend_from_slice(b"\x1b@\x1b@");
+        remote(&mut f, &[(b"JI", vec![1, 0])]);
+        f.extend_from_slice(b"\x1b@");
+        ecrire(&mut self.w, &f)?;
+        Ok(self.w)
+    }
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// Un plan tramé : une valeur 0..=3 par point (0 = rien, 3 = gros point), ligne par ligne.
+    pub(crate) struct Plan {
+        pub encre: Encre,
+        pub points: Vec<u8>,
+    }
+
+    /// Flux complet d'une page déjà en mémoire, bande par bande comme le pilote.
+    pub(crate) fn flux(t: &Travail, plans: &[Plan]) -> Result<Vec<u8>, String> {
+        if let Some(p) = plans.iter().find(|p| p.points.len() != t.largeur * t.hauteur) {
+            return Err(format!("plan {:?} : taille différente de l'image", p.encre));
+        }
+        let mut e = Emetteur::nouveau(Vec::new(), t)?;
+        for y0 in (0..t.hauteur).step_by(LIGNES) {
+            let rangs = y0 * t.largeur..(y0 + LIGNES).min(t.hauteur) * t.largeur;
+            let bande: Vec<(Encre, &[u8])> = plans.iter().map(|p| (p.encre, &p.points[rangs.clone()])).collect();
+            e.bande(&bande)?;
+        }
+        e.finir()
+    }
 
     fn depackbits(src: &[u8], n: usize) -> (Vec<u8>, usize) {
         let (mut out, mut p) = (Vec::new(), 0);
@@ -278,12 +334,12 @@ mod tests {
         (out, p)
     }
 
-    struct Bloc {
-        y: u32,
-        x: u32,
-        code: u8,
-        octets: usize,
-        donnees: Vec<u8>,
+    pub(crate) struct Bloc {
+        pub y: u32,
+        pub x: u32,
+        pub code: u8,
+        pub octets: usize,
+        pub donnees: Vec<u8>,
     }
 
     fn hex(d: &[u8]) -> String {
@@ -296,7 +352,7 @@ mod tests {
 
     /// Petit décodeur : rend une ligne par commande au format de `escp2_capture.txt`
     /// (bandes résumées) et les blocs raster décompressés.
-    fn decoder(d: &[u8]) -> (Vec<String>, Vec<Bloc>) {
+    pub(crate) fn decoder(d: &[u8]) -> (Vec<String>, Vec<Bloc>) {
         let (mut l, mut blocs) = (Vec::new(), Vec::new());
         let mut i = d.iter().take_while(|&&b| b == 0x11).count();
         l.push(format!("preambule 0x11 {i}"));
@@ -415,7 +471,7 @@ mod tests {
 
     /// Image synthétique : 9 encres, bords vides, une encre absente de la 1re bande,
     /// dernière bande partielle, aplats (compressés) et bruit (laissé brut).
-    fn travail() -> Travail {
+    fn travail() -> (Travail, Vec<Plan>) {
         let (largeur, hauteur) = (90, 40);
         let encres = [Encre::K, Encre::Rd, Encre::M, Encre::C, Encre::Lk, Encre::Y, Encre::Or, Encre::Lm, Encre::Lc];
         let mut graine = 12345u32;
@@ -439,7 +495,7 @@ mod tests {
                 Plan { encre, points }
             })
             .collect();
-        Travail { nom: "Essai é".into(), poste: "atelier".into(), utilisateur: "mathieu".into(), largeur, hauteur, dpi: 720, x: 32, y: 560, page_largeur: 200, page_hauteur: 700, plans }
+        (Travail { nom: "Essai é".into(), poste: "atelier".into(), utilisateur: "mathieu".into(), largeur, hauteur, dpi: 720, x: 32, y: 560, page_largeur: 200, page_hauteur: 700 }, plans)
     }
 
     #[test]
@@ -464,17 +520,17 @@ mod tests {
 
     #[test]
     fn flux_a_la_structure_de_la_capture() {
-        let t = travail();
-        let (lignes, _) = decoder(&flux(&t).unwrap());
+        let (t, plans) = travail();
+        let (lignes, _) = decoder(&flux(&t, &plans).unwrap());
         assert_eq!(lignes, attendu());
     }
 
     #[test]
     fn flux_redonne_les_plans() {
-        let t = travail();
-        let (_, blocs) = decoder(&flux(&t).unwrap());
+        let (t, plans) = travail();
+        let (_, blocs) = decoder(&flux(&t, &plans).unwrap());
         assert!(blocs.iter().any(|b| b.octets % 2 == 1), "au moins un bloc brut au plus juste");
-        for p in &t.plans {
+        for p in &plans {
             let mut plan = vec![0u8; t.largeur * t.hauteur];
             for b in blocs.iter().filter(|b| b.code == p.encre.code()) {
                 for r in 0..LIGNES {
@@ -497,15 +553,21 @@ mod tests {
 
     #[test]
     fn refus() {
-        let mut t = travail();
+        let (mut t, plans) = travail();
         t.x = 8;
-        assert!(flux(&t).is_err());
-        let mut t = travail();
-        t.plans[1].encre = Encre::K;
-        assert!(flux(&t).is_err());
-        let mut t = travail();
-        t.plans[0].points[0] = 4;
-        assert!(flux(&t).is_err());
+        assert!(flux(&t, &plans).is_err());
+        let (t, mut plans) = travail();
+        plans[1].encre = Encre::K;
+        assert!(flux(&t, &plans).is_err());
+        let (t, mut plans) = travail();
+        plans[0].points[0] = 4;
+        assert!(flux(&t, &plans).is_err());
+        // Bandes manquantes ou en trop : refusées, pas un flux tronqué.
+        let (t, plans) = travail();
+        let mut e = Emetteur::nouveau(Vec::new(), &t).unwrap();
+        let premiere: Vec<(Encre, &[u8])> = plans.iter().map(|p| (p.encre, &p.points[..LIGNES * t.largeur])).collect();
+        e.bande(&premiere).unwrap();
+        assert!(e.finir().unwrap_err().contains("incomplète"));
     }
 
     /// Vérifie que `escp2_capture.txt` résume fidèlement la capture (flux TCP 9100

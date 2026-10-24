@@ -19,6 +19,13 @@ const COL_NIVEAU: u32 = 10;
 const COL_NOM: u32 = 12;
 /// `prtAlertDescription`.
 const ALERTES: [u32; 11] = [1, 3, 6, 1, 2, 1, 43, 18, 1, 1, 8];
+/// `prtAlertSeverityLevel` (RFC 3805) : 3 = critique, 4 = avertissement.
+const GRAVITES: [u32; 11] = [1, 3, 6, 1, 2, 1, 43, 18, 1, 1, 2];
+/// `hrPrinterStatus` (RFC 2790, Host Resources MIB) : 3 au repos, 4 imprime, 5 chauffe.
+const STATUT_IMPRIMANTE: [u32; 11] = [1, 3, 6, 1, 2, 1, 25, 3, 5, 1, 1];
+/// Textes d'alerte relevés sur notre Epson qui arrêtent l'impression, quelle que soit la
+/// gravité annoncée (en minuscules, comparés en contenu).
+const TEXTES_BLOQUANTS: [&str; 1] = ["cover open"];
 /// Réponse d'état Epson (« @BDC ST2 »), MIB privée 1248.
 const ETAT_EPSON: [u32; 14] = [1, 3, 6, 1, 4, 1, 1248, 1, 2, 2, 1, 1, 1, 4];
 
@@ -232,6 +239,31 @@ pub fn lire_alertes(hote: &str, communaute: &str, delai: Duration) -> Result<Vec
     Ok(lignes.into_iter().filter_map(|(_, v)| if let Valeur::Texte(t) = v { Some(String::from_utf8_lossy(&t).trim().to_string()) } else { None }).filter(|t| !t.is_empty()).collect())
 }
 
+/// Alertes qui empêchent d'imprimer : gravité « critique » de la Printer-MIB (RFC 3805),
+/// ou texte relevé sur notre Epson (« printer cover open », 24/10). Une alerte sans gravité
+/// lisible ne compte que par son texte.
+pub fn lire_alertes_bloquantes(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<String>, String> {
+    let (socket, adresse) = connecter(hote, delai)?;
+    let textes = parcourir(&socket, communaute, &ALERTES).map_err(|e| format!("{adresse} : {e}"))?;
+    let gravites = parcourir(&socket, communaute, &GRAVITES).unwrap_or_default();
+    Ok(textes
+        .into_iter()
+        .filter_map(|(ligne, v)| {
+            let Valeur::Texte(t) = v else { return None };
+            let t = String::from_utf8_lossy(&t).trim().to_string();
+            let critique = gravites.iter().any(|(l, g)| *l == ligne && *g == Valeur::Entier(3));
+            let connu = TEXTES_BLOQUANTS.iter().any(|b| t.to_lowercase().contains(b));
+            (!t.is_empty() && (critique || connu)).then_some(t)
+        })
+        .collect())
+}
+
+/// L'imprimante imprime-t-elle (`hrPrinterStatus` = 4) ? `None` sans réponse lisible.
+pub fn imprime(hote: &str, communaute: &str, delai: Duration) -> Option<bool> {
+    let (socket, _) = connecter(hote, delai).ok()?;
+    parcourir(&socket, communaute, &STATUT_IMPRIMANTE).ok()?.into_iter().find_map(|(_, v)| if let Valeur::Entier(n) = v { Some(n == 4) } else { None })
+}
+
 /// Encres, support et chauffages d'une Epson (MIB privée) ; `None` si elle ne répond pas.
 pub fn lire_etat_epson(hote: &str, communaute: &str, delai: Duration) -> Option<EtatEpson> {
     let (socket, _) = connecter(hote, delai).ok()?;
@@ -277,7 +309,7 @@ pub fn lire_medias(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -305,12 +337,61 @@ mod tests {
         assert_eq!(e.chauffages, [(38, 39), (38, 38), (50, 50)]);
     }
 
+    /// Agent SNMP v1 factice sur un port local : répond aux GetNext d'après `table`
+    /// (OID complet, valeur BER), triée ou non. Rend son adresse.
+    pub(crate) fn agent_factice(mut table: Vec<(Vec<u32>, Vec<u8>)>) -> String {
+        table.sort();
+        let agent = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let adresse = agent.local_addr().unwrap().to_string();
+        std::thread::spawn(move || {
+            let mut t = [0u8; 1500];
+            while let Ok((n, de)) = agent.recv_from(&mut t) {
+                // Lire la requête GetNext comme une réponse : même structure, autre type.
+                let mut q = t[..n].to_vec();
+                let pos = q.iter().position(|b| *b == 0xA1).unwrap();
+                q[pos] = 0xA2;
+                let (id, o, _) = decoder(&q).unwrap();
+                let r = match table.iter().find(|(x, _)| x > &o) {
+                    Some((x, v)) => message("public", 0xA2, id, x, v),
+                    None => message("public", 0xA2, id, &[1, 3, 6, 1, 2, 1, 44], &[0x05, 0x00]),
+                };
+                agent.send_to(&r, de).unwrap();
+            }
+        });
+        adresse
+    }
+
+    /// Alertes en cours : capot ouvert (texte relevé), papier épuisé (gravité critique),
+    /// et un avertissement qui ne bloque pas ; statut « imprime » de la Host Resources MIB.
+    pub(crate) fn alertes_d_essai() -> Vec<(Vec<u32>, Vec<u8>)> {
+        let a = |col: u32, i: u32| ALERTES[..10].iter().copied().chain([col, 1, i]).collect::<Vec<u32>>();
+        vec![
+            (a(2, 1), entier(4)),
+            (a(2, 2), entier(3)),
+            (a(2, 3), entier(4)),
+            (a(8, 1), tlv(0x04, b"printer cover open")),
+            (a(8, 2), tlv(0x04, b"media empty")),
+            (a(8, 3), tlv(0x04, b"ink low")),
+            (STATUT_IMPRIMANTE.iter().copied().chain([1]).collect(), entier(4)),
+        ]
+    }
+
+    #[test]
+    fn alertes_bloquantes_et_statut() {
+        let adresse = agent_factice(alertes_d_essai());
+        let d = Duration::from_secs(2);
+        assert_eq!(lire_alertes_bloquantes(&adresse, "public", d).unwrap(), ["printer cover open", "media empty"]);
+        assert_eq!(lire_alertes(&adresse, "public", d).unwrap().len(), 3, "l'écran garde toutes les alertes");
+        assert_eq!(imprime(&adresse, "public", d), Some(true));
+        let vide = agent_factice(vec![]);
+        assert_eq!(lire_alertes_bloquantes(&vide, "public", d).unwrap(), Vec::<String>::new());
+        assert_eq!(imprime(&vide, "public", d), None);
+    }
+
     /// Agent SNMP factice : un rouleau de 1615 mm (micromètres) en entrée 1, rien en entrée 2.
     #[test]
     fn largeur_lue_sur_un_agent() {
-        let agent = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let adresse = agent.local_addr().unwrap().to_string();
-        let table: Vec<(Vec<u32>, Vec<u8>)> = vec![
+        let table: Vec<(Vec<u32>, Vec<u8>)> = [
             (vec![3, 1, 1], entier(4)),
             (vec![3, 1, 2], entier(4)),
             (vec![7, 1, 1], entier(1_615_000)),
@@ -320,23 +401,11 @@ mod tests {
             (vec![12, 1, 1], tlv(0x04, b"Vinyle brillant")),
             (vec![12, 1, 2], tlv(0x04, b"")),
             (vec![13, 1, 1], entier(9)),
-        ];
-        std::thread::spawn(move || {
-            let mut t = [0u8; 1500];
-            while let Ok((n, de)) = agent.recv_from(&mut t) {
-                // Lire la requête GetNext comme une réponse : même structure, autre type.
-                let mut q = t[..n].to_vec();
-                let pos = q.iter().position(|b| *b == 0xA1).unwrap();
-                q[pos] = 0xA2;
-                let (id, o, _) = decoder(&q).unwrap();
-                let suite = table.iter().map(|(s, v)| (PRT_INPUT.iter().copied().chain(s.iter().copied()).collect::<Vec<u32>>(), v)).find(|(x, _)| x > &o);
-                let r = match suite {
-                    Some((x, v)) => message("public", 0xA2, id, &x, v),
-                    None => message("public", 0xA2, id, &[1, 3, 6, 1, 2, 1, 44], &[0x05, 0x00]),
-                };
-                agent.send_to(&r, de).unwrap();
-            }
-        });
+        ]
+        .into_iter()
+        .map(|(s, v)| (PRT_INPUT.iter().copied().chain(s).collect(), v))
+        .collect();
+        let adresse = agent_factice(table);
         let m = lire_medias(&adresse, "public", Duration::from_secs(2)).unwrap();
         assert_eq!(m, [Media { entree: 1, largeur_mm: 1615.0, nom: Some("Vinyle brillant".into()), longueur_m: Some(38.926) }]);
         assert!(lire_medias("127.0.0.1:9", "public", Duration::from_millis(200)).is_err(), "pas d'agent : erreur, pas de blocage");

@@ -138,17 +138,17 @@ impl Erosion {
 }
 
 /// Lecture d'une plaque TIFF 8 bits ligne par ligne, en valeurs « 0 = pleine encre ».
-struct LecteurTiff {
+pub(crate) struct LecteurTiff {
     decodeur: tiff::decoder::Decoder<BufReader<std::fs::File>>,
-    largeur: usize,
-    hauteur: usize,
+    pub(crate) largeur: usize,
+    pub(crate) hauteur: usize,
     bande: u32,
     lignes: VecDeque<Vec<u8>>,
     inverser: bool,
 }
 
 impl LecteurTiff {
-    fn ouvrir(chemin: &Path) -> Result<Self, String> {
+    pub(crate) fn ouvrir(chemin: &Path) -> Result<Self, String> {
         let f = std::fs::File::open(chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
         let mut decodeur = tiff::decoder::Decoder::new(BufReader::new(f)).map_err(|e| format!("{} : {e}", chemin.display()))?;
         if decodeur.colortype().map_err(|e| e.to_string())? != tiff::ColorType::Gray(8) {
@@ -160,7 +160,7 @@ impl LecteurTiff {
         Ok(LecteurTiff { decodeur, largeur: l as usize, hauteur: h as usize, bande: 0, lignes: VecDeque::new(), inverser: photometrie == 0 })
     }
 
-    fn ligne(&mut self) -> Result<Vec<u8>, String> {
+    pub(crate) fn ligne(&mut self) -> Result<Vec<u8>, String> {
         while self.lignes.is_empty() {
             let (_, rangs) = self.decodeur.chunk_data_dimensions(self.bande);
             let donnees = match self.decodeur.read_chunk(self.bande).map_err(|e| e.to_string())? {

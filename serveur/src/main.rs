@@ -12,8 +12,6 @@ mod edition;
 mod erp;
 mod etat;
 mod epson;
-// Branché sur la file par l'item 2.4 (envoi TCP 9100).
-#[cfg_attr(not(test), allow(dead_code))]
 mod escp2;
 mod machines;
 mod media;
@@ -27,11 +25,8 @@ mod reglages;
 mod releves;
 mod reperage;
 mod sauvegarde;
-// Séparation 9 encres et tramage 2 bits : branchés sur la sortie Epson par l'item 2.6.
-#[cfg_attr(not(test), allow(dead_code))]
 mod separation;
 mod supports;
-#[cfg_attr(not(test), allow(dead_code))]
 mod tramage;
 
 use axum::{
@@ -2227,7 +2222,9 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         Decoupe if p.traces_decoupe == 0 => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
         Impression if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
         Impression if m.modele == machines::Modele::EpsonScS80600 => {
-            if let Err(e) = epson::preparer(&p.plaques, t.demande.couches) {
+            // Le pilote direct (réseau) n'a pas encore le blanc ni l'argent ; le dossier, si.
+            let controle = if matches!(m.connexion, machines::Connexion::Reseau { .. }) { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
+            if let Err(e) = controle(&p.plaques, t.demande.couches) {
                 return refus(StatusCode::CONFLICT, "envoi_impossible", Some(e));
             }
         }
@@ -2291,15 +2288,17 @@ async fn repartir(etat: Partage) {
 
 /// Exécute une sortie selon le modèle et l'opération, et note le résultat.
 async fn executer(etat: Partage, s: file::Sortie) {
+    let echec = |e: String| ("sortie_echouee", e);
     let resultat = match machine(&etat, &s.machine) {
-        None => Err(format!("machine « {} » absente du catalogue", s.machine)),
-        Some(m) => match (s.operation(), &m.connexion) {
-            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await,
-            (machines::Operation::Impression, _) => Err(format!("pilote d'impression à venir pour {}", m.nom)),
-            (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await,
+        None => Err(echec(format!("machine « {} » absente du catalogue", s.machine))),
+        Some(m) => match (s.operation(), m.connexion.clone()) {
+            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await.map_err(echec),
+            (machines::Operation::Impression, machines::Connexion::Reseau { hote, port }) if m.modele == machines::Modele::EpsonScS80600 => imprimer_sur_l_epson(&etat, &s, &m, hote, port).await,
+            (machines::Operation::Impression, _) => Err(echec(format!("pilote d'impression à venir pour {}", m.nom))),
+            (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await.map_err(echec),
         },
     };
-    if let Err(e) = &resultat {
+    if let Err((_, e)) = &resultat {
         eprintln!("sortie {} ({}, travail {} page {}) : {e}", s.id, s.machine, s.travail, s.page);
     }
     let mut f = etat.file.lock().unwrap();
@@ -2307,10 +2306,86 @@ async fn executer(etat: Partage, s: file::Sortie) {
         x.fin = Some(maintenant());
         match resultat {
             Ok(()) => x.etat = file::Etat::Terminee,
-            Err(e) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some("sortie_echouee".into()), Some(e)),
+            Err((code, e)) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e)),
         }
     }
     let _ = f.ecrire(&etat.config.donnees);
+}
+
+/// Intervalle des relevés SNMP pendant une impression par le pilote direct.
+const RELEVE_IMPRESSION: Duration = Duration::from_secs(5);
+
+/// Pilote direct de l'Epson (roadmap 2.4) : plaques CMJN de la page → séparation 9 encres
+/// → tramage 2 bits → ESC/P2 écrit dans la connexion TCP au fil des bandes (`epson.rs`).
+/// Avec une adresse SNMP, les alertes sont lues avant l'envoi, puis toutes les 5 s pendant
+/// l'envoi et jusqu'à la fin de l'impression (`hrPrinterStatus` quitte « imprime ») : une
+/// alerte bloquante coupe la connexion et fait échouer la sortie. Un relevé sans réponse
+/// ne fait rien échouer : il ne dit rien.
+async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, hote: String, port: u16) -> Result<(), (&'static str, String)> {
+    let echec = |e: String| ("sortie_echouee", e);
+    let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or(echec("travail ou page disparu".into()))?;
+    epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches).map_err(|e| ("envoi_impossible", e))?;
+    let rep = dossier(&etat.config.donnees, s.travail);
+    let plaques = epson::PLAQUES_CMJN.map(|n| render::chemin_plaque(&rep, s.page, n));
+    let dpi = t.demande.dpi;
+    let points = |mm: f64| (mm / 25.4 * dpi as f64).floor().max(0.0) as u32;
+    let travail = escp2::Travail {
+        nom: t.nom.clone(),
+        poste: "E-KO RIP Center".into(),
+        utilisateur: String::new(),
+        largeur: 0,
+        hauteur: 0,
+        dpi,
+        x: points(m.origine_impression_mm[0]) / 16 * 16,
+        y: points(m.origine_impression_mm[1]),
+        page_largeur: points(m.laize_mm),
+        page_hauteur: 0,
+    };
+    let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
+    let alertes = |h: String, c: String| async move {
+        let a = tokio::task::spawn_blocking(move || media::lire_alertes_bloquantes(&h, &c, Duration::from_secs(2))).await;
+        a.ok().and_then(Result::ok).filter(|a| !a.is_empty()).map(|a| a.join(", "))
+    };
+    if let Some(h) = &m.snmp
+        && let Some(a) = alertes(h.clone(), communaute.clone()).await
+    {
+        return Err(("imprimante_en_alerte", a));
+    }
+    let connexion = tokio::task::spawn_blocking(move || machines::ouvrir_reseau(&hote, port)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
+    let coupure = connexion.try_clone().map_err(|e| echec(e.to_string()))?;
+    let mut envoi = tokio::task::spawn_blocking(move || {
+        let w = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation::Separation::default(), &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
+        let c = w.into_inner().map_err(|e| format!("envoi du flux : {}", e.error()))?;
+        c.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())
+    });
+    let Some(h) = m.snmp.clone() else { return envoi.await.map_err(|e| echec(e.to_string()))?.map_err(echec) };
+    let mut tic = tokio::time::interval(RELEVE_IMPRESSION);
+    tic.tick().await;
+    loop {
+        tokio::select! {
+            r = &mut envoi => break r.map_err(|e| echec(e.to_string()))?.map_err(echec)?,
+            _ = tic.tick() => if let Some(a) = alertes(h.clone(), communaute.clone()).await {
+                let _ = coupure.shutdown(std::net::Shutdown::Both);
+                let _ = envoi.await;
+                return Err(("imprimante_en_alerte", a));
+            },
+        }
+    }
+    // Envoyé : l'imprimante finit la page. Surveillée tant qu'elle se dit en train
+    // d'imprimer, au plus deux fois la durée estimée plus 10 min.
+    let limite = m.duree_impression_min(p.hauteur_mm, dpi).map_or(Duration::from_secs(4 * 3600), |d| Duration::from_secs_f64((2.0 * d + 10.0) * 60.0));
+    let fin = tokio::time::Instant::now() + limite;
+    while tokio::time::Instant::now() < fin {
+        if let Some(a) = alertes(h.clone(), communaute.clone()).await {
+            return Err(("imprimante_en_alerte", a));
+        }
+        let (hh, c) = (h.clone(), communaute.clone());
+        if tokio::task::spawn_blocking(move || media::imprime(&hh, &c, Duration::from_secs(2))).await.ok().flatten() != Some(true) {
+            break;
+        }
+        tic.tick().await;
+    }
+    Ok(())
 }
 
 /// Découpe : le HP-GL du rendu (0,01 mm) passé au pas de la machine, par sa connexion ;
@@ -3152,6 +3227,7 @@ mod tests {
                 snmp: None,
                 pas_mm: None,
                 decalage_mm: [0.0; 2],
+                origine_impression_mm: [0.0; 2],
                 m2_heure: None,
                 parametres_decoupe: vec![],
                 decoupe_retournee: false,
@@ -3477,7 +3553,7 @@ mod tests {
         const RETRAIT: f64 = 5.0 / MM;
 
         /// Crée le travail depuis `pdf`, comme un envoi, et attend la fin du rendu.
-        async fn rendre(e: &Partage, pdf: Vec<u8>, d: Demande) -> Travail {
+        pub(super) async fn rendre(e: &Partage, pdf: Vec<u8>, d: Demande) -> Travail {
             let id = Uuid::new_v4();
             let rep = dossier(&e.config.donnees, id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3725,6 +3801,144 @@ mod tests {
             let rep = dossier(&e.config.donnees, t.id);
             assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"));
             assert!(proches(boite_hpgl(&fichier_plt(&rep, 1)), [RETRAIT, RETRAIT, 400.0 - RETRAIT, 100.0 - RETRAIT], 0.02));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
+
+    /// Pilote direct de l'Epson (roadmap 2.4, 2.6) : PDF CMJN → rendu Ghostscript →
+    /// séparation → tramage → ESC/P2 reçu par un faux port 9100, re-décodé.
+    mod pilote_epson {
+        use super::controle_d_acces::{appel, etat};
+        use super::regression_geometrie::rendre;
+        use super::*;
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        const MM: f64 = imbrication::PT_PAR_MM;
+
+        /// 20 × 10 mm : moitié gauche en tons clairs (C, M, N 15 %, J plein), moitié droite
+        /// à 40 % (zone de transition : claire et foncée ensemble) ; `blanc` : un carré
+        /// `White` en plus.
+        fn pdf(blanc: bool) -> Vec<u8> {
+            let (l, h) = (20.0 * MM, 10.0 * MM);
+            let mut doc = Document::with_version("1.4");
+            let sep = doc.add_object(Object::Array(vec![
+                "Separation".into(),
+                "White".into(),
+                "DeviceCMYK".into(),
+                Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 0.into(), 0.into(), Object::Real(0.1)], "N" => 1 }),
+            ]));
+            let mut contenu = format!("0.15 0.15 1 0.15 k 0 0 {} {h} re f 0.4 0.4 0 0.4 k {} 0 {} {h} re f", l / 2.0, l / 2.0, l / 2.0);
+            if blanc {
+                contenu += " /CS0 cs 1 scn 0 0 10 10 re f";
+            }
+            let c = doc.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
+            let pages = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real(l as f32), Object::Real(h as f32)], "Contents" => c, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } });
+            doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+            doc.trailer.set("Root", cat);
+            let mut o = vec![];
+            doc.save_to(&mut o).unwrap();
+            o
+        }
+
+        /// L'Epson du catalogue passe en réseau sur `port`, SNMP éventuel.
+        fn en_reseau(e: &Partage, port: u16, snmp: Option<String>) {
+            let mut c = e.machines.write().unwrap();
+            (c[0].connexion, c[0].snmp) = (machines::Connexion::Reseau { hote: "127.0.0.1".into(), port }, snmp);
+        }
+
+        /// Exécute une sortie de la page 1 sur l'Epson et rend son état final.
+        async fn executer_sur_l_epson(e: &Partage, travail: Uuid) -> file::Sortie {
+            let s = file::Sortie::nouvelle("epson", machines::Operation::Impression, travail, "essai", 1, maintenant());
+            e.file.lock().unwrap().sorties.push(s.clone());
+            executer(e.clone(), s.clone()).await;
+            e.file.lock().unwrap().sorties.iter().find(|x| x.id == s.id).unwrap().clone()
+        }
+
+        #[tokio::test]
+        async fn pdf_cmjn_imprime_par_le_reseau() {
+            let e = etat("pilote-epson");
+            let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = ecoute.local_addr().unwrap().port();
+            let recu = std::thread::spawn(move || {
+                let (mut f, _) = ecoute.accept().unwrap();
+                let mut o = vec![];
+                std::io::Read::read_to_end(&mut f, &mut o).unwrap();
+                o
+            });
+            // SNMP : un avertissement seul (encre basse) ne bloque pas ; sans `hrPrinterStatus`,
+            // la surveillance s'arrête à la fin de l'envoi.
+            let avertissement = media::tests::alertes_d_essai().into_iter().filter(|(o, _)| o.ends_with(&[1, 3])).collect();
+            en_reseau(&e, port, Some(media::tests::agent_factice(avertissement)));
+            let dpi = 720;
+            let t = rendre(&e, pdf(false), Demande { dpi, ..Default::default() }).await;
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            tokio::spawn(repartir(e.clone()));
+            let recu = tokio::time::timeout(Duration::from_secs(30), tokio::task::spawn_blocking(move || recu.join().unwrap())).await.expect("rien reçu en 30 s").unwrap();
+            let (lignes, blocs) = escp2::tests::decoder(&recu);
+            // Résolution du mode (720 : pas 4 sur 2880, `(D` 20/20), bandes de 16 lignes 2 bits.
+            assert!(lignes.contains(&"ESC (U 08 04 04 40 0b".to_string()) && lignes.contains(&"ESC (D 40 38 14 14".to_string()), "{lignes:?}");
+            let bandes: Vec<&String> = lignes.iter().filter(|l| l.starts_with("BANDES")).collect();
+            assert_eq!(bandes.len(), 1, "{lignes:?}");
+            assert!(bandes[0].starts_with("BANDES lignes=16 bits=2 x%16=0 ordre="), "{}", bandes[0]);
+            // Canaux : les 7 que la séparation tire du CMJN (C Lc M Lm J N Lk) ; Or et Rd
+            // n'ont pas de source sans profil de gamut étendu.
+            let mut codes: Vec<u8> = blocs.iter().map(|b| b.code).collect();
+            codes.sort();
+            codes.dedup();
+            assert_eq!(codes, [0, 1, 2, 4, 16, 17, 18]);
+            assert!(codes.iter().all(|c| escp2::ORDRE.contains(c)), "canal hors des 9 encres");
+            // Toute la page, de la ligne 0 à la dernière bande (10 mm à 720 dpi : 283 lignes).
+            let hauteur = (10.0 / 25.4 * dpi as f64).round() as u32;
+            assert_eq!(blocs.iter().map(|b| b.y).min(), Some(0));
+            assert_eq!(blocs.iter().map(|b| b.y).max().map(|y| y / 16), Some((hauteur - 1) / 16));
+            // Jaune plein à gauche, absent à droite : ses blocs s'arrêtent à mi-largeur.
+            let largeur = (20.0 / 25.4 * dpi as f64).round() as u32;
+            assert!(blocs.iter().filter(|b| b.code == 4).all(|b| b.x + 4 * b.octets as u32 <= largeur / 2 + 16), "jaune à droite");
+            for _ in 0..100 {
+                if e.file.lock().unwrap().sorties[0].etat == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!(e.file.lock().unwrap().sorties[0].etat, file::Etat::Terminee);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        #[tokio::test]
+        async fn echecs_codes() {
+            let e = etat("pilote-epson-echecs");
+            let t = rendre(&e, pdf(false), Demande { dpi: 360, ..Default::default() }).await;
+
+            // Personne au bout du port : échec, code stable.
+            let ferme = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+            en_reseau(&e, ferme, None);
+            let s = executer_sur_l_epson(&e, t.id).await;
+            assert_eq!((s.etat, s.code_erreur.as_deref()), (file::Etat::Echec, Some("sortie_echouee")), "{:?}", s.erreur);
+
+            // Imprimante en alerte (capot ouvert) : rien n'est envoyé.
+            let agent = media::tests::agent_factice(media::tests::alertes_d_essai());
+            en_reseau(&e, ferme, Some(agent));
+            let s = executer_sur_l_epson(&e, t.id).await;
+            assert_eq!((s.etat, s.code_erreur.as_deref()), (file::Etat::Echec, Some("imprimante_en_alerte")));
+            assert!(s.erreur.as_deref().unwrap().contains("printer cover open"), "{:?}", s.erreur);
+
+            // Blanc : refusé à l'entrée de la file, et par le pilote si la sortie y est déjà.
+            en_reseau(&e, ferme, None);
+            let t = rendre(&e, pdf(true), Demande { dpi: 360, ..Default::default() }).await;
+            assert!(t.pages[0].plaques.contains(&"White".to_string()), "{:?}", t.pages[0].plaques);
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson" }))).await;
+            assert_eq!(r.status(), StatusCode::CONFLICT);
+            let corps: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(corps["code"], "envoi_impossible", "{corps}");
+            let s = executer_sur_l_epson(&e, t.id).await;
+            assert_eq!((s.etat, s.code_erreur.as_deref()), (file::Etat::Echec, Some("envoi_impossible")));
+            // En dossier, le blanc reste admis.
+            e.machines.write().unwrap()[0].connexion = machines::Connexion::Dossier;
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }

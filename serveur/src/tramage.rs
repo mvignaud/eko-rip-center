@@ -1,5 +1,6 @@
 //! Tramage 2 bits de l'Epson SC-S80600 (roadmap 2.3) : un plan d'encre 8 bits de la
-//! séparation → un `escp2::Plan` (0 rien, 1 petit, 2 moyen, 3 gros point).
+//! séparation → une valeur par point (0 rien, 1 petit, 2 moyen, 3 gros point), ligne par
+//! ligne (`Trameur`), pour `escp2::Emetteur`.
 //!
 //! Méthode publique : diffusion d'erreur multi-niveaux (noyau de Floyd–Steinberg, 1976),
 //! parcours serpentin (une ligne sur deux de droite à gauche, noyau en miroir), et seuil
@@ -15,7 +16,7 @@
 //! gros points n'apparaissent donc que dans les tons foncés, le grain reste fin dans les
 //! clairs. Les poids réels (taille de goutte sur le vinyle) sont à mesurer (2.4/2.8).
 
-use crate::escp2::{Encre, Plan};
+use crate::escp2::Encre;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -36,51 +37,76 @@ impl Default for Tramage {
     }
 }
 
-pub fn tramer(encre: Encre, valeurs: &[u8], largeur: usize, p: &Tramage) -> Result<Plan, String> {
-    if largeur == 0 || !valeurs.len().is_multiple_of(largeur) {
-        return Err(format!("plan {encre:?} : taille incompatible avec la largeur {largeur}"));
+/// Tramage ligne à ligne : l'erreur diffusée (ligne courante et suivante) et la graine
+/// passent d'une ligne à la suivante, ce qui permet de tramer une page par bandes, au fil
+/// de sa lecture, sans la garder en mémoire (pilote de `epson.rs`).
+pub struct Trameur {
+    w: [f32; 4],
+    bruit: f32,
+    /// Erreur de la ligne courante et de la suivante, une case de marge de chaque côté.
+    ligne: Vec<f32>,
+    suivante: Vec<f32>,
+    graine: u32,
+    y: usize,
+}
+
+impl Trameur {
+    pub fn nouveau(encre: Encre, largeur: usize, p: &Tramage) -> Result<Self, String> {
+        let w = [0.0, p.poids[0], p.poids[1], p.poids[2]];
+        if !(w.windows(2).all(|n| n[0] < n[1]) && w[3] <= 1.0) {
+            return Err(format!("poids de points {:?} : croissants dans 0..=1 attendus", p.poids));
+        }
+        let graine = 0x9E37_79B9u32 ^ (encre.code() as u32 + 1).wrapping_mul(0x85EB_CA6B);
+        Ok(Trameur { w, bruit: p.bruit, ligne: vec![0.0; largeur + 2], suivante: vec![0.0; largeur + 2], graine, y: 0 })
     }
-    let w = [0.0, p.poids[0], p.poids[1], p.poids[2]];
-    if !(w.windows(2).all(|n| n[0] < n[1]) && w[3] <= 1.0) {
-        return Err(format!("poids de points {:?} : croissants dans 0..=1 attendus", p.poids));
-    }
-    let hauteur = valeurs.len() / largeur;
-    // Erreur de la ligne courante et de la suivante, une case de marge de chaque côté.
-    let (mut ligne, mut suivante) = (vec![0f32; largeur + 2], vec![0f32; largeur + 2]);
-    let mut points = vec![0u8; valeurs.len()];
-    let mut graine = 0x9E37_79B9u32 ^ (encre.code() as u32 + 1).wrapping_mul(0x85EB_CA6B);
-    for y in 0..hauteur {
-        let vers_droite = y % 2 == 0;
+
+    /// Trame la ligne suivante ; `valeurs` et `points` ont la largeur du trameur.
+    pub fn tramer_ligne(&mut self, valeurs: &[u8], points: &mut [u8]) {
+        let (w, largeur) = (self.w, valeurs.len());
+        let vers_droite = self.y.is_multiple_of(2);
         for j in 0..largeur {
             let x = if vers_droite { j } else { largeur - 1 - j };
-            let i = y * largeur + x;
-            let voulu = valeurs[i] as f32 / 255.0 + ligne[x + 1];
+            let voulu = valeurs[x] as f32 / 255.0 + self.ligne[x + 1];
             let haut = (1..3).find(|&n| voulu < w[n]).unwrap_or(3);
-            graine ^= graine << 13;
-            graine ^= graine >> 17;
-            graine ^= graine << 5;
-            let alea = (graine >> 8) as f32 / (1u32 << 24) as f32 - 0.5;
-            let seuil = (w[haut - 1] + w[haut]) / 2.0 + p.bruit * alea * (w[haut] - w[haut - 1]);
+            self.graine ^= self.graine << 13;
+            self.graine ^= self.graine >> 17;
+            self.graine ^= self.graine << 5;
+            let alea = (self.graine >> 8) as f32 / (1u32 << 24) as f32 - 0.5;
+            let seuil = (w[haut - 1] + w[haut]) / 2.0 + self.bruit * alea * (w[haut] - w[haut - 1]);
             let niveau = if voulu >= seuil { haut } else { haut - 1 };
-            points[i] = niveau as u8;
+            points[x] = niveau as u8;
             let e = voulu - w[niveau];
             let (devant, derriere) = if vers_droite { (x + 2, x) } else { (x, x + 2) };
-            ligne[devant] += e * 7.0 / 16.0;
-            suivante[derriere] += e * 3.0 / 16.0;
-            suivante[x + 1] += e * 5.0 / 16.0;
-            suivante[devant] += e / 16.0;
+            self.ligne[devant] += e * 7.0 / 16.0;
+            self.suivante[derriere] += e * 3.0 / 16.0;
+            self.suivante[x + 1] += e * 5.0 / 16.0;
+            self.suivante[devant] += e / 16.0;
         }
-        std::mem::swap(&mut ligne, &mut suivante);
-        suivante.fill(0.0);
+        std::mem::swap(&mut self.ligne, &mut self.suivante);
+        self.suivante.fill(0.0);
+        self.y += 1;
     }
-    Ok(Plan { encre, points })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::escp2::{self, Travail};
+    use crate::escp2::tests::Plan;
     use crate::separation::{self, Cmjn, Separation};
+
+    /// Plan entier tramé en mémoire (essais).
+    fn tramer(encre: Encre, valeurs: &[u8], largeur: usize, p: &Tramage) -> Result<Plan, String> {
+        if largeur == 0 || !valeurs.len().is_multiple_of(largeur) {
+            return Err(format!("plan {encre:?} : taille incompatible avec la largeur {largeur}"));
+        }
+        let mut t = Trameur::nouveau(encre, largeur, p)?;
+        let mut points = vec![0u8; valeurs.len()];
+        for (v, o) in valeurs.chunks_exact(largeur).zip(points.chunks_exact_mut(largeur)) {
+            t.tramer_ligne(v, o);
+        }
+        Ok(Plan { encre, points })
+    }
 
     fn couverture(plan: &Plan, p: &Tramage) -> f32 {
         let w = [0.0, p.poids[0], p.poids[1], p.poids[2]];
@@ -169,8 +195,9 @@ mod tests {
         let s = separation::separer(&Cmjn { c: &c, m: &m, y: &y, k: &k, or: None, rd: None }, &Separation::default()).unwrap();
         let p = Tramage::default();
         let plans = s.iter().map(|(e, v)| tramer(*e, v, largeur, &p).unwrap()).collect();
-        let t = Travail { nom: "rampe".into(), poste: "atelier".into(), utilisateur: "essai".into(), largeur, hauteur, dpi: 720, x: 0, y: 0, page_largeur: 200, page_hauteur: 100, plans };
-        let f = escp2::flux(&t).unwrap();
+        let plans: Vec<Plan> = plans;
+        let t = Travail { nom: "rampe".into(), poste: "atelier".into(), utilisateur: "essai".into(), largeur, hauteur, dpi: 720, x: 0, y: 0, page_largeur: 200, page_hauteur: 100 };
+        let f = escp2::tests::flux(&t, &plans).unwrap();
         assert!(f.len() > 16384);
     }
 }

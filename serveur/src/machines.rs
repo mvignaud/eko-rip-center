@@ -10,7 +10,8 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Modele {
-    /// Epson SureColor SC-S80600 (impression ; sans pilote, plaques copiées en dossier).
+    /// Epson SureColor SC-S80600 (impression : pilote direct par le réseau, port 9100, ou
+    /// plaques copiées en dossier).
     EpsonScS80600,
     /// Mutoh Kona (découpe, HP-GL à 0,01 mm).
     MutohKona,
@@ -73,6 +74,13 @@ pub struct Machine {
     /// l'impression mesuré sur une coupe d'essai.
     #[serde(default)]
     pub decalage_mm: [f64; 2],
+    /// Pilote direct de l'Epson : position (x, y) en mm de l'image sur la page envoyée.
+    /// x depuis le bord de référence de la laize (arrondi aux 16 points sous la valeur,
+    /// alignement du flux), y après la marge haute de 5 mm du flux. (0, 0) par défaut : à
+    /// régler sur l'essai papier (la capture d'un autre RIP plaçait une page étroite vers
+    /// x ≈ 636 mm, sans qu'on sache encore d'où se compte cette position).
+    #[serde(default)]
+    pub origine_impression_mm: [f64; 2],
     /// Cadence d'impression en m²/h, sur toute la laize (sinon : tableau de l'Epson).
     #[serde(default)]
     pub m2_heure: Option<f64>,
@@ -236,8 +244,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None },
     ]
 }
 
@@ -280,6 +288,8 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && (100.0..=5000.0).contains(&m.laize_mm)
             && m.pas_mm.is_none_or(|p| [0.005, 0.01, 0.025, 0.05, 0.1].iter().any(|x| (x - p).abs() < 1e-9))
             && m.decalage_mm.iter().all(|d| (-20.0..=20.0).contains(d))
+            && (0.0..m.laize_mm).contains(&m.origine_impression_mm[0])
+            && (0.0..=1000.0).contains(&m.origine_impression_mm[1])
             && m.m2_heure.is_none_or(|v| (0.1..=500.0).contains(&v))
             && m.parametres_decoupe.len() <= 20
             && m.parametres_decoupe.iter().all(ParametreDecoupe::valide)
@@ -364,16 +374,22 @@ pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoup
     }
 }
 
+/// Connexion TCP brute (port 9100…), délai de 5 s à l'ouverture et de 60 s par écriture.
+pub fn ouvrir_reseau(hote: &str, port: u16) -> Result<std::net::TcpStream, String> {
+    use std::net::ToSocketAddrs;
+    let adresse = (hote, port).to_socket_addrs().map_err(|e| format!("{hote}:{port} : {e}"))?.next().ok_or(format!("{hote} : adresse introuvable"))?;
+    let flux = std::net::TcpStream::connect_timeout(&adresse, Duration::from_secs(5)).map_err(|e| format!("{adresse} : {e}"))?;
+    flux.set_write_timeout(Some(Duration::from_secs(60))).map_err(|e| e.to_string())?;
+    Ok(flux)
+}
+
 /// Envoie les octets par la connexion de la machine (bloquant).
 pub fn envoyer(c: &Connexion, octets: &[u8]) -> Result<(), String> {
     match c {
         Connexion::Serie { port, stty } => crate::plotter::envoyer(port, stty, octets),
         Connexion::Reseau { hote, port } => {
-            use std::net::ToSocketAddrs;
-            let adresse = (hote.as_str(), *port).to_socket_addrs().map_err(|e| format!("{hote}:{port} : {e}"))?.next().ok_or(format!("{hote} : adresse introuvable"))?;
-            let mut flux = std::net::TcpStream::connect_timeout(&adresse, Duration::from_secs(5)).map_err(|e| format!("{adresse} : {e}"))?;
-            flux.set_write_timeout(Some(Duration::from_secs(60))).map_err(|e| e.to_string())?;
-            flux.write_all(octets).map_err(|e| format!("{adresse} : {e}"))?;
+            let mut flux = ouvrir_reseau(hote, *port)?;
+            flux.write_all(octets).map_err(|e| format!("{hote}:{port} : {e}"))?;
             flux.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())
         }
         Connexion::Fichier { chemin } => std::fs::OpenOptions::new().write(true).open(chemin).and_then(|mut f| f.write_all(octets)).map_err(|e| format!("{} : {e}", chemin.display())),

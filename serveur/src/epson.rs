@@ -1,18 +1,31 @@
-//! Préparation de l'envoi à l'Epson SC-S80600, en attendant le protocole (capture à
-//! l'atelier) : les plaques du rendu deviennent les canaux de l'imprimante.
+//! Epson SC-S80600 : ce qui part vers l'imprimante, et par où.
 //!
-//! Mode contone (base ONYX, données seulement, et note publique Fiery XF) : cinq canaux
-//! 8 bits, K C M Y puis WH ou MS ; l'imprimante répartit sur ses encres claires et trame.
-//! Les tons de découpe ne partent jamais ; un autre ton direct n'a pas d'encre sur
-//! l'Epson : l'envoi est refusé plutôt que d'imprimer sans lui.
+//! Deux sorties, selon la connexion de la machine :
+//! - **pilote direct** (connexion réseau, port 9100 ; roadmap 2.4) : `imprimer` lit les
+//!   plaques C, M, J, N du rendu, les sépare en 9 encres (`separation.rs`), trame chaque
+//!   encre en 2 bits (`tramage.rs`) et émet le flux ESC/P2 (`escp2.rs`) bande par bande
+//!   dans la connexion. C'est le format que l'imprimante reçoit d'un RIP (capture du 24/10) :
+//!   raster tramé sur 9 canaux, pas de ton continu ;
+//! - **mode « Dossier »** (connexion `Dossier`) : les plaques sont copiées telles quelles,
+//!   un fichier par canal (`preparer`), pour un autre logiciel ou un contrôle à l'œil.
 //!
-//! La capture du 24/10 a montré que l'Epson reçoit du raster tramé 2 bits sur 9 canaux,
-//! pas du ton continu : voir `escp2.rs` ; cet en-tête sera repris par l'item 2.6.
+//! Dans les deux cas, les tons de découpe ne partent jamais, et un ton direct sans encre
+//! sur l'Epson fait refuser l'envoi plutôt que d'imprimer sans lui. Blanc et argent (WH,
+//! MS) : canaux à confirmer par une capture (2.5) ; le pilote direct les refuse d'ici là.
+//!
+//! Mémoire du pilote : les plaques sont lues bande par bande (`blanc::LecteurTiff`), rien
+//! de la page n'est gardé ; une bâche de plusieurs mètres passe comme un autocollant.
 
+use crate::blanc::LecteurTiff;
 use crate::decoupe;
+use crate::escp2::{self, Encre, LIGNES};
+use crate::separation::{self, Cmjn, Separation};
+use crate::tramage::{Tramage, Trameur};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
+use std::path::Path;
 
-/// Canal de l'imprimante, dans l'ordre d'envoi.
+/// Canal d'une plaque en mode « Dossier », dans l'ordre des fichiers.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
 pub enum Canal {
     K,
@@ -59,7 +72,7 @@ pub struct Envoi {
 }
 
 /// Plaques d'une page → envoi. Refus : ton direct sans encre, ou WH et MS sur la même
-/// page (les réglages Epson de la base ONYX vont par CMYKW ou CMYKMs, pas les deux).
+/// page (un passage par encre d'accompagnement).
 pub fn preparer(plaques: &[String], couches: Couches) -> Result<Envoi, String> {
     let mut canaux = vec![];
     let mut sans_encre = vec![];
@@ -81,6 +94,56 @@ pub fn preparer(plaques: &[String], couches: Couches) -> Result<Envoi, String> {
         return Err("rien à imprimer : la page n'a que des tons de découpe".into());
     }
     Ok(Envoi { canaux, couches })
+}
+
+/// Plaques que lit le pilote direct, dans l'ordre de `imprimer`.
+pub const PLAQUES_CMJN: [&str; 4] = ["Cyan", "Magenta", "Yellow", "Black"];
+
+/// Page admise par le pilote direct : celle du mode « Dossier », sans blanc ni argent.
+pub fn verifier_pour_le_pilote(plaques: &[String], couches: Couches) -> Result<(), String> {
+    let envoi = preparer(plaques, couches)?;
+    match envoi.canaux.iter().find(|(c, _)| matches!(c, Canal::WH | Canal::MS)) {
+        Some((_, p)) => Err(format!("« {p} » : le blanc et l'argent ne passent pas encore par le pilote direct (canaux à capturer) ; sortie en dossier en attendant")),
+        None => Ok(()),
+    }
+}
+
+/// Pilote direct : les plaques C, M, J, N (`plaques`, TIFF 8 bits du rendu, 0 = pleine
+/// encre) sont séparées, tramées et émises dans `w` bande par bande. `t` donne le nom,
+/// la résolution, la position et la largeur de page ; la taille de l'image vient des
+/// plaques. Rend l'écrivain une fois le flux complet écrit.
+pub fn imprimer<W: Write>(plaques: [&Path; 4], mut t: escp2::Travail, sep: &Separation, trame: &Tramage, w: W) -> Result<W, String> {
+    let mut lecteurs = plaques.map(LecteurTiff::ouvrir).into_iter().collect::<Result<Vec<_>, _>>()?;
+    let (l, h) = (lecteurs[0].largeur, lecteurs[0].hauteur);
+    if lecteurs.iter().any(|x| (x.largeur, x.hauteur) != (l, h)) {
+        return Err("plaques CMJN de tailles différentes".into());
+    }
+    (t.largeur, t.hauteur, t.page_hauteur) = (l, h, t.y + h as u32);
+    let mut e = escp2::Emetteur::nouveau(w, &t)?;
+    let mut trameurs = separation::ENCRES.iter().map(|&encre| Trameur::nouveau(encre, l, trame)).collect::<Result<Vec<_>, _>>()?;
+    let mut cmjn = vec![vec![0u8; LIGNES * l]; 4];
+    let mut points = vec![vec![0u8; LIGNES * l]; separation::ENCRES.len()];
+    for y0 in (0..h).step_by(LIGNES) {
+        let n = LIGNES.min(h - y0);
+        for (lecteur, canal) in lecteurs.iter_mut().zip(cmjn.iter_mut()) {
+            for r in 0..n {
+                // Plaque : 0 = pleine encre ; séparation : 255 = pleine encre.
+                for (o, v) in canal[r * l..(r + 1) * l].iter_mut().zip(lecteur.ligne()?) {
+                    *o = 255 - v;
+                }
+            }
+        }
+        let z = n * l;
+        let s = separation::separer(&Cmjn { c: &cmjn[0][..z], m: &cmjn[1][..z], y: &cmjn[2][..z], k: &cmjn[3][..z], or: None, rd: None }, sep)?;
+        for ((trameur, (_, valeurs)), sortie) in trameurs.iter_mut().zip(&s).zip(points.iter_mut()) {
+            for r in 0..n {
+                trameur.tramer_ligne(&valeurs[r * l..(r + 1) * l], &mut sortie[r * l..(r + 1) * l]);
+            }
+        }
+        let plans: Vec<(Encre, &[u8])> = s.iter().zip(&points).map(|((encre, _), p)| (*encre, &p[..z])).collect();
+        e.bande(&plans)?;
+    }
+    e.finir()
 }
 
 #[cfg(test)]
