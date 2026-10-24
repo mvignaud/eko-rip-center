@@ -1973,7 +1973,7 @@ fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travai
 /// La file, chaque impression avec sa durée estimée (minutes, sur sa machine).
 /// Pourquoi une sortie ne part pas (roadmap 0.4) ; `None` : elle partira à son tour.
 /// Hors `attente_operateur`, la sortie est retenue tant que la raison dure.
-fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machines::Machine>) -> Option<&'static str> {
+fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machines::Machine>, charge: Option<&supports::Charge>) -> Option<&'static str> {
     match s.etat {
         file::Etat::Suspendue => return Some("attente_operateur"),
         file::Etat::EnAttente => {}
@@ -1985,12 +1985,22 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
     {
         return Some("machine_hors_ligne");
     }
-    let Some((_, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
+    let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
     if s.operation() == machines::Operation::Decoupe && !fichier_plt(&dossier(donnees, s.travail), s.page).exists() {
         return Some("source_absente");
     }
-    // Page (repères compris) plus large que la laize utile : elle ne passe pas.
-    if p.largeur_mm > m.laize_mm + 0.5 {
+    // Impression : le support chargé (connu) doit être celui du travail (roadmap 1.4) ; la
+    // sortie part d'elle-même dès qu'il l'est, on ne la force pas à la main.
+    let impression = s.operation() == machines::Operation::Impression;
+    if impression
+        && let (Some(voulu), Some(charge)) = (t.demande.support_uuid, charge.and_then(|c| c.support_uuid))
+        && voulu != charge
+    {
+        return Some("attente_support");
+    }
+    // Page (repères compris) plus large que la laize utile, ou que le rouleau chargé.
+    let laize = charge.filter(|_| impression).and_then(|c| c.laize_mm).map_or(m.laize_mm, |l| l.min(m.laize_mm));
+    if p.largeur_mm > laize + 0.5 {
         return Some("format_trop_petit");
     }
     None
@@ -2000,6 +2010,7 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let catalogue = etat.machines.read().unwrap().clone();
     let donnees = etat.config.donnees.clone();
+    let charges = supports::lire_charges(&donnees);
     Json(
         sorties
             .into_iter()
@@ -2011,7 +2022,7 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
-                v["raison_attente"] = serde_json::json!(raison_attente(&donnees, &s, catalogue.iter().find(|m| m.id == s.machine)));
+                v["raison_attente"] = serde_json::json!(raison_attente(&donnees, &s, catalogue.iter().find(|m| m.id == s.machine), charges.get(&s.machine)));
                 v
             })
             .collect(),
@@ -2097,7 +2108,8 @@ async fn repartir(etat: Partage) {
             let suivante = {
                 let mut f = etat.file.lock().unwrap();
                 let m = etat.machines.read().unwrap().iter().find(|m| m.id == id).cloned();
-                f.prochaine_si(&id, |s| raison_attente(&etat.config.donnees, s, m.as_ref()).is_none()).map(|i| {
+                let charge = supports::lire_charges(&etat.config.donnees).remove(&id);
+                f.prochaine_si(&id, |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref()).is_none()).map(|i| {
                     let s = &mut f.sorties[i];
                     (s.etat, s.debut) = (file::Etat::EnCours, Some(maintenant()));
                     let s = s.clone();
@@ -2592,23 +2604,35 @@ mod tests {
             let present = d.join("port-present");
             std::fs::write(&present, b"").unwrap();
             let p = present.to_str().unwrap();
-            assert_eq!(raison_attente(&d, &s, None), Some("machine_hors_ligne"), "machine absente du catalogue");
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, "/dev/inexistant"))), Some("machine_hors_ligne"));
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), Some("source_absente"), "pas de tracé");
+            assert_eq!(raison_attente(&d, &s, None, None), Some("machine_hors_ligne"), "machine absente du catalogue");
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, "/dev/inexistant")), None), Some("machine_hors_ligne"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), Some("source_absente"), "pas de tracé");
             std::fs::write(fichier_plt(&rep, 1), b"IN;").unwrap();
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), None);
-            assert_eq!(raison_attente(&d, &s, Some(&m(400.0, p))), Some("format_trop_petit"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), None);
+            assert_eq!(raison_attente(&d, &s, Some(&m(400.0, p)), None), Some("format_trop_petit"));
             s.etat = file::Etat::Suspendue;
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), Some("attente_operateur"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), Some("attente_operateur"));
             s.etat = file::Etat::Terminee;
-            assert_eq!(raison_attente(&d, &s, None), None, "une sortie finie n'attend rien");
+            assert_eq!(raison_attente(&d, &s, None, None), None, "une sortie finie n'attend rien");
             let mut f = file::File::default();
             let mut bloquee = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, Uuid::new_v4(), "absente", 1, 0);
             bloquee.etat = file::Etat::EnAttente;
             let prete = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, id, "essai", 1, 0);
             f.sorties = vec![bloquee, prete];
             let machine = m(1650.0, p);
-            assert_eq!(f.prochaine_si("kona", |x| raison_attente(&d, x, Some(&machine)).is_none()), Some(1), "la bloquée garde sa place, la suivante part");
+            assert_eq!(f.prochaine_si("kona", |x| raison_attente(&d, x, Some(&machine), None).is_none()), Some(1), "la bloquée garde sa place, la suivante part");
+            // Attente de support (roadmap 1.4) : impression d'un travail sur le support A.
+            let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+            let mut tr = lire_travail(&d, id).unwrap();
+            tr.demande.support_uuid = Some(a);
+            ecrire(&d, &tr).unwrap();
+            let epson = machines::Machine { connexion: machines::Connexion::Dossier, ..m(1650.0, p) };
+            let imp = file::Sortie::nouvelle("epson", machines::Operation::Impression, id, "essai", 1, 0);
+            let charge = |u: Uuid, laize: Option<f64>| supports::Charge { support_uuid: Some(u), laize_mm: laize, source: "machine".into(), le: 0 };
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(b, None))), Some("attente_support"), "B chargé, A voulu");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, None))), None, "A chargé : elle part");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, Some(400.0)))), Some("format_trop_petit"), "rouleau chargé de 400 mm pour une page de 500");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), None), None, "support chargé inconnu : on n'arrête pas l'atelier");
             std::fs::remove_dir_all(&d).unwrap();
         }
 
