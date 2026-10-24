@@ -34,17 +34,15 @@ profil() {
 #cloud-config
 autoinstall:
   version: 1
-  # Nom et mot de passe demandés à l'écran ; le reste est fixé.
+  # Nom, nom du PC, compte et mot de passe demandés à l'écran ; le reste est fixé. La
+  # section « identity » est absente : Subiquity refuse une identité sans mot de passe,
+  # même interactive (« Malformed autoinstall in 'identity' section », vu en VM le 24/10).
   interactive-sections:
     - identity
   locale: fr_FR.UTF-8
   keyboard:
     layout: fr
   timezone: Europe/Paris
-  identity:
-    hostname: eko-rip
-    realname: Administrateur E-KO RIP
-    username: eko
   ssh:
     install-server: true
     allow-pw: true

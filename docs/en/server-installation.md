@@ -27,8 +27,8 @@ from the stick. The menu offers three profiles:
 | **Server + Ubuntu desktop** | everyday PC that is also the server, clients elsewhere | Ubuntu desktop, RIP server |
 | **Server only (no desktop)** | PC dedicated to the RIP | RIP server, SSH administration |
 
-The installer only asks for the account name and password (`eko` suggested), then
-confirms wiping the disk (“Continue with autoinstall?”: answer **yes**). Remove the stick
+The installer only asks for the identity (your name, the PC name — `eko-rip` advised —,
+the account name — `eko` advised — and its password), then confirms wiping the disk (“Continue with autoinstall?”: answer **yes**). Remove the stick
 on reboot.
 
 The PC starts with the server running. On the “server + client” profile, the client opens

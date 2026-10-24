@@ -28,8 +28,9 @@ démarrer sur la clé. Le menu propose trois profils :
 | **Serveur + bureau Ubuntu** | PC d'usage qui fait aussi serveur, clients sur d'autres postes | bureau Ubuntu, serveur RIP |
 | **Serveur seul (sans bureau)** | PC dédié au RIP | serveur RIP, administration par SSH |
 
-L'installateur demande seulement le nom et le mot de passe du compte (compte `eko`
-proposé), puis confirme l'effacement du disque (« Continue with autoinstall? » : répondre
+L'installateur demande seulement l'identité (votre nom, le nom du PC — `eko-rip`
+conseillé —, le nom du compte — `eko` conseillé — et son mot de passe), puis confirme
+l'effacement du disque (« Continue with autoinstall? » : répondre
 **yes**). Retirer la clé au redémarrage.
 
 Le PC démarre en français, serveur actif. Sur le profil « serveur + client », le client
