@@ -258,6 +258,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/machines/{id}/supports/{uuid}/paquet", get(exporter_paquet))
         .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
+        .route("/api/reglages/export", get(exporter_reglages))
+        .route("/api/reglages/import", axum::routing::post(importer_reglages))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
@@ -1595,6 +1597,76 @@ async fn enregistrer_reglage(State(etat): State<Partage>, Json(r): Json<reglages
     }
 }
 
+#[derive(Deserialize)]
+struct ChoixReglages {
+    /// Noms séparés par des virgules ; absent : tous.
+    noms: Option<String>,
+}
+
+const FORMAT_REGLAGES: &str = "eko-rip-reglages";
+
+/// Réglages choisis, en un fichier (roadmap 1.6).
+async fn exporter_reglages(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<ChoixReglages>) -> Response {
+    let noms: Option<Vec<&str>> = q.noms.as_deref().map(|n| n.split(',').map(str::trim).filter(|n| !n.is_empty()).collect());
+    let liste: Vec<_> = reglages::lire(&etat.config.donnees).into_iter().filter(|r| noms.as_ref().is_none_or(|n| n.contains(&r.nom.as_str()))).collect();
+    let corps = serde_json::json!({ "format": FORMAT_REGLAGES, "version": 1, "serveur": env!("CARGO_PKG_VERSION"), "reglages": liste });
+    ([(header::CONTENT_TYPE, "application/json"), (header::CONTENT_DISPOSITION, "attachment; filename=\"reglages.json\"")], serde_json::to_vec_pretty(&corps).unwrap_or_default()).into_response()
+}
+
+#[derive(Deserialize)]
+struct ImportReglages {
+    format: String,
+    version: u32,
+    reglages: Vec<reglages::Reglage>,
+    /// `ecraser` ou `renommer` (défaut) quand un réglage du même nom existe.
+    #[serde(default)]
+    doublon: Option<String>,
+}
+
+/// Ajoute les réglages d'un export ; un doublon de nom est écrasé (il garde son
+/// identifiant local) ou renommé « nom 2 » (nouvel identifiant). Tout est contrôlé avant.
+async fn importer_reglages(State(etat): State<Partage>, Json(i): Json<ImportReglages>) -> Response {
+    if i.format != FORMAT_REGLAGES || i.version > 1 {
+        return refus(StatusCode::BAD_REQUEST, "paquet_invalide", Some(format!("{} v{}", i.format, i.version)));
+    }
+    let ecraser = match i.doublon.as_deref() {
+        Some("ecraser") => true,
+        None | Some("renommer") => false,
+        Some(x) => return refus(StatusCode::BAD_REQUEST, "paquet_invalide", Some(format!("doublon « {x} »"))),
+    };
+    let connus = couleur::lister(&etat.config.profils);
+    let catalogue = supports::lire(&etat.config.donnees, "epson");
+    let _verrou = etat.reglages.lock().await;
+    let mut liste = reglages::lire(&etat.config.donnees);
+    let avant = liste.clone();
+    let mut noms = vec![];
+    for r in i.reglages {
+        let mut r = reglages::Reglage { uuid: None, demande: r.demande.normaliser(), ..r };
+        if !reglages::nom_valide(&r.nom) {
+            return refus(StatusCode::BAD_REQUEST, "reglage_invalide", Some(r.nom));
+        }
+        if let Err(code) = supports::appliquer(&mut r.demande, &catalogue).and_then(|()| r.demande.verifier(&connus)) {
+            return refus(StatusCode::BAD_REQUEST, code, Some(r.nom));
+        }
+        if liste.iter().any(|x| x.nom == r.nom) {
+            if ecraser {
+                liste.retain(|x| x.nom != r.nom);
+            } else {
+                let pris: Vec<String> = liste.iter().map(|x| x.nom.clone()).collect();
+                r.nom = reglages::nom_libre(&r.nom, &pris);
+            }
+        }
+        noms.push(r.nom.clone());
+        liste.push(r);
+    }
+    liste.sort_by(|a, b| a.nom.cmp(&b.nom));
+    reglages::identifier(&mut liste, &avant);
+    match reglages::ecrire(&etat.config.donnees, &liste) {
+        Ok(()) => Json(serde_json::json!({ "importes": noms })).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
 /// Retire le réglage ; son dossier surveillé reste sur le disque (des fichiers peuvent y être).
 async fn supprimer_reglage(State(etat): State<Partage>, Chemin(nom): Chemin<String>) -> Response {
     let _verrou = etat.reglages.lock().await;
@@ -2741,6 +2813,39 @@ mod tests {
             assert!(a["uuid"].is_string());
             assert_eq!(a["uuid"], b["uuid"]);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Import de réglages choisis (roadmap 1.6) : doublon écrasé ou renommé.
+        #[tokio::test]
+        async fn import_de_reglages_ecraser_ou_renommer() {
+            assert_eq!(reglages::nom_libre("Vinyle", &["Vinyle".into(), "Vinyle 2".into()]), "Vinyle 3");
+            assert_eq!(reglages::nom_libre(&"a".repeat(60), &[]).chars().count(), 60, "tronqué pour rester valide");
+            let (a, b) = (etat("regl-a"), etat("regl-b"));
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap()).unwrap() };
+            for (nom, dpi) in [("Vinyle", 360), ("Bache", 180), ("Autre", 90)] {
+                assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": nom, "demande": { "dpi": dpi } }))).await.status(), StatusCode::CREATED);
+            }
+            let export = corps(appel(&a, "GET", "/api/reglages/export?noms=Vinyle,Bache", None, None).await).await;
+            assert_eq!(export["reglages"].as_array().unwrap().len(), 2, "seuls les réglages choisis");
+            assert_eq!(appel(&b, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Vinyle", "demande": { "dpi": 720 } }))).await.status(), StatusCode::CREATED);
+            let uuid_local = reglages::lire(&b.config.donnees)[0].uuid;
+            // Renommer (défaut) : le réglage local reste intact.
+            let v = corps(appel(&b, "POST", "/api/reglages/import", None, Some(export.clone())).await).await;
+            assert_eq!(v["importes"], serde_json::json!(["Bache", "Vinyle 2"]), "{v}");
+            let l = reglages::lire(&b.config.donnees);
+            assert_eq!(l.iter().find(|r| r.nom == "Vinyle").unwrap().demande.dpi, 720);
+            assert_eq!(l.iter().find(|r| r.nom == "Vinyle 2").unwrap().demande.dpi, 360);
+            // Écraser : le contenu est remplacé, l'identifiant local reste.
+            let mut e = export.clone();
+            e["doublon"] = "ecraser".into();
+            assert_eq!(appel(&b, "POST", "/api/reglages/import", None, Some(e)).await.status(), StatusCode::OK);
+            let l = reglages::lire(&b.config.donnees);
+            let vinyle = l.iter().find(|r| r.nom == "Vinyle").unwrap();
+            assert_eq!((vinyle.demande.dpi, vinyle.uuid), (360, uuid_local));
+            assert_eq!(l.len(), 3, "Vinyle, Vinyle 2, Bache");
+            for e in [a, b] {
+                std::fs::remove_dir_all(&e.config.donnees).unwrap();
+            }
         }
 
         /// Paquet support (roadmap 1.5) : export puis import sur un serveur vierge = identique.

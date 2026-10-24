@@ -149,6 +149,19 @@ pub fn nom_valide(nom: &str) -> bool {
     !n.is_empty() && n == nom && n.chars().count() <= 60 && n.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '+'))
 }
 
+/// Premier nom libre « nom 2 », « nom 3 »… (60 caractères au plus), pour un import qui
+/// renomme au lieu d'écraser (roadmap 1.6).
+pub fn nom_libre(nom: &str, pris: &[String]) -> String {
+    (2..)
+        .map(|i| {
+            let suffixe = format!(" {i}");
+            let base: String = nom.chars().take(60 - suffixe.chars().count()).collect();
+            format!("{}{suffixe}", base.trim_end())
+        })
+        .find(|n| !pris.contains(n))
+        .unwrap()
+}
+
 pub fn fichier(donnees: &Path) -> PathBuf {
     donnees.join("reglages.json")
 }
