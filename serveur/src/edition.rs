@@ -43,6 +43,30 @@ pub struct Edition {
     /// Contour `CutContour` rectangulaire, décalé du bord de l'image (mm, négatif = dedans).
     #[serde(default)]
     pub contour_mm: Option<f64>,
+    /// Recadrage (x, y, l, h) en mm dans la page source, origine au coin bas gauche de sa
+    /// MediaBox : la page produite est ce cadre, le contenu et la découpe y sont rognés.
+    #[serde(default)]
+    pub recadrage: Option<[f64; 4]>,
+    /// Échelle déliée (largeur, hauteur) en % de la page source : remplace `echelle`, et
+    /// la découpe se déforme pareil.
+    #[serde(default)]
+    pub echelle_xy: Option<[f64; 2]>,
+    /// Ce que retourne `miroir`.
+    #[serde(default)]
+    pub miroir_portee: PorteeMiroir,
+}
+
+/// Portée du miroir. ⚠️ À éprouver à l'atelier : selon le support et la pose (vitrophanie
+/// vue de l'extérieur, caisson retourné…), la découpe doit suivre l'image ou non ; le choix
+/// reste explicite tant qu'aucun essai réel ne l'a tranché.
+#[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PorteeMiroir {
+    /// Image et tracés de découpe retournés ensemble (comportement d'avant ce champ).
+    #[default]
+    ImageEtDecoupe,
+    /// Image retournée, tracés de découpe laissés dans le sens du fichier.
+    ImageSeule,
 }
 
 fn cent() -> f64 {
@@ -51,13 +75,19 @@ fn cent() -> f64 {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None }
+        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None, recadrage: None, echelle_xy: None, miroir_portee: PorteeMiroir::default() }
     }
 }
 
 impl Edition {
+    /// Rien à faire : la portée d'un miroir absent ne compte pas.
     pub fn neutre(&self) -> bool {
-        *self == Edition::default()
+        Edition { miroir_portee: if self.miroir { self.miroir_portee } else { PorteeMiroir::default() }, ..*self } == Edition::default()
+    }
+
+    /// Échelle de chaque axe (1 = 100 %).
+    pub fn echelles(&self) -> (f64, f64) {
+        self.echelle_xy.map_or((self.echelle / 100.0, self.echelle / 100.0), |[x, y]| (x / 100.0, y / 100.0))
     }
 
     pub fn verifier(&self) -> Result<(), &'static str> {
@@ -68,8 +98,17 @@ impl Edition {
             && (50.0..=5000.0).contains(&o.espacement_mm)
             && (3.0..=200.0).contains(&o.retrait_mm)
             && (2.0..=50.0).contains(&o.diametre_mm)
-            && self.contour_mm.is_none_or(|c| (-50.0..=50.0).contains(&c));
-        if bon { Ok(()) } else { Err("edition_invalide") }
+            && self.contour_mm.is_none_or(|c| (-50.0..=50.0).contains(&c))
+            && self.echelle_xy.is_none_or(|e| e.iter().all(|v| (1.0..=1000.0).contains(v)));
+        if !bon {
+            return Err("edition_invalide");
+        }
+        // Cadre vide ou qui sort de la page par la gauche ou le bas : refusé sans lire le PDF.
+        // Le bord droit et le haut se vérifient sur chaque page (`appliquer`).
+        if self.recadrage.is_some_and(|[x, y, l, h]| ![x, y, l, h].iter().all(|v| v.is_finite()) || x < 0.0 || y < 0.0 || l < 1.0 || h < 1.0) {
+            return Err("recadrage_invalide");
+        }
+        Ok(())
     }
 }
 
@@ -148,28 +187,54 @@ fn produit(m: &[f64; 6], n: &[f64; 6]) -> [f64; 6] {
     [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]]
 }
 
-/// Applique l'édition à chaque page du PDF.
-pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, String> {
-    let nb_pages = Document::load_mem(pdf).map_err(|err| format!("PDF illisible : {err}"))?.get_pages().len();
+/// Applique l'édition à chaque page du PDF. Erreur : (code, détail).
+pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, (&'static str, String)> {
+    let invalide = |err: String| ("edition_invalide", err);
+    let nb_pages = Document::load_mem(pdf).map_err(|err| invalide(format!("PDF illisible : {err}")))?.get_pages().len();
+    // Miroir de l'image seule : l'image vient d'une copie aux tons de découpe neutralisés
+    // (ils ne laissent aucun tracé), et les tracés, lus sur l'original, sont redessinés
+    // sans miroir par-dessus.
+    let image_seule = e.miroir && e.miroir_portee == PorteeMiroir::ImageSeule;
+    let (neutre, decoupes) = if image_seule {
+        let (n, _) = crate::decoupe::neutraliser(pdf).map_err(invalide)?;
+        (Some(n), crate::decoupe::extraire(pdf, false).map_err(invalide)?)
+    } else {
+        (None, vec![])
+    };
     let mut cible = Document::with_version("1.6");
     let pages_id = cible.new_object_id();
-    let coupe = cible.add_object(Object::Array(vec![
-        "Separation".into(),
-        "CutContour".into(),
-        "DeviceCMYK".into(),
-        Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
-    ]));
-    let s = e.echelle / 100.0;
+    let coupe = cible.add_object(separation("CutContour"));
+    let (kx, ky) = e.echelles();
     let marge = e.marge_mm * PT_PAR_MM;
     let mut enfants = vec![];
+    let mut tons: Vec<String> = vec![];
     for n in 1..=nb_pages {
-        let (form, t, [llx, lly]) = page_en_formulaire(&mut cible, pdf, n).map_err(|err| format!("page {n} : {err}"))?;
+        let (form, t, [llx, lly]) = page_en_formulaire(&mut cible, neutre.as_deref().unwrap_or(pdf), n).map_err(|err| invalide(format!("page {n} : {err}")))?;
+        // Cadre gardé, en points de la page source (origine au coin de sa MediaBox).
+        let [cx, cy, cl, ch] = match e.recadrage {
+            None => [0.0, 0.0, t.largeur, t.hauteur],
+            Some(c) => {
+                let [cx, cy, cl, ch] = c.map(|v| v * PT_PAR_MM);
+                // 0,01 mm de jeu : un cadre saisi au bord exact de la page reste dedans.
+                let jeu = 0.01 * PT_PAR_MM;
+                if cx + cl > t.largeur + jeu || cy + ch > t.hauteur + jeu {
+                    let mm = |v: f64| v / PT_PAR_MM;
+                    return Err(("recadrage_invalide", format!("page {n} : cadre {:.1} × {:.1} mm en ({:.1}, {:.1}) hors de la page {:.1} × {:.1} mm", c[2], c[3], c[0], c[1], mm(t.largeur), mm(t.hauteur))));
+                }
+                // Le formulaire ne montre que le cadre : c'est le rognage du contenu, que
+                // Ghostscript applique et que la lecture de la découpe suit.
+                if let Ok(Object::Stream(f)) = cible.get_object_mut(form) {
+                    f.dict.set("BBox", [llx + cx, lly + cy, llx + cx + cl, lly + cy + ch].iter().map(|v| Object::Real(*v as f32)).collect::<Vec<_>>());
+                }
+                [cx, cy, cl, ch]
+            }
+        };
         // Image transformée : taille après échelle, puis après rotation.
-        let (w, h) = (t.largeur * s, t.hauteur * s);
+        let (w, h) = (cl * kx, ch * ky);
         let (lw, lh) = if e.rotation % 180 == 90 { (h, w) } else { (w, h) };
-        // (x, y) → origine de la MediaBox à 0, échelle et miroir dans [0, w] × [0, h].
-        let sx = if e.miroir { -s } else { s };
-        let base = [sx, 0.0, 0.0, s, -sx * llx + if e.miroir { w } else { 0.0 }, -s * lly];
+        // (x, y) → origine du cadre à 0, échelle et miroir dans [0, w] × [0, h].
+        let sx = if e.miroir { -kx } else { kx };
+        let base = [sx, 0.0, 0.0, ky, -sx * (llx + cx) + if e.miroir { w } else { 0.0 }, -ky * (lly + cy)];
         // Quart de tour à gauche ramené dans le premier quadrant.
         let rot: [f64; 6] = match e.rotation {
             90 => [0.0, 1.0, -1.0, 0.0, h, 0.0],
@@ -180,6 +245,22 @@ pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, String> {
         let m = produit(&produit(&base, &rot), &[1.0, 0.0, 0.0, 1.0, marge, marge]);
         let (pl, ph) = (lw + 2.0 * marge, lh + 2.0 * marge);
         let mut contenu = format!("q {:.6} {:.6} {:.6} {:.6} {:.4} {:.4} cm /F Do Q\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+        if let Some(d) = decoupes.get(n - 1) {
+            // Tracés de l'original, rognés au cadre, posés comme l'image mais sans miroir.
+            let sans_miroir = produit(&produit(&[kx, 0.0, 0.0, ky, 0.0, 0.0], &rot), &[1.0, 0.0, 0.0, 1.0, marge, marge]);
+            let a_poser: Vec<crate::decoupe::Trace> = d.traces.iter().map(|t| crate::decoupe::Trace { points: t.points.iter().map(|p| (p.0 - cx, p.1 - cy)).collect(), ..t.clone() }).collect();
+            for t in crate::decoupe::rogner(a_poser, cl, ch) {
+                let i = tons.iter().position(|x| *x == t.ton).unwrap_or_else(|| {
+                    tons.push(t.ton.clone());
+                    tons.len() - 1
+                });
+                contenu += &format!("q {:.6} {:.6} {:.6} {:.6} {:.4} {:.4} cm /T{i} CS 1 SCN 0.5 w", sans_miroir[0], sans_miroir[1], sans_miroir[2], sans_miroir[3], sans_miroir[4], sans_miroir[5]);
+                for (j, p) in t.points.iter().enumerate() {
+                    contenu += &format!(" {:.4} {:.4} {}", p.0, p.1, if j == 0 { "m" } else { "l" });
+                }
+                contenu += if t.ferme { " h S Q\n" } else { " S Q\n" };
+            }
+        }
         if let Some(o) = e.oeillets {
             contenu += "q 0 0 0 1 K 0.6 w ";
             for (x, y) in centres_oeillets(pl, ph, &o) {
@@ -196,11 +277,15 @@ pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, String> {
         let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
         let mut xobjets = Dictionary::new();
         xobjets.set("F", form);
+        let mut espaces = dictionary! { "CC" => coupe };
+        for (i, ton) in tons.iter().enumerate() {
+            espaces.set(format!("T{i}"), separation(ton));
+        }
         enfants.push(Object::Reference(cible.add_object(dictionary! {
             "Type" => "Page", "Parent" => pages_id,
             "MediaBox" => vec![0.into(), 0.into(), Object::Real(pl as f32), Object::Real(ph as f32)],
             "Contents" => flux,
-            "Resources" => dictionary! { "XObject" => xobjets, "ColorSpace" => dictionary! { "CC" => coupe } },
+            "Resources" => dictionary! { "XObject" => xobjets, "ColorSpace" => espaces },
         })));
     }
     let compte = enfants.len() as i64;
@@ -209,8 +294,18 @@ pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, String> {
     cible.trailer.set("Root", catalogue);
     cible.prune_objects();
     let mut sortie = vec![];
-    cible.save_to(&mut sortie).map_err(|err| err.to_string())?;
+    cible.save_to(&mut sortie).map_err(|err| invalide(err.to_string()))?;
     Ok(sortie)
+}
+
+/// Espace `Separation` d'un ton de découpe, magenta à l'écran.
+fn separation(ton: &str) -> Object {
+    Object::Array(vec![
+        "Separation".into(),
+        Object::Name(ton.as_bytes().to_vec()),
+        "DeviceCMYK".into(),
+        Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
+    ])
 }
 
 #[cfg(test)]

@@ -118,6 +118,39 @@ struct Page {
     /// Cadre Mutoh imprimé : coins au milieu des traits (x1, y1, x2, y2), en points.
     #[serde(default)]
     cadre_pt: Option<[f64; 4]>,
+    /// Où l'image éditée se trouve sur la page rendue, pour les outils de la visionneuse.
+    #[serde(default)]
+    geometrie: Option<Geometrie>,
+}
+
+/// Géométrie d'une page éditée (PDF sans mosaïque), en mm, origine en bas à gauche.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+struct Geometrie {
+    /// Image éditée sur la page rendue (marge et repérage exclus) : x, y, l, h.
+    image_mm: [f64; 4],
+    /// Format de la page source (MediaBox de l'original).
+    source_mm: [f64; 2],
+    /// Rotation appliquée, rotation automatique comprise.
+    rotation: u16,
+}
+
+/// Géométrie de chaque page du travail (rien pour un SVG ou des lés de mosaïque).
+fn geometries(rep: &std::path::Path, t: &Travail, mises: &[reperage::Mise]) -> Vec<Option<Geometrie>> {
+    let lire = |nom: &str| std::fs::read(rep.join(nom)).ok();
+    let (Some(produit), true, None) = (lire(Format::Pdf.fichier()), t.format == Format::Pdf, t.demande.mosaique) else { return vec![] };
+    let original = lire("source-original.pdf").unwrap_or_else(|| produit.clone());
+    let e = &t.demande.edition;
+    let rotation = if e.rotation == 0 && t.alertes.iter().any(|a| a.code == "rotation_auto") { 90 } else { e.rotation };
+    let mm = imbrication::PT_PAR_MM;
+    (1..)
+        .map_while(|n| imbrication::taille_page(&produit, n).ok().map(|p| (n, p)))
+        .map(|(n, p)| {
+            let s = imbrication::taille_page(&original, n).ok()?;
+            let (dx, dy) = mises.get(n - 1).map_or((0.0, 0.0), |m| m.decalage);
+            let m = e.marge_mm;
+            Some(Geometrie { image_mm: [dx / mm + m, dy / mm + m, p.largeur / mm - 2.0 * m, p.hauteur / mm - 2.0 * m], source_mm: [s.largeur / mm, s.hauteur / mm], rotation })
+        })
+        .collect()
 }
 
 
@@ -619,7 +652,7 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
         Some(laize) => {
             let copie = pdf.clone();
             tokio::task::spawn_blocking(move || -> Result<Option<controle::Alerte>, (&'static str, String)> {
-                let edite = if edition.neutre() { copie } else { edition::appliquer(&copie, &edition).map_err(|e| ("edition_invalide", e))? };
+                let edite = if edition.neutre() { copie } else { edition::appliquer(&copie, &edition)? };
                 Ok(trop_large(&edite, reperage, laize))
             })
             .await
@@ -640,7 +673,7 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
         tokio::fs::copy(&source, &original).await.map_err(interne)?;
     }
     let produit = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, (&'static str, String)> {
-        let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition).map_err(|e| ("edition_invalide", e))? };
+        let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition)? };
         match mosaique {
             Some(m) => mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm, m.reperes).map_err(|e| ("mosaique_invalide", e)),
             None => Ok(pdf),
@@ -750,6 +783,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
             Ok(traces) => {
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
                 let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
+                let geometrie = geometries(&rep, &t, &mises);
                 t.pages = plaques
                     .into_iter()
                     .enumerate()
@@ -769,6 +803,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             largeur_mm: mesure.largeur_mm,
                             hauteur_mm: mesure.hauteur_mm,
                             cadre_pt: mises.get(i).and_then(|m| m.coins),
+                            geometrie: geometrie.get(i).copied().flatten(),
                         }
                     })
                     .collect();
@@ -883,13 +918,15 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
         let d = &t.demande;
         let oui_non = |b: bool| if b { if en { "yes" } else { "oui" } } else if en { "no" } else { "non" };
         let traces: usize = t.pages.iter().map(|p| p.traces_decoupe).sum();
+        let echelle = d.edition.echelle_xy.map_or(d.edition.echelle.to_string(), |[x, y]| format!("{x} × {y}"));
+        let image_seule = d.edition.miroir && d.edition.miroir_portee == edition::PorteeMiroir::ImageSeule;
         let mut lignes = if en {
             vec![
                 format!("Mode: {}", if d.mode == Mode::Imprimer { "print" } else { "cut only" }),
                 format!("Resolution: {} dpi", d.dpi),
                 format!("Media profile: {}", d.couleur.sortie.as_deref().unwrap_or("default")),
                 format!("White: {}", match d.blanc.mode { blanc::Mode::Aucun => "file's own", blanc::Mode::SousCouche => "underlay", blanc::Mode::Aplat => "flood" }),
-                format!("Scale: {} % · rotation {}° · mirror {}", d.edition.echelle, d.edition.rotation, oui_non(d.edition.miroir)),
+                format!("Scale: {echelle} % · rotation {}° · mirror {}{}", d.edition.rotation, oui_non(d.edition.miroir), if image_seule { " (image only)" } else { "" }),
                 format!("Grommets: {}", oui_non(d.edition.oeillets.is_some())),
                 format!("Cut paths: {traces}"),
             ]
@@ -899,7 +936,7 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
                 format!("Résolution : {} dpi", d.dpi),
                 format!("Profil du support : {}", d.couleur.sortie.as_deref().unwrap_or("par défaut")),
                 format!("Blanc : {}", match d.blanc.mode { blanc::Mode::Aucun => "celui du fichier", blanc::Mode::SousCouche => "sous-couche", blanc::Mode::Aplat => "aplat" }),
-                format!("Échelle : {} % · rotation {}° · miroir {}", d.edition.echelle, d.edition.rotation, oui_non(d.edition.miroir)),
+                format!("Échelle : {echelle} % · rotation {}° · miroir {}{}", d.edition.rotation, oui_non(d.edition.miroir), if image_seule { " (image seule)" } else { "" }),
                 format!("Œillets : {}", oui_non(d.edition.oeillets.is_some())),
                 format!("Tracés de découpe : {traces}"),
             ]
@@ -3807,6 +3844,147 @@ mod tests {
             let rep = dossier(&e.config.donnees, t.id);
             assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"));
             assert!(proches(boite_hpgl(&fichier_plt(&rep, 1)), [RETRAIT, RETRAIT, 400.0 - RETRAIT, 100.0 - RETRAIT], 0.02));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Éditeur, roadmap 3.B : page de 200 × 100 mm, aplat cyan décentré
+        /// [10, 10]–[60, 40] mm et `CutContour` [12, 12]–[58, 38] mm : un miroir ou un
+        /// recadrage se voit sur l'encre comme sur la coupe.
+        fn pdf_decentre() -> Vec<u8> {
+            let mut doc = Document::with_version("1.4");
+            let sep = Object::Array(vec![
+                "Separation".into(),
+                "CutContour".into(),
+                "DeviceCMYK".into(),
+                Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
+            ]);
+            let contenu = format!("1 0 0 0 k {} {} {} {} re f /CS0 CS 1 SCN {} {} {} {} re S", 10.0 * MM, 10.0 * MM, 50.0 * MM, 30.0 * MM, 12.0 * MM, 12.0 * MM, 46.0 * MM, 26.0 * MM);
+            let c = doc.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
+            let pages = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real((200.0 * MM) as f32), Object::Real((100.0 * MM) as f32)], "Contents" => c, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } });
+            doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+            doc.trailer.set("Root", cat);
+            let mut o = vec![];
+            doc.save_to(&mut o).unwrap();
+            o
+        }
+
+        /// Format (mm) de la MediaBox de la page 1 du PDF produit.
+        fn media_mm(rep: &std::path::Path) -> (f64, f64) {
+            let t = imbrication::taille_page(&std::fs::read(rep.join("source.pdf")).unwrap(), 1).unwrap();
+            (t.largeur / MM, t.hauteur / MM)
+        }
+
+        fn edite(edition: edition::Edition) -> Demande {
+            Demande { dpi: 36, rotation_auto: false, edition, ..Default::default() }
+        }
+
+        /// 3.B1 — recadrage [50, 20] + 100 × 60 mm : la page produite est le cadre, l'encre et
+        /// la coupe y sont rognées ; avec 10 mm de marge, la coupe s'arrête au bord du cadre
+        /// (BBox du formulaire), pas à celui de la page.
+        #[tokio::test]
+        async fn editeur_recadrage_page_encre_et_coupe() {
+            let e = etat("ed-recadrage");
+            let px = 25.4 / 36.0;
+            let cadre = Some([50.0, 20.0, 100.0, 60.0]);
+            for marge in [0.0, 10.0] {
+                let t = rendre(&e, pdf_decentre(), edite(edition::Edition { recadrage: cadre, marge_mm: marge, ..Default::default() })).await;
+                let rep = dossier(&e.config.donnees, t.id);
+                let (l, h) = media_mm(&rep);
+                assert!((l - (100.0 + 2.0 * marge)).abs() < 0.01 && (h - (60.0 + 2.0 * marge)).abs() < 0.01, "marge {marge} : MediaBox {l} × {h}");
+                let ((pl, ph), cyan) = encre(&rep, 1, "Cyan", 36);
+                assert!((pl - l).abs() <= px && (ph - h).abs() <= px, "plaque {pl} × {ph}");
+                // Aplat [10, 60] × [10, 40] dans le cadre [50, 150] × [20, 80] : [0, 10] × [0, 20].
+                assert!(proches(cyan, [marge, marge, marge + 10.0, marge + 20.0], 1.5 * px), "marge {marge} : encre {cyan:?}");
+                let coupe = boite_hpgl(&fichier_plt(&rep, 1));
+                assert!(proches(coupe, [marge, marge, marge + 8.0, marge + 18.0], 0.02), "marge {marge} : coupe {coupe:?}");
+                let g = t.pages[0].geometrie.expect("géométrie");
+                assert!(proches(g.image_mm, [marge, marge, 100.0, 60.0], 0.01), "{g:?}");
+                assert!((g.source_mm[0] - 200.0).abs() < 0.01 && (g.source_mm[1] - 100.0).abs() < 0.01, "{g:?}");
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 3.B1 — cadre hors de la page ou vide : refus codé, jamais un rendu faux.
+        #[tokio::test]
+        async fn editeur_recadrage_hors_page_refuse() {
+            let e = etat("ed-recadrage-refus");
+            let t = rendre(&e, pdf_decentre(), edite(edition::Edition::default())).await;
+            for cadre in [[150.0, 0.0, 100.0, 50.0], [0.0, 60.0, 50.0, 50.0], [0.0, 0.0, 0.0, 50.0], [-1.0, 0.0, 50.0, 50.0]] {
+                let mut d = serde_json::to_value(&t.demande).unwrap();
+                d["edition"]["recadrage"] = serde_json::json!(cadre);
+                let r = super::controle_d_acces::appel(&e, "POST", &format!("/api/travaux/{}/reglages", t.id), None, Some(d)).await;
+                assert_eq!(r.status(), StatusCode::BAD_REQUEST, "{cadre:?}");
+                let corps: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+                assert_eq!(corps["code"], "recadrage_invalide", "{cadre:?} : {corps}");
+            }
+            // Un cadre au bord exact de la page passe.
+            let mut d = serde_json::to_value(&t.demande).unwrap();
+            d["edition"]["recadrage"] = serde_json::json!([100.0, 50.0, 100.0, 50.0]);
+            let r = super::controle_d_acces::appel(&e, "POST", &format!("/api/travaux/{}/reglages", t.id), None, Some(d)).await;
+            assert_eq!(r.status(), StatusCode::ACCEPTED);
+            for _ in 0..600 {
+                if !actif(&lire_travail(&e.config.donnees, t.id).unwrap().statut) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 3.B2 — largeur imposée à 500 mm (l'écran en tire l'échelle) : hauteur au prorata ;
+        /// échelle déliée 250 × 50 % : déformation exacte, la coupe déformée pareil.
+        #[tokio::test]
+        async fn editeur_largeur_imposee_et_echelle_deliee() {
+            let e = etat("ed-echelle");
+            let px = 25.4 / 36.0;
+            let source = || imbrication::tests::pdf(180.0 * MM, 70.0 * MM, "1 0 0 0", (0.0, 0.0));
+            let k = 500.0 / 180.0;
+            let t = rendre(&e, source(), edite(edition::Edition { echelle: k * 100.0, ..Default::default() })).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let (l, h) = media_mm(&rep);
+            assert!((l - 500.0).abs() < 0.01 && (h - 70.0 * k).abs() < 0.01, "{l} × {h} (attendu 500 × {:.2})", 70.0 * k);
+            let (_, cyan) = encre(&rep, 1, "Cyan", 36);
+            assert!(proches(cyan, [0.0, 0.0, 500.0, 70.0 * k], 1.5 * px), "encre {cyan:?}");
+            let r = k * RETRAIT;
+            assert!(proches(boite_hpgl(&fichier_plt(&rep, 1)), [r, r, 500.0 - r, 70.0 * k - r], 0.02));
+
+            let t = rendre(&e, source(), edite(edition::Edition { echelle_xy: Some([250.0, 50.0]), ..Default::default() })).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let (l, h) = media_mm(&rep);
+            assert!((l - 450.0).abs() < 0.01 && (h - 35.0).abs() < 0.01, "déliée : {l} × {h}");
+            let (_, cyan) = encre(&rep, 1, "Cyan", 36);
+            assert!(proches(cyan, [0.0, 0.0, 450.0, 35.0], 1.5 * px), "déliée : encre {cyan:?}");
+            let coupe = boite_hpgl(&fichier_plt(&rep, 1));
+            assert!(proches(coupe, [2.5 * RETRAIT, 0.5 * RETRAIT, 450.0 - 2.5 * RETRAIT, 35.0 - 0.5 * RETRAIT], 0.02), "déliée : coupe {coupe:?}");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 3.B3 — miroir : image + découpe (défaut) → l'encre et la coupe passent à droite ;
+        /// image seule → l'encre passe à droite, la coupe reste où le fichier la met.
+        #[tokio::test]
+        async fn editeur_miroir_image_et_decoupe_ou_image_seule() {
+            let e = etat("ed-miroir");
+            let px = 25.4 / 36.0;
+            let defaut = edition::Edition { miroir: true, ..Default::default() };
+            assert_eq!(defaut.miroir_portee, edition::PorteeMiroir::ImageEtDecoupe, "défaut : comme avant ce champ");
+            for (portee, coupe_attendue) in [(edition::PorteeMiroir::ImageEtDecoupe, [142.0, 12.0, 188.0, 38.0]), (edition::PorteeMiroir::ImageSeule, [12.0, 12.0, 58.0, 38.0])] {
+                let t = rendre(&e, pdf_decentre(), edite(edition::Edition { miroir_portee: portee, ..defaut })).await;
+                let rep = dossier(&e.config.donnees, t.id);
+                let (_, cyan) = encre(&rep, 1, "Cyan", 36);
+                assert!(proches(cyan, [140.0, 10.0, 190.0, 40.0], 1.5 * px), "{portee:?} : encre {cyan:?}");
+                assert_eq!(t.pages[0].traces_decoupe, 1, "{portee:?} : un seul tracé (pas de doublon)");
+                let coupe = boite_hpgl(&fichier_plt(&rep, 1));
+                assert!(proches(coupe, coupe_attendue, 0.02), "{portee:?} : coupe {coupe:?}");
+                assert!(!t.pages[0].plaques.iter().any(|p| p == "CutContour"), "{portee:?} : la coupe n'imprime rien");
+            }
+            // Image seule avec recadrage et quart de tour : la coupe suit le cadre et la rotation, pas le miroir.
+            let t = rendre(&e, pdf_decentre(), edite(edition::Edition { miroir_portee: edition::PorteeMiroir::ImageSeule, recadrage: Some([0.0, 0.0, 100.0, 50.0]), rotation: 90, ..defaut })).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            // Cadre 100 × 50, tourné : 50 × 100. Quart de tour à gauche : (x, y) → (50 − y, x).
+            let coupe = boite_hpgl(&fichier_plt(&rep, 1));
+            assert!(proches(coupe, [12.0, 12.0, 38.0, 58.0], 0.02), "image seule tournée : coupe {coupe:?}");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }

@@ -171,12 +171,24 @@
   #vue-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   /* Pages d'un multipage à gauche, aperçu au centre, couches à droite. */
   .vue-corps { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 0; }
+  /* Colonnes fixées : sans vignettes (une page), la vue reste au milieu. */
+  .vue-corps > .vue-cadre { grid-column: 2; } .vue-corps > .vue-lateral { grid-column: 3; }
   #vue-pages { display: flex; flex-direction: column; gap: 8px; width: 104px; padding: 8px; overflow-y: auto; border-right: 1px solid var(--trait); }
   #vue-pages[hidden] { display: none; }
   #vue-pages button { display: grid; gap: 2px; padding: 3px; border: 2px solid transparent; border-radius: 4px; background: none; color: var(--texte); font-size: 11px; cursor: pointer; }
   #vue-pages button[aria-current=page] { border-color: var(--accent); font-weight: 600; }
   #vue-pages img { width: 100%; display: block; background: #fff; box-shadow: 0 0 0 1px var(--trait); }
-  #vue-couches { display: grid; align-content: start; gap: 6px; width: 170px; padding: 10px; border-left: 1px solid var(--trait); font-size: 13px; overflow-y: auto; }
+  .vue-lateral { display: grid; align-content: start; gap: 14px; width: 200px; padding: 10px; border-left: 1px solid var(--trait); font-size: 13px; overflow-y: auto; }
+  #vue-couches, #vue-edition { display: grid; align-content: start; gap: 6px; }
+  #vue-edition[hidden], #vue-edition [hidden] { display: none; }
+  #vue-edition input[type=number] { width: 100%; }
+  #vue-edition .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .vue-ancrage { display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; }
+  .vue-ancrage button { width: 26px; height: 22px; padding: 0; }
+  .vue-ancrage button[aria-pressed=true] { background: var(--accent); color: #fff; }
+  #vue-cadre-ed { position: absolute; outline: 1px dashed var(--accent); pointer-events: none; }
+  #vue-cadre-ed.recadrer { box-shadow: 0 0 0 100000px rgb(0 0 0 / .35); }
+  #vue-cadre-ed span { position: absolute; width: 10px; height: 10px; background: #fff; border: 1px solid var(--accent); transform: translate(-50%, -50%); }
   .vue-pastille { display: inline-block; width: 10px; height: 10px; border-radius: 2px; box-shadow: 0 0 0 1px var(--trait); }
   #vue-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   /* Sélection : cadre et 8 poignées (sans action avant 3.B). */
@@ -235,6 +247,12 @@
       <button type="button" class="discret" id="vue-main" data-t="vue_main" aria-pressed="true"></button>
       <button type="button" class="discret" id="vue-loupe" data-t="vue_loupe" aria-pressed="false"></button>
       <span class="sep"></span>
+      <button type="button" class="discret" id="vue-recadrer" data-t="vue_recadrer" aria-pressed="false" disabled></button>
+      <button type="button" class="discret" id="vue-echelle" data-t="vue_echelle" aria-pressed="false" disabled></button>
+      <button type="button" class="discret" id="vue-tourner-g" data-t-aria="vue_tourner_g" disabled>⟲</button>
+      <button type="button" class="discret" id="vue-tourner-d" data-t-aria="vue_tourner_d" disabled>⟳</button>
+      <button type="button" class="discret" id="vue-miroir" data-t="vue_miroir" aria-pressed="false" disabled></button>
+      <span class="sep"></span>
       <label class="case" id="vue-calque-laize"><input type="checkbox" id="vue-voir-laize" checked> <span data-t="vue_laize"></span></label>
       <button class="discret" data-t="fermer" style="margin-left: auto"></button>
     </div>
@@ -250,6 +268,7 @@
           <img id="vue-decoupe" alt="" draggable="false" hidden>
           <canvas id="vue-blanc" hidden></canvas>
           <canvas id="vue-argent" hidden></canvas>
+          <div id="vue-cadre-ed" hidden><span style="left: 0%; top: 0%"></span><span style="left: 50%; top: 0%"></span><span style="left: 100%; top: 0%"></span><span style="left: 100%; top: 50%"></span><span style="left: 100%; top: 100%"></span><span style="left: 50%; top: 100%"></span><span style="left: 0%; top: 100%"></span><span style="left: 0%; top: 50%"></span></div>
           <div id="vue-selection" hidden><span style="left: 0%; top: 0%"></span><span style="left: 50%; top: 0%"></span><span style="left: 100%; top: 0%"></span><span style="left: 100%; top: 50%"></span><span style="left: 100%; top: 100%"></span><span style="left: 50%; top: 100%"></span><span style="left: 0%; top: 100%"></span><span style="left: 0%; top: 50%"></span></div>
           <div id="vue-hors" hidden></div>
           <div id="vue-laize" hidden></div>
@@ -257,7 +276,7 @@
         <div id="vue-rect" hidden></div>
       </div>
     </div>
-    <aside id="vue-couches" data-t-aria="vue_couches"></aside>
+    <aside class="vue-lateral"><div id="vue-couches" role="group" data-t-aria="vue_couches"></div><div id="vue-edition" hidden></div></aside>
     </div>
     <div class="vue-etat" aria-live="polite"><span id="vue-dims"></span><span id="vue-pos"></span><span id="vue-info-laize"></span><span class="meta" data-t="vue_aide"></span></div>
   </form>
@@ -458,6 +477,14 @@ const textes = {
     vue_laize: "Laize", vue_aide: "Molette : zoom · glisser : déplacer · clic : sélectionner la page · loupe : clic, Maj+clic, rectangle · touches + − 0 1 · pages : ← → ou Pg↑ Pg↓ (Maj+← → : déplacer)",
     vue_pages: "Pages du travail", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Couches", couche_argent: "Argent", couche_reperes: "Repères",
     vue_reperes_noir: "Imprimés dans la plaque Black : pas de couche séparée.",
+    vue_recadrer: "Recadrer", vue_echelle: "Taille", vue_tourner_g: "Tourner de 90° à gauche", vue_tourner_d: "Tourner de 90° à droite", vue_miroir: "Miroir",
+    ed_titre: "Édition de la page", ed_rotation: (r) => `Rotation : ${r}°`, ed_portee: "Le miroir retourne", portee_image_et_decoupe: "l'image et la découpe", portee_image_seule: "l'image seule",
+    note_portee: "À éprouver à l'atelier : selon la pose, la découpe doit suivre l'image ou non.",
+    ed_recadrage: "Recadrage (mm, page source)", ed_x: "X (depuis la gauche)", ed_y: "Y (depuis le bas)", ed_l: "Largeur", ed_h: "Hauteur", ed_ancrage: "Ancrage",
+    ed_verrou: "Garder les proportions", ed_sans_recadrage: "Sans recadrage", note_repere_source: "Repères de la page d'origine, avant rotation et miroir. Poignées : tirer un bord ; glisser l'intérieur pour déplacer.",
+    ed_hors_page: "Le cadre sort de la page : il sera refusé.", ed_taille: "Taille imprimée", ed_largeur_mm: "Largeur (mm)", ed_hauteur_mm: "Hauteur (mm)",
+    ed_liees: "Proportions liées", note_taille: "Angles : proportionnel ; côtés : libre (proportions déliées). Le coin haut gauche reste fixe.",
+    ed_appliquer: "Appliquer", ed_annuler: "Annuler les changements", ed_en_cours: "Rendu en cours…", ed_indisponible: "Édition à la page : PDF rendu, sans mosaïque.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Laize ${l} mm (${n})`, vue_media_charge: "média chargé",
     vue_hors_laize: (d) => `dépasse la laize de ${d} mm`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
@@ -535,6 +562,7 @@ const textes = {
       machine_invalide: "Machine invalide (identifiant : minuscules, chiffres et -, unique ; laize 100 à 5000 mm).",
       machine_occupee: "Une sortie attend encore cette machine dans la file.", operation_impossible: "Cette machine ne fait pas cette opération.",
       media_indisponible: "L'Epson ne répond pas ou ne donne pas la largeur du média.", media_non_configure: "Lecture du média non configurée.",
+      recadrage_invalide: "Recadrage impossible : le cadre doit faire au moins 1 × 1 mm et rester dans la page.",
       edition_invalide: "Édition impossible (échelle 1 à 1000 %, marge 0 à 500 mm, œillets : écart 50 à 5000 mm, retrait 3 à 200 mm, diamètre 2 à 50 mm).",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
@@ -579,6 +607,14 @@ const textes = {
     vue_laize: "Roll width", vue_aide: "Wheel: zoom · drag: move · click: select the page · magnifier: click, Shift+click, rectangle · keys + − 0 1 · pages: ← → or PgUp PgDn (Shift+← →: move)",
     vue_pages: "Pages of the job", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Layers", couche_argent: "Silver", couche_reperes: "Marks",
     vue_reperes_noir: "Printed in the Black plate: no separate layer.",
+    vue_recadrer: "Crop", vue_echelle: "Size", vue_tourner_g: "Rotate 90° left", vue_tourner_d: "Rotate 90° right", vue_miroir: "Mirror",
+    ed_titre: "Page editing", ed_rotation: (r) => `Rotation: ${r}°`, ed_portee: "The mirror flips", portee_image_et_decoupe: "the image and the cut", portee_image_seule: "the image only",
+    note_portee: "To be proven in the workshop: depending on how it is mounted, the cut must follow the image or not.",
+    ed_recadrage: "Crop (mm, source page)", ed_x: "X (from the left)", ed_y: "Y (from the bottom)", ed_l: "Width", ed_h: "Height", ed_ancrage: "Anchor",
+    ed_verrou: "Keep proportions", ed_sans_recadrage: "No crop", note_repere_source: "Coordinates of the original page, before rotation and mirror. Handles: drag an edge; drag inside to move.",
+    ed_hors_page: "The frame goes outside the page: it will be refused.", ed_taille: "Printed size", ed_largeur_mm: "Width (mm)", ed_hauteur_mm: "Height (mm)",
+    ed_liees: "Proportions linked", note_taille: "Corners: proportional; sides: free (proportions unlinked). The top left corner stays put.",
+    ed_appliquer: "Apply", ed_annuler: "Discard changes", ed_en_cours: "Rendering…", ed_indisponible: "Page editing: rendered PDF, no tiling.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Roll width ${l} mm (${n})`, vue_media_charge: "loaded media",
     vue_hors_laize: (d) => `${d} mm wider than the roll`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
@@ -656,6 +692,7 @@ const textes = {
       machine_invalide: "Invalid machine (id: lowercase, digits and -, unique; roll width 100 to 5000 mm).",
       machine_occupee: "An output is still waiting for this machine in the queue.", operation_impossible: "This machine does not do this operation.",
       media_indisponible: "The Epson does not answer or gives no media width.", media_non_configure: "Media reading not set up.",
+      recadrage_invalide: "Cannot crop: the frame must be at least 1 × 1 mm and stay inside the page.",
       edition_invalide: "Cannot edit (scale 1 to 1000 %, margin 0 to 500 mm, grommets: spacing 50 to 5000 mm, inset 3 to 200 mm, diameter 2 to 50 mm).",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
@@ -1022,7 +1059,10 @@ function demandeDuFormulaire() {
 
 /** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
 function champsEdition(racine, e) {
-  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, ...(e || {}) };
+  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", ...(e || {}) };
+  // Réglés dans la visionneuse : gardés tels quels ; l'échelle déliée tombe si on retouche le %.
+  racine._garde = { recadrage: e.recadrage, echelle_xy: e.echelle_xy, echelle: e.echelle };
+  const portee = el("select", { name: "ed_portee" }, ...["image_et_decoupe", "image_seule"].map((v) => el("option", { value: v, selected: e.miroir_portee === v }, T()[`portee_${v}`])));
   const o = e.oeillets || { espacement_mm: 500, retrait_mm: 20, diametre_mm: 10, bords: [true, true, true, true] };
   const nombre = (nom, valeur, attrs = {}) => el("input", { type: "number", step: "any", name: `ed_${nom}`, value: valeur, ...attrs });
   const cocher = (nom, valeur) => el("input", { type: "checkbox", name: `ed_${nom}`, checked: valeur });
@@ -1030,6 +1070,7 @@ function champsEdition(racine, e) {
   racine.replaceChildren(
     el("div", { className: "deux" }, el("label", {}, T().echelle, nombre("echelle", e.echelle, { min: 1, max: 1000 })), el("label", {}, T().rotation_ed, rotation)),
     el("div", { className: "deux" }, el("label", {}, T().marge, nombre("marge", e.marge_mm, { min: 0, max: 500 })), el("label", { className: "case" }, cocher("miroir", e.miroir), T().miroir)),
+    el("label", {}, T().ed_portee, portee),
     el("label", { className: "case" }, cocher("oeillets", !!e.oeillets), T().oeillets),
     el("div", { className: "deux" }, el("label", {}, T().espacement_oe, nombre("espacement", o.espacement_mm, { min: 50, max: 5000 })), el("label", {}, T().retrait_oe, nombre("retrait", o.retrait_mm, { min: 3, max: 200 }))),
     el("div", { className: "deux" }, el("label", {}, T().diametre_oe, nombre("diametre", o.diametre_mm, { min: 2, max: 50 })),
@@ -1040,8 +1081,10 @@ function champsEdition(racine, e) {
 function lireEdition(racine) {
   const q = (n) => racine.querySelector(`[name=ed_${n}]`);
   if (!q("echelle")) return undefined;
+  const g = racine._garde || {};
   return {
     echelle: +q("echelle").value, rotation: +q("rotation").value, miroir: q("miroir").checked, marge_mm: +q("marge").value,
+    miroir_portee: q("portee").value, recadrage: g.recadrage || null, echelle_xy: +q("echelle").value === g.echelle ? g.echelle_xy || null : null,
     oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked) } : null,
     contour_mm: q("contour").checked ? +q("contour_mm").value : null,
   };
@@ -1217,13 +1260,13 @@ async function voir(src, legende, contexte = {}) {
   vue.suffixe = t ? src.slice(`/api/travaux/${t.id}/pages/${n}/`.length) : null;
   const pages = t?.pages.length > 1 ? t.pages.map((_, i) => {
     const k = i + 1, b = el("button", { type: "button", title: T().vue_page_n(k, t.pages.length) },
-      el("img", { src: `/api/travaux/${t.id}/pages/${k}/${principalVue(t)}`, alt: "", loading: "lazy", draggable: false }), String(k));
+      el("img", { src: frais(`/api/travaux/${t.id}/pages/${k}/${principalVue(t)}`, t), alt: "", loading: "lazy", draggable: false }), String(k));
     b.addEventListener("click", () => pageVue(k));
     return b;
   }) : [];
   $("vue-pages").replaceChildren(...pages);
   $("vue-pages").hidden = !pages.length;
-  $("visionneuse").showModal();
+  if (!$("visionneuse").open) $("visionneuse").showModal();
   zoneVue.focus();
   await afficherPageVue(src, legende, contexte);
 }
@@ -1252,11 +1295,12 @@ async function afficherPageVue(src, legende, { t, page, n } = {}) {
     : machine ? { mm: machine.laize_mm, nom: machine.nom } : null;
   $("vue-calque-laize").hidden = !vue.laize;
   const charge = new Promise((ok) => { img.onload = img.onerror = ok; });
-  img.src = src;
+  img.src = frais(src, t);
   await charge;
   const dims = await dimensionsMm(src, img, page);
   if (jeton !== vue.jeton) return; // une autre page a été demandée entretemps
   [vue.l, vue.h] = dims;
+  preparerEditionVue();
   ajusterVue();
 }
 /** Couches activables une à une ; leur état (`couchesVue`) dure le temps de la page,
@@ -1285,12 +1329,12 @@ function couchesDeLaPage(src, legende, t, page, n) {
   };
   const lignes = [el("strong", {}, T().vue_couches), ligne("image", legende)];
   calque.image.hidden = !couchesVue.image;
-  if (sources.decoupe) { calque.decoupe.src = sources.decoupe; lignes.push(ligne("decoupe", T().apercu_decoupe, "#ff00ff")); } else calque.decoupe.removeAttribute("src");
+  if (sources.decoupe) { calque.decoupe.src = frais(sources.decoupe, t); lignes.push(ligne("decoupe", T().apercu_decoupe, "#ff00ff")); } else calque.decoupe.removeAttribute("src");
   calque.decoupe.hidden = !sources.decoupe || !couchesVue.decoupe;
   for (const cle of ["blanc", "argent"]) {
     calque[cle].hidden = !sources[cle] || !couchesVue[cle];
     if (!sources[cle]) { calque[cle].width = 0; calque[cle].dataset.src = ""; continue; }
-    teinter(calque[cle], sources[cle], TEINTE_COUCHE[cle]);
+    teinter(calque[cle], frais(sources[cle], t), TEINTE_COUCHE[cle]);
     lignes.push(ligne(cle, cle === "blanc" ? T().blanc : T().couche_argent, `rgb(${TEINTE_COUCHE[cle]})`));
   }
   if (t?.reperage && t.reperage !== "aucun") lignes.push(el("div", {}, el("label", { className: "case" }, el("input", { type: "checkbox", disabled: true }), " ", T().couche_reperes), el("div", { className: "meta" }, T().vue_reperes_noir)));
@@ -1353,6 +1397,7 @@ function dessinerVue() {
   $("vue-laize").hidden = !laize;
   $("vue-hors").hidden = !hors;
   $("vue-selection").hidden = !vue.selection;
+  dessinerCadreEd();
   if (laize) $("vue-laize").style.width = `${laize.mm * k}px`;
   if (hors) Object.assign($("vue-hors").style, { left: `${laize.mm * k}px`, width: `${(vue.l - laize.mm) * k}px` });
   const pc = Math.round(vue.z * 100), choix = $("vue-zoom");
@@ -1406,11 +1451,13 @@ zoneVue.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   zoneVue.setPointerCapture(e.pointerId);
   const p = pointVue(e);
+  if (commencerGesteEd(mmVers(p.x, p.y))) return;
   vue.geste = { ...p, tx: vue.tx, ty: vue.ty, bouge: false };
 });
 zoneVue.addEventListener("pointermove", (e) => {
   const p = pointVue(e), g = vue.geste;
   vue.curseur = mmVers(p.x, p.y);
+  if (survolEd(vue.curseur)) return;
   if (g) {
     g.bouge ||= Math.hypot(p.x - g.x, p.y - g.y) > 3;
     if (zoneVue.dataset.outil === "main") { vue.tx = g.tx + p.x - g.x; vue.ty = g.ty + p.y - g.y; }
@@ -1422,6 +1469,7 @@ zoneVue.addEventListener("pointermove", (e) => {
   dessinerVue();
 });
 zoneVue.addEventListener("pointerup", (e) => {
+  if (ED.geste) { ED.geste = null; majEditionVue(); return; }
   const p = pointVue(e), g = vue.geste;
   vue.geste = null;
   $("vue-rect").hidden = true;
@@ -1437,7 +1485,7 @@ zoneVue.addEventListener("pointerup", (e) => {
 });
 zoneVue.addEventListener("pointerleave", () => { if (!vue.geste) { vue.curseur = null; dessinerVue(); } });
 $("visionneuse").addEventListener("keydown", (e) => {
-  if (e.target.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (["SELECT", "INPUT"].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
   const pan = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key];
   // Multipage : ← → et Pg↑ Pg↓ changent de page ; Maj+← → déplace toujours.
   const multi = vue.travail?.pages.length > 1;
@@ -1460,6 +1508,253 @@ $("vue-main").addEventListener("click", () => outilVue("main"));
 $("vue-loupe").addEventListener("click", () => outilVue("loupe"));
 $("vue-voir-laize").addEventListener("change", dessinerVue);
 new ResizeObserver(() => dessinerVue()).observe(zoneVue);
+
+/** Édition à la page (roadmap 3.B) : recadrage, taille, rotation et miroir réglés sur l'aperçu,
+ *  puis envoyés avec les réglages du travail (le rendu se refait depuis l'original). Le cadre
+ *  de recadrage est tenu dans le repère du serveur : page source, mm, origine en bas à gauche ;
+ *  il est projeté sur l'aperçu par l'édition déjà rendue (`versVue`). */
+const ED = { ed: null, initiale: "", outil: null, cadre: null, liees: true, verrou: false, ratio: 1, ancrage: [0, 0], geste: null, erreur: null, attente: false, versions: {} };
+const frais = (u, t) => (t && ED.versions[t.id] ? `${u}?v=${ED.versions[t.id]}` : u);
+const produitA = (m, n) => [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+const appliquerA = (m, [x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+function inverseA(m) {
+  const d = m[0] * m[3] - m[1] * m[2], a = m[3] / d, b = -m[1] / d, c = -m[2] / d, e = m[0] / d;
+  return [a, b, c, e, -(a * m[4] + c * m[5]), -(b * m[4] + e * m[5])];
+}
+/** Boîte [x0, y0, x1, y1] de l'image du rectangle [x, y, l, h] par m (axes droits seulement). */
+function boiteA(m, [x, y, l, h]) {
+  const p = appliquerA(m, [x, y]), q = appliquerA(m, [x + l, y + h]);
+  return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
+}
+const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", ...(t.edition || {}) });
+const echellesDe = (e) => (e.echelle_xy ? e.echelle_xy.map((v) => v / 100) : [e.echelle / 100, e.echelle / 100]);
+const geomVue = () => vue.travail.pages[vue.n - 1].geometrie;
+const arrondi = (v) => Math.round(v * 100) / 100;
+const borner = (v, a, b) => Math.min(b, Math.max(a, v));
+/** Page source (mm, bas gauche) → aperçu (mm, haut gauche), par l'édition déjà rendue. */
+function versVue() {
+  const g = geomVue(), e = editionDe(vue.travail);
+  const c = e.recadrage || [0, 0, ...g.source_mm], [kx, ky] = echellesDe(e), w = c[2] * kx, h = c[3] * ky;
+  let m = [kx, 0, 0, ky, -c[0] * kx, -c[1] * ky];
+  if (e.miroir) m = produitA(m, [-1, 0, 0, 1, w, 0]);
+  // Quart de tour à gauche, ramené dans le premier quadrant (comme `edition.rs`).
+  m = produitA(m, { 90: [0, 1, -1, 0, h, 0], 180: [-1, 0, 0, -1, w, h], 270: [0, -1, 1, 0, 0, w] }[g.rotation] || [1, 0, 0, 1, 0, 0]);
+  return produitA(m, [1, 0, 0, -1, g.image_mm[0], vue.h - g.image_mm[1]]);
+}
+/** Format de sortie à 100 % (largeur, hauteur imprimées) du cadre gardé, après rotation. */
+function baseSortie(ed) {
+  const c = ed.recadrage || [0, 0, ...geomVue().source_mm];
+  return ed.rotation % 180 ? [c[3], c[2]] : [c[2], c[3]];
+}
+function tailleDe(ed) {
+  const [bl, bh] = baseSortie(ed), [kx, ky] = echellesDe(ed);
+  return ed.rotation % 180 ? [bl * ky, bh * kx] : [bl * kx, bh * ky];
+}
+/** Taille imprimée voulue → échelle (liée : `echelle` d'après la largeur ; déliée : `echelle_xy`). */
+function poserTaille(L, H, liees) {
+  const ed = ED.ed, [bl, bh] = baseSortie(ed), lim = (v) => arrondi(borner(v, 1, 1000));
+  if (liees) { ed.echelle = lim(L / bl * 100); ed.echelle_xy = null; return; }
+  const sx = L / bl * 100, sy = H / bh * 100;
+  ed.echelle_xy = ed.rotation % 180 ? [lim(sy), lim(sx)] : [lim(sx), lim(sy)];
+}
+const horsPage = (c) => { const [sl, sh] = geomVue().source_mm; return c[0] < 0 || c[1] < 0 || c[2] < 1 || c[3] < 1 || c[0] + c[2] > sl + 0.01 || c[1] + c[3] > sh + 0.01; };
+
+function preparerEditionVue() {
+  const t = vue.travail, page = t?.pages[vue.n - 1], ok = !!page?.geometrie && t.statut === "termine" && !ED.attente;
+  for (const id of ["vue-recadrer", "vue-echelle", "vue-tourner-g", "vue-tourner-d", "vue-miroir"]) $(id).disabled = !ok;
+  Object.assign(ED, { outil: null, geste: null, cadre: null, erreur: ED.attente ? ED.erreur : null });
+  ED.ed = ok ? { ...editionDe(t), rotation: page.geometrie.rotation } : null;
+  ED.initiale = JSON.stringify(ED.ed);
+  ED.liees = !ED.ed?.echelle_xy;
+  afficherEditionVue();
+}
+function majEditionVue() {
+  if (ED.cadre) {
+    const [sl, sh] = geomVue().source_mm, c = ED.cadre;
+    const entier = Math.abs(c[0]) < 0.01 && Math.abs(c[1]) < 0.01 && Math.abs(c[2] - sl) < 0.01 && Math.abs(c[3] - sh) < 0.01;
+    ED.ed.recadrage = entier ? null : c.map(arrondi);
+  }
+  afficherEditionVue();
+  dessinerVue();
+}
+function outilEd(outil) {
+  ED.outil = ED.outil === outil ? null : outil;
+  ED.cadre = ED.outil === "recadrer" ? [...(ED.ed.recadrage || [0, 0, ...geomVue().source_mm])] : null;
+  if (ED.verrou && ED.cadre) ED.ratio = ED.cadre[2] / ED.cadre[3];
+  majEditionVue();
+}
+function afficherEditionVue() {
+  const p = $("vue-edition"), t = vue.travail, d = T();
+  $("vue-recadrer").setAttribute("aria-pressed", String(ED.outil === "recadrer"));
+  $("vue-echelle").setAttribute("aria-pressed", String(ED.outil === "echelle"));
+  $("vue-miroir").setAttribute("aria-pressed", String(!!ED.ed?.miroir));
+  p.hidden = !t;
+  if (!t) return;
+  const titre = el("strong", {}, d.ed_titre), erreur = ED.erreur ? el("p", { className: "erreur", role: "alert" }, ED.erreur) : null;
+  if (!ED.ed) { p.replaceChildren(titre, el("p", { className: "meta" }, ED.attente ? d.ed_en_cours : d.ed_indisponible), erreur); return; }
+  const ed = ED.ed;
+  const champ = (texte, valeur, poser, attrs = {}) => {
+    const i = el("input", { type: "number", step: "any", value: arrondi(valeur), ...attrs });
+    i.addEventListener("change", () => { if (i.value !== "" && Number.isFinite(+i.value)) poser(+i.value); majEditionVue(); });
+    i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); i.dispatchEvent(new Event("change")); } });
+    return el("label", {}, texte, i);
+  };
+  const blocs = [titre, el("div", {}, d.ed_rotation(ed.rotation))];
+  if (ed.miroir) {
+    const portee = el("select", {}, ...["image_et_decoupe", "image_seule"].map((v) => el("option", { value: v, selected: ed.miroir_portee === v }, d[`portee_${v}`])));
+    portee.addEventListener("change", () => { ed.miroir_portee = portee.value; majEditionVue(); });
+    blocs.push(el("label", {}, d.ed_portee, portee), el("p", { className: "meta" }, `⚠ ${d.note_portee}`));
+  }
+  if (ED.outil === "recadrer") {
+    const c = ED.cadre;
+    const cote = (i) => (v) => {
+      // Largeur (i = 2) ou hauteur (i = 3) : le point d'ancrage reste fixe ; verrou : l'autre suit.
+      const autre = 5 - i, a = ED.ancrage, vieux = c[i];
+      c[i] = v; c[i - 2] += (vieux - v) * a[i - 2];
+      if (ED.verrou) { const v2 = i === 2 ? v / ED.ratio : v * ED.ratio, vieux2 = c[autre]; c[autre] = v2; c[autre - 2] += (vieux2 - v2) * a[autre - 2]; }
+    };
+    const grille = el("div", { className: "vue-ancrage", role: "group", ariaLabel: d.ed_ancrage }, ...[1, 0.5, 0].flatMap((ay) => [0, 0.5, 1].map((ax) => {
+      const b = el("button", { type: "button", className: "discret", title: d.ed_ancrage }, "•");
+      b.setAttribute("aria-pressed", String(ED.ancrage[0] === ax && ED.ancrage[1] === ay));
+      // Ancrer : le cadre se place à ce point de la page, et y reste quand sa taille change.
+      b.addEventListener("click", () => { const [sl, sh] = geomVue().source_mm; ED.ancrage = [ax, ay]; c[0] = (sl - c[2]) * ax; c[1] = (sh - c[3]) * ay; majEditionVue(); });
+      return b;
+    })));
+    const verrou = el("input", { type: "checkbox", checked: ED.verrou });
+    verrou.addEventListener("change", () => { ED.verrou = verrou.checked; ED.ratio = c[2] / c[3]; afficherEditionVue(); });
+    blocs.push(el("strong", {}, d.ed_recadrage),
+      el("div", { className: "deux" }, champ(d.ed_x, c[0], (v) => { c[0] = v; }), champ(d.ed_y, c[1], (v) => { c[1] = v; })),
+      el("div", { className: "deux" }, champ(d.ed_l, c[2], cote(2), { min: 1 }), champ(d.ed_h, c[3], cote(3), { min: 1 })),
+      el("div", {}, d.ed_ancrage, grille),
+      el("label", { className: "case" }, verrou, " ", d.ed_verrou),
+      bouton(d.ed_sans_recadrage, () => { ED.cadre = [0, 0, ...geomVue().source_mm]; majEditionVue(); }),
+      horsPage(c) ? el("p", { className: "erreur" }, d.ed_hors_page) : null,
+      el("p", { className: "meta" }, d.note_repere_source));
+  }
+  if (ED.outil === "echelle") {
+    const [L, H] = tailleDe(ed);
+    const liees = el("input", { type: "checkbox", checked: ED.liees });
+    liees.addEventListener("change", () => { ED.liees = liees.checked; if (ED.liees) poserTaille(L, H, true); majEditionVue(); });
+    blocs.push(el("strong", {}, d.ed_taille),
+      ED.liees ? champ(d.echelle, ed.echelle, (v) => { ed.echelle = borner(v, 1, 1000); ed.echelle_xy = null; }, { min: 1, max: 1000 }) : null,
+      el("div", { className: "deux" },
+        champ(d.ed_largeur_mm, L, (v) => poserTaille(v, ED.liees ? v * H / L : H, ED.liees), { min: 1 }),
+        champ(d.ed_hauteur_mm, H, (v) => poserTaille(ED.liees ? v * L / H : L, v, ED.liees), { min: 1 })),
+      el("label", { className: "case" }, liees, " ", d.ed_liees),
+      el("p", { className: "meta" }, d.note_taille));
+  }
+  const change = JSON.stringify(ed) !== ED.initiale;
+  const appliquer = el("button", { type: "button", disabled: !change || ED.attente }, d.ed_appliquer);
+  appliquer.addEventListener("click", appliquerEditionVue);
+  const annuler = bouton(d.ed_annuler, () => { preparerEditionVue(); dessinerVue(); });
+  annuler.disabled = !change;
+  blocs.push(erreur, el("div", { className: "ligne" }, appliquer, annuler));
+  p.replaceChildren(...blocs.filter(Boolean));
+}
+/** Cadre de l'outil, en mm de l'aperçu : le recadrage, ou la taille à venir à l'échelle réelle
+ *  posée au coin haut gauche de l'image. */
+function rectEd() {
+  if (ED.outil === "recadrer") return boiteA(versVue(), ED.cadre);
+  const g = geomVue(), [L, H] = tailleDe(ED.ed), x0 = g.image_mm[0], y0 = vue.h - g.image_mm[1] - g.image_mm[3];
+  return [x0, y0, x0 + L, y0 + H];
+}
+function dessinerCadreEd() {
+  const d = $("vue-cadre-ed"), actif = !!(ED.ed && ED.outil && vue.travail);
+  d.hidden = !actif;
+  if (!actif) return;
+  const b = rectEd(), k = vue.z * PX_MM;
+  d.className = ED.outil;
+  Object.assign(d.style, { left: `${b[0] * k}px`, top: `${b[1] * k}px`, width: `${(b[2] - b[0]) * k}px`, height: `${(b[3] - b[1]) * k}px` });
+}
+/** Poignée sous le point (mm de l'aperçu) : [hx, hy] en 0 / 0,5 / 1, « dedans », ou null. */
+function poigneeEd(m) {
+  if (!ED.ed || !ED.outil) return null;
+  const b = rectEd(), tol = 8 / (vue.z * PX_MM);
+  for (const hx of [0, 0.5, 1]) for (const hy of [0, 0.5, 1]) {
+    if (hx === 0.5 && hy === 0.5) continue;
+    if (Math.abs(m.x - (b[0] + (b[2] - b[0]) * hx)) <= tol && Math.abs(m.y - (b[1] + (b[3] - b[1]) * hy)) <= tol) return [hx, hy];
+  }
+  return ED.outil === "recadrer" && m.x > b[0] && m.x < b[2] && m.y > b[1] && m.y < b[3] ? "dedans" : null;
+}
+function commencerGesteEd(m) {
+  const p = poigneeEd(m);
+  if (!p) return false;
+  ED.geste = { p, m0: m, b0: rectEd(), taille0: tailleDe(ED.ed) };
+  return true;
+}
+/** Survol ou glissement d'un outil d'édition ; vrai si le geste est pour lui. */
+function survolEd(m) {
+  const g = ED.geste;
+  if (!g) {
+    const p = poigneeEd(m);
+    zoneVue.style.cursor = p === "dedans" ? "move" : p ? (p[0] === 0.5 ? "ns-resize" : p[1] === 0.5 ? "ew-resize" : p[0] === p[1] ? "nwse-resize" : "nesw-resize") : "";
+    return false;
+  }
+  const dx = m.x - g.m0.x, dy = m.y - g.m0.y;
+  if (ED.outil === "recadrer") {
+    let [x0, y0, x1, y1] = g.b0;
+    const borne = boiteA(versVue(), [0, 0, ...geomVue().source_mm]);
+    if (g.p === "dedans") {
+      const w = x1 - x0, h = y1 - y0;
+      x0 = borner(x0 + dx, borne[0], borne[2] - w); y0 = borner(y0 + dy, borne[1], borne[3] - h); x1 = x0 + w; y1 = y0 + h;
+    } else {
+      const [hx, hy] = g.p;
+      if (hx === 0) x0 = borner(x0 + dx, borne[0], x1 - 1);
+      if (hx === 1) x1 = borner(x1 + dx, x0 + 1, borne[2]);
+      if (hy === 0) y0 = borner(y0 + dy, borne[1], y1 - 1);
+      if (hy === 1) y1 = borner(y1 + dy, y0 + 1, borne[3]);
+      // Verrou : un angle garde les proportions du cadre de départ.
+      if (ED.verrou && hx !== 0.5 && hy !== 0.5) { const h = (x1 - x0) * (g.b0[3] - g.b0[1]) / (g.b0[2] - g.b0[0]); if (hy === 0) y0 = y1 - h; else y1 = y0 + h; }
+    }
+    const inv = inverseA(versVue()), p = appliquerA(inv, [x0, y0]), q = appliquerA(inv, [x1, y1]);
+    ED.cadre = [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.abs(q[0] - p[0]), Math.abs(q[1] - p[1])];
+  } else {
+    const [hx, hy] = g.p, [L0, H0] = g.taille0;
+    let L = Math.max(1, L0 + (hx === 1 ? dx : hx === 0 ? -dx : 0)), H = Math.max(1, H0 + (hy === 1 ? dy : hy === 0 ? -dy : 0));
+    if (hx !== 0.5 && hy !== 0.5) {
+      // Angle : proportionnel, d'après le côté le plus tiré.
+      const f = Math.abs(L / L0 - 1) > Math.abs(H / H0 - 1) ? L / L0 : H / H0;
+      [L, H] = [L0 * f, H0 * f];
+    } else ED.liees = false;
+    poserTaille(L, H, ED.liees);
+  }
+  majEditionVue();
+  return true;
+}
+async function appliquerEditionVue() {
+  const t = vue.travail, n = vue.n;
+  const r = await fetch(`/api/travaux/${t.id}/reglages`, json("POST", { ...t, edition: ED.ed })).catch(() => null);
+  if (!r || !r.ok) {
+    const c = r ? await r.json().catch(() => ({})) : { code: "reseau" };
+    ED.erreur = texteErreur(c.code, c.detail);
+    afficherEditionVue();
+    return;
+  }
+  Object.assign(ED, { erreur: null, attente: true, outil: null, ed: null });
+  ED.versions[t.id] = Date.now();
+  afficherEditionVue();
+  dessinerVue();
+  dire(T().reglages_appliques);
+  for (let i = 0; i < 600 && $("visionneuse").open && vue.travail?.id === t.id; i++) {
+    await new Promise((ok) => setTimeout(ok, 500));
+    await rafraichir();
+    const nt = travaux.find((x) => x.id === t.id);
+    if (!nt || ["en_attente", "en_cours"].includes(nt.statut)) continue;
+    ED.attente = false;
+    const k = Math.min(n, nt.pages.length) || 1;
+    if (nt.pages.length) await voir(`/api/travaux/${nt.id}/pages/${k}/${principalVue(nt)}`, T().composite, { t: nt, page: nt.pages[k - 1], n: k });
+    else { vue.travail = nt; preparerEditionVue(); }
+    if (nt.statut !== "termine") { ED.erreur = texteErreur(nt.code_erreur, nt.erreur); afficherEditionVue(); }
+    return;
+  }
+  ED.attente = false;
+}
+$("vue-recadrer").addEventListener("click", () => outilEd("recadrer"));
+$("vue-echelle").addEventListener("click", () => outilEd("echelle"));
+// Quart de tour à gauche = +90 (convention du serveur).
+$("vue-tourner-g").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 90) % 360; majEditionVue(); });
+$("vue-tourner-d").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 270) % 360; majEditionVue(); });
+$("vue-miroir").addEventListener("click", () => { ED.ed.miroir = !ED.ed.miroir; majEditionVue(); });
 
 // --- Travaux ---
 let travaux = [], sorties = [], filtre = "";

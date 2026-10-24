@@ -220,7 +220,20 @@ impl<'a> Lecteur<'a> {
                     let ressources_form = flux.dict.get(b"Resources").ok().and_then(|o| deref(doc, o).as_dict().ok()).or(ressources);
                     let mut etat_form = etat.clone();
                     etat_form.ctm = produit(&matrice, &etat.ctm);
-                    self.lire(&contenu, ressources_form, etat_form, profondeur + 1)?;
+                    let debut = self.traces.len();
+                    self.lire(&contenu, ressources_form, etat_form.clone(), profondeur + 1)?;
+                    // La BBox du formulaire rogne son contenu (ISO 32000-1, 8.10.1) : la
+                    // découpe aussi. Seulement si elle reste un rectangle droit (échelles,
+                    // quarts de tour, miroirs) ; sinon les tracés sont gardés entiers.
+                    let bbox = flux.dict.get(b"BBox").and_then(Object::as_array).map(|a| nombres(a)).ok().filter(|b| b.len() == 4);
+                    let m = etat_form.ctm;
+                    if let Some(b) = bbox.filter(|_| (m[1].abs() < 1e-9 && m[2].abs() < 1e-9) || (m[0].abs() < 1e-9 && m[3].abs() < 1e-9)) {
+                        let (p, q) = (transformer(&m, (b[0], b[1])), transformer(&m, (b[2], b[3])));
+                        let (x0, y0) = (p.0.min(q.0), p.1.min(q.1));
+                        let decales = |traces: Vec<Trace>, dx: f64, dy: f64| traces.into_iter().map(|t| Trace { points: t.points.into_iter().map(|(x, y)| (x + dx, y + dy)).collect(), ..t }).collect::<Vec<_>>();
+                        let nouveaux = self.traces.split_off(debut);
+                        self.traces.extend(decales(rogner(decales(nouveaux, -x0, -y0), (p.0 - q.0).abs(), (p.1 - q.1).abs()), x0, y0));
+                    }
                 }
                 _ => {}
             }
