@@ -243,6 +243,9 @@
             <label><span data-t="retraction"></span> <input type="number" name="blanc_retraction_mm" value="0.2" min="0" max="5" step="0.05"></label>
             <label><span data-t="seuil"></span> <input type="number" name="blanc_seuil" value="5" min="1" max="100" step="1"></label>
           </div>
+          <label><span data-t="couches"></span>
+            <select name="couches"><option value="dessous" data-t="couches_dessous"></option><option value="dessus" data-t="couches_dessus"></option></select>
+          </label>
           <p class="meta" style="margin: 0" data-t="note_blanc"></p>
         </div></details>
         <details class="section"><summary data-t="mosaique"></summary><div>
@@ -344,7 +347,8 @@ const textes = {
     taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} fichiers choisis`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
     blanc_aplat: "Aplat sur toute la page", retraction: "Rétraction (mm)", seuil: "Encre minimale (%)",
-    note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre.",
+    note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre. Tons reconnus par l'Epson : White, Blanc, WH (blanc) et Metallic, Silver, Argent, MS (argent).",
+    couches: "Blanc ou argent", couches_dessous: "Sous la couleur", couches_dessus: "Sur la couleur (vitrophanie)",
     reperes_les: "Numéro et traits d'assemblage en pied de chaque lé (+10 mm)",
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
@@ -391,7 +395,7 @@ const textes = {
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
       profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
       profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
-      rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.",
+      rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.", envoi_impossible: "Envoi à l'imprimante impossible.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
       blanc_invalide: "Blanc : rétraction de 0 à 5 mm, encre minimale de 1 à 100 %.",
@@ -441,7 +445,8 @@ const textes = {
     taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} files chosen`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
     blanc_aplat: "Flood over the whole page", retraction: "Choke (mm)", seuil: "Minimum ink (%)",
-    note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge.",
+    note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge. Tones the Epson recognises: White, Blanc, WH (white) and Metallic, Silver, Argent, MS (silver).",
+    couches: "White or silver", couches_dessous: "Under the colour", couches_dessus: "Over the colour (window film)",
     reperes_les: "Panel number and joining marks at the foot of each panel (+10 mm)",
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
@@ -488,7 +493,7 @@ const textes = {
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
       profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
       profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
-      rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.",
+      rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.", envoi_impossible: "Cannot send to the printer.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
       blanc_invalide: "White: choke from 0 to 5 mm, minimum ink from 1 to 100 %.",
@@ -739,6 +744,7 @@ function demandeDuFormulaire() {
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
     mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value, reperes: f.reperes_les.checked } : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
+    couches: f.couches.value,
     edition: lireEdition($("edition-envoi")),
     auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
     support: f.support.value || null,
@@ -782,6 +788,7 @@ function appliquerDemande(d) {
   if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; f.reperes_les.checked = !!d.mosaique.reperes; }
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
+  f.couches.value = d.couches || "dessous";
   champsEdition($("edition-envoi"), d.edition);
   const a = d.auto || {};
   f.auto_imprimer.checked = !!a.imprimer; f.auto_decouper.checked = !!a.decouper; f.auto_suspendre.checked = !!a.suspendre;

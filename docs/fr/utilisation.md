@@ -99,7 +99,15 @@ s'affiche dans l'onglet.
 - **Mutoh Kona 1650** : la découpe part par le port du plotter (`/dev/kona`).
 - **Epson SC-S80600** : son pilote n'existe pas encore. En attendant, les plaques à
   imprimer sont copiées dans `/var/lib/eko-rip/sorties/epson/<travail>-p<page>-<sortie>/`
-  sur le serveur. Les tons de découpe (`CutContour`…) n'y sont jamais copiés.
+  sur le serveur, telles que le pilote les enverra : un fichier par canal de
+  l'imprimante (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, puis `WH.tif` ou `MS.tif`) et
+  `envoi.json` (canaux dans l'ordre, plaque d'origine, couches). Les tons de découpe
+  (`CutContour`…) ne partent jamais. Le blanc est reconnu sous les noms `White`, `Blanc`,
+  `WH`, l'argent sous `Metallic`, `Silver`, `Argent`, `MS` (Epson conseille `White` et
+  `Metallic`). **Blanc ou argent** (section Blanc du travail) le pose sous la couleur ou
+  dessus (vitrophanie). La mise en file est refusée, avec la raison, pour un autre ton
+  direct (le convertir en CMJN ou le renommer), ou pour du blanc et de l'argent sur la
+  même page.
 
 Chaque machine passe une sortie à la fois, dans l'ordre de sa colonne. Sur une sortie
 à passer : **En tête**, **Monter**, **Descendre**, **Suspendre** / **Reprendre**,

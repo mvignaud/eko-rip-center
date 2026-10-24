@@ -94,7 +94,14 @@ the tab.
 - **Mutoh Kona 1650**: the cut goes out through the cutter port (`/dev/kona`).
 - **Epson SC-S80600**: its driver does not exist yet. Meanwhile, the plates to print
   are copied to `/var/lib/eko-rip/sorties/epson/<job>-p<page>-<output>/` on the server.
-  Cut spot colours (`CutContour`…) are never copied there.
+  They are laid out as the driver will send them: one file per printer channel
+  (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, then `WH.tif` or `MS.tif`) and `envoi.json`
+  (channels in order, source plate, layers). Cut spot colours (`CutContour`…) never go
+  out. White is recognised as `White`, `Blanc`, `WH`, silver as `Metallic`, `Silver`,
+  `Argent`, `MS` (Epson recommends `White` and `Metallic`). **White or silver** (White
+  section of the job) puts it under the colour or over it (window film). Queuing is
+  refused, with the reason, for any other spot colour (convert it to CMYK or rename it),
+  or for white and silver on the same page.
 
 Each machine runs one output at a time, in its column's order. On an output still to
 run: **To top**, **Up**, **Down**, **Hold** / **Resume**, **Cancel**. An output on hold

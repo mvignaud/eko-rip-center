@@ -15,6 +15,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Imbrication sur la forme** des contours de découpe (option du panneau Planche) : ronds
   en quinconce, triangles tête-bêche, rotations 0/90/180/270° ; l'imposition dessine les
   contours. Sur 8 ronds et 6 triangles en laize 300 mm : 202 mm de rouleau au lieu de 289.
+- **Préparation du pilote Epson** : plaques → canaux K C M Y puis WH (`White`, `Blanc`,
+  `WH`) ou MS (`Metallic`, `Silver`, `Argent`, `MS`) ; réglage **Blanc ou argent** sous ou
+  sur la couleur, par travail ; sortie en dossier par canal avec `envoi.json`. Les tons de
+  découpe ne partent jamais ; un autre ton direct, ou blanc et argent sur la même page,
+  est refusé à la mise en file avec la raison.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

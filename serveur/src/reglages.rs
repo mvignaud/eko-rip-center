@@ -1,7 +1,7 @@
 //! Réglages d'un travail (`Demande`) et réglages enregistrés sous un nom, avec leur
 //! dossier surveillé `<données>/entrees/<nom>/`.
 
-use crate::{blanc, couleur, edition, reperage};
+use crate::{blanc, couleur, edition, epson, reperage};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -42,6 +42,9 @@ pub struct Demande {
     /// Blanc généré après le rendu (sous-couche ou aplat).
     #[serde(default)]
     pub blanc: blanc::Blanc,
+    /// Blanc ou argent sous la couleur, ou dessus (vitrophanie).
+    #[serde(default)]
+    pub couches: epson::Couches,
     /// Édition rapide appliquée au PDF avant le rendu.
     #[serde(default)]
     pub edition: edition::Edition,
@@ -73,7 +76,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None }
     }
 }
 

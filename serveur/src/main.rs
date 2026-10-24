@@ -9,6 +9,7 @@ mod controle;
 mod couverture;
 mod decoupe;
 mod edition;
+mod epson;
 mod machines;
 mod media;
 mod file;
@@ -1520,6 +1521,11 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
     match operation {
         Decoupe if p.traces_decoupe == 0 => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
         Impression if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
+        Impression if m.modele == machines::Modele::EpsonScS80600 => {
+            if let Err(e) = epson::preparer(&p.plaques, t.demande.couches) {
+                return refus(StatusCode::CONFLICT, "envoi_impossible", Some(e));
+            }
+        }
         _ => {}
     }
     let s = file::Sortie::nouvelle(&m.id, operation, t.id, &t.nom, d.page, maintenant());
@@ -1577,7 +1583,7 @@ async fn executer(etat: Partage, s: file::Sortie) {
     let resultat = match machine(&etat, &s.machine) {
         None => Err(format!("machine « {} » absente du catalogue", s.machine)),
         Some(m) => match (s.operation(), &m.connexion) {
-            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s).await,
+            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await,
             (machines::Operation::Impression, _) => Err(format!("pilote d'impression à venir pour {}", m.nom)),
             (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await,
         },
@@ -1607,15 +1613,24 @@ async fn envoyer_la_decoupe(etat: &Etat, s: &file::Sortie, m: machines::Machine)
     .unwrap_or_else(|e| Err(e.to_string()))
 }
 
-async fn sortir_les_plaques(etat: &Etat, s: &file::Sortie) -> Result<(), String> {
+/// Plaques en dossier, sauf la découpe. Pour l'Epson, telles que le pilote les enverra :
+/// un fichier par canal (`K.tif`… `WH.tif`) et `envoi.json` (canaux dans l'ordre, couches).
+async fn sortir_les_plaques(etat: &Etat, s: &file::Sortie, modele: machines::Modele) -> Result<(), String> {
     let donnees = &etat.config.donnees;
-    let (_, p) = lire_page(donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
+    let (t, p) = lire_page(donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
     let cible = file::dossier_sortie(donnees, s);
     tokio::fs::create_dir_all(&cible).await.map_err(|e| e.to_string())?;
+    let fichiers: Vec<(String, String)> = if modele == machines::Modele::EpsonScS80600 {
+        let envoi = epson::preparer(&p.plaques, t.demande.couches)?;
+        tokio::fs::write(cible.join("envoi.json"), serde_json::to_vec_pretty(&envoi).unwrap_or_default()).await.map_err(|e| e.to_string())?;
+        envoi.canaux.into_iter().map(|(c, nom)| (nom, format!("{c:?}"))).collect()
+    } else {
+        p.plaques.iter().filter(|n| !p.plaques_decoupe.contains(n)).map(|n| (n.clone(), n.clone())).collect()
+    };
     let rep = dossier(donnees, s.travail);
-    for nom in p.plaques.iter().filter(|n| !p.plaques_decoupe.contains(n)) {
-        let source = render::chemin_plaque(&rep, s.page, nom);
-        tokio::fs::copy(&source, cible.join(format!("{nom}.tif"))).await.map_err(|e| format!("copie de {} : {e}", source.display()))?;
+    for (nom, fichier) in fichiers {
+        let source = render::chemin_plaque(&rep, s.page, &nom);
+        tokio::fs::copy(&source, cible.join(format!("{fichier}.tif"))).await.map_err(|e| format!("copie de {} : {e}", source.display()))?;
     }
     Ok(())
 }
@@ -1882,8 +1897,10 @@ mod tests {
             let s = e.file.lock().unwrap().sorties[0].clone();
             assert_eq!(s.etat, file::Etat::Terminee, "{s:?}");
             let sortie = file::dossier_sortie(&donnees, &s);
-            assert_eq!(std::fs::read_to_string(sortie.join("Cyan.tif")).unwrap(), "Cyan");
-            assert!(!sortie.join("CutContour.tif").exists(), "un ton de découpe ne part jamais à l'imprimante");
+            assert_eq!(std::fs::read_to_string(sortie.join("C.tif")).unwrap(), "Cyan", "une plaque par canal Epson");
+            let envoi: serde_json::Value = serde_json::from_slice(&std::fs::read(sortie.join("envoi.json")).unwrap()).unwrap();
+            assert_eq!(envoi, serde_json::json!({ "canaux": [["C", "Cyan"]], "couches": "dessous" }));
+            assert_eq!(std::fs::read_dir(&sortie).unwrap().count(), 2, "un ton de découpe ne part jamais à l'imprimante");
             assert_eq!(file::File::lire(&donnees).sorties, [s], "file écrite sur le disque");
 
             // Réimpression sans nouveau rendu, puis suppression : l'historique part avec le travail.
