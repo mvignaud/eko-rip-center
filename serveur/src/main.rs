@@ -929,9 +929,14 @@ async fn media_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>) 
     let Some(m) = machine(&etat, &id) else { return introuvable() };
     let Some(hote) = m.snmp else { return refus(StatusCode::CONFLICT, "media_non_configure", None) };
     let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
-    match tokio::task::spawn_blocking(move || media::lire_medias(&hote, &communaute, Duration::from_secs(2))).await {
-        Ok(Ok(m)) if !m.is_empty() => Json(serde_json::json!({ "medias": m })).into_response(),
-        Ok(Ok(_)) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some("aucune largeur dans la Printer-MIB".into())),
+    let epson = m.modele == machines::Modele::EpsonScS80600;
+    let lecture = move || {
+        let d = Duration::from_secs(2);
+        media::lire_medias(&hote, &communaute, d).map(|m| (m, media::lire_alertes(&hote, &communaute, d).unwrap_or_default(), epson.then(|| media::lire_etat_epson(&hote, &communaute, d)).flatten()))
+    };
+    match tokio::task::spawn_blocking(lecture).await {
+        Ok(Ok((m, alertes, etat))) if !m.is_empty() => Json(serde_json::json!({ "medias": m, "alertes": alertes, "epson": etat })).into_response(),
+        Ok(Ok((_, alertes, _))) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some(if alertes.is_empty() { "aucune largeur dans la Printer-MIB".into() } else { alertes.join(", ") })),
         Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some(e)),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }

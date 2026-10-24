@@ -7,6 +7,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- **État de l'Epson** dans Système > Média (SNMP) : longueur restante du rouleau, n° de
+  support, niveaux d'encre (OR LK BK C M Y R LC LM CL), chauffages et alertes.
+
 ## [0.11.0] — 2026-10-24
 
 ### Ajouté

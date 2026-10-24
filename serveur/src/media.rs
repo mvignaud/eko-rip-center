@@ -2,9 +2,11 @@
 //! (RFC 3805, table `prtInputTable`) : largeur du média en travers de l'avance
 //! (`prtInputMediaDimXFeedDirChosen`), unité (`prtInputDimUnit`) et nom
 //! (`prtInputMediaName`).
-// ponytail: client SNMP v1 minimal (GetNext, BER à la main) pour trois colonnes ; à
-// valider sur la SC-S80600 (capture à l'atelier) : si elle ne remplit pas la Printer-MIB,
-// sa MIB privée Epson ou son canal USB prendront le relais.
+//! Validé sur la SC-S80600 le 24/10 : largeur imprimable (1592,7 mm d'un rouleau de 1600),
+//! longueur restante (`prtInputCurrentLevel`, décroît pendant l'impression), alertes
+//! (`prtAlertDescription`). En plus, la réponse d'état Epson « @BDC ST2 » de sa MIB
+//! privée (lue par ONYX toutes les 10 s) : niveaux d'encre, n° de support, chauffages.
+// ponytail: client SNMP v1 minimal (GetNext, BER à la main).
 
 use std::net::UdpSocket;
 use std::time::Duration;
@@ -12,7 +14,13 @@ use std::time::Duration;
 const PRT_INPUT: [u32; 10] = [1, 3, 6, 1, 2, 1, 43, 8, 2, 1];
 const COL_UNITE: u32 = 3;
 const COL_LARGEUR: u32 = 7;
+const COL_UNITE_CAPACITE: u32 = 8;
+const COL_NIVEAU: u32 = 10;
 const COL_NOM: u32 = 12;
+/// `prtAlertDescription`.
+const ALERTES: [u32; 11] = [1, 3, 6, 1, 2, 1, 43, 18, 1, 1, 8];
+/// Réponse d'état Epson (« @BDC ST2 »), MIB privée 1248.
+const ETAT_EPSON: [u32; 14] = [1, 3, 6, 1, 4, 1, 1248, 1, 2, 2, 1, 1, 1, 4];
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize)]
 pub struct Media {
@@ -20,6 +28,58 @@ pub struct Media {
     pub entree: u32,
     pub largeur_mm: f64,
     pub nom: Option<String>,
+    /// Longueur restante du rouleau, en m (celle saisie au chargement, décomptée).
+    pub longueur_m: Option<f64>,
+}
+
+/// État lu dans la réponse « @BDC ST2 » (format public, décodé à l'atelier le 24/10).
+#[derive(Debug, PartialEq, Clone, Default, serde::Serialize)]
+pub struct EtatEpson {
+    /// (encre, % restant), dans l'ordre de la réponse.
+    pub encres: Vec<(String, u8)>,
+    /// N° du support enregistré dans l'imprimante.
+    pub support: Option<u8>,
+    /// Chauffages : deux valeurs en °C ; la première est celle de l'écran de l'imprimante.
+    pub chauffages: Vec<(u8, u8)>,
+}
+
+/// Code couleur Epson → encre (codes confirmés sur l'écran de la S80600 le 24/10).
+fn encre(code: u8) -> String {
+    match code {
+        0x00 => "BK",
+        0x01 => "C",
+        0x02 => "M",
+        0x03 => "Y",
+        0x04 => "LC",
+        0x05 => "LM",
+        0x08 => "LK",
+        0x09 => "R",
+        0x0D => "OR",
+        0x10 => "CL",
+        _ => return format!("0x{code:02X}"),
+    }
+    .into()
+}
+
+/// Champs [type, longueur, données] après « @BDC ST2\r\n » et une longueur sur 16 bits.
+fn decoder_st2(o: &[u8]) -> Option<EtatEpson> {
+    let debut = o.windows(5).position(|w| w == b"ST2\r\n")? + 5;
+    let n = *o.get(debut)? as usize | (*o.get(debut + 1)? as usize) << 8;
+    let (mut i, fin) = (debut + 2, (debut + 2 + n).min(o.len()));
+    let mut e = EtatEpson::default();
+    while i + 2 <= fin {
+        let (t, l) = (o[i], o[i + 1] as usize);
+        let v = o.get(i + 2..i + 2 + l)?;
+        match t {
+            // Encres : taille d'une entrée puis entrées (repère, code, %, capacité).
+            0x0f if !v.is_empty() && v[0] >= 3 => e.encres = v[1..].chunks(v[0] as usize).filter(|c| c.len() >= 3).map(|c| (encre(c[1]), c[2])).collect(),
+            0x2d if l >= 2 => e.support = Some(v[1]),
+            0x2e => e.chauffages = v.chunks(3).filter(|c| c.len() == 3).map(|c| (c[1], c[2])).collect(),
+            _ => {}
+        }
+        i += 2 + l;
+    }
+    Some(e)
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -135,7 +195,12 @@ fn decoder(o: &[u8]) -> Option<(i64, Vec<u32>, Valeur)> {
 
 /// Parcourt une colonne de la table (GetNext) : (index de ligne, valeur).
 fn colonne(socket: &UdpSocket, communaute: &str, col: u32) -> std::io::Result<Vec<(Vec<u32>, Valeur)>> {
-    let prefixe: Vec<u32> = PRT_INPUT.iter().copied().chain([col]).collect();
+    parcourir(socket, communaute, &PRT_INPUT.iter().copied().chain([col]).collect::<Vec<u32>>())
+}
+
+/// Parcourt tout ce qui suit `prefixe` (GetNext) : (suffixe, valeur).
+fn parcourir(socket: &UdpSocket, communaute: &str, prefixe: &[u32]) -> std::io::Result<Vec<(Vec<u32>, Valeur)>> {
+    let prefixe = prefixe.to_vec();
     let mut courant = prefixe.clone();
     let mut lignes = vec![];
     let mut tampon = [0u8; 1500];
@@ -152,16 +217,37 @@ fn colonne(socket: &UdpSocket, communaute: &str, col: u32) -> std::io::Result<Ve
     Ok(lignes)
 }
 
-/// Médias chargés, lus à l'adresse `hote` (port 161 par défaut), communauté `public`.
-pub fn lire_medias(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<Media>, String> {
+fn connecter(hote: &str, delai: Duration) -> Result<(UdpSocket, String), String> {
     let adresse = if hote.contains(':') { hote.to_string() } else { format!("{hote}:161") };
     let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
     socket.set_read_timeout(Some(delai)).map_err(|e| e.to_string())?;
     socket.connect(&adresse).map_err(|e| format!("{adresse} : {e}"))?;
+    Ok((socket, adresse))
+}
+
+/// Alertes en cours (« printer cover open », « ready »…).
+pub fn lire_alertes(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<String>, String> {
+    let (socket, adresse) = connecter(hote, delai)?;
+    let lignes = parcourir(&socket, communaute, &ALERTES).map_err(|e| format!("{adresse} : {e}"))?;
+    Ok(lignes.into_iter().filter_map(|(_, v)| if let Valeur::Texte(t) = v { Some(String::from_utf8_lossy(&t).trim().to_string()) } else { None }).filter(|t| !t.is_empty()).collect())
+}
+
+/// Encres, support et chauffages d'une Epson (MIB privée) ; `None` si elle ne répond pas.
+pub fn lire_etat_epson(hote: &str, communaute: &str, delai: Duration) -> Option<EtatEpson> {
+    let (socket, _) = connecter(hote, delai).ok()?;
+    let lignes = parcourir(&socket, communaute, &ETAT_EPSON).ok()?;
+    lignes.into_iter().find_map(|(_, v)| if let Valeur::Texte(t) = v { decoder_st2(&t) } else { None })
+}
+
+/// Médias chargés, lus à l'adresse `hote` (port 161 par défaut), communauté `public`.
+pub fn lire_medias(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<Media>, String> {
+    let (socket, adresse) = connecter(hote, delai)?;
     let lire = |col| colonne(&socket, communaute, col).map_err(|e| format!("{adresse} : {e}"));
     let unites = lire(COL_UNITE)?;
     let largeurs = lire(COL_LARGEUR)?;
     let noms = lire(COL_NOM).unwrap_or_default();
+    let unites_capacite = lire(COL_UNITE_CAPACITE).unwrap_or_default();
+    let niveaux = lire(COL_NIVEAU).unwrap_or_default();
     let mut medias = vec![];
     for (ligne, v) in largeurs {
         let Valeur::Entier(l) = v else { continue };
@@ -179,7 +265,13 @@ pub fn lire_medias(hote: &str, communaute: &str, delai: Duration) -> Result<Vec<
             Valeur::Texte(t) if !t.is_empty() => Some(String::from_utf8_lossy(t).trim().to_string()),
             _ => None,
         });
-        medias.push(Media { entree: *ligne.last().unwrap_or(&0), largeur_mm: (mm * 10.0).round() / 10.0, nom });
+        // Niveau : µm (unité 4) ou 1/10 000 de pouce (3) ; négatif = inconnu.
+        let longueur_m = match (unites_capacite.iter().find(|(x, _)| *x == ligne).map(|(_, v)| v), niveaux.iter().find(|(x, _)| *x == ligne).map(|(_, v)| v)) {
+            (Some(Valeur::Entier(4)), Some(Valeur::Entier(n))) if *n >= 0 => Some(*n as f64 / 1e6),
+            (Some(Valeur::Entier(3)), Some(Valeur::Entier(n))) if *n >= 0 => Some(*n as f64 * 25.4 / 1e7),
+            _ => None,
+        };
+        medias.push(Media { entree: *ligne.last().unwrap_or(&0), largeur_mm: (mm * 10.0).round() / 10.0, nom, longueur_m });
     }
     Ok(medias)
 }
@@ -199,6 +291,20 @@ mod tests {
         assert_eq!(arcs(&oid(&[1, 3, 6, 1, 4, 1, 1248, 1])[2..]), [1, 3, 6, 1, 4, 1, 1248, 1], "arc > 127");
     }
 
+    /// Réponse « @BDC ST2 » relevée sur la S80600 le 24/10 (écran : OR 10 %, BK 93 %…,
+    /// support 6, chauffages 38/38/50 °C).
+    #[test]
+    fn etat_epson_de_l_atelier() {
+        let h = "40424443205354320D0AB9000101040C0200000D01280F2904100D0A640A08366401005D640301176404024B6405034C640C094F64060435640705296413101632130101190C0000000000756E6B6E6F776E1F0A58323753303033353433203D00787D8C857B827B6F74747887807B7D766A6F7B7E8D847E7D797179838C82767B827D7B8D8074786E747B767B85786C71797B837D7E887E767E838C822103002E0F2404000000002804080000002C02A51B2D0202062E0A0026270026260032320043011D";
+        let o: Vec<u8> = (0..h.len() / 2).map(|i| u8::from_str_radix(&h[2 * i..2 * i + 2], 16).unwrap()).collect();
+        let e = decoder_st2(&o).unwrap();
+        let noms: Vec<&str> = e.encres.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(noms, ["OR", "LK", "BK", "C", "M", "Y", "R", "LC", "LM", "CL"]);
+        assert_eq!((e.encres[0].1, e.encres[2].1), (10, 93));
+        assert_eq!(e.support, Some(6));
+        assert_eq!(e.chauffages, [(38, 39), (38, 38), (50, 50)]);
+    }
+
     /// Agent SNMP factice : un rouleau de 1615 mm (micromètres) en entrée 1, rien en entrée 2.
     #[test]
     fn largeur_lue_sur_un_agent() {
@@ -209,6 +315,8 @@ mod tests {
             (vec![3, 1, 2], entier(4)),
             (vec![7, 1, 1], entier(1_615_000)),
             (vec![7, 1, 2], entier(0)),
+            (vec![8, 1, 1], entier(4)),
+            (vec![10, 1, 1], entier(38_926_000)),
             (vec![12, 1, 1], tlv(0x04, b"Vinyle brillant")),
             (vec![12, 1, 2], tlv(0x04, b"")),
             (vec![13, 1, 1], entier(9)),
@@ -230,7 +338,7 @@ mod tests {
             }
         });
         let m = lire_medias(&adresse, "public", Duration::from_secs(2)).unwrap();
-        assert_eq!(m, [Media { entree: 1, largeur_mm: 1615.0, nom: Some("Vinyle brillant".into()) }]);
+        assert_eq!(m, [Media { entree: 1, largeur_mm: 1615.0, nom: Some("Vinyle brillant".into()), longueur_m: Some(38.926) }]);
         assert!(lire_medias("127.0.0.1:9", "public", Duration::from_millis(200)).is_err(), "pas d'agent : erreur, pas de blocage");
     }
 }
