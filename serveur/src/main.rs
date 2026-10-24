@@ -3,6 +3,7 @@
 
 mod acces;
 mod couleur;
+mod couverture;
 mod decoupe;
 mod file;
 mod imbrication;
@@ -75,7 +76,7 @@ struct Travail {
     cree_le: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 struct Page {
     /// Plaques de la page (vide en découpe seule).
     plaques: Vec<String>,
@@ -84,6 +85,12 @@ struct Page {
     plaques_decoupe: Vec<String>,
     /// Tracés de découpe de la page (0 : rien à découper).
     traces_decoupe: usize,
+    /// Surface imprimée de la page, en m² (0 en découpe seule).
+    #[serde(default)]
+    surface_m2: f64,
+    /// Part d'encre de chaque plaque, de 0 à 1.
+    #[serde(default)]
+    couverture: std::collections::BTreeMap<String, f64>,
 }
 
 
@@ -179,6 +186,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
+        .route("/api/tarifs", get(lire_tarifs).post(enregistrer_tarifs))
+        .route("/api/rapports/consommation.csv", get(rapport_consommation))
         .route("/api/file", get(lister_file).post(mettre_en_file))
         .route("/api/file/{id}", axum::routing::delete(retirer_de_la_file))
         .route("/api/file/{id}/{action}", axum::routing::post(agir_sur_la_file))
@@ -219,8 +228,81 @@ fn reprendre_travaux_interrompus(donnees: &std::path::Path) {
     }
 }
 
-async fn lister(State(etat): State<Partage>) -> Json<Vec<Travail>> {
-    Json(lire_tous(&etat.config.donnees))
+/// Travaux, avec pour chaque page l'estimation d'encre et de coût aux tarifs du moment.
+async fn lister(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
+    let tarifs = couverture::lire(&etat.config.donnees);
+    Json(
+        lire_tous(&etat.config.donnees)
+            .into_iter()
+            .map(|t| {
+                let estimations: Vec<_> = t.pages.iter().map(|p| couverture::estimer(p.surface_m2, &p.couverture, &p.plaques_decoupe, &tarifs)).collect();
+                let mut v = serde_json::to_value(&t).unwrap();
+                for (page, e) in v["pages"].as_array_mut().into_iter().flatten().zip(estimations) {
+                    page["estimation"] = serde_json::to_value(e).unwrap();
+                }
+                v
+            })
+            .collect(),
+    )
+}
+
+async fn lire_tarifs(State(etat): State<Partage>) -> Json<couverture::Tarifs> {
+    Json(couverture::lire(&etat.config.donnees))
+}
+
+async fn enregistrer_tarifs(State(etat): State<Partage>, Json(t): Json<couverture::Tarifs>) -> Response {
+    if let Err(code) = t.verifier() {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    match couverture::ecrire(&etat.config.donnees, &t) {
+        Ok(()) => Json(t).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// `2026-10-24 03:21:00` (UTC) depuis des secondes Unix (algorithme civil de H. Hinnant).
+fn date_utc(s: u64) -> String {
+    let (jours, reste) = ((s / 86_400) as i64, s % 86_400);
+    let z = jours + 719_468;
+    let ere = z.div_euclid(146_097);
+    let jde = z - ere * 146_097;
+    let ade = (jde - jde / 1460 + jde / 36_524 - jde / 146_096) / 365;
+    let jda = jde - (365 * ade + ade / 4 - ade / 100);
+    let mp = (5 * jda + 2) / 153;
+    let (j, m) = (jda - (153 * mp + 2) / 5 + 1, if mp < 10 { mp + 3 } else { mp - 9 });
+    let a = ade + ere * 400 + i64::from(m <= 2);
+    format!("{a:04}-{m:02}-{j:02} {:02}:{:02}:{:02}", reste / 3600, reste % 3600 / 60, reste % 60)
+}
+
+/// Consommation par page imprimée, pour un tableur ou l'ERP : séparateur `;`, décimales
+/// avec un point, une colonne de ml par encre rencontrée.
+async fn rapport_consommation(State(etat): State<Partage>) -> Response {
+    let tarifs = couverture::lire(&etat.config.donnees);
+    let travaux = lire_tous(&etat.config.donnees);
+    let mut encres = std::collections::BTreeSet::new();
+    let mut lignes = vec![];
+    for t in travaux.iter().filter(|t| matches!(t.statut, Statut::Termine) && t.demande.mode == Mode::Imprimer) {
+        for (i, p) in t.pages.iter().enumerate() {
+            let e = couverture::estimer(p.surface_m2, &p.couverture, &p.plaques_decoupe, &tarifs);
+            encres.extend(e.encres.iter().map(|l| l.nom.clone()));
+            lignes.push((t, i + 1, e));
+        }
+    }
+    let csv_texte = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
+    let mut csv = String::from("date;travail;id;page;surface_m2");
+    for n in &encres {
+        csv.push_str(&format!(";{}", csv_texte(&format!("{n}_ml"))));
+    }
+    csv.push_str(";encre_ml;cout_encres;cout_support;total\n");
+    for (t, page, e) in lignes {
+        csv.push_str(&format!("{};{};{};{page};{:.4}", date_utc(t.cree_le), csv_texte(&t.nom), t.id, e.surface_m2));
+        for n in &encres {
+            let ml = e.encres.iter().find(|l| &l.nom == n).map_or(0.0, |l| l.ml);
+            csv.push_str(&format!(";{ml:.2}"));
+        }
+        csv.push_str(&format!(";{:.2};{:.4};{:.4};{:.4}\n", e.ml, e.cout_encres, e.cout_support, e.total));
+    }
+    ([(header::CONTENT_TYPE, "text/csv; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"consommation.csv\"")], csv).into_response()
 }
 
 /// Réponse d'erreur : `code` est stable et traduit par l'écran, `detail` reste technique.
@@ -457,10 +539,20 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 t.pages = plaques
                     .into_iter()
                     .enumerate()
-                    .map(|(i, plaques)| Page {
-                        plaques_decoupe: plaques.iter().filter(|p| decoupe::est_ton_de_decoupe(p)).cloned().collect(),
-                        plaques,
-                        traces_decoupe: traces.get(i).copied().unwrap_or(0),
+                    .map(|(i, plaques)| {
+                        let apercus: Vec<_> = plaques.iter().map(|p| (p.clone(), render::chemin_apercu_plaque(&rep, i + 1, p))).collect();
+                        // Une mesure impossible n'empêche pas d'imprimer : le coût reste à zéro.
+                        let mesure = couverture::mesurer(&apercus, render::DPI_APERCU as f64).unwrap_or_else(|e| {
+                            eprintln!("travail {} : couverture de la page {} : {e}", t.id, i + 1);
+                            couverture::Mesure { surface_m2: 0.0, couverture: Default::default() }
+                        });
+                        Page {
+                            plaques_decoupe: plaques.iter().filter(|p| decoupe::est_ton_de_decoupe(p)).cloned().collect(),
+                            plaques,
+                            traces_decoupe: traces.get(i).copied().unwrap_or(0),
+                            surface_m2: mesure.surface_m2,
+                            couverture: mesure.couverture,
+                        }
                     })
                     .collect();
                 t.statut = Statut::Termine;
@@ -1147,12 +1239,19 @@ mod tests {
         assert!(a_purger(&travaux, 100 * jour, 0).is_empty(), "0 : jamais");
     }
 
+    #[test]
+    fn dates_du_rapport() {
+        assert_eq!(date_utc(0), "1970-01-01 00:00:00");
+        assert_eq!(date_utc(951_782_400), "2000-02-29 00:00:00", "année bissextile séculaire");
+        assert_eq!(date_utc(1_792_805_570), "2026-10-24 01:32:50");
+    }
+
     /// Chaque code d'erreur émis par ce fichier doit être traduit en FR et en EN dans l'écran.
     #[test]
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -1284,7 +1383,7 @@ mod tests {
                 statut: Statut::Termine,
                 code_erreur: None,
                 erreur: None,
-                pages: vec![Page { plaques: vec!["Cyan".into(), "CutContour".into()], plaques_decoupe: vec!["CutContour".into()], traces_decoupe: 0 }],
+                pages: vec![Page { plaques: vec!["Cyan".into(), "CutContour".into()], plaques_decoupe: vec!["CutContour".into()], ..Default::default() }],
                 cree_le: maintenant(),
             };
             let rep = dossier(&donnees, t.id);
@@ -1324,6 +1423,59 @@ mod tests {
             assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
             assert!(e.file.lock().unwrap().sorties.is_empty());
             assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Rendu réel d'une page cyan de 2 × 1 pouce : couverture mesurée, coût aux tarifs
+        /// enregistrés, tons de découpe hors compte, ligne du rapport CSV.
+        #[tokio::test]
+        async fn couverture_et_cout_d_un_vrai_rendu() {
+            let e = etat("cout");
+            let donnees = e.config.donnees.clone();
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "cyan;\"2x1\".pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { dpi: 72, ..Default::default() },
+                statut: Statut::EnAttente,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            traiter(e.clone(), t.clone()).await;
+
+            let tarifs = serde_json::json!({ "encre_defaut": { "ml_m2": 10.0, "prix_litre": 100.0 }, "encres": { "Cyan": { "ml_m2": 20.0, "prix_litre": 200.0 } }, "support_m2": 3.0 });
+            assert_eq!(appel(&e, "POST", "/api/tarifs", None, Some(tarifs)).await.status(), StatusCode::OK);
+            let mauvais = serde_json::json!({ "encre_defaut": { "ml_m2": -1.0, "prix_litre": 100.0 } });
+            assert_eq!(appel(&e, "POST", "/api/tarifs", None, Some(mauvais)).await.status(), StatusCode::BAD_REQUEST);
+
+            let r = appel(&e, "GET", "/api/travaux", None, None).await;
+            let corps = axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap();
+            let v: serde_json::Value = serde_json::from_slice(&corps).unwrap();
+            let page = &v[0]["pages"][0];
+            assert_eq!(v[0]["statut"], "termine", "{v}");
+            let surface = 2.0 * 0.0254 * 0.0254;
+            assert!((page["surface_m2"].as_f64().unwrap() - surface).abs() < surface * 0.03, "{page}");
+            let cyan = page["couverture"]["Cyan"].as_f64().unwrap();
+            assert!(cyan > 0.85, "page pleine de cyan (moins le filet de découpe) : {cyan}");
+            assert!(page["couverture"]["Magenta"].as_f64().unwrap() < 0.01);
+            let est = &page["estimation"];
+            assert!(est["encres"].as_array().unwrap().iter().all(|l| l["nom"] != "CutContour"), "{est}");
+            let attendu = cyan * page["surface_m2"].as_f64().unwrap() * 20.0;
+            assert!((est["encres"].as_array().unwrap().iter().find(|l| l["nom"] == "Cyan").unwrap()["ml"].as_f64().unwrap() - attendu).abs() < 1e-9);
+
+            let r = appel(&e, "GET", "/api/rapports/consommation.csv", None, None).await;
+            assert_eq!(r.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+            let csv = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            let lignes: Vec<&str> = csv.lines().collect();
+            assert_eq!(lignes.len(), 2, "{csv}");
+            assert!(lignes[0].contains("\"Cyan_ml\"") && !lignes[0].contains("CutContour"), "{}", lignes[0]);
+            assert!(lignes[1].contains("\"cyan;\"\"2x1\"\".pdf\""), "nom protégé : {}", lignes[1]);
             std::fs::remove_dir_all(&donnees).unwrap();
         }
     }

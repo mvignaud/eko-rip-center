@@ -71,7 +71,9 @@
   .ligne { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .ligne.bas { align-items: end; }
   .ligne > label { flex: 1; }
-  #message { margin: 0; min-height: 1.4em; font-size: 13px; }
+  #message { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translateX(-50%); margin: 0; max-width: min(640px, calc(100vw - 32px));
+    padding: 10px 16px; border-radius: 8px; background: var(--texte); color: var(--fond); box-shadow: 0 4px 16px rgb(0 0 0 / .25); font-size: 13px; }
+  #message.erreur { background: var(--echec); color: #fff; }
 
   /* Liste des travaux */
   .filtres { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
@@ -114,6 +116,10 @@
   .systeme dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
   .systeme dt { color: var(--doux); }
   .systeme dd { margin: 0; }
+  .vue-systeme { display: grid; gap: 16px; }
+  .tarifs { display: grid; grid-template-columns: minmax(120px, max-content) repeat(2, minmax(90px, 140px)); gap: 6px 12px; align-items: center; }
+  .tarifs input { width: 100%; }
+  .tarifs .tete { font-size: 12px; color: var(--doux); }
   .jauge { height: 8px; border-radius: 4px; background: var(--attente-doux); overflow: hidden; margin-top: 4px; max-width: 320px; }
   .jauge > div { height: 100%; background: var(--accent); }
   .jauge.basse > div { background: var(--echec); }
@@ -193,7 +199,6 @@
           </div>
         </div></details>
         <button type="submit" data-t="envoyer"></button>
-        <p id="message" role="status"></p>
       </form>
     </aside>
 
@@ -219,11 +224,12 @@
 
   <section id="vue-file" class="vue-file" hidden></section>
 
-  <section id="vue-systeme" class="panneau systeme" hidden>
-    <h2 data-t="nav_systeme"></h2>
-    <div class="corps" id="systeme"></div>
+  <section id="vue-systeme" class="vue-systeme" hidden>
+    <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
+    <section class="panneau"><h2 data-t="couts"></h2><form class="corps" id="tarifs"></form></section>
   </section>
 </main>
+<p id="message" role="status" hidden></p>
 <script>
 const textes = {
   fr: {
@@ -256,6 +262,10 @@ const textes = {
     note_epson: "Pilote à venir : les plaques sont copiées dans sorties/epson/ sur le serveur.",
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" },
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
+    couts: "Coûts d'encre et de support", encre: "Encre", ml_m2: "ml/m² à 100 %", prix_litre: "€ / litre", autres_encres: "Toutes les autres",
+    support_m2: "Support (€ / m²)", enregistrer: "Enregistrer", tarifs_enregistres: "Tarifs enregistrés.", export_csv: "Exporter la consommation (CSV)",
+    note_tarifs: "Valeurs de départ à remplacer par celles de l'atelier (pesée des cartouches, factures). Une case vide prend la ligne « Toutes les autres ».",
+    estimation: (m2, ml, total, encre, support) => `${m2} m² · encre ${ml} ml · ≈ ${total} € (encre ${encre} €, support ${support} €)`,
     aucune_sortie: "Rien en file.", historique: "Historique", ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
       format_inconnu: "Format non reconnu : envoyer un PDF, un AI ou un SVG.",
@@ -271,6 +281,7 @@ const textes = {
       profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
+      tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
@@ -306,6 +317,10 @@ const textes = {
     note_epson: "Driver to come: plates are copied to sorties/epson/ on the server.",
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" },
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
+    couts: "Ink and media costs", encre: "Ink", ml_m2: "ml/m² at 100 %", prix_litre: "€ / litre", autres_encres: "All others",
+    support_m2: "Media (€ / m²)", enregistrer: "Save", tarifs_enregistres: "Rates saved.", export_csv: "Export consumption (CSV)",
+    note_tarifs: "Starting values, to be replaced by the workshop's own (cartridge weighing, invoices). An empty box takes the “All others” row.",
+    estimation: (m2, ml, total, encre, support) => `${m2} m² · ink ${ml} ml · ≈ €${total} (ink €${encre}, media €${support})`,
     aucune_sortie: "Nothing queued.", historique: "History", ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
       format_inconnu: "Unknown format: send a PDF, AI or SVG file.",
@@ -321,6 +336,7 @@ const textes = {
       profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
       rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
+      tarifs_invalides: "Invalid rates: positive numbers expected.",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
@@ -346,7 +362,15 @@ function bouton(texte, action, classe = "discret") {
   b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); action(b); });
   return b;
 }
-function dire(texte, erreur = false) { msg.className = erreur ? "erreur" : "meta"; msg.textContent = texte; }
+/** Message flottant, commun à toutes les vues ; une erreur reste plus longtemps. */
+let minuterieMessage;
+function dire(texte, erreur = false) {
+  msg.className = erreur ? "erreur" : "";
+  msg.textContent = texte;
+  msg.hidden = !texte;
+  clearTimeout(minuterieMessage);
+  if (texte) minuterieMessage = setTimeout(() => { msg.hidden = true; }, erreur ? 10000 : 4000);
+}
 
 /** Texte traduit d'une erreur : le code est traduit, le détail technique est ajouté tel quel. */
 function texteErreur(code, detail) {
@@ -439,6 +463,45 @@ $("profil").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
+const nombre = (x, d) => x.toLocaleString(locale(), { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// Tarifs : reconstruits seulement au chargement, à l'enregistrement et au changement de
+// langue (jamais pendant une saisie).
+let tarifs = null;
+async function chargerTarifs() {
+  tarifs = await api("/api/tarifs");
+  afficherTarifs();
+}
+function afficherTarifs() {
+  const f = $("tarifs");
+  if (!tarifs || f.contains(document.activeElement)) return;
+  const vues = travaux.flatMap((t) => t.pages.flatMap((p) => p.plaques.filter((x) => !(p.plaques_decoupe || []).includes(x))));
+  const noms = [...new Set(["Cyan", "Magenta", "Yellow", "Black", "White", "Silver", ...Object.keys(tarifs.encres), ...vues])];
+  const champ = (name, valeur, defaut) => el("input", { type: "number", min: 0, step: "any", name, value: valeur ?? "", placeholder: defaut ?? "" });
+  const d = tarifs.encre_defaut;
+  const grille = el("div", { className: "tarifs" },
+    el("span", { className: "tete" }, T().encre), el("span", { className: "tete" }, T().ml_m2), el("span", { className: "tete" }, T().prix_litre),
+    el("strong", {}, T().autres_encres), champ("defaut_ml", d.ml_m2), champ("defaut_prix", d.prix_litre),
+    ...noms.flatMap((n) => [el("span", {}, n), champ(`ml:${n}`, tarifs.encres[n]?.ml_m2, d.ml_m2), champ(`prix:${n}`, tarifs.encres[n]?.prix_litre, d.prix_litre)]));
+  f.replaceChildren(el("p", { className: "meta", style: "margin: 0" }, T().note_tarifs), grille,
+    el("label", { style: "max-width: 200px" }, T().support_m2, champ("support", tarifs.support_m2)),
+    el("div", { className: "ligne" }, el("button", { type: "submit" }, T().enregistrer),
+      el("a", { href: "/api/rapports/consommation.csv", download: "consommation.csv" }, T().export_csv)));
+}
+$("tarifs").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const v = Object.fromEntries(new FormData($("tarifs")));
+  const nb = (x) => (x === "" || x === undefined ? null : +x);
+  const defaut = { ml_m2: nb(v.defaut_ml) ?? 0, prix_litre: nb(v.defaut_prix) ?? 0 };
+  const encres = {};
+  for (const cle of Object.keys(v).filter((k) => k.startsWith("ml:"))) {
+    const n = cle.slice(3), ml = nb(v[cle]), prix = nb(v[`prix:${n}`]);
+    if (ml !== null || prix !== null) encres[n] = { ml_m2: ml ?? defaut.ml_m2, prix_litre: prix ?? defaut.prix_litre };
+  }
+  const r = await api("/api/tarifs", json("POST", { encre_defaut: defaut, encres, support_m2: nb(v.support) ?? 0 }));
+  if (r) { tarifs = r; document.activeElement.blur(); afficherTarifs(); dire(T().tarifs_enregistres); derniereEmpreinte = ""; rafraichir(); }
+});
+
 let infoSysteme = null;
 const go = (o) => `${(o / 1e9).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${langue === "fr" ? "Go" : "GB"}`;
 async function chargerSysteme() {
@@ -516,6 +579,7 @@ function appliquerLangue() {
   remplirProfils();
   remplirReglages();
   afficherSysteme();
+  afficherTarifs();
   afficherSession();
   majPlanche();
   afficherVue();
@@ -523,7 +587,7 @@ function appliquerLangue() {
 boutonLangue.addEventListener("click", () => {
   langue = langue === "fr" ? "en" : "fr";
   try { localStorage.setItem("langue", langue); } catch {}
-  msg.textContent = "";
+  dire("");
   appliquerLangue();
 });
 
@@ -638,8 +702,9 @@ function vuePage(t, page, n) {
   const vignette = (src, legende) => el("figure", {}, el("img", { src, alt: legende, loading: "lazy" }), el("figcaption", {}, legende));
   const vignettes = t.mode === "decouper" ? [] : [vignette(`${base}/apercu.png`, T().composite)];
   if (page.traces_decoupe) vignettes.push(vignette(`${base}/decoupe.svg`, T().apercu_decoupe));
+  const taux = (p) => (page.couverture && p in page.couverture ? ` · ${nombre(page.couverture[p] * 100, 0)} %` : "");
   vignettes.push(...page.plaques.map((p) => vignette(`${base}/plaques/${encodeURIComponent(p)}`,
-    (page.plaques_decoupe || []).includes(p) ? T().non_imprimee(p) : p)));
+    (page.plaques_decoupe || []).includes(p) ? T().non_imprimee(p) : p + taux(p))));
 
   const sortiesPage = el("div", { className: "ligne" });
   const versMachine = (machine, texte) => {
@@ -662,6 +727,10 @@ function vuePage(t, page, n) {
     el("div", {}, t.pages.length > 1 ? el("strong", {}, T().page(n), " · ") : null, el("span", { className: "meta" }, T().decoupe(page.traces_decoupe))),
     sortiesPage);
   const bloc = el("div", { className: "page" }, tete);
+  const e = page.estimation;
+  if (t.mode === "imprimer" && e && e.surface_m2 > 0) {
+    bloc.append(el("div", { className: "meta" }, T().estimation(nombre(e.surface_m2, 3), nombre(e.ml, 1), nombre(e.total, 2), nombre(e.cout_encres, 2), nombre(e.cout_support, 2))));
+  }
   if (t.mode === "imprimer") {
     const cle = `${t.id}:${n}`;
     const caseP = el("input", { type: "checkbox", checked: selection.has(cle) });
@@ -719,6 +788,7 @@ function afficherFile() {
 
 function toutCharger() {
   chargerProfils().then(chargerReglages);
+  chargerTarifs();
   chargerSysteme();
   rafraichir();
 }

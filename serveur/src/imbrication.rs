@@ -133,7 +133,7 @@ pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64) -> Result<(Ve
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     const MM: f64 = PT_PAR_MM;
@@ -170,7 +170,7 @@ mod tests {
 
     /// PDF d'une page `l × h` pt dont la MediaBox commence en (`ox`, `oy`), remplie d'une
     /// couleur CMJN, avec un contour `CutContour` à 5 pt du bord.
-    fn pdf(l: f64, h: f64, cmjn: &str, (ox, oy): (f64, f64)) -> Vec<u8> {
+    pub(crate) fn pdf(l: f64, h: f64, cmjn: &str, (ox, oy): (f64, f64)) -> Vec<u8> {
         let mut doc = Document::with_version("1.4");
         let sep = Object::Array(vec![
             "Separation".into(),

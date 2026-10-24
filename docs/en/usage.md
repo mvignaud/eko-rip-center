@@ -128,6 +128,28 @@ Spot colours (`White`, `Silver`…) are never converted.
 **System** view: server version, job retention (30 days by default, set with
 `EKO_RIP_CONSERVATION_JOURS`) and free space on the data disk, in red under 10 %.
 
+## Ink and cost
+
+Each printed page shows its area, estimated ink and cost:
+`0.42 m² · ink 3.1 ml · ≈ €1.92 (ink €0.44, media €1.48)`. Under each plate thumbnail,
+its ink rate (share of the page covered at 100 %).
+
+The calculation: for each plate, *rate × area × ml/m² at 100 %* gives the ml, then
+*ml ÷ 1000 × price per litre* the cost; media costs *area × price per m²*. Cut spot
+colours are not counted.
+
+Rates are set in **System > Ink and media costs**: one row per ink (ml/m² at 100 % and
+€ per litre), an **All others** row for empty boxes, and the media price per m². The
+shipped values (10 ml/m², €140/l) are starting values: replace them with the workshop's
+own (weigh cartridges before and after a known print, invoices). A rate change also
+applies to jobs already done.
+
+**Export consumption (CSV)** downloads one row per printed page (UTC date, job, page,
+area, ml per ink, costs), `;` separator, dot decimals, for a spreadsheet or E-KO ERP.
+
+Known limit: the media counted is the page area, not the roll length used across the
+whole roll width.
+
 ## Not there yet
 
 - The Epson driver: plates go to a folder, not to the printer.

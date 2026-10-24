@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tokio::process::Command;
 
+/// Résolution des aperçus (plaques et composite) ; la couverture d'encre y est mesurée.
+pub const DPI_APERCU: u32 = 50;
+
 pub struct Rendu {
     /// Pour chaque page (dans l'ordre), ses plaques en ordre alphabétique.
     pub pages: Vec<Vec<String>>,
@@ -37,10 +40,10 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
     }
 
     ghostscript(gs, pdf, "tiffsep", dpi, options, &prod.join("plaque-%03d.tif"), delai).await?;
-    ghostscript(gs, pdf, "tiffsep", 50, options, &apercu.join("plaque-%03d.tif"), delai).await?;
+    ghostscript(gs, pdf, "tiffsep", DPI_APERCU, options, &apercu.join("plaque-%03d.tif"), delai).await?;
     // L'aperçu est en RVB : le profil du support (CMJN) y sert d'épreuve écran.
     let epreuve: Vec<String> = options.iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
-    ghostscript(gs, pdf, "png16m", 50, &epreuve, &apercu.join("composite-%03d.png"), delai).await?;
+    ghostscript(gs, pdf, "png16m", DPI_APERCU, &epreuve, &apercu.join("composite-%03d.png"), delai).await?;
 
     let pages = plaques_par_page(&prod)?;
     for (i, plaques) in pages.iter().enumerate() {

@@ -15,11 +15,16 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   sortie coupée par un arrêt passe en échec au lieu de repartir au milieu.
 - Epson, en attendant son pilote : les plaques à imprimer (jamais les tons de découpe)
   sont copiées dans `sorties/epson/`.
+- **Encre et coût** : taux d'encre de chaque plaque (mesuré sur l'aperçu), surface,
+  encre et coût estimés par page ; tarifs par encre (ml/m² à 100 %, €/l) et support
+  (€/m²) dans Système (`tarifs.json`) ; export CSV de la consommation
+  (`/api/rapports/consommation.csv`). Les tons de découpe ne comptent pas.
 - **Nouvelle interface** : vues Travaux, File d'attente et Système ; panneau « Nouveau
   travail » avec zone de dépôt ; cartes avec vignette et badges d'état ; recherche et
   filtres ; vue file par machine ; affichage téléphone.
 
 ### Modifié
+- Les messages s'affichent dans un bandeau flottant, visible depuis toutes les vues.
 - L'écran ne se reconstruit plus que si les données changent (un clic ne tombe plus sur
   un bouton remplacé).
 - Guides d'utilisation FR/EN réécrits (file d'attente, nouvelle interface, glossaire) ;

@@ -132,6 +132,30 @@ Vue **Système** : version du serveur, durée de conservation des travaux (30 jo
 défaut, réglée par `EKO_RIP_CONSERVATION_JOURS`) et espace libre du disque des données,
 en rouge sous 10 %.
 
+## Encre et coût
+
+Chaque page imprimée indique sa surface, l'encre estimée et son coût :
+`0,42 m² · encre 3,1 ml · ≈ 1,92 € (encre 0,44 €, support 1,48 €)`. Sous chaque
+vignette de plaque, son taux d'encre (part de la page couverte à 100 %).
+
+Le calcul : pour chaque plaque, *taux × surface × ml/m² à 100 %* donne les ml, puis
+*ml ÷ 1000 × prix au litre* le coût ; le support coûte *surface × prix au m²*. Les tons
+de découpe ne comptent pas.
+
+Les tarifs se règlent dans **Système > Coûts d'encre et de support** : une ligne par
+encre (ml/m² à 100 % et € par litre), une ligne **Toutes les autres** pour les cases
+vides, et le prix du support au m². Les valeurs livrées (10 ml/m², 140 €/l) sont des
+valeurs de départ : les remplacer par celles de l'atelier (pesée des cartouches avant
+et après un tirage connu, factures). Un changement de tarif s'applique aussi aux
+travaux déjà faits.
+
+**Exporter la consommation (CSV)** télécharge une ligne par page imprimée (date UTC,
+travail, page, surface, ml par encre, coûts), séparateur `;`, décimales avec un point,
+pour un tableur ou E-KO ERP.
+
+Limite connue : le support compté est la surface de la page, pas la longueur de rouleau
+consommée sur toute la laize.
+
 ## Ce qui n'existe pas encore
 
 - Le pilote de l'Epson : les plaques sortent dans un dossier, pas vers l'imprimante.
