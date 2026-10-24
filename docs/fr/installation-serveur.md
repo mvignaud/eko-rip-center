@@ -71,6 +71,27 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_MAX_MO` | `2048` | taille maximale d'un PDF reçu, en Mo |
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu, en secondes |
 
+## Partager les dossiers surveillés (Samba)
+
+Pour déposer des fichiers depuis les postes Mac et Windows :
+
+```bash
+sudo apt install samba
+```
+
+Ajouter à la fin de `/etc/samba/smb.conf` :
+
+```ini
+[eko-rip]
+   path = /var/lib/eko-rip/entrees
+   writable = yes
+   force user = eko-rip
+   valid users = eko
+```
+
+Puis `sudo smbpasswd -a eko` et `sudo systemctl restart smbd`. Les postes ouvrent
+`smb://<serveur>/eko-rip` (Mac) ou `\\<serveur>\eko-rip` (Windows).
+
 ## Sécurité
 
 Le serveur n'a pas encore d'authentification. Il ne doit être joignable que depuis

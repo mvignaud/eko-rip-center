@@ -26,6 +26,16 @@ not matter). The job card shows how many and offers **Download the .plt file**
 (HP-GL, 1/40 mm, origin at the page's bottom-left corner). A cut colour at 0% is not
 cut.
 
+## Presets and hot folders
+
+**Save these settings…** stores the whole form under a name (letters, digits, spaces,
+`-`, `_`, `+`). Picking it in **Preset** fills the form.
+
+Each preset has a **hot folder**: `/var/lib/eko-rip/entrees/<preset name>/` on the
+server. A PDF, AI or SVG dropped there becomes a job with that preset once its copy is
+complete (size stable for 5 s). A rejected file goes to `refuses/`, with a `.refus.txt`
+file giving the reason.
+
 ## Tiling
 
 **Tiling** block: tick **Split into panels when wider than the roll**, set the roll

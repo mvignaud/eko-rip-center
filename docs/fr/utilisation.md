@@ -26,6 +26,16 @@ espaces et tirets indifférents). La fiche du travail indique leur nombre et pro
 **Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
 page). Un ton de découpe à 0 % n'est pas découpé.
 
+## Réglages et dossiers surveillés
+
+**Enregistrer ces réglages…** garde tout le formulaire sous un nom (lettres, chiffres,
+espaces, `-`, `_`, `+`). Le choisir dans **Réglage** remplit le formulaire.
+
+Chaque réglage a un **dossier surveillé** : `/var/lib/eko-rip/entrees/<nom du réglage>/`
+sur le serveur. Un PDF, AI ou SVG déposé dedans devient un travail avec ce réglage, dès
+que sa copie est terminée (taille stable pendant 5 s). Un fichier refusé est rangé dans
+`refuses/`, avec un fichier `.refus.txt` qui donne la raison.
+
 ## Mosaïque
 
 Bloc **Mosaïque** : cocher **Couper en lés si plus large que la laize**, régler la laize

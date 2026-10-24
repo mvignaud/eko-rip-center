@@ -12,6 +12,12 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   même largeur avec recouvrement réglable (20 mm par défaut), un lé par page ; l'original
   est gardé (`source-original.pdf`). La découpe de chaque lé est rognée à son bord.
 - Les tracés de découpe sont rognés à la page : la lame ne part jamais hors du support.
+- **Réglages enregistrés** : « Enregistrer ces réglages… » garde le formulaire sous un nom
+  (mode, tracés, repérage, couleur, résolution, mosaïque) ; le choisir remplit le
+  formulaire.
+- **Dossiers surveillés** : chaque réglage a son dossier `<données>/entrees/<nom>/` ; un
+  fichier déposé (PDF, AI, SVG), une fois sa copie terminée, devient un travail avec ce
+  réglage ; un fichier refusé part dans `refuses/` avec la raison.
 
 ## [0.4.0] — 2026-10-24
 

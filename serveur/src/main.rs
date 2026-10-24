@@ -7,6 +7,7 @@ mod imbrication;
 mod mosaique;
 mod plotter;
 mod render;
+mod reglages;
 mod reperage;
 
 use axum::{
@@ -20,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 use tokio::{io::AsyncWriteExt, sync::Semaphore};
 use uuid::Uuid;
+use reglages::{Demande, Mode, Mosaique};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -28,15 +30,6 @@ enum Statut {
     EnCours,
     Termine,
     Echec,
-}
-
-/// Imprimer (rendu en plaques, plus la découpe s'il y a des tracés) ou découper seulement.
-#[derive(Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum Mode {
-    #[default]
-    Imprimer,
-    Decouper,
 }
 
 /// Format reconnu aux premiers octets du fichier reçu.
@@ -62,23 +55,11 @@ struct Travail {
     id: Uuid,
     /// Nom du fichier envoyé, pour l'affichage seulement : jamais utilisé comme chemin.
     nom: String,
-    dpi: u32,
-    #[serde(default)]
-    mode: Mode,
     #[serde(default)]
     format: Format,
-    /// Découper tous les tracés, pas seulement ceux des tons de découpe.
-    #[serde(default)]
-    tous_les_traces: bool,
-    /// Repères imprimés pour la découpe sur le Kona (mode Imprimer).
-    #[serde(default)]
-    reperage: reperage::Reperage,
-    /// Profils ICC et intention de rendu (mode Imprimer).
-    #[serde(default)]
-    couleur: couleur::Couleur,
-    /// Mosaïque appliquée à l'envoi (laize et recouvrement, en mm).
-    #[serde(default)]
-    mosaique: Option<Mosaique>,
+    /// Réglages du travail, à plat dans le JSON (`mode`, `dpi`, `reperage`…).
+    #[serde(flatten)]
+    demande: Demande,
     statut: Statut,
     /// Code stable traduit par l'écran (`rendu_echoue`, `interrompu`).
     #[serde(default)]
@@ -93,12 +74,6 @@ struct Travail {
     envoi_decoupe: Option<EnvoiDecoupe>,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
-}
-
-#[derive(Clone, Copy, Serialize, Deserialize)]
-struct Mosaique {
-    laize_mm: f64,
-    recouvrement_mm: f64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -151,6 +126,8 @@ struct Etat {
     rendu: Semaphore,
     /// Un seul envoi à la fois vers le plotter.
     plotter: Semaphore,
+    /// Écritures de `reglages.json` l'une après l'autre.
+    reglages: tokio::sync::Mutex<()>,
 }
 
 type Partage = Arc<Etat>;
@@ -177,7 +154,8 @@ async fn main() {
     reprendre_travaux_interrompus(&config.donnees);
 
     let max = config.max_octets;
-    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1) });
+    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: tokio::sync::Mutex::new(()) });
+    tokio::spawn(surveiller(etat.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -191,6 +169,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/planches", axum::routing::post(creer_planche))
+        .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
+        .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -251,9 +231,8 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
     let provisoire = rep.join("source.tmp");
-    let (mut nom, mut dpi, mut format) = (String::new(), 720u32, None);
-    let (mut mode, mut tous_les_traces, mut reperage) = (Mode::Imprimer, false, reperage::Reperage::Aucun);
-    let mut couleur = couleur::Couleur::default();
+    let (mut nom, mut format) = (String::new(), None);
+    let mut d = Demande::default();
     let (mut mosaique, mut laize_mm, mut recouvrement_mm) = (false, 1600.0f64, 20.0f64);
 
     loop {
@@ -262,117 +241,137 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
             Ok(None) => break,
             Err(e) => return abandon(&rep, StatusCode::BAD_REQUEST, ("envoi_illisible", Some(e.to_string()))).await,
         };
-        match champ.name() {
-            Some("dpi") => {
-                dpi = match champ.text().await.ok().and_then(|t| t.trim().parse().ok()) {
-                    Some(d @ 36..=2880) => d,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("dpi_invalide", None)).await,
-                };
+        let Some(nom_champ) = champ.name().map(str::to_string) else { continue };
+        if nom_champ == "fichier" {
+            nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
+            match enregistrer(champ, &provisoire).await {
+                Ok(f) => format = Some(f),
+                Err(r) => return abandon(&rep, StatusCode::BAD_REQUEST, r).await,
             }
-            Some("mode") => {
-                mode = match champ.text().await.ok().as_deref().map(str::trim) {
-                    Some("imprimer") => Mode::Imprimer,
-                    Some("decouper") => Mode::Decouper,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
-                };
-            }
-            Some("traces") => {
-                tous_les_traces = match champ.text().await.ok().as_deref().map(str::trim) {
-                    Some("tons") => false,
-                    Some("tous") => true,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
-                };
-            }
-            Some("reperage") => {
-                reperage = match champ.text().await.ok().as_deref().map(str::trim) {
-                    Some("aucun") => reperage::Reperage::Aucun,
-                    Some("manuel") => reperage::Reperage::Manuel,
-                    Some("cadre") => reperage::Reperage::Cadre,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
-                };
-            }
-            Some(champ_profil @ ("profil_cmjn" | "profil_rvb" | "profil_sortie")) => {
-                let champ_profil = champ_profil.to_string();
-                let choix = champ.text().await.unwrap_or_default().trim().to_string();
-                let choix = (!choix.is_empty()).then_some(choix);
-                match champ_profil.as_str() {
-                    "profil_cmjn" => couleur.entree_cmjn = choix,
-                    "profil_rvb" => couleur.entree_rvb = choix,
-                    _ => couleur.sortie = choix,
+            continue;
+        }
+        let valeur = champ.text().await.unwrap_or_default().trim().to_string();
+        let erreur = |code: &'static str| (code, None);
+        let r: Result<(), Refus> = match nom_champ.as_str() {
+            "dpi" => valeur.parse().map(|v| d.dpi = v).map_err(|_| erreur("dpi_invalide")),
+            "mode" => match valeur.as_str() {
+                "imprimer" => {
+                    d.mode = Mode::Imprimer;
+                    Ok(())
                 }
-            }
-            Some("intention") => {
-                couleur.intention = match champ.text().await.ok().and_then(|t| t.trim().parse().ok()) {
-                    Some(i @ 0..=3) => i,
-                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("profil_inadapte", None)).await,
-                };
-            }
-            Some(champ_nombre @ ("laize_mm" | "recouvrement_mm")) => {
-                let est_laize = champ_nombre == "laize_mm";
-                let Some(v) = champ.text().await.ok().and_then(|t| t.trim().parse::<f64>().ok()) else {
-                    return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", None)).await;
-                };
-                if est_laize { laize_mm = v } else { recouvrement_mm = v }
-            }
-            Some("mosaique") => mosaique = champ.text().await.is_ok_and(|t| t.trim() == "oui"),
-            Some("forcer_profils") => couleur.forcer = champ.text().await.is_ok_and(|t| t.trim() == "oui"),
-            Some("fichier") => {
-                nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
-                match enregistrer(champ, &provisoire).await {
-                    Ok(f) => format = Some(f),
-                    Err(r) => return abandon(&rep, StatusCode::BAD_REQUEST, r).await,
+                "decouper" => {
+                    d.mode = Mode::Decouper;
+                    Ok(())
                 }
+                _ => Err(erreur("mode_invalide")),
+            },
+            "traces" => match valeur.as_str() {
+                "tons" => {
+                    d.tous_les_traces = false;
+                    Ok(())
+                }
+                "tous" => {
+                    d.tous_les_traces = true;
+                    Ok(())
+                }
+                _ => Err(erreur("mode_invalide")),
+            },
+            "reperage" => match valeur.as_str() {
+                "aucun" => {
+                    d.reperage = reperage::Reperage::Aucun;
+                    Ok(())
+                }
+                "manuel" => {
+                    d.reperage = reperage::Reperage::Manuel;
+                    Ok(())
+                }
+                "cadre" => {
+                    d.reperage = reperage::Reperage::Cadre;
+                    Ok(())
+                }
+                _ => Err(erreur("mode_invalide")),
+            },
+            "profil_cmjn" => {
+                d.couleur.entree_cmjn = (!valeur.is_empty()).then_some(valeur);
+                Ok(())
             }
-            _ => {}
+            "profil_rvb" => {
+                d.couleur.entree_rvb = (!valeur.is_empty()).then_some(valeur);
+                Ok(())
+            }
+            "profil_sortie" => {
+                d.couleur.sortie = (!valeur.is_empty()).then_some(valeur);
+                Ok(())
+            }
+            "intention" => valeur.parse().map(|v| d.couleur.intention = v).map_err(|_| erreur("profil_inadapte")),
+            "forcer_profils" => {
+                    d.couleur.forcer = valeur == "oui";
+                    Ok(())
+                }
+            "mosaique" => {
+                    mosaique = valeur == "oui";
+                    Ok(())
+                }
+            "laize_mm" => valeur.parse().map(|v| laize_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            "recouvrement_mm" => valeur.parse().map(|v| recouvrement_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            _ => Ok(()),
+        };
+        if let Err(r) = r {
+            return abandon(&rep, StatusCode::BAD_REQUEST, r).await;
         }
     }
     let Some(format) = format else {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     };
+    d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm });
+    match creer_travail(&etat, id, nom, format, d).await {
+        Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
+        Err((statut, r)) => abandon(&rep, statut, r).await,
+    }
+}
+
+/// Crée un travail à partir de `source.tmp`, déjà écrit dans son dossier : contrôles,
+/// mosaïque, `job.json`, puis traitement en tâche de fond. Commun à l'écran, aux planches
+/// et aux dossiers surveillés. En cas de refus, le dossier reste à effacer par l'appelant.
+async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande) -> Result<Travail, (StatusCode, Refus)> {
+    let rep = dossier(&etat.config.donnees, id);
+    let mauvais = |code: &'static str, detail: Option<String>| (StatusCode::BAD_REQUEST, (code, detail));
+    let interne = |e: String| (StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e)));
+    let d = d.normaliser();
     // Le rendu en plaques passe par Ghostscript, qui ne lit pas le SVG.
-    if format == Format::Svg && mode == Mode::Imprimer {
-        return abandon(&rep, StatusCode::BAD_REQUEST, ("svg_decoupe_seulement", None)).await;
+    if format == Format::Svg && d.mode == Mode::Imprimer {
+        return Err(mauvais("svg_decoupe_seulement", None));
     }
-    // Rien n'est imprimé en découpe seule : ni repères ni couleur.
-    if mode == Mode::Decouper {
-        reperage = reperage::Reperage::Aucun;
-        couleur = couleur::Couleur::default();
-    }
-    if let Err(code) = couleur::verifier(&couleur, &couleur::lister(&etat.config.profils)) {
-        return abandon(&rep, StatusCode::BAD_REQUEST, (code, None)).await;
-    }
-    if let Err(e) = tokio::fs::rename(&provisoire, rep.join(format.fichier())).await {
-        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
-    }
+    d.verifier(&couleur::lister(&etat.config.profils)).map_err(|code| mauvais(code, None))?;
+    tokio::fs::rename(rep.join("source.tmp"), rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
     // Mosaïque : la source est remplacée par ses lés ; l'original est gardé à côté.
-    let mosaique = (mosaique && mode == Mode::Imprimer && format == Format::Pdf).then_some(Mosaique { laize_mm, recouvrement_mm });
+    let mosaique = d.mosaique.filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     if let Some(m) = mosaique {
-        if !(50.0..=5000.0).contains(&m.laize_mm) || !(0.0..=200.0).contains(&m.recouvrement_mm) {
-            return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", Some("laize 50–5000 mm, recouvrement 0–200 mm".into()))).await;
-        }
         let source = rep.join(Format::Pdf.fichier());
         let original = rep.join("source-original.pdf");
-        let resultat = match tokio::fs::rename(&source, &original).await.and(tokio::fs::read(&original).await) {
-            Ok(pdf) => tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm)).await.unwrap_or_else(|e| Err(e.to_string())),
-            Err(e) => Err(e.to_string()),
-        };
-        match resultat {
-            Ok(les) => {
-                if let Err(e) = tokio::fs::write(&source, les).await {
-                    return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
-                }
-            }
-            Err(e) => return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", Some(e))).await,
-        }
+        tokio::fs::rename(&source, &original).await.map_err(|e| interne(e.to_string()))?;
+        let pdf = tokio::fs::read(&original).await.map_err(|e| interne(e.to_string()))?;
+        let les = tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string()))
+            .map_err(|e| mauvais("mosaique_invalide", Some(e)))?;
+        tokio::fs::write(&source, les).await.map_err(|e| interne(e.to_string()))?;
     }
-
-    let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, couleur, mosaique, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
-    if let Err(e) = ecrire(&etat.config.donnees, &travail) {
-        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
-    }
+    let travail = Travail {
+        id,
+        nom,
+        format,
+        demande: Demande { mosaique, ..d },
+        statut: Statut::EnAttente,
+        code_erreur: None,
+        erreur: None,
+        pages: vec![],
+        envoi_decoupe: None,
+        cree_le: maintenant(),
+    };
+    ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
-    (StatusCode::ACCEPTED, Json(travail)).into_response()
+    Ok(travail)
 }
 
 /// Octets lus avant de reconnaître le format.
@@ -435,18 +434,18 @@ async fn traiter(etat: Partage, mut t: Travail) {
     let _ = ecrire(donnees, &t);
 
     let rep = dossier(donnees, t.id);
-    let rendu = match t.mode {
-        Mode::Imprimer => match preparer_impression(&rep, t.reperage).await {
+    let rendu = match t.demande.mode {
+        Mode::Imprimer => match preparer_impression(&rep, t.demande.reperage).await {
             Ok((pdf, mises)) => {
-                let options = couleur::options_ghostscript(&t.couleur, &etat.config.profils);
-                render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, &options, etat.config.delai).await.map(|r| (Some(r.pages), mises))
+                let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
+                render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await.map(|r| (Some(r.pages), mises))
             }
             Err(e) => Err(e),
         },
         Mode::Decouper => Ok((None, vec![])),
     };
     match rendu {
-        Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.tous_les_traces, &mises).await {
+        Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
             Ok(traces) => {
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
                 let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
@@ -543,32 +542,109 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
 
     let id = Uuid::new_v4();
     let rep = dossier(donnees, id);
-    if let Err(e) = tokio::fs::create_dir_all(&rep).await.and(tokio::fs::write(rep.join(Format::Pdf.fichier()), planche).await) {
+    if let Err(e) = tokio::fs::create_dir_all(&rep).await.and(tokio::fs::write(rep.join("source.tmp"), planche).await) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
     let copies: usize = d.elements.iter().map(|e| e.copies).sum();
-    let travail = Travail {
-        id,
-        nom: format!("Planche {laize:.0} mm — {copies} élément(s)"),
-        dpi: d.dpi,
-        mode: Mode::Imprimer,
-        format: Format::Pdf,
-        tous_les_traces: false,
-        reperage: d.reperage,
-        couleur: couleur::Couleur::default(),
-        mosaique: None,
-        statut: Statut::EnAttente,
-        code_erreur: None,
-        erreur: None,
-        pages: vec![],
-        envoi_decoupe: None,
-        cree_le: maintenant(),
-    };
-    if let Err(e) = ecrire(donnees, &travail) {
-        return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
+    let nom = format!("Planche {laize:.0} mm — {copies} élément(s)");
+    match creer_travail(&etat, id, nom, Format::Pdf, Demande { dpi: d.dpi, reperage: d.reperage, ..Default::default() }).await {
+        Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
+        Err((statut, r)) => abandon(&rep, statut, r).await,
     }
-    tokio::spawn(traiter(etat.clone(), travail.clone()));
-    (StatusCode::ACCEPTED, Json(travail)).into_response()
+}
+
+async fn lister_reglages(State(etat): State<Partage>) -> Json<Vec<reglages::Reglage>> {
+    Json(reglages::lire(&etat.config.donnees))
+}
+
+/// Crée ou remplace un réglage (même nom) ; son dossier surveillé est créé.
+async fn enregistrer_reglage(State(etat): State<Partage>, Json(r): Json<reglages::Reglage>) -> Response {
+    if !reglages::nom_valide(&r.nom) {
+        return refus(StatusCode::BAD_REQUEST, "reglage_invalide", Some(r.nom));
+    }
+    let r = reglages::Reglage { demande: r.demande.normaliser(), ..r };
+    if let Err(code) = r.demande.verifier(&couleur::lister(&etat.config.profils)) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    let _verrou = etat.reglages.lock().await;
+    let mut liste = reglages::lire(&etat.config.donnees);
+    liste.retain(|x| x.nom != r.nom);
+    liste.push(r.clone());
+    liste.sort_by(|a, b| a.nom.cmp(&b.nom));
+    match reglages::ecrire(&etat.config.donnees, &liste) {
+        Ok(()) => (StatusCode::CREATED, Json(r)).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Retire le réglage ; son dossier surveillé reste sur le disque (des fichiers peuvent y être).
+async fn supprimer_reglage(State(etat): State<Partage>, Chemin(nom): Chemin<String>) -> Response {
+    let _verrou = etat.reglages.lock().await;
+    let mut liste = reglages::lire(&etat.config.donnees);
+    let avant = liste.len();
+    liste.retain(|x| x.nom != nom);
+    if liste.len() == avant {
+        return introuvable();
+    }
+    match reglages::ecrire(&etat.config.donnees, &liste) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Dossiers surveillés : toutes les 5 s, chaque fichier stable de `entrees/<réglage>/`
+/// devient un travail avec ce réglage ; un refus range le fichier dans `refuses/`.
+async fn surveiller(etat: Partage) {
+    let mut vus = std::collections::HashMap::new();
+    loop {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        let donnees = etat.config.donnees.clone();
+        let liste = reglages::lire(&donnees);
+        let mut fichiers = vec![];
+        for r in &liste {
+            let Ok(entrees) = std::fs::read_dir(reglages::dossier_entree(&donnees, &r.nom)) else { continue };
+            for e in entrees.flatten() {
+                let (Ok(meta), Ok(nom)) = (e.metadata(), e.file_name().into_string()) else { continue };
+                if meta.is_file() && !nom.starts_with('.') {
+                    fichiers.push((e.path(), meta.len()));
+                }
+            }
+        }
+        for chemin in reglages::stables(&mut vus, fichiers) {
+            let Some(r) = chemin.parent().and_then(|d| d.file_name()).and_then(|n| n.to_str()).and_then(|n| liste.iter().find(|r| r.nom == n)) else { continue };
+            if let Err(raison) = prendre_fichier(&etat, &chemin, r.demande.clone()).await {
+                eprintln!("dossier surveillé {} : {} refusé : {raison}", r.nom, chemin.display());
+                let refuses = chemin.with_file_name("refuses");
+                let _ = std::fs::create_dir_all(&refuses);
+                if let Some(nom) = chemin.file_name() {
+                    let cible = refuses.join(nom);
+                    let _ = std::fs::rename(&chemin, &cible);
+                    let _ = std::fs::write(cible.with_extension("refus.txt"), format!("{raison}\n"));
+                }
+            }
+        }
+    }
+}
+
+/// Fichier d'un dossier surveillé → nouveau travail. Le fichier est déplacé dans le
+/// dossier du travail ; en cas de refus, il est remis à sa place pour être rangé.
+async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande) -> Result<(), String> {
+    let mut debut = vec![0u8; EN_TETE];
+    let n = std::io::Read::read(&mut std::fs::File::open(chemin).map_err(|e| e.to_string())?, &mut debut).map_err(|e| e.to_string())?;
+    let format = reconnaitre(&debut[..n]).map_err(|(code, _)| code.to_string())?;
+    let nom: String = chemin.file_name().and_then(|n| n.to_str()).unwrap_or("sans nom").chars().take(200).collect();
+    let id = Uuid::new_v4();
+    let rep = dossier(&etat.config.donnees, id);
+    std::fs::create_dir_all(&rep).map_err(|e| e.to_string())?;
+    std::fs::rename(chemin, rep.join("source.tmp")).map_err(|e| e.to_string())?;
+    match creer_travail(etat, id, nom, format, d).await {
+        Ok(_) => Ok(()),
+        Err((_, (code, detail))) => {
+            let _ = std::fs::rename(rep.join("source.tmp"), chemin).or_else(|_| std::fs::rename(rep.join(format.fichier()), chemin));
+            let _ = std::fs::remove_dir_all(&rep);
+            Err(detail.map_or(code.to_string(), |d| format!("{code} : {d}")))
+        }
+    }
 }
 
 async fn lister_profils(State(etat): State<Partage>) -> Json<Vec<couleur::Profil>> {
@@ -794,7 +870,9 @@ mod tests {
     /// Chaque code d'erreur émis par ce fichier doit être traduit en FR et en EN dans l'écran.
     #[test]
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
-        let source = include_str!("main.rs");
+        // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
+        let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -805,13 +883,14 @@ mod tests {
             let apres_statut = avant.strip_suffix(", ").and_then(|a| a.rsplit_once("StatusCode::")).is_some_and(|(_, nom)| {
                 nom.chars().all(|c| c.is_ascii_uppercase() || c == '_')
             });
+            let apres_err = avant.ends_with("Err(") || avant.ends_with("erreur(");
             if !(avant.ends_with('(') || apres_statut) {
                 continue;
             }
             let reste = &source[i + 1..];
             let Some(fin) = reste.find('"') else { continue };
             let (code, apres) = (&reste[..fin], &reste[fin + 1..]);
-            let est_un_code = [", ", ".into()", ".to_string()"].iter().any(|s| apres.starts_with(s));
+            let est_un_code = [", ", ".into()", ".to_string()"].iter().any(|s| apres.starts_with(s)) || (apres_err && apres.starts_with(')'));
             if est_un_code && !code.is_empty() && code.chars().all(|c| c.is_ascii_lowercase() || c == '_') && !codes.contains(&code) {
                 codes.push(code);
             }

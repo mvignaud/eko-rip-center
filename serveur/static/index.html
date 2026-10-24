@@ -24,6 +24,7 @@
   legend { font-size: 13px; color: var(--doux); padding: 0 4px; }
   label.case { display: flex; align-items: center; gap: 6px; }
   label.discret { color: var(--accent); cursor: pointer; }
+  .ligne-reglage { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; width: 100%; }
   #planche { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
   #planche[hidden] { display: none; }
   input[type=number] { width: 7em; }
@@ -42,6 +43,11 @@
 <header class="entete"><h1>E-KO RIP Center</h1><button type="button" id="langue" class="discret"></button></header>
 <main>
   <form id="envoi">
+    <div class="ligne-reglage">
+      <label><span data-t="reglage"></span> <select id="reglage"></select></label>
+      <button type="button" class="discret" id="enregistrer-reglage" data-t="enregistrer_reglage"></button>
+      <button type="button" class="discret" id="supprimer-reglage" data-t="supprimer_reglage"></button>
+    </div>
     <label><span data-t="mode"></span>
       <select name="mode"><option value="imprimer" data-t="imprimer"></option><option value="decouper" data-t="decouper"></option></select>
     </label>
@@ -87,6 +93,8 @@ const textes = {
     couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
+    reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer ces réglages…", supprimer_reglage: "Supprimer le réglage",
+    nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     ajouter: "Planche", copies: "copies", planche_creee: "Planche créée.",
@@ -105,7 +113,7 @@ const textes = {
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
       profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
-      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.",
+      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", travail_occupe: "Ce travail est en cours de rendu ou d'envoi.", envoi_en_cours: "Un envoi au plotter est déjà en cours.",
       envoi_decoupe_echoue: "L'envoi au plotter a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
@@ -117,6 +125,8 @@ const textes = {
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
+    reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save these settings…", supprimer_reglage: "Delete preset",
+    nom_reglage: "Preset name (its hot folder will have this name):", reglage_enregistre: (n) => `Preset “${n}” saved; hot folder: entrees/${n}/`,
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     ajouter: "Sheet", copies: "copies", planche_creee: "Sheet created.",
@@ -135,7 +145,7 @@ const textes = {
       erreur_interne: "Server error.", introuvable: "Not found.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
       profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
-      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.",
+      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
       rien_a_decouper: "This job has no cut path.", travail_occupe: "This job is being rendered or sent.", envoi_en_cours: "A cutter job is already being sent.",
       envoi_decoupe_echoue: "Sending to the cutter failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
@@ -181,11 +191,67 @@ document.getElementById("profil").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
+let reglages = [];
+const choixReglage = document.getElementById("reglage");
+async function chargerReglages() {
+  try { reglages = await (await fetch("/api/reglages")).json(); } catch { reglages = []; }
+  remplirReglages();
+}
+function remplirReglages() {
+  const garde = choixReglage.value;
+  choixReglage.replaceChildren(el("option", { value: "" }, T().aucun_reglage), ...reglages.map((r) => el("option", { value: r.nom }, r.nom)));
+  choixReglage.value = reglages.some((r) => r.nom === garde) ? garde : "";
+  document.getElementById("supprimer-reglage").hidden = !choixReglage.value;
+}
+
+/** Formulaire → réglages d'un travail (même forme que le serveur). */
+function demandeDuFormulaire() {
+  const f = form, profil = (n) => f[n].value || null;
+  return {
+    mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
+    couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
+    mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value } : null,
+  };
+}
+function appliquerDemande(d) {
+  const f = form;
+  // Une résolution enregistrée absente de la liste (72, 2880…) y est ajoutée.
+  if (![...f.dpi.options].some((o) => o.value === String(d.dpi))) f.dpi.append(new Option(String(d.dpi), String(d.dpi)));
+  f.mode.value = d.mode; f.traces.value = d.tous_les_traces ? "tous" : "tons"; f.reperage.value = d.reperage; f.dpi.value = String(d.dpi);
+  f.profil_cmjn.value = d.couleur.entree_cmjn || ""; f.profil_rvb.value = d.couleur.entree_rvb || ""; f.profil_sortie.value = d.couleur.sortie || "";
+  f.intention.value = String(d.couleur.intention); f.forcer_profils.checked = d.couleur.forcer;
+  f.mosaique.checked = !!d.mosaique;
+  if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; }
+}
+choixReglage.addEventListener("change", () => {
+  const r = reglages.find((x) => x.nom === choixReglage.value);
+  if (r) appliquerDemande(r.demande);
+  document.getElementById("supprimer-reglage").hidden = !r;
+});
+document.getElementById("enregistrer-reglage").addEventListener("click", async () => {
+  const nom = (prompt(T().nom_reglage, choixReglage.value) || "").trim();
+  if (!nom) return;
+  try {
+    const r = await fetch("/api/reglages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nom, demande: demandeDuFormulaire() }) });
+    const c = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(texteErreur(c.code, c.detail));
+    await chargerReglages(); choixReglage.value = nom; remplirReglages();
+    msg.className = ""; msg.textContent = T().reglage_enregistre(nom);
+  } catch (err) { msg.className = "erreur"; msg.textContent = err.message; }
+});
+document.getElementById("supprimer-reglage").addEventListener("click", async () => {
+  const nom = choixReglage.value;
+  if (!nom || !confirm(T().confirmer(nom))) return;
+  await agir(`/api/reglages/${encodeURIComponent(nom)}`, "DELETE");
+  await chargerReglages();
+});
+
 function appliquerLangue() {
   document.documentElement.lang = langue;
   document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
   boutonLangue.textContent = T().autre;
   remplirProfils();
+  remplirReglages();
   majPlanche();
   rafraichir();
 }
@@ -323,7 +389,7 @@ async function decouper(url, bouton) {
 }
 
 appliquerLangue();
-chargerProfils();
+chargerProfils().then(chargerReglages);
 setInterval(rafraichir, 3000);
 </script>
 </body>

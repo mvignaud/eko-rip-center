@@ -71,6 +71,27 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_MAX_MO` | `2048` | maximum PDF size, in MB |
 | `EKO_RIP_DELAI_S` | `1800` | maximum rendering time, in seconds |
 
+## Sharing the hot folders (Samba)
+
+To drop files from Mac and Windows workstations:
+
+```bash
+sudo apt install samba
+```
+
+Append to `/etc/samba/smb.conf`:
+
+```ini
+[eko-rip]
+   path = /var/lib/eko-rip/entrees
+   writable = yes
+   force user = eko-rip
+   valid users = eko
+```
+
+Then `sudo smbpasswd -a eko` and `sudo systemctl restart smbd`. Workstations open
+`smb://<server>/eko-rip` (Mac) or `\\<server>\eko-rip` (Windows).
+
 ## Security
 
 The server has no authentication yet. Keep it reachable from the workshop network
