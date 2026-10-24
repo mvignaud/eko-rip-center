@@ -3,7 +3,8 @@
 The server runs on Linux. Printers and cutters are connected to it; workshop
 computers reach it over the network.
 
-Four ways to install it.
+Four ways to install it. Then: [running the server](administration.md) (data,
+backups, updates, FAQ).
 
 ## 0. Dedicated PC: Ubuntu installation image
 

@@ -3,7 +3,8 @@
 Le serveur tourne sous Linux. Les imprimantes et les plotters lui sont branchés ;
 les postes de l'atelier s'y connectent par le réseau.
 
-Quatre façons de l'installer, au choix.
+Quatre façons de l'installer, au choix. Ensuite : [administrer le serveur](administration.md)
+(données, sauvegardes, mises à jour, questions fréquentes).
 
 ## 0. PC dédié : image d'installation Ubuntu
 

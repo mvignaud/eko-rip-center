@@ -12,7 +12,8 @@ Deux paquets : le **serveur** (Linux : `.deb`, Docker, binaire) et le **client**
 bureau (macOS, Windows, Linux), qui ouvre l'écran du serveur dans sa fenêtre.
 
 Documentation : [français](docs/fr/) · [English](docs/en/) ·
-[changelog](CHANGELOG.md).
+[changelog](CHANGELOG.md). Administration et questions fréquentes :
+[administration](docs/fr/administration.md) · [running the server](docs/en/administration.md).
 
 ## Développement
 

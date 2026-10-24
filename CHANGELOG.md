@@ -37,6 +37,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Durée d'impression estimée** sur la fiche et dans la file (total à passer par
   machine) ; cadence réglable par machine, Epson par défaut d'après sa fiche.
 - **Notifications** : fin ou échec d'une sortie dit à l'écran, et au système si permis.
+- Documentation **Administrer le serveur** (FR/EN) : données, sauvegardes, mises à jour,
+  comptes, machines et questions fréquentes.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des
