@@ -287,6 +287,10 @@
           <label><span data-t="espacement"></span> <input type="number" id="espacement" value="5" min="0" max="100" step="0.5"></label>
           <label class="case"><input type="checkbox" id="rotation"> <span data-t="rotation"></span></label>
           <label class="case"><input type="checkbox" id="forme"> <span data-t="forme"></span></label>
+          <label class="case"><input type="checkbox" id="motif"> <span data-t="motif"></span></label>
+          <label><span data-t="colonnes"></span> <input type="number" id="colonnes" value="2" min="1" max="100" step="1"></label>
+          <label><span data-t="rangees"></span> <input type="number" id="rangees" value="2" min="1" max="500" step="1"></label>
+          <label class="case"><input type="checkbox" id="demi-saut"> <span data-t="demi_saut"></span></label>
           <button type="button" id="creer-planche"></button>
         </div>
         <div id="imposition" style="padding: 0 16px 16px"></div>
@@ -322,7 +326,7 @@
 const textes = {
   fr: {
     identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
-    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
     connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
@@ -362,7 +366,7 @@ const textes = {
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Longueur de rouleau : ${l} mm · surface utilisée : ${u} %`,
-    rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
+    rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", motif: "Motif step & repeat (une page en grille)", colonnes: "Colonnes", rangees: "Rangées", demi_saut: "Demi-saut (papier peint)", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", cadre_code: "Cadre Mutoh + code-barres (CutServer SF, type 2)", cadre_multi: "Cadre Mutoh multi-segments + code-barres (CutServer MF, type 3)", envoyer: "Envoyer au RIP", autre: "English",
@@ -424,7 +428,7 @@ const textes = {
   },
   en: {
     identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
-    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
     connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
@@ -464,7 +468,7 @@ const textes = {
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Roll length: ${l} mm · area used: ${u} %`,
-    rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
+    rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", motif: "Step & repeat pattern (one page in a grid)", colonnes: "Columns", rangees: "Rows", demi_saut: "Half drop (wallpaper)", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", cadre_code: "Mutoh frame + barcode (CutServer SF, type 2)", cadre_multi: "Mutoh multi-segment frame + barcode (CutServer MF, type 3)", envoyer: "Send to RIP", autre: "Français",
@@ -1126,17 +1130,20 @@ const selection = new Map();
 function majPlanche() {
   const n = [...selection.values()].reduce((a, b) => a + b, 0);
   $("planche").hidden = n === 0;
-  $("creer-planche").textContent = T().creer_planche(n);
+  const m = $("motif").checked ? (+$("colonnes").value || 0) * (+$("rangees").value || 0) : n;
+  $("creer-planche").textContent = T().creer_planche(m);
   if (n) dessinerImposition();
 }
 const elementsPlanche = () => [...selection].map(([cle, copies]) => { const [id, page] = cle.split(":"); return { id, page: +page, copies }; });
-["laize", "espacement", "rotation", "forme"].forEach((id) => $(id).addEventListener("change", majPlanche));
+["laize", "espacement", "rotation", "forme", "motif", "colonnes", "rangees", "demi-saut"].forEach((id) => $(id).addEventListener("change", majPlanche));
+/** Step & repeat : une seule page, répétée en grille (les copies cochées sont ignorées). */
+const motifPlanche = () => ($("motif").checked ? { colonnes: +$("colonnes").value, rangees: +$("rangees").value, demi_saut: $("demi-saut").checked } : null);
 
 /** Aperçu de l'imposition : la laize, les éléments à leur place, longueur et utilisation. */
 let imposition = 0;
 async function dessinerImposition() {
   const n = ++imposition;
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, rotation: $("rotation").checked, forme: $("forme").checked, elements: elementsPlanche() };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, rotation: $("rotation").checked, forme: $("forme").checked, motif: motifPlanche(), elements: elementsPlanche() };
   const r = await fetch("/api/planches/apercu", json("POST", corps)).catch(() => null);
   if (n !== imposition || !r) return;
   const c = await r.json().catch(() => ({}));
@@ -1174,7 +1181,7 @@ async function dessinerImposition() {
 }
 $("creer-planche").addEventListener("click", async () => {
   const elements = elementsPlanche();
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, forme: $("forme").checked, elements };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, forme: $("forme").checked, motif: motifPlanche(), elements };
   if (await api("/api/planches", json("POST", corps))) { selection.clear(); majPlanche(); dire(T().planche_creee); rafraichir(); }
 });
 
@@ -1297,7 +1304,9 @@ function afficherEditeurMachines() {
       el("div", { className: "ligne bas" },
         el("label", {}, T().connexion_machine, typeConnexion), details,
         el("label", {}, T().snmp, champ("snmp", m.snmp || "", { placeholder: "192.168.1.50" })),
-        el("label", {}, T().pas, choix("pas", ["", "0.01", "0.025", "0.05", "0.1"], m.pas_mm == null ? "" : String(m.pas_mm), { "": T().pas_defaut }))));
+        el("label", {}, T().pas, choix("pas", ["", "0.01", "0.025", "0.05", "0.1"], m.pas_mm == null ? "" : String(m.pas_mm), { "": T().pas_defaut })),
+        el("label", { title: T().note_decalage }, T().decalage_x, champ("decalage_x", (m.decalage_mm || [0, 0])[0], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" })),
+        el("label", { title: T().note_decalage }, T().decalage_y, champ("decalage_y", (m.decalage_mm || [0, 0])[1], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" }))));
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
   };
@@ -1311,7 +1320,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
     const type = q("type");
     const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
-    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null };
+    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0] };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

@@ -696,6 +696,9 @@ struct DemandePlanche {
     /// Imbrication sur la forme des contours de découpe (sinon en rangées de rectangles).
     #[serde(default)]
     forme: bool,
+    /// Step & repeat d'une seule page (colonnes × rangées, demi-saut).
+    #[serde(default)]
+    motif: Option<imbrication::Motif>,
     elements: Vec<ElementPlanche>,
 }
 
@@ -704,6 +707,14 @@ struct ElementPlanche {
     id: Uuid,
     page: usize,
     copies: usize,
+}
+
+impl DemandePlanche {
+    fn motif_invalide(&self) -> Option<&'static str> {
+        let m = self.motif?;
+        let bon = self.elements.len() == 1 && (1..=100).contains(&m.colonnes) && (1..=500).contains(&m.rangees) && m.colonnes * m.rangees <= 2000;
+        (!bon).then_some("motif : une seule page, 1 à 100 colonnes, 1 à 500 rangées, 2000 copies au plus")
+    }
 }
 
 fn espace_defaut() -> f64 {
@@ -925,6 +936,9 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
     if !(50.0..=5000.0).contains(&d.laize_mm) || !(0.0..=100.0).contains(&d.espacement_mm) || d.elements.is_empty() || d.elements.len() > 200 || d.elements.iter().any(|e| !(1..=500).contains(&e.copies)) {
         return mauvais("laize 50–5000 mm, espacement 0–100 mm, 1 à 200 éléments, 1 à 500 copies".into());
     }
+    if let Some(e) = d.motif_invalide() {
+        return mauvais(e.into());
+    }
     let donnees = &etat.config.donnees;
     let mut pdfs = vec![];
     let mut noms = vec![];
@@ -937,10 +951,10 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
         noms.push(format!("{} p{}", t.nom, e.page));
     }
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
-    let (laize, espace, rotation, forme) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme);
+    let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
     let imp = match tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::imposer(&sources, laize, espace, rotation, forme)
+        imbrication::imposer(&sources, laize, espace, rotation, forme, motif)
     })
     .await
     {
@@ -991,6 +1005,9 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     if d.elements.is_empty() || d.elements.len() > 200 || d.elements.iter().any(|e| !(1..=500).contains(&e.copies)) {
         return mauvais("1 à 200 éléments, 1 à 500 copies chacun");
     }
+    if let Some(e) = d.motif_invalide() {
+        return mauvais(e);
+    }
     let donnees = &etat.config.donnees;
     let mut pdfs = vec![];
     for e in &d.elements {
@@ -1003,11 +1020,11 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
         }
     }
-    let (laize, espace, rotation, forme) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme);
+    let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::composer(&sources, laize, espace, rotation, forme)
+        imbrication::composer(&sources, laize, espace, rotation, forme, motif)
     })
     .await;
     let planche = match compose {
@@ -1022,7 +1039,10 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
     let copies: usize = d.elements.iter().map(|e| e.copies).sum();
-    let nom = format!("Planche {laize:.0} mm — {copies} élément(s)");
+    let nom = match d.motif {
+        Some(m) => format!("Motif {} × {}{} — {laize:.0} mm", m.colonnes, m.rangees, if m.demi_saut { " demi-saut" } else { "" }),
+        None => format!("Planche {laize:.0} mm — {copies} élément(s)"),
+    };
     match creer_travail(&etat, id, nom, Format::Pdf, Demande { dpi: d.dpi, reperage: d.reperage, ..Default::default() }).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
@@ -1710,7 +1730,7 @@ async fn envoyer_la_decoupe(etat: &Etat, s: &file::Sortie, m: machines::Machine)
     let plt = fichier_plt(&dossier(&etat.config.donnees, s.travail), s.page);
     tokio::task::spawn_blocking(move || {
         let texte = std::fs::read_to_string(&plt).map_err(|e| format!("lecture de {} : {e}", plt.display()))?;
-        machines::envoyer(&m.connexion, machines::changer_de_pas(&texte, m.pas_mm()).as_bytes())
+        machines::envoyer(&m.connexion, machines::changer_de_pas(&texte, m.pas_mm(), m.decalage_mm).as_bytes())
     })
     .await
     .unwrap_or_else(|e| Err(e.to_string()))
@@ -2135,6 +2155,7 @@ mod tests {
                 connexion: machines::Connexion::Reseau { hote: "127.0.0.1".into(), port },
                 snmp: None,
                 pas_mm: None,
+                decalage_mm: [0.0; 2],
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);

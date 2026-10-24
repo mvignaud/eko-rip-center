@@ -215,6 +215,11 @@ grid whose step is 1/800 of the roll width (1 mm at least): a cut never touches 
 neighbour, but the actual gap may exceed the requested spacing by one step. The share of
 area used counts the area of the cut contours, in both modes.
 
+**Step & repeat pattern** repeats one page in a grid: **columns** × **rows**, at the
+chosen spacing. With **Half drop**, every other column moves down half a height
+(wallpaper repeat). The ticked number of copies is ignored; the grid must fit the roll
+width (100 columns, 500 rows and 2000 copies at most). The cut follows every copy.
+
 ## Colour
 
 **Colour** block (Print mode):
@@ -238,7 +243,9 @@ Spot colours (`White`, `Silver`…) are never converted.
 digits, `-`), a name, the model (Epson SC-S80600, Mutoh Kona, Graphtec FC7000, Roland
 VersaCAMM VP), the roll width, the connection (serial or USB-serial, TCP network, device
 such as `/dev/usb/lp0`, or folder), the SNMP address to read the loaded media, and the cut
-step (0.01 mm for the Kona, 0.025 mm by default elsewhere). **Save** applies at once. A
+step (0.01 mm for the Kona, 0.025 mm by default elsewhere) and the cut **offset X / Y**
+(−20 to 20 mm): the gap measured on a test cut between cut and print, added to every cut
+sent to that machine. **Save** applies at once. A
 machine with an output still to run cannot be removed.
 
 - **Graphtec FC7000-75**: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm

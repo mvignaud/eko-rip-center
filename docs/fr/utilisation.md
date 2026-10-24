@@ -225,6 +225,11 @@ Sur une grille de pas égal au 1/800 de la laize (1 mm au moins) : une découpe 
 jamais sa voisine, mais l'espace réel peut dépasser l'espacement demandé d'un pas. La part
 de surface utilisée compte l'aire des contours de découpe, dans les deux modes.
 
+**Motif step & repeat** répète une seule page en grille : **colonnes** × **rangées**, à
+l'espacement choisi. Avec **Demi-saut**, une colonne sur deux descend d'une demi-hauteur
+(raccord papier peint). Le nombre de copies coché est ignoré ; la grille doit tenir dans
+la laize (100 colonnes, 500 rangées et 2000 copies au plus). La découpe suit chaque copie.
+
 ## Couleur
 
 Bloc **Couleur** (mode Imprimer) :
@@ -249,7 +254,9 @@ en rouge sous 10 %.
 identifiant (minuscules, chiffres, `-`), un nom, le modèle (Epson SC-S80600, Mutoh Kona,
 Graphtec FC7000, Roland VersaCAMM VP), la laize, la connexion (série ou USB-série,
 réseau TCP, périphérique comme `/dev/usb/lp0`, ou dossier), l'adresse SNMP pour lire le
-média chargé, et le pas de découpe (0,01 mm pour le Kona, 0,025 mm par défaut ailleurs).
+média chargé, le pas de découpe (0,01 mm pour le Kona, 0,025 mm par défaut ailleurs) et
+le **décalage X / Y** de la découpe (−20 à 20 mm) : l'écart mesuré sur une coupe d'essai
+entre la découpe et l'impression, ajouté à chaque découpe envoyée à cette machine.
 **Enregistrer** applique tout de suite : les boutons d'impression et de découpe, la file
 et la barre latérale suivent. Une machine qui a encore une sortie à passer ne peut pas
 être retirée.

@@ -31,6 +31,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Sauvegarde et restauration de la configuration** (Système, administrateur) : un
   fichier JSON avec machines, tarifs, réglages enregistrés et profils ICC ; restauration
   vérifiée en entier avant d'écrire. Sans les comptes ni les travaux.
+- **Décalage de découpe** X / Y par machine (−20 à 20 mm), ajouté au HP-GL envoyé.
+- **Motif step & repeat** (panneau Planche) : une page en grille colonnes × rangées, avec
+  **demi-saut** en option ; découpe de chaque copie.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

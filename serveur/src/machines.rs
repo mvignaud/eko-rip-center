@@ -66,6 +66,10 @@ pub struct Machine {
     /// Pas de la découpe en HP-GL, en mm (par défaut : 0,01 pour le Kona, 0,025 sinon).
     #[serde(default)]
     pub pas_mm: Option<f64>,
+    /// Décalage de la découpe (x, y) en mm, ±20 : rattrape l'écart entre le couteau et
+    /// l'impression mesuré sur une coupe d'essai.
+    #[serde(default)]
+    pub decalage_mm: [f64; 2],
 }
 
 impl Machine {
@@ -88,8 +92,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None },
-        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None },
+        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2] },
+        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2] },
     ]
 }
 
@@ -111,21 +115,26 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && !m.nom.trim().is_empty()
             && (100.0..=5000.0).contains(&m.laize_mm)
             && m.pas_mm.is_none_or(|p| [0.005, 0.01, 0.025, 0.05, 0.1].iter().any(|x| (x - p).abs() < 1e-9))
+            && m.decalage_mm.iter().all(|d| (-20.0..=20.0).contains(d))
     });
     if bon { Ok(()) } else { Err("machine_invalide") }
 }
 
-/// Convertit le HP-GL produit par le RIP (pas de 0,01 mm, commandes `PU`/`PD` à coordonnées)
-/// au pas `pas_mm` de la machine.
-pub fn changer_de_pas(hpgl: &str, pas_mm: f64) -> String {
+/// Convertit le HP-GL produit par le RIP (pas de 0,01 mm, commandes `PU`/`PD` à coordonnées
+/// x,y absolues) au pas `pas_mm` de la machine, décalé de `decalage_mm` (x, y).
+pub fn changer_de_pas(hpgl: &str, pas_mm: f64, decalage_mm: [f64; 2]) -> String {
     let f = 0.01 / pas_mm;
-    if (f - 1.0).abs() < 1e-12 {
+    if (f - 1.0).abs() < 1e-12 && decalage_mm == [0.0; 2] {
         return hpgl.to_string();
     }
     hpgl.split(';')
         .map(|cmd| match cmd.get(..2) {
             Some(op @ ("PU" | "PD")) if cmd.len() > 2 => {
-                let nombres: Vec<String> = cmd[2..].split(',').map(|n| n.trim().parse::<f64>().map_or_else(|_| n.to_string(), |v| format!("{}", (v * f).round() as i64))).collect();
+                let nombres: Vec<String> = cmd[2..]
+                    .split(',')
+                    .enumerate()
+                    .map(|(i, n)| n.trim().parse::<f64>().map_or_else(|_| n.to_string(), |v| format!("{}", ((v + decalage_mm[i % 2] * 100.0) * f).round() as i64)))
+                    .collect();
                 format!("{op}{}", nombres.join(","))
             }
             _ => cmd.to_string(),
@@ -175,8 +184,10 @@ mod tests {
     fn conversion_de_pas() {
         let rip = "IN;SP1;PU0,0;PD2540,0,2540,2540;PU;SP0;";
         // 25,4 mm : 2540 pas de 0,01 mm, 1016 pas de 0,025 mm (HP-GL standard).
-        assert_eq!(changer_de_pas(rip, 0.025), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
-        assert_eq!(changer_de_pas(rip, 0.01), rip);
+        assert_eq!(changer_de_pas(rip, 0.025, [0.0; 2]), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
+        assert_eq!(changer_de_pas(rip, 0.01, [0.0; 2]), rip);
+        // 1 mm à droite, 0,5 mm en arrière, au pas de 0,025 mm : +40 et −20.
+        assert_eq!(changer_de_pas(rip, 0.025, [1.0, -0.5]), "IN;SP1;PU40,-20;PD1056,-20,1056,996;PU;SP0;");
         let mut m = catalogue_initial(Path::new("/dev/kona"), "9600", None).remove(1);
         assert_eq!(m.pas_mm(), 0.01);
         m.modele = Modele::GraphtecFc7000;

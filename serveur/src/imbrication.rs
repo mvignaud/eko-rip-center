@@ -4,6 +4,7 @@
 //! découpe — l'extracteur de découpe lit les formulaires).
 
 use lopdf::{Dictionary, Document, Object, ObjectId, Stream, dictionary};
+use serde::Deserialize;
 
 pub const PT_PAR_MM: f64 = 72.0 / 25.4;
 
@@ -155,9 +156,39 @@ pub struct Imposition {
     pub contours: Vec<Vec<Vec<(f64, f64)>>>,
 }
 
-pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool) -> Result<Imposition, String> {
+/// Step & repeat d'une seule source : grille de `colonnes` × `rangees`, avec demi-saut
+/// (une colonne sur deux descend d'une demi-hauteur, comme un papier peint).
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct Motif {
+    pub colonnes: usize,
+    pub rangees: usize,
+    #[serde(default)]
+    pub demi_saut: bool,
+}
+
+/// Places de la grille et taille de la planche, en points ; refus si elle dépasse la laize.
+pub fn grille(t: Taille, m: Motif, laize: f64, espace: f64) -> Result<(Vec<Place>, Taille), String> {
+    let (pas_x, pas_y) = (t.largeur + espace, t.hauteur + espace);
+    let largeur = m.colonnes as f64 * pas_x - espace;
+    if largeur > laize + 1e-6 {
+        return Err(format!("{} colonnes de {:.0} mm dépassent la laize", m.colonnes, t.largeur / PT_PAR_MM));
+    }
+    let saut = if m.demi_saut && m.colonnes > 1 { pas_y / 2.0 } else { 0.0 };
+    let places = (0..m.colonnes)
+        .flat_map(|c| (0..m.rangees).map(move |r| (c, r)))
+        .enumerate()
+        .map(|(indice, (c, r))| Place { indice, x: c as f64 * pas_x, y: r as f64 * pas_y + if c % 2 == 1 { saut } else { 0.0 }, angle: 0 })
+        .collect();
+    Ok((places, Taille { largeur, hauteur: m.rangees as f64 * pas_y - espace + saut }))
+}
+
+pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>) -> Result<Imposition, String> {
     let tailles_sources = sources.iter().enumerate().map(|(n, s)| taille_page(s.pdf, s.page).map_err(|e| format!("source {} : {e}", n + 1))).collect::<Result<Vec<_>, _>>()?;
-    let elements: Vec<usize> = sources.iter().enumerate().flat_map(|(n, s)| std::iter::repeat_n(n, s.copies)).collect();
+    let elements: Vec<usize> = match motif {
+        Some(_) if sources.len() != 1 => return Err("un motif répète une seule page".into()),
+        Some(m) => vec![0; m.colonnes * m.rangees],
+        None => sources.iter().enumerate().flat_map(|(n, s)| std::iter::repeat_n(n, s.copies)).collect(),
+    };
     if elements.is_empty() {
         return Err("rien à imbriquer".into());
     }
@@ -172,7 +203,9 @@ pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool
             d.map(|d| d.traces.into_iter().filter(|t| t.ferme && t.points.len() >= 3).map(|t| t.points).collect()).unwrap_or_default()
         })
         .collect();
-    let (places, planche) = if forme {
+    let (places, planche) = if let Some(m) = motif {
+        grille(tailles_sources[0], m, laize, espace)?
+    } else if forme {
         let silhouettes: Vec<crate::forme::Silhouette> = elements.iter().map(|&n| crate::forme::Silhouette { taille: tailles_sources[n], polygones: contours[n].clone() }).collect();
         crate::forme::placer(&silhouettes, laize, espace, rotation)?
     } else {
@@ -182,8 +215,8 @@ pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool
 }
 
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
-pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool) -> Result<(Vec<u8>, Vec<Place>), String> {
-    let Imposition { places, planche, elements, .. } = imposer(sources, laize_mm, espace_mm, rotation, forme)?;
+pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>) -> Result<(Vec<u8>, Vec<Place>), String> {
+    let Imposition { places, planche, elements, .. } = imposer(sources, laize_mm, espace_mm, rotation, forme, motif)?;
     let mut cible = Document::with_version("1.6");
     // Formulaires créés, un par source, et leur taille.
     let mut formulaires: Vec<(ObjectId, Taille, [f64; 2])> = vec![];
@@ -225,6 +258,19 @@ pub(crate) mod tests {
 
     fn t(l: f64, h: f64) -> Taille {
         Taille { largeur: l * MM, hauteur: h * MM }
+    }
+
+    #[test]
+    fn motif_en_grille_et_demi_saut() {
+        let m = Motif { colonnes: 3, rangees: 2, demi_saut: true };
+        let (places, planche) = grille(t(100.0, 50.0), m, 400.0 * MM, 10.0 * MM).unwrap();
+        assert_eq!(places.len(), 6);
+        let mm = |v: f64| (v / MM * 1e6).round() / 1e6;
+        // Colonne du milieu descendue d'une demi-hauteur de pas (60 / 2 = 30 mm).
+        let colonne = |c: usize| places.iter().filter(|p| mm(p.x) == c as f64 * 110.0).map(|p| mm(p.y)).collect::<Vec<_>>();
+        assert_eq!((colonne(0), colonne(1), colonne(2)), (vec![0.0, 60.0], vec![30.0, 90.0], vec![0.0, 60.0]));
+        assert_eq!((mm(planche.largeur), mm(planche.hauteur)), (320.0, 140.0));
+        assert!(grille(t(100.0, 50.0), Motif { colonnes: 4, ..m }, 400.0 * MM, 10.0 * MM).is_err(), "4 × 110 − 10 = 430 mm > laize");
     }
 
     #[test]
@@ -271,7 +317,7 @@ pub(crate) mod tests {
     fn element_tourne_rendu_et_decoupe_en_place() {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &magenta, page: 1, copies: 1 }];
-        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true, false).unwrap();
+        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true, false, None).unwrap();
         assert!(places[0].tourne());
         let d = crate::decoupe::extraire(&planche, false).unwrap();
         assert!((d[0].largeur - 40.0).abs() < 1e-3 && (d[0].hauteur - 60.0).abs() < 1e-3, "{} × {}", d[0].largeur, d[0].hauteur);
@@ -324,7 +370,7 @@ pub(crate) mod tests {
     fn planche_sur_la_forme_tete_beche() {
         let tri = pdf_triangle(100.0 * MM);
         let sources = [Source { pdf: &tri, page: 1, copies: 2 }];
-        let (planche, places) = composer(&sources, 105.0, 0.0, true, true).unwrap();
+        let (planche, places) = composer(&sources, 105.0, 0.0, true, true, None).unwrap();
         assert!(places.iter().any(|p| p.angle == 180), "{places:?}");
         let d = crate::decoupe::extraire(&planche, false).unwrap();
         assert!(d[0].hauteur / MM < 120.0, "longueur {} mm", d[0].hauteur / MM);
@@ -344,7 +390,7 @@ pub(crate) mod tests {
         let (a, b) = (&d[0].traces[0], &d[0].traces[1]);
         assert!(!dans(centre(a), &b.points) && !dans(centre(b), &a.points), "contours imbriqués l'un dans l'autre");
         // En rangées (sans la forme), deux carrés l'un au-dessus de l'autre.
-        let (rangs, _) = composer(&sources, 105.0, 0.0, true, false).unwrap();
+        let (rangs, _) = composer(&sources, 105.0, 0.0, true, false, None).unwrap();
         assert!(crate::decoupe::extraire(&rangs, false).unwrap()[0].hauteur / MM > 190.0);
     }
 
@@ -383,7 +429,7 @@ pub(crate) mod tests {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &cyan, page: 1, copies: 1 }, Source { pdf: &magenta, page: 1, copies: 2 }];
         // Laize 80 mm ≈ 226,8 pt : cyan (100) + magenta (60) + espace tiennent en rangée 1 ; le 2e magenta passe en rangée 2.
-        let (planche, places) = composer(&sources, 80.0, 5.0, false, false).unwrap();
+        let (planche, places) = composer(&sources, 80.0, 5.0, false, false, None).unwrap();
         assert_eq!(places.len(), 3);
 
         // Découpe : trois contours, chacun dans son élément placé.
