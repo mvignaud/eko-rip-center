@@ -254,6 +254,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/machines/{id}/consommation", get(consommation_machine))
         .route("/api/machines/{id}/supports", get(lister_supports).post(enregistrer_supports))
         .route("/api/machines/{id}/charge", get(lire_charge).post(saisir_charge))
+        .route("/api/machines/{id}/supports/paquet", axum::routing::post(importer_paquet))
+        .route("/api/machines/{id}/supports/{uuid}/paquet", get(exporter_paquet))
         .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
@@ -1045,6 +1047,64 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     }
     *etat.machines.write().unwrap() = s.machines.clone();
     Json(serde_json::json!({ "machines": s.machines.len(), "reglages": liste.len(), "profils": profils.len() })).into_response()
+}
+
+/// Paquet support (roadmap 1.5) : le support, ses modes et les réglages qui s'en servent.
+async fn exporter_paquet(State(etat): State<Partage>, Chemin((id, uuid)): Chemin<(String, Uuid)>) -> Response {
+    let c = supports::lire(&etat.config.donnees, "epson");
+    let Some(support) = c.supports.into_iter().find(|s| s.machine == id && s.id == Some(uuid)) else { return introuvable() };
+    let reglages = reglages::lire(&etat.config.donnees).into_iter().filter(|r| r.demande.support_uuid == Some(uuid)).collect();
+    let nom = format!("attachment; filename=\"support-{}.json\"", support.nom.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect::<String>());
+    let p = supports::Paquet { format: supports::FORMAT_PAQUET.into(), version: supports::VERSION_PAQUET, serveur: env!("CARGO_PKG_VERSION").into(), support, reglages };
+    ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&p).unwrap_or_default()).into_response()
+}
+
+/// Importe un paquet : le support garde son identifiant (remplacé s'il existe déjà sur cette
+/// machine), les réglages sont ajoutés ou remplacés par nom. Tout est contrôlé avant d'écrire.
+async fn importer_paquet(State(etat): State<Partage>, Chemin(id): Chemin<String>, Json(p): Json<supports::Paquet>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    if p.format != supports::FORMAT_PAQUET {
+        return refus(StatusCode::BAD_REQUEST, "paquet_invalide", Some(format!("format « {} »", p.format)));
+    }
+    if p.version > supports::VERSION_PAQUET {
+        return refus(StatusCode::BAD_REQUEST, "paquet_trop_recent", Some(format!("paquet v{}, ce serveur lit jusqu'à la v{}", p.version, supports::VERSION_PAQUET)));
+    }
+    let _verrou = etat.reglages.lock().await;
+    let mut c = supports::lire(&etat.config.donnees, "epson");
+    let mut support = supports::Support { machine: id.clone(), ..p.support };
+    if support.id.is_none() || support.modes.iter().any(|m| m.id.is_none()) || c.supports.iter().any(|s| s.id == support.id && s.machine != id) {
+        return refus(StatusCode::BAD_REQUEST, "paquet_invalide", Some("identifiants manquants ou support d'une autre machine".into()));
+    }
+    c.supports.retain(|s| s.id != support.id);
+    // Un support du même nom (autre identifiant) cède la place : le nom est unique par machine.
+    c.supports.retain(|s| !(s.machine == id && s.nom == support.nom));
+    support.machine = id.clone();
+    c.supports.push(support);
+    let de_la_machine: Vec<_> = c.supports.iter().filter(|s| s.machine == id).cloned().collect();
+    if let Err(code) = supports::verifier(&de_la_machine) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    let connus = couleur::lister(&etat.config.profils);
+    let mut liste = reglages::lire(&etat.config.donnees);
+    for r in p.reglages {
+        let r = reglages::Reglage { demande: r.demande.normaliser(), ..r };
+        if !reglages::nom_valide(&r.nom) {
+            return refus(StatusCode::BAD_REQUEST, "reglage_invalide", Some(r.nom));
+        }
+        if let Err(code) = r.demande.verifier(&connus) {
+            return refus(StatusCode::BAD_REQUEST, code, Some(r.nom));
+        }
+        liste.retain(|x| x.nom != r.nom);
+        liste.push(r);
+    }
+    liste.sort_by(|a, b| a.nom.cmp(&b.nom));
+    reglages::identifier(&mut liste, &[]);
+    if let Err(e) = supports::ecrire(&etat.config.donnees, &c).and_then(|()| reglages::ecrire(&etat.config.donnees, &liste)) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    StatusCode::NO_CONTENT.into_response()
 }
 
 /// Support chargé dans la machine (roadmap 1.3) : `null` si rien n'est connu.
@@ -2681,6 +2741,42 @@ mod tests {
             assert!(a["uuid"].is_string());
             assert_eq!(a["uuid"], b["uuid"]);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Paquet support (roadmap 1.5) : export puis import sur un serveur vierge = identique.
+        #[tokio::test]
+        async fn paquet_support_aller_retour() {
+            let (a, b) = (etat("paquet-a"), etat("paquet-b"));
+            let corps = |r: Response| async move { axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap() };
+            let support = supports::lire(&a.config.donnees, "epson").supports[0].clone();
+            let reglage = serde_json::json!({ "nom": "Vinyle-720", "demande": { "dpi": 360, "support_uuid": support.id, "mode_uuid": support.modes[0].id } });
+            assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(reglage)).await.status(), StatusCode::CREATED);
+            assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Autre", "demande": { "dpi": 360 } }))).await.status(), StatusCode::CREATED);
+            let r = appel(&a, "GET", &format!("/api/machines/epson/supports/{}/paquet", support.id.unwrap()), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let paquet: serde_json::Value = serde_json::from_slice(&corps(r).await).unwrap();
+            assert_eq!(paquet["reglages"].as_array().unwrap().len(), 1, "seuls les réglages qui se servent du support");
+            // Serveur vierge (sans supports.json ni tarifs : catalogue vide).
+            std::fs::write(b.config.donnees.join("tarifs.json"), serde_json::to_vec(&serde_json::json!({ "encres": {}, "encre_defaut": { "ml_m2": 10.0, "prix_litre": 100.0 }, "support_m2": 0.0, "supports": [] })).unwrap()).unwrap();
+            assert!(supports::lire(&b.config.donnees, "epson").supports.is_empty());
+            assert_eq!(appel(&b, "POST", "/api/machines/epson/supports/paquet", None, Some(paquet.clone())).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!(supports::lire(&b.config.donnees, "epson").supports, vec![support.clone()], "support et identifiants identiques");
+            let rb = reglages::lire(&b.config.donnees);
+            assert_eq!(rb.len(), 1);
+            assert_eq!((rb[0].nom.as_str(), rb[0].demande.mode_uuid, rb[0].demande.support_uuid), ("Vinyle-720", support.modes[0].id, support.id));
+            // Réimporter : rien ne double.
+            assert_eq!(appel(&b, "POST", "/api/machines/epson/supports/paquet", None, Some(paquet.clone())).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!((supports::lire(&b.config.donnees, "epson").supports.len(), reglages::lire(&b.config.donnees).len()), (1, 1));
+            // Paquet d'une version plus récente : refusé, rien d'écrit.
+            let mut futur = paquet.clone();
+            futur["version"] = 99.into();
+            futur["support"]["nom"] = "Futur".into();
+            let r = appel(&b, "POST", "/api/machines/epson/supports/paquet", None, Some(futur)).await;
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            assert!(supports::lire(&b.config.donnees, "epson").supports.iter().all(|s| s.nom != "Futur"));
+            for e in [a, b] {
+                std::fs::remove_dir_all(&e.config.donnees).unwrap();
+            }
         }
 
         /// Support chargé (roadmap 1.3) : saisi par l'opérateur, qui prime ; retour à la machine.

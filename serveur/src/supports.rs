@@ -77,6 +77,22 @@ pub fn ecrire_charge(donnees: &Path, machine: &str, c: Charge) -> std::io::Resul
     crate::etat::ecrire(&fichier_charges(donnees), &toutes, false)
 }
 
+/// Format du paquet support (roadmap 1.5) ; un paquet d'un format plus récent est refusé.
+pub const FORMAT_PAQUET: &str = "eko-rip-paquet-support";
+pub const VERSION_PAQUET: u32 = 1;
+
+/// Un support, ses modes et les réglages enregistrés qui s'en servent, en un seul fichier.
+/// ponytail: sans les profils ICC (jamais distribués) ; le réglage cite le profil par nom.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Paquet {
+    pub format: String,
+    pub version: u32,
+    /// Version du serveur qui l'a fait.
+    pub serveur: String,
+    pub support: Support,
+    pub reglages: Vec<crate::reglages::Reglage>,
+}
+
 /// Support de `machine` enregistré sous le n° `numero` dans l'imprimante.
 pub fn par_numero<'a>(c: &'a Catalogue, machine: &str, numero: u8) -> Option<&'a Support> {
     c.supports.iter().find(|s| s.machine == machine && s.numero_machine == Some(numero))
