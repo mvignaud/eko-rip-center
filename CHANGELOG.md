@@ -12,6 +12,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   rectangulaire ; à l'envoi ou après coup (« Éditer », rendu refait depuis l'original).
 - **Mise en file automatique** après le rendu (Epson, Kona), en attente ou suspendue ;
   enregistrée dans les réglages.
+- **Aperçu de l'imposition** de la planche avant de la créer (`POST /api/planches/apercu`) :
+  rouleau, éléments placés, longueur et surface utilisée.
 - Choix de plusieurs fichiers à la fois ; visionneuse en grand avec dimensions en mm.
 - **Pré-vérification** à l'envoi d'un PDF à imprimer : polices non incorporées, images
   de moins de 100 ppi à la taille imprimée (formulaires et images en ligne compris) ;

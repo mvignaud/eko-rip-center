@@ -169,7 +169,9 @@ commence, pour aligner les lés à la pose.
 Sur chaque page imprimable, cocher **Ajouter à la planche** et indiquer le nombre de
 copies. Le panneau **Planche** apparaît au-dessus de la liste : régler la **laize**
 (largeur utile du rouleau, 1600 mm par défaut) et l'**espacement**, puis **Créer la
-planche**. Avec **Tourner de 90° si la planche est plus courte**, quatre orientations
+planche**. Avant de la créer, le panneau dessine l'**imposition** : le rouleau à la laize,
+chaque élément à sa place (survol : nom et dimensions), la longueur de rouleau et la part
+de surface utilisée ; il se met à jour à chaque changement. Avec **Tourner de 90° si la planche est plus courte**, quatre orientations
 sont essayées (telle quelle, tout tourné, tout couché, tout debout) et la plus courte en
 rouleau est gardée ; un élément plus large que la laize n'y passe que tourné. La
 résolution et le repérage du panneau Nouveau travail s'appliquent. Les

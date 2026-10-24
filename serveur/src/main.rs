@@ -183,6 +183,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/planches", axum::routing::post(creer_planche))
+        .route("/api/planches/apercu", axum::routing::post(apercu_planche))
         .route("/api/systeme", get(systeme))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
@@ -663,6 +664,55 @@ fn espace_defaut() -> f64 {
 
 fn dpi_defaut() -> u32 {
     720
+}
+
+/// Imposition sans rien créer : places des éléments (mm, origine en bas à gauche),
+/// longueur de rouleau et part de la surface utilisée.
+async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche>) -> Response {
+    let mauvais = |detail: String| refus(StatusCode::BAD_REQUEST, "planche_invalide", Some(detail));
+    if !(50.0..=5000.0).contains(&d.laize_mm) || !(0.0..=100.0).contains(&d.espacement_mm) || d.elements.is_empty() || d.elements.len() > 200 || d.elements.iter().any(|e| !(1..=500).contains(&e.copies)) {
+        return mauvais("laize 50–5000 mm, espacement 0–100 mm, 1 à 200 éléments, 1 à 500 copies".into());
+    }
+    let donnees = &etat.config.donnees;
+    let mut tailles = vec![];
+    let mut noms = vec![];
+    for e in &d.elements {
+        let Some((t, _)) = lire_page(donnees, e.id, e.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+        let pdf = match tokio::fs::read(dossier(donnees, e.id).join(Format::Pdf.fichier())).await {
+            Ok(o) => o,
+            Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
+        };
+        let page = e.page;
+        let taille = match tokio::task::spawn_blocking(move || imbrication::taille_page(&pdf, page)).await {
+            Ok(Ok(x)) => x,
+            Ok(Err(err)) => return mauvais(err),
+            Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
+        };
+        for _ in 0..e.copies {
+            tailles.push(taille);
+            noms.push(format!("{} p{}", t.nom, e.page));
+        }
+    }
+    let mm = imbrication::PT_PAR_MM;
+    match imbrication::placer(&tailles, d.laize_mm * mm, d.espacement_mm * mm, d.rotation) {
+        Ok((places, planche)) => {
+            let utile: f64 = tailles.iter().map(|t| t.largeur * t.hauteur).sum();
+            let places: Vec<_> = places
+                .iter()
+                .map(|p| {
+                    let t = tailles[p.indice];
+                    let (l, h) = if p.tourne { (t.hauteur, t.largeur) } else { (t.largeur, t.hauteur) };
+                    serde_json::json!({ "nom": noms[p.indice], "x": p.x / mm, "y": p.y / mm, "largeur": l / mm, "hauteur": h / mm, "tourne": p.tourne })
+                })
+                .collect();
+            Json(serde_json::json!({
+                "laize_mm": d.laize_mm, "longueur_mm": planche.hauteur / mm, "largeur_mm": planche.largeur / mm,
+                "utilisation": utile / (d.laize_mm * mm * planche.hauteur).max(1e-9), "places": places,
+            }))
+            .into_response()
+        }
+        Err(e) => mauvais(e),
+    }
 }
 
 /// Imbrique des pages de travaux existants sur la laize, en un nouveau travail à imprimer.
@@ -1577,6 +1627,44 @@ mod tests {
             assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
             assert!(e.file.lock().unwrap().sorties.is_empty());
             assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Aperçu d'imposition : 3 copies de 200 × 100 mm sur 320 mm, rotation permise →
+        /// trois éléments debout côte à côte, 200 mm de rouleau ; rien n'est créé.
+        #[tokio::test]
+        async fn apercu_d_imposition() {
+            let e = etat("imposition");
+            let donnees = e.config.donnees.clone();
+            let mm = imbrication::PT_PAR_MM;
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "etiquette.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande::default(),
+                statut: Statut::Termine,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![Page::default()],
+                alertes: vec![],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(200.0 * mm, 100.0 * mm, "1 0 0 0", (0.0, 0.0))).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            let corps = serde_json::json!({ "laize_mm": 320.0, "espacement_mm": 5.0, "rotation": true, "elements": [{ "id": t.id, "page": 1, "copies": 3 }] });
+            let r = appel(&e, "POST", "/api/planches/apercu", None, Some(corps)).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert!((v["longueur_mm"].as_f64().unwrap() - 200.0).abs() < 1e-3, "{v}");
+            let places = v["places"].as_array().unwrap();
+            assert_eq!(places.len(), 3);
+            assert!(places.iter().all(|p| p["tourne"] == true && (p["largeur"].as_f64().unwrap() - 100.0).abs() < 1e-3));
+            assert_eq!(places[0]["nom"], "etiquette.pdf p1");
+            // 3 × 0,02 m² sur 0,32 × 0,2 m.
+            assert!((v["utilisation"].as_f64().unwrap() - 0.06 / 0.064).abs() < 1e-4);
+            assert_eq!(lire_tous(&donnees).len(), 1, "rien de créé");
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 

@@ -163,7 +163,9 @@ or starts, to line panels up when installing.
 
 On each printable page, tick **Add to sheet** and enter the number of copies. The
 **Sheet** panel appears above the list: set the **roll width** (usable width, 1600 mm
-by default) and the **spacing**, then **Build the sheet**. With **Rotate 90° when the sheet gets shorter**, four
+by default) and the **spacing**, then **Build the sheet**. Before it is built, the panel draws the **imposition**: the roll
+at its width, each item in place (hover: name and size), the roll length and the share
+of area used; it updates on every change. With **Rotate 90° when the sheet gets shorter**, four
 orientations are tried (as is, all rotated, all lying, all standing) and the shortest on
 the roll is kept; an item wider than the roll only fits rotated. The resolution and
 registration of the New job panel apply. Items are placed tallest first, left to right;

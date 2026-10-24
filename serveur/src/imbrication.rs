@@ -73,6 +73,14 @@ fn rangees(tailles: &[Taille], tourne: &[bool], laize: f64, espace: f64) -> (Vec
     (places, Taille { largeur: large_max, hauteur: y + haut_rangee })
 }
 
+/// Taille (points) de la page `page` (à partir de 1) d'un PDF, d'après sa MediaBox.
+pub fn taille_page(pdf: &[u8], page: usize) -> Result<Taille, String> {
+    let doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    let id = *doc.get_pages().get(&(page as u32)).ok_or(format!("pas de page {page}"))?;
+    let b = doc.get_dictionary(id).map_err(|e| e.to_string())?.get(b"MediaBox").ok().and_then(nombres).filter(|b| b.len() == 4).ok_or("page sans MediaBox")?;
+    Ok(Taille { largeur: b[2] - b[0], hauteur: b[3] - b[1] })
+}
+
 /// Une page à imbriquer : PDF source, numéro de page (à partir de 1), nombre de copies.
 pub struct Source<'a> {
     pub pdf: &'a [u8],
