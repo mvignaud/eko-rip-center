@@ -28,6 +28,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   sans pouvoir régler le serveur (machines, tarifs, profils ICC, réglages enregistrés :
   refus 403 `admin_requis`, écrans masqués). `utilisateur ajouter <nom> [admin|operateur]` ;
   les comptes existants restent administrateurs.
+- **Sauvegarde et restauration de la configuration** (Système, administrateur) : un
+  fichier JSON avec machines, tarifs, réglages enregistrés et profils ICC ; restauration
+  vérifiée en entier avant d'écrire. Sans les comptes ni les travaux.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

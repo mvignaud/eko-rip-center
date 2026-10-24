@@ -151,6 +151,15 @@ A session lasts 12 hours (`HttpOnly`, `SameSite=Strict` cookie) and is lost when
 server restarts. After 5 wrong attempts for one name, that name is locked for 5
 minutes. Hot folders need no account: control them through the share (Samba).
 
+### Configuration backup
+
+System > **Configuration backup** (administrator): **Download the backup** gives a JSON
+file with the machine catalogue, prices, saved presets and uploaded ICC profiles.
+**Restore…** replaces machines, prices and presets with the file's and adds its
+profiles; everything is checked before the first write (a bad file changes nothing).
+Accounts are not in it (recreate them on the server), nor jobs or the queue. For a new
+server: install, create the administrator account, restore.
+
 ### Network
 
 Traffic is not encrypted (HTTP): keep the server reachable from the workshop network

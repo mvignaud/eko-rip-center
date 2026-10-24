@@ -158,6 +158,16 @@ Elle est perdue au redémarrage du serveur. Après 5 essais faux pour un même n
 est bloqué 5 minutes. Les dossiers surveillés ne demandent pas de compte : leur accès
 se règle par le partage (Samba).
 
+### Sauvegarde de la configuration
+
+Système > **Sauvegarde de la configuration** (administrateur) : **Télécharger la
+sauvegarde** donne un fichier JSON avec le catalogue des machines, les tarifs, les
+réglages enregistrés et les profils ICC déposés. **Restaurer…** remplace machines, tarifs
+et réglages par ceux du fichier et ajoute ses profils ; tout est vérifié avant la
+première écriture (un fichier faux ne change rien). Les comptes n'y sont pas (les
+recréer sur le serveur), ni les travaux ni la file. Pour un serveur neuf : installer,
+créer le compte administrateur, restaurer.
+
 ### Réseau
 
 La connexion n'est pas chiffrée (HTTP) : le serveur ne doit être joignable que depuis

@@ -20,6 +20,7 @@ mod plotter;
 mod render;
 mod reglages;
 mod reperage;
+mod sauvegarde;
 
 use axum::{
     Json, Router,
@@ -211,6 +212,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/systeme", get(systeme))
         .route("/api/machines", get(lister_machines).post(enregistrer_machines))
         .route("/api/machines/{id}/media", get(media_machine))
+        .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
@@ -828,6 +830,79 @@ async fn enregistrer_machines(State(etat): State<Partage>, Json(liste): Json<Vec
     }
     *etat.machines.write().unwrap() = liste.clone();
     Json(liste).into_response()
+}
+
+/// Configuration du serveur en un fichier (machines, tarifs, réglages, profils ICC).
+async fn exporter_config(State(etat): State<Partage>) -> Response {
+    let mut profils = std::collections::BTreeMap::new();
+    for p in couleur::lister(&etat.config.profils) {
+        match tokio::fs::read(etat.config.profils.join(&p.fichier)).await {
+            Ok(o) => profils.insert(p.fichier, sauvegarde::hex(&o)),
+            Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(format!("{} : {e}", p.fichier))),
+        };
+    }
+    let s = sauvegarde::Sauvegarde {
+        format: sauvegarde::FORMAT.into(),
+        version: env!("CARGO_PKG_VERSION").into(),
+        cree_le: maintenant(),
+        machines: etat.machines.read().unwrap().clone(),
+        tarifs: couverture::lire(&etat.config.donnees),
+        reglages: reglages::lire(&etat.config.donnees),
+        profils,
+    };
+    let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
+    ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
+}
+
+/// Remplace machines, tarifs et réglages, ajoute ou remplace les profils. Tout est
+/// vérifié avant la première écriture : une sauvegarde fausse ne laisse rien à moitié.
+async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde::Sauvegarde>) -> Response {
+    if s.format != sauvegarde::FORMAT {
+        return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", Some(format!("format « {} »", s.format)));
+    }
+    let mut profils = vec![];
+    for (nom, texte) in &s.profils {
+        let octets = sauvegarde::depuis_hex(texte);
+        match octets.as_deref().filter(|_| couleur::nom_valide(nom)).and_then(|o| couleur::lire_entete(o, nom)) {
+            Some(p) => profils.push((p, octets.unwrap_or_default())),
+            None => return refus(StatusCode::BAD_REQUEST, "profil_invalide", Some(nom.clone())),
+        }
+    }
+    if let Err(code) = machines::verifier(&s.machines).and(s.tarifs.verifier()) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    // Les réglages peuvent citer un profil de la sauvegarde ou un profil déjà là.
+    let mut connus = couleur::lister(&etat.config.profils);
+    connus.extend(profils.iter().map(|(p, _)| p.clone()));
+    let mut liste = vec![];
+    for r in s.reglages {
+        if !reglages::nom_valide(&r.nom) || liste.iter().any(|x: &reglages::Reglage| x.nom == r.nom) {
+            return refus(StatusCode::BAD_REQUEST, "reglage_invalide", Some(r.nom));
+        }
+        let r = reglages::Reglage { demande: r.demande.normaliser(), ..r };
+        if let Err(code) = r.demande.verifier(&connus) {
+            return refus(StatusCode::BAD_REQUEST, code, Some(r.nom));
+        }
+        liste.push(r);
+    }
+    let _verrou = etat.reglages.lock().await;
+    if etat.file.lock().unwrap().sorties.iter().any(|x| x.active() && !s.machines.iter().any(|m| m.id == x.machine)) {
+        return refus(StatusCode::CONFLICT, "machine_occupee", None);
+    }
+    let ecrire = || -> std::io::Result<()> {
+        std::fs::create_dir_all(&etat.config.profils)?;
+        for (p, o) in &profils {
+            std::fs::write(etat.config.profils.join(&p.fichier), o)?;
+        }
+        machines::ecrire(&etat.config.donnees, &s.machines)?;
+        couverture::ecrire(&etat.config.donnees, &s.tarifs)?;
+        reglages::ecrire(&etat.config.donnees, &liste)
+    };
+    if let Err(e) = ecrire() {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    *etat.machines.write().unwrap() = s.machines.clone();
+    Json(serde_json::json!({ "machines": s.machines.len(), "reglages": liste.len(), "profils": profils.len() })).into_response()
 }
 
 /// Média chargé dans une machine (largeur réelle), lu par SNMP dans la Printer-MIB.
@@ -1893,6 +1968,37 @@ mod tests {
             assert_eq!(appel(&e, "GET", "/api/file", Some(op), None).await.status(), StatusCode::OK);
             assert_eq!(appel(&e, "POST", "/api/reglages", Some(chef), Some(reglage)).await.status(), StatusCode::CREATED, "l'administrateur règle");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Sauvegarde puis restauration sur un serveur neuf ; une sauvegarde fausse n'écrit rien.
+        #[tokio::test]
+        async fn sauvegarde_et_restauration_de_la_configuration() {
+            let (a, b) = (etat("sauve-a"), etat("sauve-b"));
+            let icc = std::fs::read(std::fs::read_dir(couleur::tests::profils_ghostscript()).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "icc")).unwrap()).unwrap();
+            std::fs::create_dir_all(&a.config.profils).unwrap();
+            std::fs::write(a.config.profils.join("atelier.icc"), &icc).unwrap();
+            let reglage = serde_json::json!({ "nom": "Vinyle", "demande": { "dpi": 360 } });
+            assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(reglage)).await.status(), StatusCode::CREATED);
+            let r = appel(&a, "GET", "/api/sauvegarde", None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let mut s: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 26).await.unwrap()).unwrap();
+            assert_eq!(s["format"], "eko-rip-sauvegarde-1");
+            assert!(s.get("utilisateurs").is_none(), "jamais les comptes");
+
+            let mut fausse = s.clone();
+            fausse["profils"]["atelier.icc"] = "00ff".into();
+            assert_eq!(appel(&b, "POST", "/api/sauvegarde", None, Some(fausse)).await.status(), StatusCode::BAD_REQUEST);
+            assert!(reglages::lire(&b.config.donnees).is_empty() && !b.config.profils.join("atelier.icc").exists(), "rien d'écrit");
+
+            s["machines"][0]["nom"] = "Epson de l'atelier".into();
+            let r = appel(&b, "POST", "/api/sauvegarde", None, Some(s)).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(std::fs::read(b.config.profils.join("atelier.icc")).unwrap(), icc);
+            assert_eq!(reglages::lire(&b.config.donnees)[0].demande.dpi, 360);
+            assert_eq!(b.machines.read().unwrap()[0].nom, "Epson de l'atelier", "catalogue rechargé");
+            for e in [a, b] {
+                std::fs::remove_dir_all(&e.config.donnees).unwrap();
+            }
         }
 
         #[tokio::test]
