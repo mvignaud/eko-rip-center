@@ -34,6 +34,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Décalage de découpe** X / Y par machine (−20 à 20 mm), ajouté au HP-GL envoyé.
 - **Motif step & repeat** (panneau Planche) : une page en grille colonnes × rangées, avec
   **demi-saut** en option ; découpe de chaque copie.
+- **Durée d'impression estimée** sur la fiche et dans la file (total à passer par
+  machine) ; cadence réglable par machine, Epson par défaut d'après sa fiche.
+- **Notifications** : fin ou échec d'une sortie dit à l'écran, et au système si permis.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

@@ -70,9 +70,20 @@ pub struct Machine {
     /// l'impression mesuré sur une coupe d'essai.
     #[serde(default)]
     pub decalage_mm: [f64; 2],
+    /// Cadence d'impression en m²/h, sur toute la laize (sinon : tableau de l'Epson).
+    #[serde(default)]
+    pub m2_heure: Option<f64>,
 }
 
 impl Machine {
+    /// Minutes pour imprimer `longueur_mm` de rouleau à `dpi` ; `None` sans cadence connue.
+    /// Epson SC-S80600 (fiche publique) : 360 dpi 94 m²/h (1 passe), 720 dpi 17 m²/h
+    /// (720 × 1440, 6 passes), au-delà 6,6 m²/h (1440 × 1440, 16 passes).
+    pub fn duree_impression_min(&self, longueur_mm: f64, dpi: u32) -> Option<f64> {
+        let cadence = self.m2_heure.or_else(|| (self.modele == Modele::EpsonScS80600).then_some(if dpi <= 360 { 94.0 } else if dpi <= 720 { 17.0 } else { 6.6 }))?;
+        (self.modele.imprime() && longueur_mm > 0.0).then(|| self.laize_mm * longueur_mm / 1e6 / cadence * 60.0)
+    }
+
     pub fn pas_mm(&self) -> f64 {
         self.pas_mm.unwrap_or(if self.modele == Modele::MutohKona { 0.01 } else { 0.025 })
     }
@@ -92,8 +103,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2] },
-        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2] },
+        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None },
+        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None },
     ]
 }
 
@@ -116,6 +127,7 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && (100.0..=5000.0).contains(&m.laize_mm)
             && m.pas_mm.is_none_or(|p| [0.005, 0.01, 0.025, 0.05, 0.1].iter().any(|x| (x - p).abs() < 1e-9))
             && m.decalage_mm.iter().all(|d| (-20.0..=20.0).contains(d))
+            && m.m2_heure.is_none_or(|v| (0.1..=500.0).contains(&v))
     });
     if bon { Ok(()) } else { Err("machine_invalide") }
 }
@@ -168,7 +180,9 @@ mod tests {
     fn catalogue_et_capacites() {
         let c = catalogue_initial(Path::new("/dev/kona"), "9600", None);
         assert!(verifier(&c).is_ok());
-        assert!(c[0].fait(Operation::Impression) && !c[0].fait(Operation::Decoupe));
+        // 1 m de rouleau sur 1626 mm à 720 dpi : 1,626 m² à 17 m²/h ≈ 5,7 min.
+        assert!((c[0].duree_impression_min(1000.0, 720).unwrap() - 1.626 / 17.0 * 60.0).abs() < 1e-9);
+        assert_eq!(c[1].duree_impression_min(1000.0, 720), None, "le Kona n'imprime pas");
         assert!(!c[1].fait(Operation::Impression) && c[1].fait(Operation::Decoupe));
         assert!(Modele::RolandVersacamm.imprime() && Modele::RolandVersacamm.decoupe());
         let mut double = c.clone();

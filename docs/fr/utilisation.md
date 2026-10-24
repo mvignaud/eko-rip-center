@@ -109,6 +109,14 @@ s'affiche dans l'onglet.
   direct (le convertir en CMJN ou le renommer), ou pour du blanc et de l'argent sur la
   même page.
 
+Chaque impression à passer affiche sa **durée estimée**, et l'en-tête de la colonne le
+total restant ; la fiche du travail aussi. Estimation : longueur imprimée × laize de la
+machine ÷ cadence. Cadence de l'Epson par défaut (fiche Epson) : 94 m²/h jusqu'à 360 dpi,
+17 m²/h à 720 dpi (720 × 1440, 6 passes), 6,6 m²/h au-delà ; **Cadence (m²/h)** dans
+l'éditeur des machines la remplace (à mesurer à l'atelier, et pour la Roland). Quand une
+sortie se termine ou échoue, l'écran le dit, et le système aussi si le client a
+l'autorisation d'afficher des notifications.
+
 Chaque machine passe une sortie à la fois, dans l'ordre de sa colonne. Sur une sortie
 à passer : **En tête**, **Monter**, **Descendre**, **Suspendre** / **Reprendre**,
 **Annuler**. Une sortie suspendue ne part pas ; les suivantes passent devant elle.

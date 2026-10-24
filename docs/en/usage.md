@@ -103,6 +103,13 @@ the tab.
   refused, with the reason, for any other spot colour (convert it to CMYK or rename it),
   or for white and silver on the same page.
 
+Each print still to run shows its **estimated time**, and the column header the total
+left; so does the job card. Estimate: printed length × machine roll width ÷ speed. Epson
+default speed (Epson data sheet): 94 m²/h up to 360 dpi, 17 m²/h at 720 dpi (720 × 1440,
+6 passes), 6.6 m²/h above; **Speed (m²/h)** in the machine editor overrides it (measure
+it in the workshop, and for the Roland). When an output finishes or fails, the screen
+says so, and the system too if the client may show notifications.
+
 Each machine runs one output at a time, in its column's order. On an output still to
 run: **To top**, **Up**, **Down**, **Hold** / **Resume**, **Cancel**. An output on hold
 does not run; the next ones pass it. **History** keeps finished outputs: **Redo** runs

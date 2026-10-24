@@ -326,7 +326,7 @@
 const textes = {
   fr: {
     identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
-    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
     connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
@@ -428,7 +428,7 @@ const textes = {
   },
   en: {
     identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
-    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
     connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
@@ -573,6 +573,8 @@ async function api(url, options = {}) {
   if (!r.ok) { if (r.status !== 401) dire(texteErreur(c.code, c.detail), true); return null; }
   return c;
 }
+/** « ≈ 12 min » ou « ≈ 1 h 05 ». */
+const duree = (min) => (min < 60 ? `≈ ${Math.max(1, Math.round(min))} min` : `≈ ${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, "0")}`);
 const json = (methode, corps) => ({ method: methode, headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) });
 
 // Session : toute réponse 401 de l'API ouvre la fenêtre de connexion.
@@ -955,7 +957,7 @@ async function rafraichir() {
   const lire = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const [t, s] = await Promise.all([lire("/api/travaux"), lire("/api/file")]);
   if (t) travaux = t;
-  if (s) sorties = s;
+  if (s) { signalerFins(sorties, s); sorties = s; }
   const aPasser = sorties.filter((x) => ["en_attente", "en_cours", "suspendue"].includes(x.etat)).length;
   $("compte-file").hidden = !aPasser; $("compte-file").textContent = aPasser;
   $("compte-travaux").textContent = travaux.length;
@@ -968,6 +970,23 @@ async function rafraichir() {
   afficherVue();
 }
 let derniereEmpreinte = "";
+/** Une sortie qui vient de finir ou d'échouer est dite à l'écran, et au système si permis. */
+let premierReleve = true;
+function signalerFins(avant, apres) {
+  // Au premier relevé, tout l'historique est déjà fini : rien à dire.
+  if (premierReleve) { premierReleve = false; return; }
+  for (const s of apres) {
+    // Une sortie peut naître et finir entre deux relevés : nouvelle et finie compte aussi.
+    const a = avant.find((x) => x.id === s.id);
+    if (a?.etat === s.etat || !["terminee", "echec"].includes(s.etat)) continue;
+    const machine = catalogue.find((m) => m.id === s.machine)?.nom || s.machine;
+    const texte = T()[s.etat === "echec" ? "notif_echec" : "notif_finie"](s.nom, machine);
+    dire(texte, s.etat === "echec");
+    try { if (window.Notification?.permission === "granted") new Notification("E-KO RIP Center", { body: texte }); } catch {}
+  }
+}
+// Demandée une fois, au premier clic (les navigateurs l'exigent après un geste).
+document.addEventListener("click", () => { try { if (window.Notification?.permission === "default") Notification.requestPermission(); } catch {} }, { once: true });
 function afficherVue() {
   if (vueCourante() === "travaux") afficherTravaux();
   if (vueCourante() === "file") afficherFile();
@@ -1022,7 +1041,8 @@ function afficherInspecteur() {
     t.pages.length ? el("span", { className: "badge" }, T().pages(t.pages.length)) : null,
     t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null,
     t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null,
-    t.prix_de_revient > 0 ? el("span", { className: "badge", title: T().prix_de_revient }, `≈ ${nombre(t.prix_de_revient, 2)} € ${t.pages[0]?.estimation?.ttc ? T().ttc : T().ht}`) : null);
+    t.prix_de_revient > 0 ? el("span", { className: "badge", title: T().prix_de_revient }, `≈ ${nombre(t.prix_de_revient, 2)} € ${t.pages[0]?.estimation?.ttc ? T().ttc : T().ht}`) : null,
+    t.duree_impression_min > 0 ? el("span", { className: "badge", title: T().duree_estimee }, duree(t.duree_impression_min)) : null);
   const corps = el("div", { className: "corps" }, el("div", {}, el("div", { className: "nom" }, t.nom), badges, el("div", { className: "meta" }, date(t.cree_le))));
   if (t.statut === "echec") corps.append(el("p", { className: "erreur", style: "margin: 0" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
   if (t.alertes && t.alertes.length) {
@@ -1202,13 +1222,15 @@ function afficherFile() {
     const ligne = (s) => el("div", { className: "sortie" },
       el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}`)),
         el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, T().etats[s.etat]),
-          el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le)))),
+          el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
+          s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
       el("div", { className: "actions" }, ...actionsPossibles[s.etat].map((a) => bouton(T().actions[a], () =>
         (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
     const enCours = miennes.filter(aPasser);
+    const reste = enCours.reduce((a, s) => a + (s.duree_min || 0), 0);
     return el("section", { className: "panneau" },
-      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
+      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), reste > 0 ? el("span", { className: "meta" }, ` · ${T().reste(duree(reste))}`) : null, m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
       el("div", {}, ...(enCours.length ? enCours.map(ligne) : [el("p", { className: "vide-liste" }, T().aucune_sortie)])),
       finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null);
   });
@@ -1306,7 +1328,8 @@ function afficherEditeurMachines() {
         el("label", {}, T().snmp, champ("snmp", m.snmp || "", { placeholder: "192.168.1.50" })),
         el("label", {}, T().pas, choix("pas", ["", "0.01", "0.025", "0.05", "0.1"], m.pas_mm == null ? "" : String(m.pas_mm), { "": T().pas_defaut })),
         el("label", { title: T().note_decalage }, T().decalage_x, champ("decalage_x", (m.decalage_mm || [0, 0])[0], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" })),
-        el("label", { title: T().note_decalage }, T().decalage_y, champ("decalage_y", (m.decalage_mm || [0, 0])[1], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" }))));
+        el("label", { title: T().note_decalage }, T().decalage_y, champ("decalage_y", (m.decalage_mm || [0, 0])[1], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" })),
+        el("label", { title: T().note_cadence }, T().cadence, champ("cadence", m.m2_heure ?? "", { type: "number", min: 0.1, max: 500, step: 0.1, placeholder: T().pas_defaut, style: "width: 7em" }))));
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
   };
@@ -1320,7 +1343,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
     const type = q("type");
     const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
-    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0] };
+    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

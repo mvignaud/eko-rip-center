@@ -268,6 +268,7 @@ fn reprendre_travaux_interrompus(donnees: &std::path::Path) {
 /// Travaux, avec pour chaque page l'estimation d'encre et de coût aux tarifs du moment.
 async fn lister(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
     let tarifs = couverture::lire(&etat.config.donnees);
+    let imprimante = etat.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).cloned();
     Json(
         lire_tous(&etat.config.donnees)
             .into_iter()
@@ -279,6 +280,9 @@ async fn lister(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
                     page["estimation"] = serde_json::to_value(e).unwrap();
                 }
                 v["prix_de_revient"] = serde_json::json!(prix_de_revient);
+                // Durée sur la première imprimante du catalogue, toutes pages.
+                let duree: Option<f64> = imprimante.as_ref().filter(|_| t.demande.mode == Mode::Imprimer).and_then(|m| t.pages.iter().map(|p| m.duree_impression_min(p.hauteur_mm, t.demande.dpi)).sum());
+                v["duree_impression_min"] = serde_json::json!(duree);
                 v
             })
             .collect(),
@@ -1603,8 +1607,26 @@ fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travai
     Some((t, p))
 }
 
-async fn lister_file(State(etat): State<Partage>) -> Json<Vec<file::Sortie>> {
-    Json(etat.file.lock().unwrap().sorties.clone())
+/// La file, chaque impression avec sa durée estimée (minutes, sur sa machine).
+async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
+    let sorties = etat.file.lock().unwrap().sorties.clone();
+    let catalogue = etat.machines.read().unwrap().clone();
+    let donnees = etat.config.donnees.clone();
+    Json(
+        sorties
+            .into_iter()
+            .map(|s| {
+                let duree = (s.operation() == machines::Operation::Impression)
+                    .then(|| catalogue.iter().find(|m| m.id == s.machine))
+                    .flatten()
+                    .zip(lire_page(&donnees, s.travail, s.page))
+                    .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
+                let mut v = serde_json::to_value(&s).unwrap();
+                v["duree_min"] = serde_json::json!(duree);
+                v
+            })
+            .collect(),
+    )
 }
 
 /// Change la file sous son verrou et l'écrit ; `Err` : code d'erreur pour l'écran.
@@ -2156,6 +2178,7 @@ mod tests {
                 snmp: None,
                 pas_mm: None,
                 decalage_mm: [0.0; 2],
+                m2_heure: None,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
