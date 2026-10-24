@@ -1,0 +1,31 @@
+# Structure du flux reçu par notre Epson SC-S80600 sur le port 9100 (capture réseau faite
+# à l'atelier le 24/10/2026 : travail Stickers_Lions_club_10cm, 720 × 720, 8 passes HQ).
+# Écrite à la main : noms de commandes et paramètres de réglage seulement, aucune donnée
+# raster, aucun nom ni texte du logiciel émetteur. Les lignes BANDES résument les 545
+# bandes de la capture ; (C, (c et (S dépendent de la page (marge 71 = 5 mm à 1/360).
+# Format : une ligne par commande, telle que la rend le décodeur des tests de escp2.rs.
+preambule 0x11 16384
+nul 3
+EJL [@EJL 1284.4] [@EJL     ]
+ESC @
+REMOTE1 JS JH JU HD HD HD
+REMOTE1 SN(00 08 00) SN(00 82 47) AC(00 40) EX(00 00 00 00 14 00) DR(00 01 00 00)
+ESC @
+ESC (G 01
+ESC U 00
+ESC (K 00 00
+ESC (i 01 f3 00
+ESC (e 00 11
+ESC (U 08 04 04 40 0b
+ESC (C *
+ESC (c marge=71
+ESC (S marge=71
+ESC (D 40 38 14 14
+BANDES lignes=16 bits=2 x%16=0 ordre=2 1 4 0 18 17 16 10 7
+FF
+ESC @
+REMOTE1 LD() JE(00)
+ESC @
+ESC @
+REMOTE1 JI(01 00)
+ESC @

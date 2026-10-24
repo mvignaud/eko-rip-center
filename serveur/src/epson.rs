@@ -5,6 +5,9 @@
 //! 8 bits, K C M Y puis WH ou MS ; l'imprimante répartit sur ses encres claires et trame.
 //! Les tons de découpe ne partent jamais ; un autre ton direct n'a pas d'encre sur
 //! l'Epson : l'envoi est refusé plutôt que d'imprimer sans lui.
+//!
+//! La capture du 24/10 a montré que l'Epson reçoit du raster tramé 2 bits sur 9 canaux,
+//! pas du ton continu : voir `escp2.rs` ; cet en-tête sera repris par l'item 2.6.
 
 use crate::decoupe;
 use serde::{Deserialize, Serialize};

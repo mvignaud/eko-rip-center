@@ -11,6 +11,9 @@ mod decoupe;
 mod edition;
 mod etat;
 mod epson;
+// Branché sur la file par l'item 2.4 (envoi TCP 9100).
+#[cfg_attr(not(test), allow(dead_code))]
+mod escp2;
 mod machines;
 mod media;
 mod file;
