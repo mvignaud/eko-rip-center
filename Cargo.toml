@@ -3,7 +3,7 @@ resolver = "3"
 members = ["serveur", "client"]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 license = "LicenseRef-proprietaire"
 publish = false
 
