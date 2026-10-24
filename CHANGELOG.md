@@ -5,7 +5,7 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
-## [Non publié]
+## [0.3.0] — 2026-10-24
 
 ### Ajouté
 - **Découpe seule** : un fichier AI (enregistré « compatible PDF »), PDF ou SVG est
@@ -31,6 +31,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **HP-GL au pas de 0,010 mm** (100 unités par mm) au lieu de 0,025 mm : c'est le seul
   pas accepté par la découpe de contour du Kona. Régler le menu « Resolution » du Kona
   sur 0,010 mm.
+
+*English: cut-only mode (AI, PDF, SVG; cut spot colours or all paths), send to the
+Mutoh Kona from the screen (USB FTDI serial port, udev rule, /dev/kona), Kona
+registration at print time (P1–P4 crosses or Mutoh type 1 frame), multi-page PDFs,
+delete/retry jobs, HP-GL at 0.010 mm per step.*
 
 ## [0.2.0] — 2026-10-23
 
