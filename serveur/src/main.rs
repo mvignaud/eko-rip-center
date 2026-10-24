@@ -2086,10 +2086,19 @@ fn introuvable() -> Response {
     refus(StatusCode::NOT_FOUND, "introuvable", None)
 }
 
+/// Fichier d'une page absent : 409 `pas_pret` si le travail existe et se rend encore (à
+/// redemander), sinon 404 (roadmap 0.5).
+fn page_absente(donnees: &std::path::Path, id: Uuid) -> Response {
+    match lire_travail(donnees, id) {
+        Some(t) if matches!(t.statut, Statut::EnAttente | Statut::EnCours) => refus(StatusCode::CONFLICT, "pas_pret", None),
+        _ => introuvable(),
+    }
+}
+
 async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
     match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_svg(rep, page))).await {
         Some(o) => ([(header::CONTENT_TYPE, "image/svg+xml")], o).into_response(),
-        None => introuvable(),
+        None => page_absente(&etat.config.donnees, id),
     }
 }
 
@@ -2137,14 +2146,14 @@ async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin
             let nom = format!("attachment; filename=\"{}\"", cutserver.unwrap_or_else(|| format!("decoupe-{page:03}.plt")));
             ([(header::CONTENT_TYPE, "application/vnd.hp-hpgl".to_string()), (header::CONTENT_DISPOSITION, nom)], o).into_response()
         }
-        None => introuvable(),
+        None => page_absente(&etat.config.donnees, id),
     }
 }
 
 async fn apercu(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
     match servir(&etat.config.donnees, id, page, |rep, _| Some(render::chemin_composite(rep, page))).await {
         Some(o) => png(o),
-        None => introuvable(),
+        None => page_absente(&etat.config.donnees, id),
     }
 }
 
@@ -2153,7 +2162,7 @@ async fn plaque(State(etat): State<Partage>, Chemin((id, page, nom)): Chemin<(Uu
     let chemin = |rep: &std::path::Path, p: &Page| p.plaques.contains(&nom).then(|| render::chemin_apercu_plaque(rep, page, &nom));
     match servir(&etat.config.donnees, id, page, chemin).await {
         Some(o) => png(o),
-        None => introuvable(),
+        None => page_absente(&etat.config.donnees, id),
     }
 }
 
@@ -2414,6 +2423,24 @@ mod tests {
             assert_eq!(avec(&jeton, "/api/tarifs").await.unwrap().status(), StatusCode::FORBIDDEN, "le jeton n'ouvre pas le reste");
             let empreinte = std::fs::read_to_string(e.config.donnees.join("erp.json")).unwrap();
             assert!(!empreinte.contains(&jeton), "le jeton n'est jamais gardé en clair");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Page d'un travail en cours de rendu : 409 pas_pret ; travail inconnu : 404 (roadmap 0.5).
+        #[tokio::test]
+        async fn page_pas_prete_distincte_d_inexistante() {
+            let e = etat("pas-pret");
+            let id = Uuid::new_v4();
+            std::fs::create_dir_all(dossier(&e.config.donnees, id)).unwrap();
+            let t = |statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "x", "statut": statut, "erreur": null, "cree_le": 0, "pages": [] })).unwrap();
+            ecrire(&e.config.donnees, &t("en_cours")).unwrap();
+            for uri in ["apercu.png", "decoupe.svg", "decoupe.plt", "plaques/Cyan"] {
+                let r = appel(&e, "GET", &format!("/api/travaux/{id}/pages/1/{uri}"), None, None).await;
+                assert_eq!(r.status(), StatusCode::CONFLICT, "{uri}");
+            }
+            ecrire(&e.config.donnees, &t("termine")).unwrap();
+            assert_eq!(appel(&e, "GET", &format!("/api/travaux/{id}/pages/1/apercu.png"), None, None).await.status(), StatusCode::NOT_FOUND, "fini sans cette page");
+            assert_eq!(appel(&e, "GET", &format!("/api/travaux/{}/pages/1/apercu.png", Uuid::new_v4()), None, None).await.status(), StatusCode::NOT_FOUND);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
