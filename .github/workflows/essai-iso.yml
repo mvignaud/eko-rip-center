@@ -1,0 +1,54 @@
+name: Essai de l'image d'installation
+
+# L'image Ubuntu démarre-t-elle sur nos profils ? Construite avec de faux paquets (ils ne
+# servent qu'après les questions), démarrée en machine virtuelle (KVM) sur le premier
+# profil, console série : l'installateur doit avoir lu et accepté notre profil et poser
+# « Continue with autoinstall? ». Un profil refusé (YAML ou schéma) échoue avant.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["image/**", ".github/workflows/essai-iso.yml"]
+
+jobs:
+  demarrage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y xorriso qemu-system-x86 qemu-utils
+      - name: KVM pour la machine virtuelle
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+      - name: ISO Ubuntu 24.04 LTS Server officielle, empreinte vérifiée
+        run: |
+          BASE=https://releases.ubuntu.com/24.04
+          curl -fsSL "$BASE/SHA256SUMS" | grep -E '\*?ubuntu-24\.04(\.[0-9]+)?-live-server-amd64\.iso$' | sort -V -k2 | tail -1 > SHA256SUMS
+          ISO=$(awk '{print $2}' SHA256SUMS | tr -d '*')
+          curl -fsSL -o "$ISO" "$BASE/$ISO"
+          sha256sum -c SHA256SUMS
+          echo "UBUNTU=$ISO" >> "$GITHUB_ENV"
+      - name: Image avec console série
+        run: |
+          echo faux > serveur.deb && echo faux > client.deb
+          EKO_OPTIONS_NOYAU="console=ttyS0,115200" image/construire-iso.sh "$UBUNTU" serveur.deb client.deb essai.iso
+          rm -f "$UBUNTU"
+      - name: Démarrage jusqu'à la question de l'installateur
+        run: |
+          qemu-img create -f qcow2 disque.qcow2 25G
+          qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+            -drive file=disque.qcow2,if=virtio -cdrom essai.iso -boot d \
+            -display none -serial file:serie.log -monitor none &
+          for i in $(seq 1 120); do
+            if grep -aq "Continue with autoinstall" serie.log; then echo "question posée après $((i * 5)) s"; exit 0; fi
+            if grep -aiqE "autoinstall config did not validate|Traceback" serie.log; then break; fi
+            sleep 5
+          done
+          echo "--- fin de la console série ---"
+          tail -c 6000 serie.log | tr -d '\000'
+          exit 1
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with: { name: console-serie, path: serie.log, retention-days: 7 }

@@ -98,6 +98,9 @@ appliquerLangue();
 const connu = lire("serveur");
 if (connu) champ.value = connu;
 if (connu && !new URLSearchParams(location.search).has("changer")) connecter(connu);
+// Premier lancement sur le PC qui fait aussi serveur (petit atelier) : le serveur local
+// est pris d'office s'il répond.
+else if (!connu) joignable("http://localhost:8640").then((ok) => { if (ok) connecter("http://localhost:8640"); });
 </script>
 </body>
 </html>

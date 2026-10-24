@@ -1,72 +1,114 @@
 #!/usr/bin/env bash
-# Construit l'image d'installation du serveur E-KO RIP Center à partir de l'ISO
-# netinst officielle de Debian. L'ISO d'origine est modifiée par xorriso, qui rejoue
-# son démarrage BIOS et UEFI tel quel : seuls les menus changent, et le dossier /eko
-# (préconfiguration + paquet serveur) s'ajoute.
+# Construit l'image d'installation d'E-KO RIP Center à partir de l'ISO officielle
+# Ubuntu 24.04 LTS Server. L'ISO d'origine est modifiée par xorriso, qui rejoue son
+# démarrage BIOS et UEFI tel quel : seul le menu GRUB change, et le dossier /eko
+# (profils d'installation automatique + paquets serveur et client) s'ajoute.
 #
-#   image/construire-iso.sh <debian-netinst.iso> <eko-rip-serveur.deb> <sortie.iso>
+# Trois profils au démarrage :
+#   - serveur + client : bureau Ubuntu, serveur RIP, client ouvert au démarrage sur ce PC
+#     (petit atelier : un seul PC) ;
+#   - serveur + bureau : bureau Ubuntu et serveur RIP (PC d'usage, clients ailleurs) ;
+#   - serveur seul : sans bureau.
+# L'installateur ne demande que le nom et le mot de passe, puis confirme l'effacement du
+# disque (« Continue with autoinstall? »). Le bureau se télécharge pendant l'installation.
+#
+#   image/construire-iso.sh <ubuntu-live-server.iso> <eko-rip-serveur.deb> <client.deb> <sortie.iso>
 set -euo pipefail
 
-source_iso=$1 deb=$2 sortie=$3
-ici=$(cd "$(dirname "$0")" && pwd)
+source_iso=$1 serveur=$2 client=$3 sortie=$4
 travail=$(mktemp -d)
 trap 'rm -rf "$travail"' EXIT
 
-extraire() { xorriso -osirrox on -indev "$source_iso" -extract "$1" "$travail/$2" 2>/dev/null; chmod u+w "$travail/$2"; }
-extraire /isolinux/menu.cfg menu.cfg
-extraire /isolinux/gtk.cfg gtk.cfg
-extraire /boot/grub/grub.cfg grub.cfg
-extraire /md5sum.txt md5sum.txt
+xorriso -osirrox on -indev "$source_iso" -extract /boot/grub/grub.cfg "$travail/grub.cfg" 2>/dev/null
+chmod u+w "$travail/grub.cfg"
+grep -q '/casper/vmlinuz' "$travail/grub.cfg"
 
-options="auto=true priority=critical preseed/file=/cdrom/eko/preseed.cfg locale=fr_FR.UTF-8 keymap=fr hostname=eko-rip domain=local"
-libelle="Installer E-KO RIP - EFFACE LE DISQUE"
-remplacer() { awk "$1" "$2" > "$travail/tmp" && mv "$travail/tmp" "$2"; }
-
-# BIOS (isolinux) : notre entrée d'abord, et par défaut.
-cat > "$travail/eko.cfg" <<EOF
-label eko
-	menu label ^$libelle
-	menu default
-	kernel /install.amd/vmlinuz
-	append vga=788 initrd=/install.amd/initrd.gz $options --- quiet
+# Profil d'installation automatique (Subiquity). $1 : nom, $2 : bureau (oui/non),
+# $3 : client (oui/non).
+profil() {
+    local bureau=$2 client=$3 rep="$travail/eko/profils/$1"
+    mkdir -p "$rep"
+    : > "$rep/meta-data"
+    {
+        cat <<'EOF'
+#cloud-config
+autoinstall:
+  version: 1
+  # Nom et mot de passe demandés à l'écran ; le reste est fixé.
+  interactive-sections:
+    - identity
+  locale: fr_FR.UTF-8
+  keyboard:
+    layout: fr
+  timezone: Europe/Paris
+  identity:
+    hostname: eko-rip
+    realname: Administrateur E-KO RIP
+    username: eko
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: direct
 EOF
-remplacer '/^include gtk.cfg$/ { print "include eko.cfg" } { print }' "$travail/menu.cfg"
-remplacer '/^default installgui$/ { print "default eko"; next } /^\tmenu default$/ { next } { print }' "$travail/gtk.cfg"
-grep -q '^include eko.cfg$' "$travail/menu.cfg"
-grep -q '^default eko$' "$travail/gtk.cfg"
-
-# UEFI (grub) : notre entrée avant « Graphical install ».
-cat > "$travail/entree.cfg" <<EOF
-menuentry '$libelle' {
-    set background_color=black
-    linux    /install.amd/vmlinuz vga=788 $options --- quiet
-    initrd   /install.amd/initrd.gz
+        if [ "$bureau" = oui ]; then
+            printf '  packages:\n    - ubuntu-desktop-minimal\n'
+        fi
+        cat <<'EOF'
+  late-commands:
+    - cp /cdrom/eko/eko-rip-serveur.deb /cdrom/eko/eko-rip-client.deb /target/tmp/
+    - curtin in-target -- sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/eko-rip-serveur.deb < /dev/null'
+EOF
+        if [ "$client" = oui ]; then
+            cat <<'EOF'
+    # Client installé et ouvert à chaque session ; il prend le serveur local d'office.
+    - curtin in-target -- sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/eko-rip-client.deb < /dev/null'
+    - curtin in-target -- sh -c 'mkdir -p /etc/xdg/autostart && cp /usr/share/applications/*RIP*.desktop /etc/xdg/autostart/'
+EOF
+        fi
+        if [ "$bureau" = oui ]; then
+            cat <<'EOF'
+    # Le bureau gère le réseau par NetworkManager (fichier copié : un « clé: valeur »
+    # écrit ici serait lu comme du YAML).
+    - rm -f /target/etc/netplan/50-cloud-init.yaml /target/etc/netplan/00-installer-config.yaml
+    - install -m 600 /cdrom/eko/01-network-manager-all.yaml /target/etc/netplan/01-network-manager-all.yaml
+EOF
+        fi
+        cat <<'EOF'
+    - curtin in-target -- rm -f /tmp/eko-rip-serveur.deb /tmp/eko-rip-client.deb
+    - mkdir -p /target/etc/issue.d
+    - sh -c 'printf "E-KO RIP Center - http://\\4:8640 (client E-KO RIP Center)\n\n" > /target/etc/issue.d/eko-rip.issue'
+EOF
+    } > "$rep/user-data"
 }
-EOF
-awk 'FNR == NR { entree = entree $0 "\n"; next }
-     /^menuentry .*Graphical install/ && !fait { printf "%s", entree; fait = 1 } { print }' \
-    "$travail/entree.cfg" "$travail/grub.cfg" > "$travail/tmp" && mv "$travail/tmp" "$travail/grub.cfg"
-grep -q "E-KO RIP" "$travail/grub.cfg"
 
-mkdir "$travail/eko"
-cp "$ici/preseed.cfg" "$travail/eko/preseed.cfg"
-cp "$deb" "$travail/eko/eko-rip-serveur.deb"
+profil serveur-client oui oui
+profil serveur-bureau oui non
+profil serveur non non
+printf 'network:\n  version: 2\n  renderer: NetworkManager\n' > "$travail/eko/01-network-manager-all.yaml"
+cp "$serveur" "$travail/eko/eko-rip-serveur.deb"
+cp "$client" "$travail/eko/eko-rip-client.deb"
 
-# Somme de contrôle de « Vérifier l'intégrité du support » : lignes à jour pour les
-# fichiers changés ou ajoutés (isolinux/ n'y figure pas dans l'ISO Debian).
-somme() { if command -v md5sum >/dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi; }
-remplacer '$2 != "./boot/grub/grub.cfg" { print }' "$travail/md5sum.txt"
-for f in boot/grub/grub.cfg:grub.cfg eko/preseed.cfg:eko/preseed.cfg eko/eko-rip-serveur.deb:eko/eko-rip-serveur.deb; do
-    echo "$(somme "$travail/${f#*:}")  ./${f%%:*}" >> "$travail/md5sum.txt"
-done
+# Menu GRUB (BIOS et UEFI) : nos trois entrées en tête, la première par défaut.
+# EKO_OPTIONS_NOYAU : options ajoutées au noyau (essai en machine virtuelle : console série).
+entree() {
+    printf "menuentry '%s' {\n\tset gfxpayload=keep\n\tlinux\t/casper/vmlinuz 'ds=nocloud;s=/cdrom/eko/profils/%s/' %s---\n\tinitrd\t/casper/initrd\n}\n" "$1" "$2" "${EKO_OPTIONS_NOYAU:+$EKO_OPTIONS_NOYAU }"
+}
+{
+    echo 'set default=0'
+    echo 'set timeout=30'
+    entree "E-KO RIP : serveur + client sur ce PC - EFFACE LE DISQUE" serveur-client
+    entree "E-KO RIP : serveur + bureau Ubuntu - EFFACE LE DISQUE" serveur-bureau
+    entree "E-KO RIP : serveur seul (sans bureau) - EFFACE LE DISQUE" serveur
+    # Le menu d'origine suit, sans ses propres réglages de délai et de défaut.
+    grep -v -E '^set (default|timeout)=' "$travail/grub.cfg"
+} > "$travail/grub-eko.cfg"
+test "$(grep -c "E-KO RIP" "$travail/grub-eko.cfg")" = 3
 
 rm -f "$sortie"
 xorriso -indev "$source_iso" -outdev "$sortie" \
-    -map "$travail/eko.cfg" /isolinux/eko.cfg \
-    -map "$travail/menu.cfg" /isolinux/menu.cfg \
-    -map "$travail/gtk.cfg" /isolinux/gtk.cfg \
-    -map "$travail/grub.cfg" /boot/grub/grub.cfg \
-    -map "$travail/md5sum.txt" /md5sum.txt \
+    -map "$travail/grub-eko.cfg" /boot/grub/grub.cfg \
     -map "$travail/eko" /eko \
     -boot_image any replay 2>/dev/null
 

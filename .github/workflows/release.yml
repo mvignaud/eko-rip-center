@@ -45,28 +45,57 @@ jobs:
       - uses: actions/upload-artifact@v7
         with: { name: serveur, path: dist/* }
 
+  client-iso:
+    # Client .deb pour l'ISO Ubuntu 24.04 (bibliothèques « t64 » : le paquet bâti sur 22.04
+    # ne s'y installerait pas).
+    needs: tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - name: Paquet .deb du client
+        working-directory: client
+        run: npx --yes @tauri-apps/cli@2 build --bundles deb
+      - run: mkdir dist && find target -path '*/release/bundle/deb/*.deb' -exec cp {} dist/eko-rip-client-ubuntu24.deb \; && ls -la dist
+      - uses: actions/upload-artifact@v7
+        with: { name: paquet-client-iso, path: dist/* }
+
   iso:
-    needs: serveur
+    needs: [serveur, client-iso]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with: { name: serveur, path: serveur-dist }
+      - uses: actions/download-artifact@v8
+        with: { name: paquet-client-iso, path: client-dist }
       - run: sudo apt-get update && sudo apt-get install -y xorriso
-      - name: ISO netinst Debian officielle, empreinte vérifiée
+      - name: ISO Ubuntu 24.04 LTS Server officielle (dernière révision), empreinte vérifiée
         run: |
-          BASE=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
-          curl -fsSL "$BASE/SHA256SUMS" | grep -E ' debian-[0-9.]+-amd64-netinst\.iso$' > SHA256SUMS
+          BASE=https://releases.ubuntu.com/24.04
+          curl -fsSL "$BASE/SHA256SUMS" | grep -E '\*?ubuntu-24\.04(\.[0-9]+)?-live-server-amd64\.iso$' | sort -V -k2 | tail -1 > SHA256SUMS
           test "$(wc -l < SHA256SUMS)" = 1
-          ISO=$(awk '{print $2}' SHA256SUMS)
+          ISO=$(awk '{print $2}' SHA256SUMS | tr -d '*')
           curl -fsSL -o "$ISO" "$BASE/$ISO"
           sha256sum -c SHA256SUMS
-          echo "NETINST=$ISO" >> "$GITHUB_ENV"
-      - name: Image d'installation du serveur
+          echo "UBUNTU=$ISO" >> "$GITHUB_ENV"
+      - name: Image d'installation (trois profils)
         run: |
           VERSION=${GITHUB_REF_NAME#v}
+          NOM="eko-rip-center-$VERSION-ubuntu-24.04-amd64.iso"
+          image/construire-iso.sh "$UBUNTU" serveur-dist/eko-rip-serveur_*_amd64.deb client-dist/eko-rip-client-ubuntu24.deb "$NOM"
+          rm -f "$UBUNTU"
+          # Une release GitHub refuse les fichiers de plus de 2 Go : l'image part en deux
+          # morceaux, avec l'empreinte de l'image entière.
           mkdir iso-dist
-          image/construire-iso.sh "$NETINST" serveur-dist/eko-rip-serveur_*_amd64.deb "iso-dist/eko-rip-center-serveur-$VERSION-amd64.iso"
+          sha256sum "$NOM" > "iso-dist/$NOM.sha256"
+          split -b 1900m -d -a 1 "$NOM" "iso-dist/$NOM.part"
+          rm -f "$NOM"
+          ls -la iso-dist
       - uses: actions/upload-artifact@v7
         with: { name: iso, path: iso-dist/*, compression-level: 0 }
 
@@ -146,7 +175,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
-          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- Serveur sur un PC dédié : `eko-rip-center-serveur-%s-amd64.iso` (⚠️ efface le disque)\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" "$VERSION" >> notes.md
+          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- PC dédié (Ubuntu 24.04, ⚠️ efface le disque) : réunir les deux morceaux `eko-rip-center-%s-ubuntu-24.04-amd64.iso.part0` et `.part1` (Linux/macOS : `cat *.part0 *.part1 > eko-rip-center-%s-ubuntu-24.04-amd64.iso` ; Windows : `copy /b fichier.part0 + fichier.part1 fichier.iso`), vérifier avec le fichier `.sha256`, puis copier sur une clé USB\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" "$VERSION" "$VERSION" >> notes.md
           cat notes.md
       - name: Publication
         env: { GH_TOKEN: "${{ github.token }}" }

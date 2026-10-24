@@ -5,25 +5,36 @@ computers reach it over the network.
 
 Four ways to install it.
 
-## 0. Dedicated PC: installation image
+## 0. Dedicated PC: Ubuntu installation image
 
 > ⚠️ **Installing wipes the PC's whole disk.**
 
-For an x86_64 PC used only for the RIP. Download
-`eko-rip-center-serveur-<version>-amd64.iso` from the releases page and write it to a
-USB stick (balenaEtcher, or `dd` on Linux and macOS).
+The image is built from Ubuntu 24.04 LTS. It is published in two parts (a GitHub release
+refuses files over 2 GB): download `eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0`,
+`.part1` and `.sha256`, then join them:
 
-1. Connect the PC to the workshop network (wired is best: the installer downloads
-   Debian packages).
-2. Boot from the stick and pick **Installer E-KO RIP - EFFACE LE DISQUE**.
-3. Answer the only two questions: the `eko` account password (twice), then **Oui**
-   (yes) to “Faut-il appliquer les changements sur les disques ?” (write the changes
-   to disk?).
-4. Remove the stick when the installer reboots the machine.
+- Linux or macOS: `cat <name>.iso.part0 <name>.iso.part1 > <name>.iso`, then
+  `shasum -a 256 -c <name>.iso.sha256`;
+- Windows: `copy /b <name>.iso.part0 + <name>.iso.part1 <name>.iso`.
 
-The PC boots into Debian 13 (French) with the server running. The console login
-screen shows the address to open from workstations, for example
-`http://192.168.1.20:8640`. Administration goes through SSH: `ssh eko@<address>`.
+Write the image to a USB stick (balenaEtcher, or `dd`), connect the PC to the workshop
+network (cable advised: the Ubuntu desktop is downloaded during installation) and boot
+from the stick. The menu offers three profiles:
+
+| Profile | For | Content |
+|---|---|---|
+| **Server + client on this PC** (default) | small workshop, a single PC | Ubuntu desktop, RIP server, E-KO RIP Center client opened at each session on this PC |
+| **Server + Ubuntu desktop** | everyday PC that is also the server, clients elsewhere | Ubuntu desktop, RIP server |
+| **Server only (no desktop)** | PC dedicated to the RIP | RIP server, SSH administration |
+
+The installer only asks for the account name and password (`eko` suggested), then
+confirms wiping the disk (“Continue with autoinstall?”: answer **yes**). Remove the stick
+on reboot.
+
+The PC starts with the server running. On the “server + client” profile, the client opens
+and connects to the local server by itself. From other computers, the client connects to
+the address shown on the login screen (e.g. `http://192.168.1.20:8640`). Administration:
+`ssh eko@<address>`.
 
 ## 1. Debian package (recommended)
 

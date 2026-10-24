@@ -5,25 +5,37 @@ les postes de l'atelier s'y connectent par le réseau.
 
 Quatre façons de l'installer, au choix.
 
-## 0. PC dédié : image d'installation
+## 0. PC dédié : image d'installation Ubuntu
 
 > ⚠️ **L'installation efface entièrement le disque du PC.**
 
-Pour un PC x86_64 qui ne servira qu'au RIP. Télécharger
-`eko-rip-center-serveur-<version>-amd64.iso` depuis la page des releases et l'écrire
-sur une clé USB (balenaEtcher, ou `dd` sous Linux et macOS).
+L'image est faite à partir d'Ubuntu 24.04 LTS. Elle est publiée en deux morceaux (une
+release GitHub refuse les fichiers de plus de 2 Go) : télécharger
+`eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0`, `.part1` et `.sha256`, puis les
+réunir :
 
-1. Brancher le PC au réseau de l'atelier (câble conseillé : l'installation télécharge
-   les paquets Debian).
-2. Démarrer sur la clé et choisir **Installer E-KO RIP - EFFACE LE DISQUE**.
-3. Répondre aux deux seules questions : le mot de passe du compte `eko` (deux fois),
-   puis **Oui** à « Faut-il appliquer les changements sur les disques ? ».
-4. Retirer la clé quand l'installation redémarre la machine.
+- Linux ou macOS : `cat eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0 eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part1 > eko-rip-center-<version>-ubuntu-24.04-amd64.iso`
+  puis `shasum -a 256 -c eko-rip-center-<version>-ubuntu-24.04-amd64.iso.sha256` ;
+- Windows : `copy /b fichier.iso.part0 + fichier.iso.part1 fichier.iso`.
 
-Le PC démarre sous Debian 13, en français, avec le serveur actif. L'écran de
-connexion affiche l'adresse à ouvrir depuis les postes, par exemple
-`http://192.168.1.20:8640`. L'administration se fait par SSH :
-`ssh eko@<adresse>`.
+Écrire l'image sur une clé USB (balenaEtcher, ou `dd`), brancher le PC au réseau de
+l'atelier (câble conseillé : le bureau Ubuntu se télécharge pendant l'installation) et
+démarrer sur la clé. Le menu propose trois profils :
+
+| Profil | Pour | Contenu |
+|---|---|---|
+| **Serveur + client sur ce PC** (par défaut) | petit atelier, un seul PC | bureau Ubuntu, serveur RIP, client E-KO RIP Center ouvert à chaque session sur ce PC |
+| **Serveur + bureau Ubuntu** | PC d'usage qui fait aussi serveur, clients sur d'autres postes | bureau Ubuntu, serveur RIP |
+| **Serveur seul (sans bureau)** | PC dédié au RIP | serveur RIP, administration par SSH |
+
+L'installateur demande seulement le nom et le mot de passe du compte (compte `eko`
+proposé), puis confirme l'effacement du disque (« Continue with autoinstall? » : répondre
+**yes**). Retirer la clé au redémarrage.
+
+Le PC démarre en français, serveur actif. Sur le profil « serveur + client », le client
+s'ouvre et se connecte tout seul au serveur local. Depuis les autres postes, le client
+se connecte à l'adresse affichée à l'écran de connexion (par exemple
+`http://192.168.1.20:8640`). Administration : `ssh eko@<adresse>`.
 
 ## 1. Paquet Debian (recommandé)
 
