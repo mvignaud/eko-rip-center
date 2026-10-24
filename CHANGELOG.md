@@ -21,6 +21,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   Kona ; la page est agrandie, l'image décalée, les repères en noir pur, et les tracés
   de découpe suivent le même décalage.
 
+- **Supprimer** un travail terminé ou en échec, **relancer** un travail en échec (les
+  sorties précédentes sont effacées avant le nouveau rendu).
+
 ### Modifié
 - **HP-GL au pas de 0,010 mm** (100 unités par mm) au lieu de 0,025 mm : c'est le seul
   pas accepté par la découpe de contour du Kona. Régler le menu « Resolution » du Kona

@@ -152,6 +152,8 @@ fn routes(etat: Partage) -> Router {
     Router::new()
         .route("/", get(|| async { Html(include_str!("../static/index.html")) }))
         .route("/api/travaux", get(lister).post(envoyer))
+        .route("/api/travaux/{id}", axum::routing::delete(supprimer))
+        .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/decoupe.svg", get(apercu_decoupe))
@@ -416,6 +418,47 @@ async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mis
         tokio::fs::write(rep.join("apercu").join("decoupe.svg"), decoupe::apercu_svg(&d)).await.map_err(|e| e.to_string())?;
     }
     Ok(d.traces.len())
+}
+
+/// Rendu ou envoi au plotter en cours : on ne touche pas au dossier du travail.
+fn occupe(t: &Travail) -> bool {
+    let actif = |s: &Statut| matches!(s, Statut::EnAttente | Statut::EnCours);
+    actif(&t.statut) || t.envoi_decoupe.as_ref().is_some_and(|e| actif(&e.statut))
+}
+
+async fn supprimer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some(t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if occupe(&t) {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Recommence le rendu et la préparation de la découpe à partir du fichier reçu.
+async fn relancer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if occupe(&t) {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    // Les sorties d'avant ne doivent pas survivre au nouveau rendu (un .plt périmé partirait au plotter).
+    let rep = dossier(donnees, id);
+    for sous in ["prod", "apercu"] {
+        let _ = tokio::fs::remove_dir_all(rep.join(sous)).await;
+    }
+    let _ = tokio::fs::remove_file(rep.join("imprime.pdf")).await;
+    t.statut = Statut::EnAttente;
+    (t.code_erreur, t.erreur, t.envoi_decoupe) = (None, None, None);
+    (t.plaques, t.traces_decoupe) = (vec![], 0);
+    if let Err(e) = ecrire(donnees, &t) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    tokio::spawn(traiter(etat.clone(), t.clone()));
+    (StatusCode::ACCEPTED, Json(t)).into_response()
 }
 
 fn lire_travail(donnees: &std::path::Path, id: Uuid) -> Option<Travail> {
