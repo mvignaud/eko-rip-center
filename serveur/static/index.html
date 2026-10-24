@@ -165,6 +165,7 @@
   <button type="button" class="outil" id="o-imprimer"><span class="ico">⎙</span><span data-t="o_imprimer"></span></button>
   <button type="button" class="outil" id="o-decouper"><span class="ico">✂</span><span data-t="o_decouper"></span></button>
   <button type="button" class="outil" id="o-editer"><span class="ico">✎</span><span data-t="editer"></span></button>
+  <button type="button" class="outil" id="o-reglages"><span class="ico">⚙</span><span data-t="o_reglages"></span></button>
   <button type="button" class="outil" id="o-bat"><span class="ico">✓</span><span data-t="o_bat"></span></button>
   <button type="button" class="outil" id="o-relancer"><span class="ico">↻</span><span data-t="relancer"></span></button>
   <button type="button" class="outil" id="o-supprimer"><span class="ico">🗑</span><span data-t="supprimer"></span></button>
@@ -203,8 +204,8 @@
 
 <dialog id="importer">
       <form id="envoi" class="corps">
-        <div class="entete-fenetre"><strong data-t="nouveau_travail"></strong><button type="button" class="discret" id="fermer-importer" data-t="fermer"></button></div>
-        <label class="depot">
+        <div class="entete-fenetre"><strong id="titre-importer" data-t="nouveau_travail"></strong><button type="button" class="discret" id="fermer-importer" data-t="fermer"></button></div>
+        <label class="depot" id="zone-depot">
           <strong data-t="deposer_ici"></strong><span data-t="fichier"></span>
           <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" multiple hidden>
           <span id="nom-fichier" class="meta"></span>
@@ -227,6 +228,7 @@
         </label>
         <label><span data-t="support_choix"></span> <select name="support"></select></label>
         <label><span data-t="coupe_choix"></span> <select name="parametre_decoupe"></select></label>
+        <label class="case" data-t-title="note_rotation_auto"><input type="checkbox" name="rotation_auto" checked> <span data-t="rotation_auto"></span></label>
         <label><span data-t="reperage"></span>
           <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option><option value="cadre_code" data-t="cadre_code"></option><option value="cadre_multi" data-t="cadre_multi"></option></select>
         </label>
@@ -332,7 +334,7 @@
 const textes = {
   fr: {
     identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
-    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", coupes_titre: "Réglages de coupe", coupe_ajouter: "Ajouter un réglage", coupe_nom: "Nom", coupe_vitesse: "Vitesse (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Accélération (G)", retournee: "Découpe retournée (180°)", note_retournee: "Kona avec cadre : à cocher si la coupe sort tournée de 180° par rapport à l'impression.", coupe_choix: "Réglage de coupe", coupe_massicot: "Valeurs du massicot", note_massicot: "Ne rien envoyer : le Kona garde sa vitesse, sa force et son accélération.", coupe_outil: "Outil", coupe_motif: "Motif (bas/haut, mm)", coupe_diffusion: "Diffusion du motif", note_diffusion: "Un nombre entier de motifs par ligne droite : la coupe commence et finit aux angles.", note_motif: "Comme CutServer : jusqu'à 10 paires « bas/haut » en mm, séparées par des espaces (ex. 8/2 = couper 8 mm, lever 2 mm). Vide : coupe continue.", coupe_defaut: "— par défaut (le premier) —", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", coupes_titre: "Réglages de coupe", coupe_ajouter: "Ajouter un réglage", coupe_nom: "Nom", coupe_vitesse: "Vitesse (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Accélération (G)", retournee: "Découpe retournée (180°)", note_retournee: "Kona avec cadre : à cocher si la coupe sort tournée de 180° par rapport à l'impression.", coupe_choix: "Réglage de coupe", rotation_auto: "Tourner seul si le visuel dépasse la laize", note_rotation_auto: "Si la page, repérage compris, est plus large que la laize de l'imprimante mais y tient tournée de 90°, le RIP la tourne.", o_reglages: "Réglages", reglages_de: (n) => `Réglages de « ${n} »`, reglages_appliques: "Réglages appliqués : rendu en cours.", coupe_massicot: "Valeurs du massicot", note_massicot: "Ne rien envoyer : le Kona garde sa vitesse, sa force et son accélération.", coupe_outil: "Outil", coupe_motif: "Motif (bas/haut, mm)", coupe_diffusion: "Diffusion du motif", note_diffusion: "Un nombre entier de motifs par ligne droite : la coupe commence et finit aux angles.", note_motif: "Comme CutServer : jusqu'à 10 paires « bas/haut » en mm, séparées par des espaces (ex. 8/2 = couper 8 mm, lever 2 mm). Vide : coupe continue.", coupe_defaut: "— par défaut (le premier) —", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
     connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
@@ -382,6 +384,7 @@ const textes = {
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
+      rotation_auto: (d) => `Tourné de 90° pour tenir dans la laize de l'imprimante (${d}).`,
     },
     rechercher: "Rechercher un travail…", filtre_tous: "Tous", filtre_actifs: "En cours", aucun_travail: "Aucun travail. Déposer un fichier pour commencer.",
     decoupe: (n) => (n ? `${n} tracé${n > 1 ? "s" : ""} de découpe` : "Aucun tracé de découpe"), telecharger: "Fichier .plt",
@@ -391,7 +394,7 @@ const textes = {
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" },
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `Reste ${m} m de rouleau`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
+    longueur_restante: (m) => `Reste ${m} m de rouleau`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
     media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
     sauvegarde: "Sauvegarde de la configuration", sauvegarder: "Télécharger la sauvegarde", restaurer: "Restaurer…",
     note_sauvegarde: "Un fichier JSON : machines, tarifs, réglages enregistrés et profils ICC. Les comptes n'y sont pas (ils se recréent sur le serveur), ni les travaux.",
@@ -434,7 +437,7 @@ const textes = {
   },
   en: {
     identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
-    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", coupes_titre: "Cut settings", coupe_ajouter: "Add a setting", coupe_nom: "Name", coupe_vitesse: "Speed (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Acceleration (G)", retournee: "Cut turned (180°)", note_retournee: "Kona with a frame: tick it if the cut comes out turned 180° from the print.", coupe_choix: "Cut setting", coupe_massicot: "Cutter defaults", note_massicot: "Send nothing: the Kona keeps its own speed, force and acceleration.", coupe_outil: "Tool", coupe_motif: "Pattern (down/up, mm)", coupe_diffusion: "Spread pattern", note_diffusion: "A whole number of patterns per straight line: the cut starts and ends at corners.", note_motif: "As in CutServer: up to 10 \"down/up\" pairs in mm, separated by spaces (e.g. 8/2 = cut 8 mm, lift 2 mm). Empty: continuous cut.", coupe_defaut: "— default (the first) —", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", coupes_titre: "Cut settings", coupe_ajouter: "Add a setting", coupe_nom: "Name", coupe_vitesse: "Speed (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Acceleration (G)", retournee: "Cut turned (180°)", note_retournee: "Kona with a frame: tick it if the cut comes out turned 180° from the print.", coupe_choix: "Cut setting", rotation_auto: "Turn by itself when wider than the roll", note_rotation_auto: "If the page, registration included, is wider than the printer's roll width but fits turned 90°, the RIP turns it.", o_reglages: "Settings", reglages_de: (n) => `Settings of “${n}”`, reglages_appliques: "Settings applied: rendering.", coupe_massicot: "Cutter defaults", note_massicot: "Send nothing: the Kona keeps its own speed, force and acceleration.", coupe_outil: "Tool", coupe_motif: "Pattern (down/up, mm)", coupe_diffusion: "Spread pattern", note_diffusion: "A whole number of patterns per straight line: the cut starts and ends at corners.", note_motif: "As in CutServer: up to 10 \"down/up\" pairs in mm, separated by spaces (e.g. 8/2 = cut 8 mm, lift 2 mm). Empty: continuous cut.", coupe_defaut: "— default (the first) —", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
     connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
@@ -484,6 +487,7 @@ const textes = {
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
+      rotation_auto: (d) => `Turned 90° to fit the printer's roll width (${d}).`,
     },
     rechercher: "Search jobs…", filtre_tous: "All", filtre_actifs: "In progress", aucun_travail: "No job yet. Drop a file to start.",
     decoupe: (n) => (n ? `${n} cut path${n > 1 ? "s" : ""}` : "No cut path"), telecharger: ".plt file",
@@ -493,7 +497,7 @@ const textes = {
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" },
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `${m} m of roll left`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
+    longueur_restante: (m) => `${m} m of roll left`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
     media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
     sauvegarde: "Configuration backup", sauvegarder: "Download the backup", restaurer: "Restore…",
     note_sauvegarde: "One JSON file: machines, prices, saved presets and ICC profiles. Accounts are not in it (recreate them on the server), nor jobs.",
@@ -780,6 +784,7 @@ function demandeDuFormulaire() {
     auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
     support: f.support.value || null,
     parametre_decoupe: f.parametre_decoupe.value || null,
+    rotation_auto: f.rotation_auto.checked,
   };
 }
 
@@ -828,6 +833,7 @@ function appliquerDemande(d) {
   f.support.value = d.support || "";
   if (d.parametre_decoupe && ![...f.parametre_decoupe.options].some((o) => o.value === d.parametre_decoupe)) f.parametre_decoupe.append(new Option(d.parametre_decoupe, d.parametre_decoupe));
   f.parametre_decoupe.value = d.parametre_decoupe || "";
+  f.rotation_auto.checked = d.rotation_auto !== false;
 }
 choixReglage.addEventListener("change", () => {
   const r = reglages.find((x) => x.nom === choixReglage.value);
@@ -862,6 +868,7 @@ function appliquerLangue() {
   document.documentElement.lang = langue;
   document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
   document.querySelectorAll("[data-t-placeholder]").forEach((n) => { n.placeholder = T()[n.dataset.tPlaceholder]; });
+  document.querySelectorAll("[data-t-title]").forEach((n) => { n.title = T()[n.dataset.tTitle]; });
   boutonLangue.textContent = T().autre;
   remplirProfils();
   remplirReglages();
@@ -910,8 +917,29 @@ document.addEventListener("drop", async (e) => {
   rafraichir();
 });
 
+// « Réglages » : le même panneau, rempli avec ceux d'un travail reçu ; rendu refait.
+let travailRegle = null;
+function ouvrirReglages(t) {
+  travailRegle = t;
+  appliquerDemande(t);
+  $("titre-importer").textContent = T().reglages_de(t.nom);
+  $("zone-depot").hidden = true;
+  form.querySelector("button[type=submit]").textContent = T().appliquer;
+  $("importer").showModal();
+}
+$("importer").addEventListener("close", () => {
+  if (!travailRegle) return;
+  travailRegle = null;
+  $("titre-importer").textContent = T().nouveau_travail;
+  $("zone-depot").hidden = false;
+  form.querySelector("button[type=submit]").textContent = T().envoyer;
+});
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (travailRegle) {
+    if (await api(`/api/travaux/${travailRegle.id}/reglages`, json("POST", demandeDuFormulaire()))) { $("importer").close(); dire(T().reglages_appliques); rafraichir(); }
+    return;
+  }
   if (!form.fichier.files.length) { dire(T().choisir_fichier, true); return; }
   const b = form.querySelector("button[type=submit]");
   b.disabled = true;
@@ -1068,6 +1096,7 @@ function majOutils() {
   $("o-imprimer").disabled = !imprimable || !catalogue.some((m) => m.modele_imprime);
   $("o-decouper").disabled = !fini || !t.pages.some((p) => p.traces_decoupe) || !catalogue.some((m) => m.modele_decoupe);
   $("o-editer").disabled = !t || t.format !== "pdf" || !["termine", "echec"].includes(t.statut);
+  $("o-reglages").disabled = !t || !["termine", "echec"].includes(t.statut);
   $("o-bat").disabled = !fini || t.format !== "pdf";
   $("o-relancer").disabled = !t || t.statut !== "echec";
   $("o-supprimer").disabled = !t || !["termine", "echec"].includes(t.statut);
@@ -1087,6 +1116,7 @@ async function versFile(operation) {
 $("o-imprimer").addEventListener("click", () => versFile("impression"));
 $("o-decouper").addEventListener("click", () => versFile("decoupe"));
 $("o-editer").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirEdition(t); });
+$("o-reglages").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirReglages(t); });
 $("o-bat").addEventListener("click", () => { const t = travailSelectionne(); if (t) window.open(`/api/travaux/${t.id}/bat.pdf?langue=${langue}`, "_blank", "noopener"); });
 $("o-relancer").addEventListener("click", () => { const t = travailSelectionne(); if (t) agir(`/api/travaux/${t.id}/relancer`, "POST"); });
 $("o-supprimer").addEventListener("click", () => {
@@ -1274,7 +1304,7 @@ function afficherMedia() {
       e?.chauffages?.length ? T().chauffages(e.chauffages.map(([t]) => `${t} °C`).join(" · ")) : null].filter(Boolean);
     z.replaceChildren(el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
       infos.length ? el("p", { className: "meta", style: "margin: 0" }, infos.join(" — ")) : null, encres,
-      etatImprimante?.alertes?.length ? el("p", { className: "meta", style: "margin: 0" }, T().alertes(etatImprimante.alertes.join(", "))) : null,
+      etatImprimante?.alertes?.length ? el("p", { className: "meta", style: "margin: 0" }, T().alertes_imprimante(etatImprimante.alertes.join(", "))) : null,
       el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia)));
   } else {
     const code = erreurMedia?.code;

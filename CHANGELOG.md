@@ -10,6 +10,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ### Ajouté
 - **État de l'Epson** dans Système > Média (SNMP) : longueur restante du rouleau, n° de
   support, niveaux d'encre (OR LK BK C M Y R LC LM CL), chauffages et alertes.
+- **Rotation automatique** : une page trop large pour la laize de l'imprimante (repérage
+  compris) qui y tient tournée de 90° est tournée seule, avec une alerte.
+- **Réglages** d'un travail déjà reçu : tout le panneau de l'import (repérage, coupe, lés,
+  blanc, support, couleur…), rendu refait depuis l'original.
+
+### Corrigé
+- Clé de traduction `alertes` en double (panneau Epson) qui masquait les alertes de
+  pré-vérification ; contrôle des clés en double ajouté à la CI.
 
 ## [0.11.0] — 2026-10-24
 

@@ -29,6 +29,18 @@ dans l'installation du serveur).
 Formats acceptés : PDF, AI (enregistré avec « Créer un fichier compatible PDF ») et SVG
 (découpe seulement).
 
+## Rotation automatique et réglages après l'import
+
+**Tourner seul si le visuel dépasse la laize** (coché par défaut) : si la page, repérage
+compris (cadre, codes, marges), est plus large que la laize de l'imprimante (Système >
+Machines) mais y tient tournée de 90°, le RIP la tourne et l'indique par une alerte sur le
+travail. Sans effet avec une rotation choisie dans l'édition rapide ou avec une mosaïque
+(les lés s'en chargent).
+
+**Réglages** (barre d'outils) rouvre le panneau de l'import sur le travail choisi : mode,
+repérage, réglage de coupe, lés, blanc, support, couleur… **Appliquer et refaire le
+rendu** repart de l'original, sans renvoyer le fichier.
+
 ## Édition rapide
 
 Bloc **Édition rapide** du panneau d'envoi, ou bouton **Éditer** d'un travail fini (le

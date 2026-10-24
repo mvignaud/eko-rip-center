@@ -221,6 +221,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
+        .route("/api/travaux/{id}/reglages", axum::routing::post(modifier_reglages))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
@@ -517,7 +518,9 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         vec![]
     };
     let mosaique = d.mosaique.filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
-    construire_source(&rep, format, &Demande { mosaique, ..d.clone() }).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+    let mut alertes = alertes;
+    let tourne = construire_source(&rep, format, &Demande { mosaique, ..d.clone() }, laize_imprimante(etat)).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+    alertes.extend(tourne);
     let travail = Travail {
         id,
         nom,
@@ -538,23 +541,41 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
 /// `source.pdf` à rendre, depuis l'original : édition rapide puis mosaïque. L'original est
 /// gardé dans `source-original.pdf` dès qu'une transformation s'applique, pour pouvoir
 /// rééditer sans renvoyer le fichier. Erreur : (code, détail).
-async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande) -> Result<(), (&'static str, String)> {
+async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, laize_mm: Option<f64>) -> Result<Option<controle::Alerte>, (&'static str, String)> {
     let interne = |e: std::io::Error| ("erreur_interne", e.to_string());
     if format != Format::Pdf {
-        return Ok(());
+        return Ok(None);
     }
     let (source, original) = (rep.join(Format::Pdf.fichier()), rep.join("source-original.pdf"));
-    let (edition, mosaique) = (d.edition, d.mosaique);
+    let (mut edition, mosaique, reperage) = (d.edition, d.mosaique, d.reperage);
+    let a_original = tokio::fs::try_exists(&original).await.unwrap_or(false);
+    let pdf = tokio::fs::read(if a_original { &original } else { &source }).await.map_err(interne)?;
+    // Rotation automatique : décidée sur la page éditée (échelle, marge…), repérage compris.
+    let auto = (d.rotation_auto && d.mode == Mode::Imprimer && edition.rotation == 0 && mosaique.is_none()).then_some(laize_mm).flatten();
+    let tourne = match auto {
+        Some(laize) => {
+            let copie = pdf.clone();
+            tokio::task::spawn_blocking(move || -> Result<Option<controle::Alerte>, (&'static str, String)> {
+                let edite = if edition.neutre() { copie } else { edition::appliquer(&copie, &edition).map_err(|e| ("edition_invalide", e))? };
+                Ok(trop_large(&edite, reperage, laize))
+            })
+            .await
+            .map_err(|e| ("erreur_interne", e.to_string()))??
+        }
+        None => None,
+    };
+    if tourne.is_some() {
+        edition.rotation = 90;
+    }
     if edition.neutre() && mosaique.is_none() {
-        if tokio::fs::try_exists(&original).await.unwrap_or(false) {
+        if a_original {
             tokio::fs::copy(&original, &source).await.map_err(interne)?;
         }
-        return Ok(());
+        return Ok(None);
     }
-    if !tokio::fs::try_exists(&original).await.unwrap_or(false) {
+    if !a_original {
         tokio::fs::copy(&source, &original).await.map_err(interne)?;
     }
-    let pdf = tokio::fs::read(&original).await.map_err(interne)?;
     let produit = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, (&'static str, String)> {
         let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition).map_err(|e| ("edition_invalide", e))? };
         match mosaique {
@@ -564,7 +585,28 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande) -
     })
     .await
     .map_err(|e| ("erreur_interne", e.to_string()))??;
-    tokio::fs::write(&source, produit).await.map_err(interne)
+    tokio::fs::write(&source, produit).await.map_err(interne)?;
+    Ok(tourne)
+}
+
+/// Une page plus large que la laize (repérage compris) qui y tient tournée de 90° : rend
+/// l'alerte à joindre au travail. Toutes les pages doivent tenir une fois tournées.
+fn trop_large(pdf: &[u8], reperage: reperage::Reperage, laize_mm: f64) -> Option<controle::Alerte> {
+    let n = lopdf::Document::load_mem(pdf).ok()?.get_pages().len();
+    let mm = imbrication::PT_PAR_MM;
+    let tailles: Vec<imbrication::Taille> = (1..=n).map(|p| imbrication::taille_page(pdf, p)).collect::<Result<_, _>>().ok()?;
+    let largeur = |l: f64, h: f64| reperage::mise_en_page(reperage, l, h, 0).page.0 / mm;
+    let trop = tailles.iter().find(|t| largeur(t.largeur, t.hauteur) > laize_mm + 0.01)?;
+    tailles.iter().all(|t| largeur(t.hauteur, t.largeur) <= laize_mm + 0.01).then(|| controle::Alerte {
+        code: "rotation_auto".into(),
+        page: None,
+        detail: format!("{:.0} mm > {:.0} mm", largeur(trop.largeur, trop.hauteur), laize_mm),
+    })
+}
+
+/// Laize de la première imprimante du catalogue (celle de la rotation automatique).
+fn laize_imprimante(etat: &Etat) -> Option<f64> {
+    etat.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).map(|m| m.laize_mm)
 }
 
 /// Octets lus avant de reconnaître le format.
@@ -1580,11 +1622,40 @@ async fn editer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(e): 
     if let Err(code) = t.demande.edition.verifier() {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
-    if let Err((code, detail)) = construire_source(&dossier(&etat.config.donnees, id), t.format, &t.demande).await {
-        let statut = if code == "erreur_interne" { StatusCode::INTERNAL_SERVER_ERROR } else { StatusCode::BAD_REQUEST };
-        return refus(statut, code, Some(detail));
+    reconstruire(&etat, t).await
+}
+
+/// Tous les réglages d'un travail déjà reçu (mode, repérage, coupe, lés, blanc, support,
+/// couleur…) : rendu refait depuis l'original, comme à l'import.
+async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(d): Json<Demande>) -> Response {
+    let Some(mut t) = lire_travail(&etat.config.donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if occupe(&etat, &t) {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
-    refaire(&etat, t).await
+    let d = d.normaliser();
+    if t.format == Format::Svg && d.mode == Mode::Imprimer {
+        return refus(StatusCode::BAD_REQUEST, "svg_decoupe_seulement", None);
+    }
+    if let Err(code) = d.verifier(&couleur::lister(&etat.config.profils)) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    t.demande = Demande { mosaique: d.mosaique.filter(|_| d.mode == Mode::Imprimer && t.format == Format::Pdf), ..d };
+    reconstruire(&etat, t).await
+}
+
+/// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
+async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
+    match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &t.demande, laize_imprimante(etat)).await {
+        Ok(tourne) => {
+            t.alertes.retain(|a| a.code != "rotation_auto");
+            t.alertes.extend(tourne);
+        }
+        Err((code, detail)) => {
+            let statut = if code == "erreur_interne" { StatusCode::INTERNAL_SERVER_ERROR } else { StatusCode::BAD_REQUEST };
+            return refus(statut, code, Some(detail));
+        }
+    }
+    refaire(etat, t).await
 }
 
 async fn refaire(etat: &Partage, mut t: Travail) -> Response {
@@ -2307,6 +2378,42 @@ mod tests {
 
         /// Mise en file automatique (Epson en attente, Kona suspendu après l'impression),
         /// puis réédition à 200 % : rendu refait depuis l'original, surface × 4.
+        /// Page plus large que la laize : tournée seule (alerte) ; « Réglages » sans rotation
+        /// automatique et avec un autre repérage : rendu refait depuis l'original.
+        #[tokio::test]
+        async fn rotation_automatique_et_reglages_apres_import() {
+            let e = etat("rotation");
+            let donnees = e.config.donnees.clone();
+            e.machines.write().unwrap()[0].laize_mm = 300.0;
+            let mm = imbrication::PT_PAR_MM;
+            let id = Uuid::new_v4();
+            let rep = dossier(&donnees, id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.tmp"), imbrication::tests::pdf(400.0 * mm, 100.0 * mm, "1 0 0 0", (0.0, 0.0))).unwrap();
+            let t = creer_travail(&e, id, "large.pdf".into(), Format::Pdf, Demande { dpi: 36, ..Default::default() }).await.ok().unwrap();
+            assert!(t.alertes.iter().any(|a| a.code == "rotation_auto"), "{:?}", t.alertes);
+            let attendre = || async {
+                for _ in 0..200 {
+                    let x = lire_travail(&donnees, id).unwrap();
+                    if !matches!(x.statut, Statut::EnAttente | Statut::EnCours) {
+                        return x;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                panic!("rendu trop long");
+            };
+            let x = attendre().await;
+            assert!((x.pages[0].largeur_mm - 100.0).abs() < 1.0, "tournée : {} mm de large", x.pages[0].largeur_mm);
+
+            let corps = serde_json::json!({ "dpi": 36, "rotation_auto": false, "reperage": "manuel" });
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{id}/reglages"), None, Some(corps)).await.status(), StatusCode::ACCEPTED);
+            let x = attendre().await;
+            assert!(x.pages[0].largeur_mm > 400.0, "plus tournée, croix comprises : {} mm", x.pages[0].largeur_mm);
+            assert!(!x.alertes.iter().any(|a| a.code == "rotation_auto"));
+            assert_eq!(x.demande.reperage, reperage::Reperage::Manuel);
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
         #[tokio::test]
         async fn file_automatique_puis_reedition() {
             let e = etat("auto");

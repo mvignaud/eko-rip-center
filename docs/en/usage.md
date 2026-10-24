@@ -27,6 +27,17 @@ in the middle the **job table**, on the right the **inspector** of the selected 
 
 Accepted formats: PDF, AI (saved with “Create PDF Compatible File”) and SVG (cut only).
 
+## Automatic rotation and settings after import
+
+**Turn by itself when wider than the roll** (ticked by default): if the page,
+registration included (frame, codes, margins), is wider than the printer's roll width
+(System > Machines) but fits turned 90°, the RIP turns it and says so with a job alert.
+No effect with a rotation chosen in quick edit or with tiling (the tiles handle it).
+
+**Settings** (toolbar) reopens the import panel on the selected job: mode,
+registration, cut setting, tiles, white, media, colour… **Apply and render again**
+starts from the original, without sending the file again.
+
 ## Quick edit
 
 **Quick edit** block of the send panel, or **Edit** button on a finished job (rendering

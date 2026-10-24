@@ -22,6 +22,8 @@ jobs:
             python3 -c "import re,sys; print(re.search(r'<script>(.*)</script>', open(sys.argv[1]).read(), re.S).group(1))" "$f" > /tmp/page.js
             node --check /tmp/page.js || { echo "erreur de syntaxe dans $f"; exit 1; }
           done
+      - name: Clés de traduction en double (la dernière écrase l'autre sans erreur)
+        run: node outils/doublons-traductions.js serveur/static/index.html
       - run: cargo clippy -p eko-rip-serveur --all-targets --locked -- -D warnings
       - run: cargo test -p eko-rip-serveur --locked
       - run: cargo install cargo-deb --locked
