@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.10.0] — 2026-10-24
+
 ### Ajouté
 - **Catalogue de machines** (`machines.json`, `GET/POST /api/machines`) : modèle (Epson
   SC-S80600, Mutoh Kona, Graphtec FC7000, Roland VersaCAMM), laize, connexion (série,
@@ -38,6 +40,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   client) et l'API lui répond 403 (`client_requis`). Le client s'annonce par son
   User-Agent (`EKO-RIP-Client/`). `EKO_RIP_ACCES_NAVIGATEUR=1` rouvre le navigateur pour le
   développement. ⚠️ Mettre à jour les clients avec le serveur.
+
+*English: machine catalogue (Epson, Mutoh Kona, Graphtec FC7000, Roland VersaCAMM VP;
+serial, TCP, device or folder connection; SNMP; cut step) edited from the client, cuts
+converted to each machine's HP-GL step; new RIP-queue style interface (toolbar, machines
+sidebar, job table, inspector, dark theme by default); the interface and API are for the
+desktop clients only, a browser sees a status page; Ubuntu 24.04 installation image with
+three profiles (server + client, server + desktop, server only), published in two parts;
+the client connects to a local server by itself.*
 
 ## [0.9.0] — 2026-10-24
 
