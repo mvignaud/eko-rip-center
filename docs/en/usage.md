@@ -43,6 +43,14 @@ the others: a hot folder can thus print on its own.
 
 Several files can be chosen at once; each is sent with the same settings.
 
+## Proof (BAT)
+
+**Proof (PDF)** link on a finished job: an A4 landscape PDF to send to the customer, one
+page per job page: the image soft-proofed with the media profile, the cut line in magenta
+(not printed), the size in mm, the settings (mode, resolution, profile, white, edit,
+grommets), the preflight warnings and an “Approved for printing” box (date, name and
+signature). It comes out in the screen's language.
+
 ## Viewer
 
 Clicking a thumbnail (composite, plate, cut) opens it large, with its size in mm.

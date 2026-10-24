@@ -63,7 +63,7 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
     Ok(Rendu { pages })
 }
 
-async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, options: &[String], sortie: &Path, delai: Duration) -> Result<(), String> {
+pub(crate) async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, options: &[String], sortie: &Path, delai: Duration) -> Result<(), String> {
     let mut cmd = Command::new(gs);
     cmd.args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE"])
         .arg(format!("-sDEVICE={device}"))

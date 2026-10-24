@@ -2,6 +2,7 @@
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
 mod acces;
+mod bat;
 mod blanc;
 mod couleur;
 mod controle;
@@ -190,6 +191,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
+        .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
@@ -664,6 +666,100 @@ fn espace_defaut() -> f64 {
 
 fn dpi_defaut() -> u32 {
     720
+}
+
+#[derive(Deserialize)]
+struct ChoixLangue {
+    #[serde(default)]
+    langue: Option<String>,
+}
+
+/// Bon à tirer du travail : image en épreuve écran du support, découpe superposée,
+/// caractéristiques, cadre « Bon pour accord ». `?langue=en` pour l'anglais.
+async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::extract::Query(q): axum::extract::Query<ChoixLangue>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some(t) = lire_travail(donnees, id) else { return introuvable() };
+    if !matches!(t.statut, Statut::Termine) || t.format != Format::Pdf {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    let en = q.langue.as_deref() == Some("en");
+    let rep = dossier(donnees, id);
+    let tmp = rep.join("bat");
+    let _ = tokio::fs::remove_dir_all(&tmp).await;
+    if let Err(e) = tokio::fs::create_dir_all(&tmp).await {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    let resultat: Result<Vec<u8>, String> = async {
+        let source = tokio::fs::read(rep.join(Format::Pdf.fichier())).await.map_err(|e| e.to_string())?;
+        let tous = t.demande.tous_les_traces;
+        let (neutre, decoupes, tailles) = tokio::task::spawn_blocking(move || -> Result<_, String> {
+            let decoupes = decoupe::extraire(&source, tous)?;
+            let tailles: Vec<(f64, f64)> = decoupes.iter().map(|d| (d.largeur, d.hauteur)).collect();
+            Ok((decoupe::neutraliser(&source)?.0, decoupes, tailles))
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        // Définition : la plus grande page tient en 1800 px, entre 10 et 150 dpi.
+        let plus_grand = tailles.iter().map(|(l, h)| l.max(*h)).fold(1.0, f64::max) / 72.0;
+        let dpi = (1800.0 / plus_grand).clamp(10.0, 150.0) as u32;
+        tokio::fs::write(tmp.join("bat.pdf"), neutre).await.map_err(|e| e.to_string())?;
+        let epreuve: Vec<String> = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils).iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
+        render::ghostscript(&etat.config.gs, &tmp.join("bat.pdf"), "png16m", dpi, &epreuve, &tmp.join("p-%03d.png"), etat.config.delai).await?;
+        let mut pages = vec![];
+        for (i, d) in decoupes.into_iter().enumerate() {
+            let image = image::open(tmp.join(format!("p-{:03}.png", i + 1))).map_err(|e| e.to_string())?.to_rgb8();
+            pages.push(bat::PageBat { image, largeur: d.largeur, hauteur: d.hauteur, traces: d.traces });
+        }
+        let d = &t.demande;
+        let oui_non = |b: bool| if b { if en { "yes" } else { "oui" } } else if en { "no" } else { "non" };
+        let traces: usize = t.pages.iter().map(|p| p.traces_decoupe).sum();
+        let mut lignes = if en {
+            vec![
+                format!("Mode: {}", if d.mode == Mode::Imprimer { "print" } else { "cut only" }),
+                format!("Resolution: {} dpi", d.dpi),
+                format!("Media profile: {}", d.couleur.sortie.as_deref().unwrap_or("default")),
+                format!("White: {}", match d.blanc.mode { blanc::Mode::Aucun => "file's own", blanc::Mode::SousCouche => "underlay", blanc::Mode::Aplat => "flood" }),
+                format!("Scale: {} % · rotation {}° · mirror {}", d.edition.echelle, d.edition.rotation, oui_non(d.edition.miroir)),
+                format!("Grommets: {}", oui_non(d.edition.oeillets.is_some())),
+                format!("Cut paths: {traces}"),
+            ]
+        } else {
+            vec![
+                format!("Mode : {}", if d.mode == Mode::Imprimer { "impression" } else { "découpe seule" }),
+                format!("Résolution : {} dpi", d.dpi),
+                format!("Profil du support : {}", d.couleur.sortie.as_deref().unwrap_or("par défaut")),
+                format!("Blanc : {}", match d.blanc.mode { blanc::Mode::Aucun => "celui du fichier", blanc::Mode::SousCouche => "sous-couche", blanc::Mode::Aplat => "aplat" }),
+                format!("Échelle : {} % · rotation {}° · miroir {}", d.edition.echelle, d.edition.rotation, oui_non(d.edition.miroir)),
+                format!("Œillets : {}", oui_non(d.edition.oeillets.is_some())),
+                format!("Tracés de découpe : {traces}"),
+            ]
+        };
+        for a in &t.alertes {
+            lignes.push(format!("{} {}", if en { "Warning:" } else { "Alerte :" }, a.detail));
+        }
+        let date = date_utc(t.cree_le);
+        let textes = bat::Textes {
+            titre: format!("{} — {}", if en { "Proof" } else { "Bon à tirer" }, t.nom),
+            sous_titre: format!("E-KO RIP Center · {} {} · {}", if en { "job" } else { "travail" }, &t.id.to_string()[..8], &date[..16]),
+            lignes,
+            page: "Page".into(),
+            dimensions: if en { "Size: {l} × {h} mm".into() } else { "Format : {l} × {h} mm".into() },
+            accord: if en { "Approved for printing" } else { "Bon pour accord" }.into(),
+            signature: if en { "Date, name and signature:" } else { "Date, nom et signature :" }.into(),
+            legende_decoupe: if en { "Cut line (not printed)" } else { "Tracé de découpe (non imprimé)" }.into(),
+        };
+        tokio::task::spawn_blocking(move || bat::composer(&textes, &pages)).await.map_err(|e| e.to_string())?
+    }
+    .await;
+    let _ = tokio::fs::remove_dir_all(&tmp).await;
+    match resultat {
+        Ok(pdf) => {
+            let nom: String = t.nom.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
+            let entete = format!("inline; filename=\"BAT-{}.pdf\"", nom.trim_end_matches("_pdf"));
+            ([(header::CONTENT_TYPE, "application/pdf".to_string()), (header::CONTENT_DISPOSITION, entete)], pdf).into_response()
+        }
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "rendu_echoue", Some(e)),
+    }
 }
 
 /// Imposition sans rien créer : places des éléments (mm, origine en bas à gauche),
@@ -1627,6 +1723,41 @@ mod tests {
             assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
             assert!(e.file.lock().unwrap().sorties.is_empty());
             assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// BAT d'un travail rendu : PDF A4 paysage, une page par page du travail, refusé tant
+        /// que le rendu n'est pas fini.
+        #[tokio::test]
+        async fn bat_d_un_travail() {
+            let e = etat("bat");
+            let donnees = e.config.donnees.clone();
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "étiquette.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { dpi: 36, ..Default::default() },
+                statut: Statut::EnAttente,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![],
+                alertes: vec![],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            assert_eq!(appel(&e, "GET", &format!("/api/travaux/{}/bat.pdf", t.id), None, None).await.status(), StatusCode::CONFLICT);
+            traiter(e.clone(), t.clone()).await;
+            let r = appel(&e, "GET", &format!("/api/travaux/{}/bat.pdf?langue=en", t.id), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(r.headers()[header::CONTENT_TYPE], "application/pdf");
+            assert!(r.headers()[header::CONTENT_DISPOSITION].to_str().unwrap().contains("BAT-_tiquette.pdf"));
+            let pdf = axum::body::to_bytes(r.into_body(), 1 << 26).await.unwrap();
+            let doc = lopdf::Document::load_mem(&pdf).unwrap();
+            assert_eq!(doc.get_pages().len(), 1);
+            assert!(!rep.join("bat").exists(), "fichiers de travail effacés");
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 

@@ -46,6 +46,14 @@ dossier surveillé peut ainsi imprimer seul.
 
 On peut choisir plusieurs fichiers à la fois ; ils partent chacun avec les mêmes réglages.
 
+## BAT (bon à tirer)
+
+Lien **BAT (PDF)** d'un travail fini : un PDF A4 paysage à envoyer au client, une page
+par page du travail : l'image en épreuve écran du profil de support, le tracé de découpe
+en magenta (non imprimé), le format en mm, les réglages (mode, résolution, profil, blanc,
+édition, œillets), les alertes de pré-vérification et un cadre « Bon pour accord » (date,
+nom et signature). Il sort dans la langue de l'écran.
+
 ## Visionneuse
 
 Un clic sur une vignette (composite, plaque, découpe) l'ouvre en grand, avec ses
