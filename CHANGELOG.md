@@ -7,6 +7,22 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.15.0] — 2026-10-24
+
+### Ajouté
+- **Grand aperçu façon éditeur** (fiche du travail) : zoom de 25 à 800 % à la molette (le
+  point sous le curseur reste fixe), boutons Ajuster et 100 %, outils Main et Loupe (clic,
+  Maj+clic, rectangle), règles en mm sur deux bords qui suivent le zoom, position du curseur
+  en mm, **laize** visible (média lu sur l'Epson, sinon laize de la machine) avec la partie
+  qui dépasse en rouge, calque de découpe superposable ; clavier : + − 0 1 et flèches.
+- **Émetteur ESC/P2 de l'Epson SC-S80600** (pas encore branché sur la file) : en-tête,
+  réglages 720 × 720, point variable, bandes de 16 lignes en 2 bits compressées PackBits, neuf
+  canaux ; contrôlé contre la structure d'un flux reçu par notre machine. Premier essai papier
+  à venir.
+
+*Added: editor-style large preview (zoom, hand, magnifier, mm rulers, roll width, cut
+overlay, keyboard). Epson SC-S80600 ESC/P2 emitter (not yet wired to the queue).*
+
 ## [0.14.0] — 2026-10-24
 
 ### Ajouté
