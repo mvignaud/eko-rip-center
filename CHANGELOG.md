@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.12.0] — 2026-10-24
+
 ### Ajouté
 - **État de l'Epson** dans Système > Média (SNMP) : longueur restante du rouleau, n° de
   support, niveaux d'encre (OR LK BK C M Y R LC LM CL), chauffages et alertes.
@@ -18,6 +20,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ### Corrigé
 - Clé de traduction `alertes` en double (panneau Epson) qui masquait les alertes de
   pré-vérification ; contrôle des clés en double ajouté à la CI.
+
+*English: Epson status over SNMP (roll length left, media number, ink levels, heaters,
+alerts); automatic 90° rotation of a page wider than the printer's roll width; full
+settings of a received job (registration, cut, tiles, white, media, colour) with a new
+render from the original; fixed a duplicated translation key hiding preflight alerts.*
 
 ## [0.11.0] — 2026-10-24
 
