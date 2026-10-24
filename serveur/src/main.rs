@@ -19,6 +19,7 @@ mod mosaique;
 mod plotter;
 mod render;
 mod reglages;
+mod releves;
 mod reperage;
 mod sauvegarde;
 
@@ -198,6 +199,7 @@ async fn main() {
     }
     tokio::spawn(surveiller(etat.clone()));
     tokio::spawn(purger(etat.clone()));
+    tokio::spawn(relever(etat.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -215,6 +217,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/systeme", get(systeme))
         .route("/api/machines", get(lister_machines).post(enregistrer_machines))
         .route("/api/machines/{id}/media", get(media_machine))
+        .route("/api/machines/{id}/consommation", get(consommation_machine))
         .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
@@ -982,6 +985,51 @@ async fn media_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>) 
         Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some(e)),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
+}
+
+/// Relevé SNMP de chaque Epson toutes les minutes (encres et rouleau), gardé quand il change.
+async fn relever(etat: Partage) {
+    let mut derniers: std::collections::HashMap<String, Option<releves::Releve>> = Default::default();
+    loop {
+        let cibles: Vec<(String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.snmp.clone()?))).collect();
+        for (id, hote) in cibles {
+            let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
+            let lecture = move || {
+                let d = Duration::from_secs(2);
+                let encres = media::lire_etat_epson(&hote, &communaute, d)?.encres;
+                let longueur_m = media::lire_medias(&hote, &communaute, d).ok()?.first()?.longueur_m;
+                (!encres.is_empty()).then_some((encres, longueur_m))
+            };
+            let Ok(Some((encres, longueur_m))) = tokio::task::spawn_blocking(lecture).await else { continue };
+            let r = releves::Releve { le: maintenant(), encres, longueur_m };
+            let dernier = derniers.entry(id.clone()).or_insert_with(|| releves::lire(&etat.config.donnees, &id).pop());
+            if dernier.as_ref().is_some_and(|d| releves::identique(d, &r)) {
+                continue;
+            }
+            if let Err(e) = releves::ajouter(&etat.config.donnees, &id, &r) {
+                eprintln!("relevé {id} : {e}");
+            }
+            *dernier = Some(r);
+        }
+        tokio::time::sleep(Duration::from_secs(60)).await;
+    }
+}
+
+#[derive(Deserialize)]
+struct Periode {
+    /// Secondes Unix ; par défaut les 7 derniers jours.
+    depuis: Option<u64>,
+    jusqua: Option<u64>,
+}
+
+/// Consommation réelle relevée sur la machine (encre en points de %, support en m).
+async fn consommation_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>, axum::extract::Query(q): axum::extract::Query<Periode>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let jusqua = q.jusqua.unwrap_or_else(maintenant);
+    let depuis = q.depuis.unwrap_or(jusqua.saturating_sub(7 * 86400));
+    Json(releves::consommation(&releves::lire(&etat.config.donnees, &id), depuis, jusqua)).into_response()
 }
 
 /// Imposition sans rien créer : places des éléments (mm, origine en bas à gauche),

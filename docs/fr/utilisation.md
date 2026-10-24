@@ -310,8 +310,15 @@ et la barre latérale suivent. Une machine qui a encore une sortie à passer ne 
 mesure au chargement, est lue par le réseau (SNMP, Printer-MIB normalisée) et devient la
 laize des panneaux Planche et Mosaïque (**Utiliser comme laize**, **Relire**). Il faut
 renseigner l'adresse IP de l'Epson dans `EKO_RIP_EPSON_SNMP` (voir l'installation du
-serveur). À valider sur la machine : si la SC-S80600 ne publie pas sa largeur dans la
-Printer-MIB, l'écran le dit, et la lecture passera par une autre voie après capture.
+serveur). Validé sur la SC-S80600 : l'écran montre aussi la longueur restante du rouleau,
+le n° de support, les chauffages et le niveau de chaque encre.
+
+**Consommation réelle** : le serveur relève l'Epson chaque minute (encres et rouleau) et
+garde chaque changement dans `releves/epson.jsonl` (dossier des données). L'écran affiche
+ce qui a été consommé sur 7 jours ; l'API `GET /api/machines/epson/consommation?depuis=&jusqua=`
+(secondes Unix) le donne pour toute période. Seules les baisses comptent : un changement de
+poche ou de rouleau n'est pas compté comme une consommation. L'imprimante ne donne l'encre
+qu'au % près : le chiffre est fiable sur la durée, pas pour un petit travail.
 
 ## Encre et coût
 

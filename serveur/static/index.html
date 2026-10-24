@@ -409,7 +409,7 @@ const textes = {
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `Reste ${m} m de rouleau`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
+    longueur_restante: (m) => `Reste ${m} m de rouleau`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
     media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
     sauvegarde: "Sauvegarde de la configuration", sauvegarder: "Télécharger la sauvegarde", restaurer: "Restaurer…",
     note_sauvegarde: "Un fichier JSON : machines, tarifs, réglages enregistrés et profils ICC. Les comptes n'y sont pas (ils se recréent sur le serveur), ni les travaux.",
@@ -512,7 +512,7 @@ const textes = {
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `${m} m of roll left`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
+    longueur_restante: (m) => `${m} m of roll left`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
     media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
     sauvegarde: "Configuration backup", sauvegarder: "Download the backup", restaurer: "Restore…",
     note_sauvegarde: "One JSON file: machines, prices, saved presets and ICC profiles. Accounts are not in it (recreate them on the server), nor jobs.",
@@ -1325,12 +1325,14 @@ function afficherFile() {
 }
 
 /** Média chargé dans l'Epson : sa largeur devient la laize des panneaux (planche, mosaïque). */
-let media = null, erreurMedia = null, etatImprimante = null;
+let media = null, erreurMedia = null, etatImprimante = null, consommation = null;
 async function chargerMedia() {
   const r = await fetch("/api/machines/epson/media").catch(() => null);
   const c = r ? await r.json().catch(() => ({})) : {};
   [media, erreurMedia] = r && r.ok ? [c.medias[0], null] : [null, r ? c : { code: "reseau" }];
   etatImprimante = r && r.ok ? c : null;
+  const rc = await fetch("/api/machines/epson/consommation").catch(() => null);
+  consommation = rc && rc.ok ? await rc.json().catch(() => null) : null;
   if (media) utiliserMedia(false);
   afficherMedia();
 }
@@ -1349,8 +1351,10 @@ function afficherMedia() {
       el("div", { className: "encre", title: `${nom} ${pc} %` }, el("div", { className: "jauge-encre" }, el("div", { className: pc <= 15 ? "niveau-encre bas" : "niveau-encre", style: `height: ${pc}%` })), el("span", {}, nom)))) : null;
     const infos = [media.longueur_m != null ? T().longueur_restante(media.longueur_m.toFixed(1)) : null, e?.support != null ? T().support_n(e.support) : null,
       e?.chauffages?.length ? T().chauffages(e.chauffages.map(([t]) => `${t} °C`).join(" · ")) : null].filter(Boolean);
+    const c = consommation, encresConso = c ? Object.entries(c.encres).filter(([, v]) => v).map(([n, v]) => `${n} ${v} %`).join(" · ") : "";
+    const conso = c?.releves > 1 ? el("p", { className: "meta", style: "margin: 0" }, T().conso_7j(c.metres.toFixed(1), encresConso)) : null;
     z.replaceChildren(el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
-      infos.length ? el("p", { className: "meta", style: "margin: 0" }, infos.join(" — ")) : null, encres,
+      infos.length ? el("p", { className: "meta", style: "margin: 0" }, infos.join(" — ")) : null, encres, conso,
       etatImprimante?.alertes?.length ? el("p", { className: "meta", style: "margin: 0" }, T().alertes_imprimante(etatImprimante.alertes.join(", "))) : null,
       el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia)));
   } else {

@@ -7,6 +7,18 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.13.0] — 2026-10-24
+
+### Ajouté
+- Consommation réelle de l'Epson : relevé SNMP chaque minute (encres et rouleau), gardé
+  quand il change dans `releves/<machine>.jsonl` ; consommation sur 7 jours dans
+  **Système > Média** et par l'API `GET /api/machines/{id}/consommation`. Seules les baisses
+  comptent (un changement de poche ou de rouleau n'est pas une consommation) ; encre au %
+  près.
+
+*Added: actual Epson consumption, read over SNMP every minute (inks and roll), shown over
+7 days in System > Media and available through `GET /api/machines/{id}/consommation`.*
+
 ## [0.12.1] — 2026-10-24
 
 La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la CI) : la

@@ -293,8 +293,15 @@ machine with an output still to run cannot be removed.
 measures when loading, is read over the network (SNMP, standard Printer-MIB) and becomes
 the roll width of the Sheet and Tiling panels (**Use as roll width**, **Read again**).
 Set the Epson's IP address in `EKO_RIP_EPSON_SNMP` (see the server installation guide).
-To be validated on the machine: if the SC-S80600 does not publish its width in the
-Printer-MIB, the screen says so, and reading will use another path after a capture.
+Validated on the SC-S80600: the screen also shows the remaining roll length, the media
+number, the heaters and the level of each ink.
+
+**Actual consumption**: the server reads the Epson every minute (inks and roll) and keeps
+each change in `releves/epson.jsonl` (data folder). The screen shows what was used over 7
+days; the API `GET /api/machines/epson/consommation?depuis=&jusqua=` (Unix seconds) gives it
+for any period. Only decreases count: a new ink pack or roll is not counted as consumption.
+The printer reports ink only to the nearest %: the figure is reliable over time, not for
+a small job.
 
 ## Ink and cost
 
