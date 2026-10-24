@@ -7,6 +7,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.13.1] — 2026-10-24
+
+### Corrigé
+- Système > Média : « null » s'affichait sous les jauges tant qu'aucune consommation
+  n'était relevée (un élément vide passé tel quel à l'affichage).
+
+*Fixed: "null" shown under the ink gauges before any consumption was measured.*
+
 ## [0.13.0] — 2026-10-24
 
 ### Ajouté

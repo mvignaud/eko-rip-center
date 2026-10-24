@@ -1353,10 +1353,10 @@ function afficherMedia() {
       e?.chauffages?.length ? T().chauffages(e.chauffages.map(([t]) => `${t} °C`).join(" · ")) : null].filter(Boolean);
     const c = consommation, encresConso = c ? Object.entries(c.encres).filter(([, v]) => v).map(([n, v]) => `${n} ${v} %`).join(" · ") : "";
     const conso = c?.releves > 1 ? el("p", { className: "meta", style: "margin: 0" }, T().conso_7j(c.metres.toFixed(1), encresConso)) : null;
-    z.replaceChildren(el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
+    z.replaceChildren(...[el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
       infos.length ? el("p", { className: "meta", style: "margin: 0" }, infos.join(" — ")) : null, encres, conso,
       etatImprimante?.alertes?.length ? el("p", { className: "meta", style: "margin: 0" }, T().alertes_imprimante(etatImprimante.alertes.join(", "))) : null,
-      el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia)));
+      el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia))].filter(Boolean));
   } else {
     const code = erreurMedia?.code;
     z.replaceChildren(el("p", { className: code === "media_non_configure" ? "meta" : "erreur", style: "margin: 0" },
