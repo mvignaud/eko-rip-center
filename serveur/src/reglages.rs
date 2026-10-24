@@ -54,6 +54,9 @@ pub struct Demande {
     /// Support du catalogue des tarifs (prix de revient).
     #[serde(default)]
     pub support: Option<String>,
+    /// Réglage de coupe de la découpeuse (nom), sinon son premier.
+    #[serde(default)]
+    pub parametre_decoupe: Option<String>,
 }
 
 /// Sorties ajoutées d'office à la file quand le rendu est fini.
@@ -76,7 +79,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, parametre_decoupe: None }
     }
 }
 

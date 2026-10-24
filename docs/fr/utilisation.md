@@ -173,9 +173,11 @@ En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
   Actions > Contour Cut > Manual, pointer P1, P2, P3, P4.
 - **Cadre Mutoh (type 1)** : cadre noir de 5 mm, à 10 mm de l'image, intérieur d'au
   moins 250 × 250 mm, blancs de 25 mm sur les côtés, 30 mm à l'avant, 80 mm à
-  l'arrière (cotes minimales du manuel Kona respectées). Le Kona le mesure seul.
-- **Cadre Mutoh + code-barres (type 2, CutServer SF)** : le même cadre, coins percés de
-  quatre fenêtres, et deux codes POSTNET de 250 × 20 mm (bas à gauche, haut à droite,
+  l'arrière (cotes minimales du manuel Kona respectées). ⚠️ Le Kona ne lit pas seul un
+  cadre sans code-barres (manuel, § 6.2 : manuel, Single Frame, Multi Frame) : envoyé
+  directement, il s'arrête sur « EPOS 6213 ». Pour la lecture automatique, prendre le type 2.
+- **Cadre Mutoh + code-barres (type 2, CutServer SF)** : **éprouvé à l'atelier le 24/10**
+  (impression, lecture du cadre et des codes, coupe). Le même cadre et deux codes POSTNET de 250 × 20 mm (bas à gauche, haut à droite,
   à 50 mm du côté et 9 mm du cadre) avec le numéro en clair. Le numéro (11 chiffres)
   vient du travail et de la page. Le fichier de découpe téléchargé porte le nom attendu
   par Mutoh CutServer, `Nom_SF_<numéro>.plt` : le déposer dans son dossier, le Kona lit
@@ -185,9 +187,21 @@ En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
   repère de 30 mm tous les 500 mm au plus sur chaque côté, mêmes codes, fichier
   `Nom_MF_<numéro>.plt`, pour les grandes longueurs découpées par segments.
 
-Types 2 et 3 suivent les tableaux du guide d'application Kona (chap. 4.4.2) ; les
-fenêtres des coins, la place du code du haut et l'écart des repères sont lus sur ses
-schémas, sans cote : provisoires jusqu'au premier essai sur le Kona.
+Types 2 et 3 suivent les tableaux du guide d'application Kona (chap. 4.4.2) ; la place
+du code du haut et l'écart des repères du type 3 sont lus sur ses schémas, sans cote (le
+type 3 reste à éprouver).
+
+Chaque cadre porte une **flèche ▲** dans son coin intérieur bas-droit : elle pointe vers
+le bord qui sort le premier de l'Epson, celui qu'on engage le premier dans le Kona (par
+l'arrière).
+
+**Envoi au Kona.** Le RIP envoie la découpe comme Mutoh CutServer : avec un cadre, il
+déclare les deux coins opposés du cadre (milieux des traits), le Kona le balaie, lit le
+code, puis coupe. Les **réglages de coupe** (vitesse en cm/s, force en g, accélération en
+G) se déclarent par machine dans Système > Machines, comme les « couches de découpe » de
+CutServer ; le premier sert par défaut. **Fichier .plt** avec `?machine=kona` donne le
+fichier tel que le Kona le reçoit, à envoyer à la main (port série 9600, 8N1, RTS/CTS).
+Si la coupe sort tournée de 180°, cocher **découpe retournée** sur la machine.
 
 La page imprimée est agrandie d'autant, et le fichier de découpe suit le même décalage.
 Le Kona doit être réglé sur une résolution de **0,010 mm**.

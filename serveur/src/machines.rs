@@ -73,6 +73,27 @@ pub struct Machine {
     /// Cadence d'impression en m²/h, sur toute la laize (sinon : tableau de l'Epson).
     #[serde(default)]
     pub m2_heure: Option<f64>,
+    /// Réglages de coupe par support (le premier sert par défaut), comme les « couches de
+    /// découpe » de CutServer.
+    #[serde(default)]
+    pub parametres_decoupe: Vec<ParametreDecoupe>,
+    /// Kona avec cadre : feuille chargée dans l'autre sens (découpe tournée de 180°).
+    #[serde(default)]
+    pub decoupe_retournee: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ParametreDecoupe {
+    pub nom: String,
+    pub vitesse_cm_s: f64,
+    pub force_g: f64,
+    pub acceleration_g: f64,
+}
+
+impl ParametreDecoupe {
+    fn valide(&self) -> bool {
+        !self.nom.trim().is_empty() && self.nom.chars().count() <= 40 && (1.0..=100.0).contains(&self.vitesse_cm_s) && (1.0..=600.0).contains(&self.force_g) && (0.1..=10.0).contains(&self.acceleration_g)
+    }
 }
 
 impl Machine {
@@ -103,8 +124,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None },
-        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None },
+        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
+        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
     ]
 }
 
@@ -128,6 +149,8 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && m.pas_mm.is_none_or(|p| [0.005, 0.01, 0.025, 0.05, 0.1].iter().any(|x| (x - p).abs() < 1e-9))
             && m.decalage_mm.iter().all(|d| (-20.0..=20.0).contains(d))
             && m.m2_heure.is_none_or(|v| (0.1..=500.0).contains(&v))
+            && m.parametres_decoupe.len() <= 20
+            && m.parametres_decoupe.iter().all(ParametreDecoupe::valide)
     });
     if bon { Ok(()) } else { Err("machine_invalide") }
 }
@@ -153,6 +176,47 @@ pub fn changer_de_pas(hpgl: &str, pas_mm: f64, decalage_mm: [f64; 2]) -> String 
         })
         .collect::<Vec<_>>()
         .join(";")
+}
+
+/// Découpe pour le Mutoh Kona, telle que CutServer l'envoie (capture USB du 24/10) : une
+/// commande par ligne (`;\r\n`), `PROGSTEP10` (pas de 0,01 mm), réglages de coupe
+/// `AS`/`ZF`/`VS`, et avec un cadre la lecture automatique `AL5` : coins opposés du cadre,
+/// coupe, retour au premier coin, `AL5,2`. `hpgl` est celui du RIP, au pas de 0,01 mm ;
+/// `cadre` : coins au milieu des traits (x1, y1, x2, y2) dans les mêmes unités.
+///
+/// Axes du Kona (essais au point 0) : X suit la longueur de la feuille, Y+ vers la gauche,
+/// repère direct ; d'où X = y de la page, Y = −x (comme ONYX). `retourne` : 180° de plus.
+pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoupe>, retourne: bool) -> String {
+    let s = if retourne { -1 } else { 1 };
+    let axes = |x: i64, y: i64| (s * y, -s * x);
+    let mut corps = String::new();
+    // Écrit comme CutServer : « AS 1.0;ZF 145;VS 15; ».
+    let reglages = p.map(|p| format!("AS {:.1};ZF {};VS {};LT;\r\n", p.acceleration_g, p.force_g, p.vitesse_cm_s)).unwrap_or_default();
+    for cmd in hpgl.split(';').map(str::trim).filter(|c| !c.is_empty()) {
+        match cmd.get(..2) {
+            Some(op @ ("PU" | "PD")) if cmd.len() > 2 => {
+                let v: Vec<i64> = cmd[2..].split(',').filter_map(|n| n.trim().parse().ok()).collect();
+                // Une commande par point, comme CutServer.
+                for &[x, y] in v.as_chunks::<2>().0 {
+                    let (x, y) = axes(x, y);
+                    corps += &format!("{op}{x},{y};\r\n");
+                }
+            }
+            Some("SP") if cmd != "SP0" => corps += &format!("{cmd};\r\n{reglages}"),
+            _ => {}
+        }
+    }
+    match cadre {
+        Some([x1, y1, x2, y2]) => {
+            let (a, b) = (axes(x1, y1), axes(x2, y2));
+            let (p1, p2) = ((a.0.min(b.0), a.1.min(b.1)), (a.0.max(b.0), a.1.max(b.1)));
+            format!(
+                "AL5,0;IN;\r\nPA;PROGSTEP10;\r\n@SEGMENTEDFILESTART1;\r\n@SEGMENTSTART1;\r\n\r\nAL5,0,0,1,{},{},{},{};\r\n{corps}PU{},{};\r\nAL5,2;\r\n\r\n@SEGMENTEND1;\r\n\r\nSP0;@SEGMENTEDFILEEND1;\r\n",
+                p1.0, p1.1, p2.0, p2.1, p1.0, p1.1
+            )
+        }
+        None => format!("IN;\r\nPA;PROGSTEP10;\r\n{corps}PU0,0;\r\nSP0;\r\n"),
+    }
 }
 
 /// Envoie les octets par la connexion de la machine (bloquant).
@@ -199,6 +263,13 @@ mod tests {
         let rip = "IN;SP1;PU0,0;PD2540,0,2540,2540;PU;SP0;";
         // 25,4 mm : 2540 pas de 0,01 mm, 1016 pas de 0,025 mm (HP-GL standard).
         assert_eq!(changer_de_pas(rip, 0.025, [0.0; 2]), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
+        // Kona avec cadre : axes tournés (X = y, Y = −x), coins min/max, une commande par ligne.
+        let p = ParametreDecoupe { nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0 };
+        let k = pour_kona(rip, Some([-500, -500, 3000, 3000]), Some(&p), false);
+        assert!(k.starts_with("AL5,0;IN;\r\nPA;PROGSTEP10;\r\n@SEGMENTEDFILESTART1;\r\n@SEGMENTSTART1;\r\n\r\nAL5,0,0,1,-500,-3000,3000,500;\r\nSP1;\r\nAS 1.0;ZF 145;VS 15;LT;\r\nPU0,0;\r\nPD0,-2540;\r\nPD2540,-2540;\r\n"), "{k}");
+        assert!(k.ends_with("PU-500,-3000;\r\nAL5,2;\r\n\r\n@SEGMENTEND1;\r\n\r\nSP0;@SEGMENTEDFILEEND1;\r\n"), "{k}");
+        // Sans cadre : outil 1 obligatoire (sans lui, le Kona ne coupe rien : essai du 24/10).
+        assert!(pour_kona(rip, None, None, false).contains("SP1;\r\n"));
         assert_eq!(changer_de_pas(rip, 0.01, [0.0; 2]), rip);
         // 1 mm à droite, 0,5 mm en arrière, au pas de 0,025 mm : +40 et −20.
         assert_eq!(changer_de_pas(rip, 0.025, [1.0, -0.5]), "IN;SP1;PU40,-20;PD1056,-20,1056,996;PU;SP0;");

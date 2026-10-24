@@ -108,6 +108,9 @@ struct Page {
     largeur_mm: f64,
     #[serde(default)]
     hauteur_mm: f64,
+    /// Cadre Mutoh imprimé : coins au milieu des traits (x1, y1, x2, y2), en points.
+    #[serde(default)]
+    cadre_pt: Option<[f64; 4]>,
 }
 
 
@@ -660,6 +663,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             couverture: mesure.couverture,
                             largeur_mm: mesure.largeur_mm,
                             hauteur_mm: mesure.hauteur_mm,
+                            cadre_pt: mises.get(i).and_then(|m| m.coins),
                         }
                     })
                     .collect();
@@ -1747,12 +1751,14 @@ async fn executer(etat: Partage, s: file::Sortie) {
     let _ = f.ecrire(&etat.config.donnees);
 }
 
-/// Découpe : le HP-GL du rendu (0,01 mm) passé au pas de la machine, par sa connexion.
+/// Découpe : le HP-GL du rendu (0,01 mm) passé au pas de la machine, par sa connexion ;
+/// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
 async fn envoyer_la_decoupe(etat: &Etat, s: &file::Sortie, m: machines::Machine) -> Result<(), String> {
     let plt = fichier_plt(&dossier(&etat.config.donnees, s.travail), s.page);
+    let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
     tokio::task::spawn_blocking(move || {
         let texte = std::fs::read_to_string(&plt).map_err(|e| format!("lecture de {} : {e}", plt.display()))?;
-        machines::envoyer(&m.connexion, machines::changer_de_pas(&texte, m.pas_mm(), m.decalage_mm).as_bytes())
+        machines::envoyer(&m.connexion, pour_la_machine(&texte, &t, &p, &m).as_bytes())
     })
     .await
     .unwrap_or_else(|e| Err(e.to_string()))
@@ -1797,15 +1803,43 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
     }
 }
 
+/// HP-GL du rendu (0,01 mm) tel que la machine le reçoit : au pas de la machine, décalé ;
+/// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
+fn pour_la_machine(hpgl: &str, t: &Travail, p: &Page, m: &machines::Machine) -> String {
+    let texte = machines::changer_de_pas(hpgl, m.pas_mm(), m.decalage_mm);
+    if m.modele != machines::Modele::MutohKona {
+        return texte;
+    }
+    let reglage = t.demande.parametre_decoupe.as_ref().and_then(|n| m.parametres_decoupe.iter().find(|x| &x.nom == n)).or(m.parametres_decoupe.first());
+    let u = |v: f64| (v * 100.0 * 25.4 / 72.0).round() as i64;
+    machines::pour_kona(&texte, p.cadre_pt.map(|c| c.map(u)), reglage, m.decoupe_retournee)
+}
+
+#[derive(Deserialize)]
+struct ChoixMachine {
+    #[serde(default)]
+    machine: Option<String>,
+}
+
 /// Avec un cadre à code-barres, nommé pour Mutoh CutServer : `Nom_SF|MF_<numéro>.plt`.
-async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+/// `?machine=<id>` : le fichier tel que cette machine le reçoit (à envoyer à la main).
+async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>, axum::extract::Query(q): axum::extract::Query<ChoixMachine>) -> Response {
     let cutserver = lire_page(&etat.config.donnees, id, page).and_then(|(t, _)| {
         let mot = t.demande.reperage.code_cutserver()?;
         let base: String = std::path::Path::new(&t.nom).file_stem()?.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
         Some(format!("{base}_{mot}_{:011}.plt", reperage::numero(id, page)))
     });
+    let machine = match q.machine.as_deref().map(|m| machine(&etat, m)) {
+        Some(None) => return introuvable(),
+        Some(m) => m,
+        None => None,
+    };
     match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_plt(rep, page))).await {
         Some(o) => {
+            let o = match (&machine, lire_page(&etat.config.donnees, id, page)) {
+                (Some(m), Some((t, p))) => pour_la_machine(&String::from_utf8_lossy(&o), &t, &p, m).into_bytes(),
+                _ => o,
+            };
             let nom = format!("attachment; filename=\"{}\"", cutserver.unwrap_or_else(|| format!("decoupe-{page:03}.plt")));
             ([(header::CONTENT_TYPE, "application/vnd.hp-hpgl".to_string()), (header::CONTENT_DISPOSITION, nom)], o).into_response()
         }
@@ -2179,6 +2213,8 @@ mod tests {
                 pas_mm: None,
                 decalage_mm: [0.0; 2],
                 m2_heure: None,
+                parametres_decoupe: vec![],
+                decoupe_retournee: false,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);

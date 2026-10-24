@@ -6,15 +6,17 @@
 //! - `Manuel` : quatre croix P1–P4 aux coins, pointées à la main sur le Kona.
 //! - `Cadre` : cadre continu de Type 1, mesuré automatiquement, sans code-barres ni
 //!   CutServer.
-//! - `CadreCode` (Type 2, « SF ») : cadre continu, coins à fenêtres, deux codes POSTNET
+//! - `CadreCode` (Type 2, « SF ») : cadre continu, deux codes POSTNET
 //!   (bas à gauche, haut à droite) qui portent le numéro du fichier de découpe CutServer.
 //! - `CadreMulti` (Type 3, « MF ») : angles de 125 mm et repères intermédiaires sur les
 //!   côtés, pour une découpe par segments ; mêmes codes.
 //!
 //! Types 2 et 3 : cotes des tableaux du guide (chap. 4.4.2) ; POSTNET standard (62 barres,
 //! chiffre de contrôle), vérifié en décodant l'exemple imprimé du guide. Lus sur les
-//! schémas, sans cote : les fenêtres des coins, la place du code du haut, l'écart des
-//! repères du Type 3. Provisoire jusqu'au premier essai réel.
+//! schémas, sans cote : la place du code du haut, l'écart des repères du Type 3.
+//! Le Kona n'a pas de lecture automatique sans code-barres (manuel § 6.2 : manuel, Single
+//! Frame, Multi Frame) : le Type 1 ne se lit pas seul, essai du 24/10 → EPOS 6213.
+//! Provisoire jusqu'au premier essai réel.
 
 use lopdf::{Document, Object, Stream, dictionary};
 use serde::{Deserialize, Serialize};
@@ -106,13 +108,16 @@ pub struct Mise {
     pub page: (f64, f64),
     pub decalage: (f64, f64),
     pub rectangles: Vec<[f64; 4]>,
+    /// Cadre Mutoh : coins opposés (x1, y1, x2, y2) au MILIEU des traits, ce que le Kona
+    /// attend dans `AL5` (mesuré sur la capture ONYX du 24/10 : écart = cadre − épaisseur).
+    pub coins: Option<[f64; 4]>,
 }
 
 /// `numero` : celui des codes-barres (Types 2 et 3), ignoré sinon.
 pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64) -> Mise {
     let mm = |v: f64| v * PT_PAR_MM;
     match reperage {
-        Reperage::Aucun => Mise { page: (largeur, hauteur), decalage: (0.0, 0.0), rectangles: vec![] },
+        Reperage::Aucun => Mise { page: (largeur, hauteur), decalage: (0.0, 0.0), rectangles: vec![], coins: None },
         Reperage::Cadre | Reperage::CadreCode | Reperage::CadreMulti => {
             use cadre::*;
             let avec_code = reperage != Reperage::Cadre;
@@ -132,15 +137,9 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
             let decalage = (x0 + e + (int_l - largeur) / 2.0, y0 + e + (int_h - hauteur) / 2.0);
             let (x1, y1) = (x0 + ext_l - e, y0 + ext_h - e);
             let mut rectangles = match reperage {
-                Reperage::Cadre => vec![[x0, y0, ext_l, e], [x0, y1, ext_l, e], [x0, y0, e, ext_h], [x1, y0, e, ext_h]],
-                // Côtés entre les coins, coins à fenêtres.
-                Reperage::CadreCode => {
-                    let mut r = vec![[x0 + e, y0, ext_l - 2.0 * e, e], [x0 + e, y1, ext_l - 2.0 * e, e], [x0, y0 + e, e, ext_h - 2.0 * e], [x1, y0 + e, e, ext_h - 2.0 * e]];
-                    for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
-                        r.extend(coin_a_fenetres(x, y, e));
-                    }
-                    r
-                }
+                // Cadre continu, coins pleins (Type 2 : comme le cadre d'ONYX qui passe sur notre
+                // Kona ; les fenêtres du schéma EasySign ne servent pas).
+                Reperage::Cadre | Reperage::CadreCode => vec![[x0, y0, ext_l, e], [x0, y1, ext_l, e], [x0, y0, e, ext_h], [x1, y0, e, ext_h]],
                 _ => {
                     let mut r = vec![[x0, y0, ext_l, e], [x0, y1, ext_l, e]];
                     let angle = mm(multi::ANGLE);
@@ -168,7 +167,12 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
                 rectangles.extend(postnet(numero, hx, hy));
                 rectangles.extend(chiffres(numero, hx + mm(code::LARGEUR) / 2.0, iy1 - mm(code::CHIFFRES_AU_CADRE + code::CHIFFRES_HAUTEUR)));
             }
-            Mise { page: (ext_l + 2.0 * mm(BORD_COTE), y0 + ext_h + mm(BORD_ARRIERE)), decalage, rectangles }
+            // Sens d'insertion, comme le ▲ d'ONYX : vers le haut de la page, le bord qui sort
+            // le premier de l'Epson (constaté à l'atelier le 24/10). Dans le coin intérieur
+            // bas-droit, hors de l'image (marge de 10 mm).
+            rectangles.extend(fleche_vers_le_haut(x1 - mm(3.0) - mm(FLECHE) / 2.0, y0 + e + mm(3.0)));
+            let coins = Some([x0 + e / 2.0, y0 + e / 2.0, x0 + ext_l - e / 2.0, y0 + ext_h - e / 2.0]);
+            Mise { page: (ext_l + 2.0 * mm(BORD_COTE), y0 + ext_h + mm(BORD_ARRIERE)), decalage, rectangles, coins }
         }
         Reperage::Manuel => {
             let bord = mm(CROIX_BORD + CROIX_BRAS / 2.0);
@@ -180,20 +184,20 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
                 rectangles.push([cx - bras / 2.0, cy - trait_ / 2.0, bras, trait_]);
                 rectangles.push([cx - trait_ / 2.0, cy - bras / 2.0, trait_, bras]);
             }
-            Mise { page: (largeur + 2.0 * (bord + m), hauteur + 2.0 * (bord + m)), decalage, rectangles }
+            Mise { page: (largeur + 2.0 * (bord + m), hauteur + 2.0 * (bord + m)), decalage, rectangles, coins: None }
         }
     }
 }
 
-/// Coin de côté `e` du Type 2 : noir, percé de quatre fenêtres blanches (2 × 2).
-fn coin_a_fenetres(x: f64, y: f64, e: f64) -> Vec<[f64; 4]> {
-    // ponytail: proportions lues sur le schéma du guide (non cotées) ; à confronter au Kona.
-    let traits = [(0.0, 0.1), (0.45, 0.1), (0.9, 0.1)];
-    let mut r: Vec<[f64; 4]> = traits.iter().map(|&(d, t)| [x, y + d * e, e, t * e]).collect();
-    for (dy, h) in [(0.1, 0.35), (0.55, 0.35)] {
-        r.extend(traits.iter().map(|&(d, t)| [x + d * e, y + dy * e, t * e, h * e]));
-    }
-    r
+/// Côté du triangle de la flèche d'insertion, en mm.
+const FLECHE: f64 = 5.0;
+
+/// Triangle plein pointant vers le haut (base en y, centrée sur cx), en marches de
+/// 0,25 mm : le repérage ne dessine que des rectangles.
+fn fleche_vers_le_haut(cx: f64, y: f64) -> Vec<[f64; 4]> {
+    let (c, marche) = (FLECHE * PT_PAR_MM, 0.25 * PT_PAR_MM);
+    let n = (c * 0.87 / marche).round() as usize;
+    (0..n).map(|i| { let l = c * (n - i) as f64 / n as f64; [cx - l / 2.0, y + i as f64 * marche, l, marche] }).collect()
 }
 
 /// POSTNET du numéro (11 chiffres et contrôle), pied des barres en (x, y), en points.
@@ -369,6 +373,16 @@ mod tests {
         let verticaux: Vec<f64> = m.rectangles.iter().filter(|b| (b[2] / MM - cadre::EPAISSEUR).abs() < 1e-9 && b[3] > b[2]).map(|b| b[3] / MM).collect();
         assert_eq!(verticaux.iter().filter(|&&h| (h - 125.0).abs() < 1e-9).count(), 4);
         assert!(verticaux.iter().filter(|&&h| (10.0..=60.0).contains(&h)).count() >= 2);
+    }
+
+    /// La flèche d'insertion est dans le cadre, sous l'image, pointe vers le haut.
+    #[test]
+    fn fleche_d_insertion_dans_le_coin_bas_droit() {
+        let m = mise_en_page(Reperage::Cadre, 100.0 * MM, 60.0 * MM, 0);
+        let f: Vec<_> = m.rectangles[4..].to_vec();
+        assert!(f.len() > 10 && f.windows(2).all(|w| w[1][2] < w[0][2] && w[1][1] > w[0][1]), "s'affine en montant : pointe en haut");
+        let bas_interieur = (cadre::BORD_AVANT + cadre::EPAISSEUR) * MM;
+        assert!((f[0][1] - bas_interieur - 3.0 * MM).abs() < 1e-9 && f.last().unwrap()[1] < m.decalage.1, "sous l'image, dans la marge");
     }
 
     #[test]

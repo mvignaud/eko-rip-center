@@ -21,9 +21,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   découpe ne partent jamais ; un autre ton direct, ou blanc et argent sur la même page,
   est refusé à la mise en file avec la raison.
 - **Cadres Mutoh Types 2 et 3** (CutServer SF et MF) : codes POSTNET 250 × 20 mm haut et
-  bas, numéro à 11 chiffres par page, coins à fenêtres (Type 2), angles de 125 mm et
+  bas, numéro à 11 chiffres par page, cadre plein (Type 2), angles de 125 mm et
   repères intermédiaires (Type 3) ; fichier de découpe nommé `Nom_SF|MF_<numéro>.plt`.
-  Provisoires jusqu'au premier essai sur le Kona.
+  Type 2 éprouvé sur le Kona le 24/10 ; Type 3 à éprouver.
 - **Rôles administrateur et opérateur** : l'opérateur travaille (travaux, file, planches)
   sans pouvoir régler le serveur (machines, tarifs, profils ICC, réglages enregistrés :
   refus 403 `admin_requis`, écrans masqués). `utilisateur ajouter <nom> [admin|operateur]` ;
@@ -37,6 +37,12 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Durée d'impression estimée** sur la fiche et dans la file (total à passer par
   machine) ; cadence réglable par machine, Epson par défaut d'après sa fiche.
 - **Notifications** : fin ou échec d'une sortie dit à l'écran, et au système si permis.
+- **Mutoh Kona : impression + découpe éprouvée à l'atelier (24/10)** avec un cadre type 2
+  du RIP : envoi comme CutServer (lecture du cadre `AL5`, coins au milieu des traits,
+  `PROGSTEP10`, une commande par ligne, outil `SP1`), axes du Kona (X = hauteur de page,
+  Y = −largeur), réglages de coupe par machine (vitesse, force, accélération) et par
+  travail, option « découpe retournée », `.plt` prêt pour une machine (`?machine=kona`).
+- **Flèche d'insertion ▲** dans les cadres Mutoh.
 - Documentation **Administrer le serveur** (FR/EN) : données, sauvegardes, mises à jour,
   comptes, machines et questions fréquentes.
 

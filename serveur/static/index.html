@@ -221,6 +221,7 @@
           <select name="traces"><option value="tons" data-t="tons"></option><option value="tous" data-t="tous"></option></select>
         </label>
         <label><span data-t="support_choix"></span> <select name="support"></select></label>
+        <label><span data-t="coupe_choix"></span> <select name="parametre_decoupe"></select></label>
         <label><span data-t="reperage"></span>
           <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option><option value="cadre_code" data-t="cadre_code"></option><option value="cadre_multi" data-t="cadre_multi"></option></select>
         </label>
@@ -326,7 +327,7 @@
 const textes = {
   fr: {
     identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
-    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", coupes_titre: "Réglages de coupe", coupe_ajouter: "Ajouter un réglage", coupe_nom: "Nom", coupe_vitesse: "Vitesse (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Accélération (G)", retournee: "Découpe retournée (180°)", note_retournee: "Kona avec cadre : à cocher si la coupe sort tournée de 180° par rapport à l'impression.", coupe_choix: "Réglage de coupe", coupe_defaut: "— par défaut (le premier) —", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
     connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
@@ -428,7 +429,7 @@ const textes = {
   },
   en: {
     identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
-    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", coupes_titre: "Cut settings", coupe_ajouter: "Add a setting", coupe_nom: "Name", coupe_vitesse: "Speed (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Acceleration (G)", retournee: "Cut turned (180°)", note_retournee: "Kona with a frame: tick it if the cut comes out turned 180° from the print.", coupe_choix: "Cut setting", coupe_defaut: "— default (the first) —", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
     connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
@@ -773,6 +774,7 @@ function demandeDuFormulaire() {
     edition: lireEdition($("edition-envoi")),
     auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
     support: f.support.value || null,
+    parametre_decoupe: f.parametre_decoupe.value || null,
   };
 }
 
@@ -819,6 +821,8 @@ function appliquerDemande(d) {
   f.auto_imprimer.checked = !!a.imprimer; f.auto_decouper.checked = !!a.decouper; f.auto_suspendre.checked = !!a.suspendre;
   if (d.support && ![...f.support.options].some((o) => o.value === d.support)) f.support.append(new Option(d.support, d.support));
   f.support.value = d.support || "";
+  if (d.parametre_decoupe && ![...f.parametre_decoupe.options].some((o) => o.value === d.parametre_decoupe)) f.parametre_decoupe.append(new Option(d.parametre_decoupe, d.parametre_decoupe));
+  f.parametre_decoupe.value = d.parametre_decoupe || "";
 }
 choixReglage.addEventListener("change", () => {
   const r = reglages.find((x) => x.nom === choixReglage.value);
@@ -1272,6 +1276,11 @@ async function chargerMachines() {
   const c = await api("/api/machines");
   if (!c) return;
   catalogue = c.map((m) => ({ ...m, modele_imprime: ["epson_sc_s80600", "roland_versacamm"].includes(m.modele), modele_decoupe: m.modele !== "epson_sc_s80600" }));
+  // Réglages de coupe proposés par travail : ceux de toutes les découpeuses.
+  const choixCoupe = form.parametre_decoupe, garde = choixCoupe.value;
+  const noms = [...new Set(catalogue.flatMap((m) => (m.parametres_decoupe || []).map((p) => p.nom)))];
+  choixCoupe.replaceChildren(new Option(T().coupe_defaut, ""), ...noms.map((n) => new Option(n, n)));
+  choixCoupe.value = noms.includes(garde) ? garde : "";
   afficherLateral();
   afficherEditeurMachines();
   derniereEmpreinte = "";
@@ -1330,6 +1339,20 @@ function afficherEditeurMachines() {
         el("label", { title: T().note_decalage }, T().decalage_x, champ("decalage_x", (m.decalage_mm || [0, 0])[0], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" })),
         el("label", { title: T().note_decalage }, T().decalage_y, champ("decalage_y", (m.decalage_mm || [0, 0])[1], { type: "number", min: -20, max: 20, step: 0.05, style: "width: 6em" })),
         el("label", { title: T().note_cadence }, T().cadence, champ("cadence", m.m2_heure ?? "", { type: "number", min: 0.1, max: 500, step: 0.1, placeholder: T().pas_defaut, style: "width: 7em" }))));
+    // Réglages de coupe (couches de découpe de CutServer) : le premier sert par défaut.
+    const coupes = el("div", {});
+    const ligneCoupe = (p = { nom: "", vitesse_cm_s: 15, force_g: 145, acceleration_g: 1 }) => {
+      const r = el("div", { className: "ligne bas ligne-coupe" },
+        el("label", { style: "flex: 2" }, T().coupe_nom, champ("c_nom", p.nom, { placeholder: "Mi-chair V3000" })),
+        el("label", {}, T().coupe_vitesse, champ("c_vitesse", p.vitesse_cm_s, { type: "number", min: 1, max: 100, step: 1, style: "width: 6em" })),
+        el("label", {}, T().coupe_force, champ("c_force", p.force_g, { type: "number", min: 1, max: 600, step: 1, style: "width: 6em" })),
+        el("label", {}, T().coupe_acceleration, champ("c_acc", p.acceleration_g, { type: "number", min: 0.1, max: 10, step: 0.1, style: "width: 6em" })));
+      r.append(bouton("✕", () => r.remove(), "discret danger"));
+      coupes.append(r);
+    };
+    (m.parametres_decoupe || []).forEach((p) => ligneCoupe(p));
+    bloc.append(el("div", { className: "ligne bas" }, el("strong", {}, T().coupes_titre), bouton(T().coupe_ajouter, () => ligneCoupe()),
+      el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee)), coupes);
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
   };
@@ -1343,7 +1366,9 @@ $("editeur-machines").addEventListener("submit", async (e) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
     const type = q("type");
     const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
-    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null };
+    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null,
+      parametres_decoupe: [...b.querySelectorAll(".ligne-coupe")].map((r) => ({ nom: r.querySelector("[name=c_nom]").value.trim(), vitesse_cm_s: +r.querySelector("[name=c_vitesse]").value, force_g: +r.querySelector("[name=c_force]").value, acceleration_g: +r.querySelector("[name=c_acc]").value })).filter((p) => p.nom),
+      decoupe_retournee: b.querySelector("[name=retournee]").checked };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

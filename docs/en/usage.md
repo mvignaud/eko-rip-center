@@ -165,9 +165,11 @@ In **Print** mode, **Kona registration** adds around the image:
   Contour Cut > Manual, point P1, P2, P3, P4.
 - **Mutoh frame (type 1)**: 5 mm black frame, 10 mm from the image, inside at least
   250 × 250 mm, margins of 25 mm on the sides, 30 mm at the front, 80 mm at the rear
-  (minimum sizes from the Kona manual). The Kona measures it by itself.
-- **Mutoh frame + barcode (type 2, CutServer SF)**: the same frame, corners pierced with
-  four windows, and two 250 × 20 mm POSTNET codes (bottom left, top right, 50 mm from the
+  (minimum sizes from the Kona manual). ⚠️ The Kona does not read a frame without a
+  barcode by itself (manual, § 6.2: manual, Single Frame, Multi Frame): sent directly,
+  it stops on "EPOS 6213". For automatic reading, use type 2.
+- **Mutoh frame + barcode (type 2, CutServer SF)**: **proven in the workshop on 24/10**
+  (print, frame and code reading, cut). The same frame and two 250 × 20 mm POSTNET codes (bottom left, top right, 50 mm from the
   side and 9 mm from the frame) with the number in clear. The 11-digit number comes from
   the job and page. The downloaded cut file has the name Mutoh CutServer expects,
   `Name_SF_<number>.plt`: drop it in its folder, the Kona reads the code and CutServer
@@ -176,9 +178,20 @@ In **Print** mode, **Kona registration** adds around the image:
   marker at most every 500 mm on each side, same codes, file `Name_MF_<number>.plt`, for
   long jobs cut segment by segment.
 
-Types 2 and 3 follow the tables of the Kona application guide (ch. 4.4.2); the corner
-windows, the place of the top code and the marker spacing are read from its drawings,
-without dimensions: provisional until the first test on the Kona.
+Types 2 and 3 follow the tables of the Kona application guide (ch. 4.4.2); the place of
+the top code and the type 3 marker spacing are read from its drawings, without
+dimensions (type 3 still to be proven).
+
+Every frame carries an **▲ arrow** in its inner bottom-right corner: it points to the
+edge that leaves the Epson first, the one fed first into the Kona (from the rear).
+
+**Sending to the Kona.** The RIP sends the cut as Mutoh CutServer does: with a frame it
+declares two opposite frame corners (line centres), the Kona scans it, reads the code,
+then cuts. **Cut settings** (speed in cm/s, force in g, acceleration in G) are declared
+per machine in System > Machines, like CutServer's "cut layers"; the first is the
+default. **.plt file** with `?machine=kona` gives the file as the Kona receives it, to
+send by hand (serial port 9600, 8N1, RTS/CTS). If the cut comes out turned 180°, tick
+**cut turned** on the machine.
 
 The printed page grows accordingly, and the cut file follows the same offset. The Kona
 must be set to a resolution of **0.010 mm**.
