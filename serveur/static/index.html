@@ -1643,7 +1643,8 @@ function afficherFile() {
   const ouvert = [...$("vue-file").querySelectorAll("details")].map((d) => d.open);
   const colonnes = catalogue.map((m) => {
     const machine = m.id;
-    const miennes = sorties.filter((s) => s.machine === machine);
+    // Une sortie envoyée au pool apparaît chez chaque membre tant qu'aucun ne l'a prise.
+    const miennes = sorties.filter((s) => s.machine === machine || (m.pool && s.machine === m.pool));
     const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
     const ligne = (s) => el("div", { className: "sortie" },
       el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}`)),
