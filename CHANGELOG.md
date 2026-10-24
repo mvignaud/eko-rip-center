@@ -11,6 +11,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Purge automatique** des travaux plus vieux que `EKO_RIP_CONSERVATION_JOURS` jours
   (30 par défaut, 0 = jamais), toutes les heures ; un travail en cours n'est jamais
   purgé. ⚠️ À la mise à jour, les travaux de plus de 30 jours sont effacés au démarrage.
+- **Glisser-déposer** : un ou plusieurs fichiers lâchés sur la page partent avec les
+  réglages du formulaire (écran web et client de bureau).
 - Pied de page : version, espace libre du disque des données (en rouge sous 10 %),
   durée de conservation. Route `/api/systeme`.
 

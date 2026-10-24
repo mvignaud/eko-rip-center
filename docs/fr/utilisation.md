@@ -1,7 +1,7 @@
 # Utilisation
 
 1. Ouvrir l'écran (client ou navigateur).
-2. Choisir un PDF et la résolution (360, 720 ou 1440 dpi), puis **Envoyer au RIP**.
+2. Choisir un PDF (ou lâcher un ou plusieurs fichiers n'importe où sur la page) et la résolution (360, 720 ou 1440 dpi), puis **Envoyer au RIP**.
 3. Le travail apparaît dans la liste : *En attente*, *Rendu en cours*, puis
    *Terminé* avec l'aperçu de chaque plaque.
 

@@ -25,6 +25,7 @@
   label.case { display: flex; align-items: center; gap: 6px; }
   label.discret { color: var(--accent); cursor: pointer; }
   footer { margin: 24px 0 8px; }
+  body.depot main { outline: 3px dashed var(--accent); outline-offset: -8px; }
   .ligne-reglage { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; width: 100%; }
   #planche { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
   #planche[hidden] { display: none; }
@@ -286,13 +287,40 @@ function texteErreur(code, detail) {
   return detail ? `${base} (${detail})` : base;
 }
 
+/** Envoie le formulaire ; `fichier` remplace celui du champ (glisser-déposer). */
+async function envoyerFormulaire(fichier) {
+  const corps = new FormData(form);
+  if (fichier) corps.set("fichier", fichier, fichier.name);
+  return fetch("/api/travaux", { method: "POST", body: corps });
+}
+
+// Glisser-déposer : un ou plusieurs fichiers lâchés sur la page partent avec les réglages du formulaire.
+document.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); document.body.classList.add("depot"); } });
+document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("depot"); });
+document.addEventListener("drop", async (e) => {
+  if (!e.dataTransfer?.files.length) return;
+  e.preventDefault();
+  document.body.classList.remove("depot");
+  for (const f of e.dataTransfer.files) {
+    msg.className = ""; msg.textContent = T().envoi;
+    try {
+      const r = await envoyerFormulaire(f);
+      const c = await r.json().catch(() => ({}));
+      if (r.status === 413) throw new Error(texteErreur("trop_gros"));
+      if (!r.ok) throw new Error(`${f.name} : ${texteErreur(c.code, c.detail)}`);
+      msg.textContent = T().recu(c.nom);
+    } catch (err) { msg.className = "erreur"; msg.textContent = err.message; }
+  }
+  rafraichir();
+});
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const bouton = form.querySelector("button[type=submit]");
   bouton.disabled = true; msg.className = ""; msg.textContent = T().envoi;
   try {
     let r;
-    try { r = await fetch("/api/travaux", { method: "POST", body: new FormData(form) }); }
+    try { r = await envoyerFormulaire(); }
     catch { throw new Error(texteErreur("reseau")); }
     const corps = await r.json().catch(() => ({}));
     if (r.status === 413) throw new Error(texteErreur("trop_gros"));
