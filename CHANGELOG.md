@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.9.0] — 2026-10-24
+
 ### Ajouté
 - **Prix de revient par travail** (encre + matière), sur la carte et dans le CSV ; prix
   saisis HT ou TTC, taux de TVA, affichage HT ou TTC au choix.
@@ -15,6 +17,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Catalogue de supports** : prix au m², ou largeur + longueur + prix payé du rouleau ;
   choisi à l'envoi ; matière comptée sur toute la laize (par défaut : HEXIS V3000WG,
   1,97 €/m², 1600 mm × 45 m).
+
+*English: cost price per job (ink + media) on the card and in the CSV; ink price per
+litre from cartridge size and price; media catalogue (price per m² or roll width, length
+and price paid), chosen per job, media counted across the whole roll width; prices
+entered and shown excl. or incl. VAT as chosen.*
 
 ## [0.8.0] — 2026-10-24
 
