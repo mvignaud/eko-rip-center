@@ -228,6 +228,10 @@ length and price paid (the price per m² is computed). The medium is chosen on s
 whole roll width over the printed length. The job card shows its **cost price** (ink +
 media).
 
+**Excl. or incl. VAT**: state whether the prices entered include VAT, the **VAT** rate
+(20 % by default) and the basis of the **cost price shown** (excl. VAT by default); the
+card, each page's estimate and the CSV (`base` column) follow.
+
 **Export consumption (CSV)** downloads one row per printed page (UTC date, job, page,
 area, ml per ink, costs), `;` separator, dot decimals, for a spreadsheet or E-KO ERP.
 

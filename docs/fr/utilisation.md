@@ -237,6 +237,10 @@ support se choisit à l'envoi (**Support (prix de revient)**, gardé dans les r�
 avec une largeur connue, la matière comptée est toute la largeur du rouleau sur la
 longueur imprimée. La carte du travail affiche son **prix de revient** (encre + matière).
 
+**HT ou TTC** : indiquer si les prix saisis sont **TTC** ou **HT**, le taux de **TVA**
+(20 % par défaut) et la base du **prix de revient affiché** (HT par défaut) ; la carte,
+l'estimation de chaque page et le CSV (colonne `base`) suivent.
+
 **Exporter la consommation (CSV)** télécharge une ligne par page imprimée (date UTC,
 travail, page, surface, ml par encre, coûts), séparateur `;`, décimales avec un point,
 pour un tableur ou E-KO ERP.

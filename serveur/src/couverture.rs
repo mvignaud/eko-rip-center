@@ -96,6 +96,35 @@ pub struct Tarifs {
     /// Catalogue des supports, choisis par travail.
     #[serde(default)]
     pub supports: Vec<Support>,
+    /// Prix saisis toutes taxes comprises (sinon hors taxe).
+    #[serde(default = "vrai")]
+    pub saisie_ttc: bool,
+    /// Taux de TVA en %, pour passer de l'un à l'autre.
+    #[serde(default = "tva_defaut")]
+    pub tva_pct: f64,
+    /// Prix de revient affiché toutes taxes comprises (sinon hors taxe).
+    #[serde(default)]
+    pub affichage_ttc: bool,
+}
+
+fn vrai() -> bool {
+    true
+}
+
+fn tva_defaut() -> f64 {
+    20.0
+}
+
+impl Tarifs {
+    /// Facteur qui passe des prix saisis aux prix affichés (HT ↔ TTC).
+    pub fn conversion(&self) -> f64 {
+        let t = 1.0 + self.tva_pct / 100.0;
+        match (self.saisie_ttc, self.affichage_ttc) {
+            (true, false) => 1.0 / t,
+            (false, true) => t,
+            _ => 1.0,
+        }
+    }
 }
 
 impl Default for Tarifs {
@@ -106,7 +135,8 @@ impl Default for Tarifs {
         // Premier support du catalogue, donné le même jour : HEXIS V3000WG à 1,97 €/m², rouleau
         // de 1600 mm × 45 m (141,84 €).
         let hexis = Support { nom: "HEXIS V3000WG".into(), prix_m2: Some(1.97), rouleau: Some(Rouleau { largeur_mm: 1600.0, longueur_m: 45.0, prix: 141.84 }) };
-        Tarifs { encres: BTreeMap::new(), encre_defaut: Encre { ml_m2: 10.0, prix_litre: 177.0, cartouche }, support_m2: 0.0, supports: vec![hexis] }
+        // Prix saisis TTC (comme donnés), prix de revient affiché HT.
+        Tarifs { encres: BTreeMap::new(), encre_defaut: Encre { ml_m2: 10.0, prix_litre: 177.0, cartouche }, support_m2: 0.0, supports: vec![hexis], saisie_ttc: true, tva_pct: 20.0, affichage_ttc: false }
     }
 }
 
@@ -123,7 +153,7 @@ impl Tarifs {
                 && s.prix_m2.is_none_or(bon)
                 && s.rouleau.is_none_or(|r| bon(r.largeur_mm) && r.largeur_mm > 0.0 && bon(r.longueur_m) && r.longueur_m > 0.0 && bon(r.prix))
         });
-        if encres_bonnes && supports_bons && bon(self.support_m2) { Ok(()) } else { Err("tarifs_invalides") }
+        if encres_bonnes && supports_bons && bon(self.support_m2) && (0.0..=100.0).contains(&self.tva_pct) { Ok(()) } else { Err("tarifs_invalides") }
     }
 }
 
@@ -151,6 +181,8 @@ pub struct LigneEncre {
 
 #[derive(Debug, PartialEq, Serialize)]
 pub struct Estimation {
+    /// Coûts toutes taxes comprises (sinon hors taxe).
+    pub ttc: bool,
     pub surface_m2: f64,
     /// Support compté (catalogue) et surface de support consommée (m²).
     pub support: Option<String>,
@@ -174,7 +206,7 @@ pub fn estimer(surface_m2: f64, hauteur_mm: f64, couverture: &BTreeMap<String, f
         .map(|(nom, &c)| {
             let e = t.encres.get(nom).copied().unwrap_or(t.encre_defaut);
             let ml = c * surface_m2 * e.ml_m2;
-            LigneEncre { nom: nom.clone(), couverture: c, ml, cout: ml / 1000.0 * e.prix_litre() }
+            LigneEncre { nom: nom.clone(), couverture: c, ml, cout: ml / 1000.0 * e.prix_litre() * t.conversion() }
         })
         .collect();
     let (ml, cout_encres) = encres.iter().fold((0.0, 0.0), |(m, c), l| (m + l.ml, c + l.cout));
@@ -183,8 +215,8 @@ pub fn estimer(surface_m2: f64, hauteur_mm: f64, couverture: &BTreeMap<String, f
         Some(s) => (s.rouleau.filter(|_| hauteur_mm > 0.0 && surface_m2 > 0.0).map_or(surface_m2, |r| r.largeur_mm / 1000.0 * hauteur_mm / 1000.0), s.prix_m2()),
         None => (surface_m2, t.support_m2),
     };
-    let cout_support = surface_support_m2 * prix_m2;
-    Estimation { surface_m2, support: s.map(|s| s.nom.clone()), surface_support_m2, encres, ml, cout_encres, cout_support, total: cout_encres + cout_support }
+    let cout_support = surface_support_m2 * prix_m2 * t.conversion();
+    Estimation { ttc: t.affichage_ttc, surface_m2, support: s.map(|s| s.nom.clone()), surface_support_m2, encres, ml, cout_encres, cout_support, total: cout_encres + cout_support }
 }
 
 #[cfg(test)]
@@ -208,7 +240,7 @@ mod tests {
 
     #[test]
     fn cout_par_encre_et_support() {
-        let mut t = Tarifs { support_m2: 5.0, ..Default::default() };
+        let mut t = Tarifs { support_m2: 5.0, affichage_ttc: true, ..Default::default() };
         t.encres.insert("White".into(), Encre { ml_m2: 20.0, prix_litre: 200.0, cartouche: None });
         let couverture = BTreeMap::from([("Cyan".into(), 0.5), ("White".into(), 1.0), ("CutContour".into(), 0.01)]);
         let e = estimer(2.0, 0.0, &couverture, &["CutContour".into()], &t, None);
@@ -220,6 +252,20 @@ mod tests {
         assert!((e.cout_support - 10.0).abs() < 1e-9 && (e.total - 19.77).abs() < 1e-9 && (e.ml - 50.0).abs() < 1e-9);
         assert!(Tarifs { support_m2: f64::NAN, ..Default::default() }.verifier().is_err());
         assert!(Tarifs::default().verifier().is_ok());
+    }
+
+    #[test]
+    fn hors_taxe_ou_toutes_taxes() {
+        // 1 m² de bâche à 12 € TTC, sans encre : 10 € HT à 20 % de TVA.
+        let base = Tarifs { supports: vec![Support { nom: "B".into(), prix_m2: Some(12.0), rouleau: None }], ..Default::default() };
+        let cout = |t: &Tarifs| estimer(1.0, 0.0, &BTreeMap::new(), &[], t, Some("B"));
+        let ht = cout(&base);
+        assert!(!ht.ttc && (ht.total - 10.0).abs() < 1e-9, "saisi TTC, affiché HT par défaut");
+        assert!((cout(&Tarifs { affichage_ttc: true, ..base.clone() }).total - 12.0).abs() < 1e-9);
+        // Saisi HT, affiché TTC : 12 × 1,2 = 14,40.
+        let t = Tarifs { saisie_ttc: false, affichage_ttc: true, ..base.clone() };
+        assert!(cout(&t).ttc && (cout(&t).total - 14.4).abs() < 1e-9);
+        assert!(Tarifs { tva_pct: 150.0, ..base }.verifier().is_err());
     }
 
     #[test]
@@ -242,7 +288,7 @@ mod tests {
         // Rouleau de 1600 mm × 50 m payé 240 € : 3 €/m².
         let vinyle = Support { nom: "Vinyle".into(), prix_m2: None, rouleau: Some(Rouleau { largeur_mm: 1600.0, longueur_m: 50.0, prix: 240.0 }) };
         assert!((vinyle.prix_m2() - 3.0).abs() < 1e-9);
-        let mut t = Tarifs { supports: vec![vinyle, Support { nom: "Bâche".into(), prix_m2: Some(4.5), rouleau: None }], ..Default::default() };
+        let mut t = Tarifs { supports: vec![vinyle, Support { nom: "Bâche".into(), prix_m2: Some(4.5), rouleau: None }], affichage_ttc: true, ..Default::default() };
         t.encres.insert("Cyan".into(), cyan);
         // Page de 1000 × 500 mm (0,5 m²), cyan à 50 % : 0,5 × 0,5 × 10 = 2,5 ml → 0,35 €.
         // Vinyle : toute la laize (1,6 m) sur 0,5 m = 0,8 m² à 3 € = 2,40 €.

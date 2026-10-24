@@ -8,7 +8,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ## [Non publié]
 
 ### Ajouté
-- **Prix de revient par travail** (encre + matière), sur la carte et dans le CSV.
+- **Prix de revient par travail** (encre + matière), sur la carte et dans le CSV ; prix
+  saisis HT ou TTC, taux de TVA, affichage HT ou TTC au choix.
 - Encres : contenance et prix de la cartouche → prix au litre (par défaut : cartouche
   Epson 700 ml à 123,90 € TTC, soit 177 €/l).
 - **Catalogue de supports** : prix au m², ou largeur + longueur + prix payé du rouleau ;

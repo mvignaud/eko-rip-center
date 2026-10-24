@@ -325,7 +325,7 @@ const textes = {
     couts: "Coûts d'encre et de support", cartouche_ml: "Cartouche (ml)", cartouche_prix: "Prix cartouche (€)",
     supports: "Supports (rouleaux)", note_supports: "Prix au m², ou largeur + longueur + prix payé du rouleau : le prix au m² est calculé. Avec une largeur, la matière comptée est toute la largeur du rouleau sur la longueur imprimée.",
     support_nom: "Nom (ex. Vinyle blanc mat)", largeur_mm: "Largeur (mm)", longueur_m: "Longueur (m)", prix_paye: "Prix payé (€)", ou_prix_m2: "ou €/m²",
-    ajouter_support: "Ajouter un support", support_choix: "Support (prix de revient)", support_defaut: "— prix par défaut —",
+    ajouter_support: "Ajouter un support", saisie: "Prix saisis", affichage: "Prix de revient affiché", tva: "TVA (%)", ht: "HT", ttc: "TTC", support_choix: "Support (prix de revient)", support_defaut: "— prix par défaut —",
     prix_de_revient: "Prix de revient estimé (encre + matière)", matiere: (n, m2) => `${n} : ${m2} m² de matière`, encre: "Encre", ml_m2: "ml/m² à 100 %", prix_litre: "€ / litre", autres_encres: "Toutes les autres",
     support_m2: "Support sans choix (€ / m²)", enregistrer: "Enregistrer", tarifs_enregistres: "Tarifs enregistrés.", export_csv: "Exporter la consommation (CSV)",
     note_tarifs: "Valeurs de départ à remplacer par celles de l'atelier. Contenance et prix de la cartouche, s'ils sont saisis, fixent le prix au litre. Une case vide prend la ligne « Toutes les autres ».",
@@ -407,7 +407,7 @@ const textes = {
     couts: "Ink and media costs", cartouche_ml: "Cartridge (ml)", cartouche_prix: "Cartridge price (€)",
     supports: "Media (rolls)", note_supports: "Price per m², or roll width + length + price paid: the price per m² is computed. With a width, the media counted is the whole roll width over the printed length.",
     support_nom: "Name (e.g. Matt white vinyl)", largeur_mm: "Width (mm)", longueur_m: "Length (m)", prix_paye: "Price paid (€)", ou_prix_m2: "or €/m²",
-    ajouter_support: "Add a medium", support_choix: "Media (cost price)", support_defaut: "— default price —",
+    ajouter_support: "Add a medium", saisie: "Prices entered", affichage: "Cost price shown", tva: "VAT (%)", ht: "excl. VAT", ttc: "incl. VAT", support_choix: "Media (cost price)", support_defaut: "— default price —",
     prix_de_revient: "Estimated cost price (ink + media)", matiere: (n, m2) => `${n}: ${m2} m² of media`, encre: "Ink", ml_m2: "ml/m² at 100 %", prix_litre: "€ / litre", autres_encres: "All others",
     support_m2: "Media when none chosen (€ / m²)", enregistrer: "Save", tarifs_enregistres: "Rates saved.", export_csv: "Export consumption (CSV)",
     note_tarifs: "Starting values, to be replaced by the workshop's own. Cartridge size and price, when entered, set the price per litre. An empty box takes the “All others” row.",
@@ -599,6 +599,10 @@ function afficherTarifs() {
     el("strong", {}, T().supports), el("p", { className: "meta", style: "margin: 0" }, T().note_supports), supports,
     el("div", { className: "ligne" }, bouton(T().ajouter_support, () => ligneSupport())),
     el("label", { style: "max-width: 260px" }, T().support_m2, champ("support", tarifs.support_m2)),
+    el("div", { className: "ligne bas" },
+      el("label", {}, T().saisie, el("select", { name: "saisie_ttc" }, el("option", { value: "1", selected: tarifs.saisie_ttc !== false }, T().ttc), el("option", { value: "0", selected: tarifs.saisie_ttc === false }, T().ht))),
+      el("label", {}, T().tva, champ("tva", tarifs.tva_pct ?? 20)),
+      el("label", {}, T().affichage, el("select", { name: "affichage_ttc" }, el("option", { value: "0", selected: !tarifs.affichage_ttc }, T().ht), el("option", { value: "1", selected: !!tarifs.affichage_ttc }, T().ttc)))),
     el("div", { className: "ligne" }, el("button", { type: "submit" }, T().enregistrer),
       el("a", { href: "/api/rapports/consommation.csv", download: "consommation.csv" }, T().export_csv)));
 }
@@ -618,7 +622,8 @@ $("tarifs").addEventListener("submit", async (e) => {
     const rouleau = q("largeur") && q("longueur") ? { largeur_mm: q("largeur"), longueur_m: q("longueur"), prix: q("prix") ?? 0 } : null;
     return { nom: l.querySelector("[name=nom]").value.trim(), prix_m2: q("m2"), rouleau };
   }).filter((x) => x.nom);
-  const r = await api("/api/tarifs", json("POST", { encre_defaut: defaut, encres, support_m2: nb(v.support) ?? 0, supports }));
+  const r = await api("/api/tarifs", json("POST", { encre_defaut: defaut, encres, support_m2: nb(v.support) ?? 0, supports,
+    saisie_ttc: v.saisie_ttc === "1", tva_pct: nb(v.tva) ?? 20, affichage_ttc: v.affichage_ttc === "1" }));
   if (r) { tarifs = r; document.activeElement.blur(); afficherTarifs(); remplirSupports(); dire(T().tarifs_enregistres); derniereEmpreinte = ""; rafraichir(); }
 });
 
@@ -882,7 +887,7 @@ function carteTravail(t) {
     t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null,
     t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null,
     t.alertes && t.alertes.length ? el("span", { className: "badge alerte" }, T().nb_alertes(t.alertes.length)) : null,
-    t.prix_de_revient > 0 ? el("span", { className: "badge", title: T().prix_de_revient }, `≈ ${nombre(t.prix_de_revient, 2)} €`) : null);
+    t.prix_de_revient > 0 ? el("span", { className: "badge", title: T().prix_de_revient }, `≈ ${nombre(t.prix_de_revient, 2)} € ${t.pages[0]?.estimation?.ttc ? T().ttc : T().ht}`) : null);
   const actions = el("div", { className: "ligne" });
   if (t.format === "pdf" && (t.statut === "termine" || t.statut === "echec")) actions.append(bouton(T().editer, () => ouvrirEdition(t)));
   if (t.format === "pdf" && t.statut === "termine") actions.append(el("a", { href: `/api/travaux/${t.id}/bat.pdf?langue=${langue}`, target: "_blank", rel: "noopener", className: "meta", onclick: (e) => e.stopPropagation() }, T().bat));
@@ -947,7 +952,7 @@ function vuePage(t, page, n) {
   const e = page.estimation;
   if (t.mode === "imprimer" && e && e.surface_m2 > 0) {
     bloc.append(el("div", { className: "meta" }, T().estimation(nombre(e.surface_m2, 3), nombre(e.ml, 1), nombre(e.total, 2), nombre(e.cout_encres, 2), nombre(e.cout_support, 2)),
-      e.support ? ` · ${T().matiere(e.support, nombre(e.surface_support_m2, 3))}` : ""));
+      e.support ? ` · ${T().matiere(e.support, nombre(e.surface_support_m2, 3))}` : "", ` · ${e.ttc ? T().ttc : T().ht}`));
   }
   if (t.mode === "imprimer") {
     const cle = `${t.id}:${n}`;

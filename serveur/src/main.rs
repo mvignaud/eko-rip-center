@@ -315,14 +315,14 @@ async fn rapport_consommation(State(etat): State<Partage>) -> Response {
     for n in &encres {
         csv.push_str(&format!(";{}", csv_texte(&format!("{n}_ml"))));
     }
-    csv.push_str(";encre_ml;cout_encres;cout_support;total\n");
+    csv.push_str(";encre_ml;cout_encres;cout_support;total;base\n");
     for (t, page, e) in lignes {
         csv.push_str(&format!("{};{};{};{page};{};{:.4};{:.4}", date_utc(t.cree_le), csv_texte(&t.nom), t.id, csv_texte(e.support.as_deref().unwrap_or("")), e.surface_m2, e.surface_support_m2));
         for n in &encres {
             let ml = e.encres.iter().find(|l| &l.nom == n).map_or(0.0, |l| l.ml);
             csv.push_str(&format!(";{ml:.2}"));
         }
-        csv.push_str(&format!(";{:.2};{:.4};{:.4};{:.4}\n", e.ml, e.cout_encres, e.cout_support, e.total));
+        csv.push_str(&format!(";{:.2};{:.4};{:.4};{:.4};{}\n", e.ml, e.cout_encres, e.cout_support, e.total, if e.ttc { "TTC" } else { "HT" }));
     }
     ([(header::CONTENT_TYPE, "text/csv; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"consommation.csv\"")], csv).into_response()
 }
