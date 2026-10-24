@@ -134,7 +134,22 @@ fois, sans écho, 10 caractères au moins) :
 sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter mathieu
 ```
 
-`utilisateur liste` liste les comptes ; `utilisateur supprimer <nom>` en retire un (ses
+Deux rôles :
+- **administrateur** : tout, y compris les réglages du serveur (catalogue des machines,
+  tarifs d'encre et de support, profils ICC, réglages enregistrés) ;
+- **opérateur** : envoie, édite, imprime, découpe, gère la file et les planches ; voit
+  les machines et le média chargé, mais pas les écrans de réglage, que le serveur lui
+  refuse de toute façon.
+
+Le rôle se donne en troisième argument (`admin` ou `operateur`). Sans lui : administrateur
+s'il n'y en a encore aucun, opérateur sinon. Les comptes créés avant la 0.11 restent
+administrateurs. Redéclarer un compte change son rôle et son mot de passe.
+
+```bash
+sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter julie operateur
+```
+
+`utilisateur liste` liste les comptes et leur rôle ; `utilisateur supprimer <nom>` en retire un (ses
 sessions tombent aussitôt). Aucun redémarrage n'est nécessaire. Les mots de passe sont
 gardés hachés en Argon2id dans `<données>/utilisateurs.json` (droits 0600).
 

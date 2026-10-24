@@ -954,8 +954,9 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     }
 }
 
-/// `eko-rip-serveur utilisateur ajouter|supprimer|liste [nom]` ; le mot de passe est
-/// demandé sans écho, jamais passé en argument (il resterait dans l'historique).
+/// `eko-rip-serveur utilisateur ajouter|supprimer|liste [nom] [admin|operateur]` ; le
+/// mot de passe est demandé sans écho, jamais passé en argument (il resterait dans
+/// l'historique). Sans rôle : administrateur s'il n'y en a aucun, opérateur sinon.
 fn commande_utilisateur(donnees: &std::path::Path, args: &[String]) -> i32 {
     let _ = std::fs::create_dir_all(donnees);
     let mut liste = acces::lire(donnees);
@@ -963,11 +964,21 @@ fn commande_utilisateur(donnees: &std::path::Path, args: &[String]) -> i32 {
     match args.first().map(String::as_str) {
         Some("liste") => {
             for u in &liste {
-                println!("{}", u.nom);
+                println!("{}\t{}", u.nom, if u.role == acces::Role::Admin { "admin" } else { "operateur" });
             }
             return 0;
         }
         Some("ajouter") if acces::nom_valide(nom) => {
+            let role = match args.get(2).map(String::as_str) {
+                Some("admin") => acces::Role::Admin,
+                Some("operateur") => acces::Role::Operateur,
+                None if !liste.iter().any(|u| u.nom != nom && u.role == acces::Role::Admin) => acces::Role::Admin,
+                None => acces::Role::Operateur,
+                Some(r) => {
+                    eprintln!("Rôle inconnu : {r} (admin ou operateur)");
+                    return 2;
+                }
+            };
             let Ok(mdp) = rpassword::prompt_password(format!("Mot de passe pour {nom} : ")) else { return 1 };
             if mdp.chars().count() < 10 {
                 eprintln!("Mot de passe trop court (10 caractères au moins).");
@@ -985,7 +996,8 @@ fn commande_utilisateur(donnees: &std::path::Path, args: &[String]) -> i32 {
                 }
             };
             liste.retain(|u| u.nom != nom);
-            liste.push(acces::Utilisateur { nom: nom.into(), hachage });
+            liste.push(acces::Utilisateur { nom: nom.into(), hachage, role });
+            println!("{nom} : {}", if role == acces::Role::Admin { "administrateur" } else { "opérateur" });
             liste.sort_by(|a, b| a.nom.cmp(&b.nom));
         }
         Some("supprimer") if liste.iter().any(|u| u.nom == nom) => liste.retain(|u| u.nom != nom),
@@ -994,7 +1006,7 @@ fn commande_utilisateur(donnees: &std::path::Path, args: &[String]) -> i32 {
             return 1;
         }
         _ => {
-            eprintln!("Usage : eko-rip-serveur utilisateur ajouter|supprimer|liste [nom]\\n(nom : lettres, chiffres, . - _ ; 40 caractères au plus)");
+            eprintln!("Usage : eko-rip-serveur utilisateur ajouter|supprimer|liste [nom] [admin|operateur]\\n(nom : lettres, chiffres, . - _ ; 40 caractères au plus)");
             return 2;
         }
     }
@@ -1056,17 +1068,25 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
     if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::lire(&etat.config.donnees).is_empty() {
         return suite.run(requete).await;
     }
-    let valide = jeton_requete(requete.headers()).is_some_and(|j| {
-        let sessions = etat.sessions.lock().unwrap();
-        sessions.utilisateur(&j, std::time::Instant::now()).is_some_and(|nom| acces::lire(&etat.config.donnees).iter().any(|u| u.nom == nom))
-    });
-    if valide { suite.run(requete).await } else { refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) }
+    let Some(role) = role_session(&etat, requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) };
+    if role != acces::Role::Admin && acces::reserve_admin(requete.method(), chemin) {
+        return refus(StatusCode::FORBIDDEN, "admin_requis", None);
+    }
+    suite.run(requete).await
+}
+
+/// Rôle de l'utilisateur de la session, s'il existe encore.
+fn role_session(etat: &Etat, entetes: &axum::http::HeaderMap) -> Option<acces::Role> {
+    let nom = etat.sessions.lock().unwrap().utilisateur(&jeton_requete(entetes)?, std::time::Instant::now())?;
+    acces::lire(&etat.config.donnees).into_iter().find(|u| u.nom == nom).map(|u| u.role)
 }
 
 async fn lire_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
     let ouvert = acces::lire(&etat.config.donnees).is_empty();
     let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
-    Json(serde_json::json!({ "acces_libre": ouvert, "utilisateur": utilisateur }))
+    // Accès libre : tout est permis, comme un administrateur.
+    let role = if ouvert { Some(acces::Role::Admin) } else { role_session(&etat, &entetes) };
+    Json(serde_json::json!({ "acces_libre": ouvert, "utilisateur": utilisateur, "role": role }))
 }
 
 #[derive(Deserialize)]
@@ -1829,7 +1849,7 @@ mod tests {
         #[tokio::test]
         async fn api_fermee_sans_session_ouverte_avec() {
             let e = etat("ferme");
-            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
             assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::UNAUTHORIZED);
             assert_eq!(appel(&e, "GET", "/api/travaux", Some("eko_rip_session=invente"), None).await.status(), StatusCode::UNAUTHORIZED);
             assert_eq!(appel(&e, "GET", "/", None, None).await.status(), StatusCode::OK, "la page de connexion reste servie");
@@ -1846,15 +1866,39 @@ mod tests {
             assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::OK);
 
             // Utilisateur retiré du fichier : sa session ne vaut plus rien.
-            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "autre".into(), hachage: acces::hacher("x-x-x-x-x-x").unwrap() }]).unwrap();
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "autre".into(), hachage: acces::hacher("x-x-x-x-x-x").unwrap() }]).unwrap();
             assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::UNAUTHORIZED);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// L'opérateur travaille (travaux, file, planches) mais ne règle pas le serveur.
+        #[tokio::test]
+        async fn l_operateur_ne_regle_pas_le_serveur() {
+            let e = etat("roles");
+            let compte = |nom: &str, role| acces::Utilisateur { nom: nom.into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap(), role };
+            acces::ecrire(&e.config.donnees, &[compte("chef", acces::Role::Admin), compte("op", acces::Role::Operateur)]).unwrap();
+            let mut cookies = vec![];
+            for nom in ["chef", "op"] {
+                let r = appel(&e, "POST", "/api/session", None, Some(serde_json::json!({ "nom": nom, "mot_de_passe": "phrase-de-passe-longue" }))).await;
+                cookies.push(r.headers()[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap().to_string());
+            }
+            let (chef, op) = (cookies[0].as_str(), cookies[1].as_str());
+            let session: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(appel(&e, "GET", "/api/session", Some(op), None).await.into_body(), 1 << 16).await.unwrap()).unwrap();
+            assert_eq!(session["role"], "operateur");
+            let reglage = serde_json::json!({ "nom": "Vinyle", "demande": {} });
+            for (methode, chemin, corps) in [("POST", "/api/reglages", Some(reglage.clone())), ("DELETE", "/api/reglages/Vinyle", None), ("POST", "/api/tarifs", Some(serde_json::json!({})))] {
+                assert_eq!(appel(&e, methode, chemin, Some(op), corps).await.status(), StatusCode::FORBIDDEN, "{methode} {chemin}");
+            }
+            assert_eq!(appel(&e, "GET", "/api/machines", Some(op), None).await.status(), StatusCode::OK, "lecture permise");
+            assert_eq!(appel(&e, "GET", "/api/file", Some(op), None).await.status(), StatusCode::OK);
+            assert_eq!(appel(&e, "POST", "/api/reglages", Some(chef), Some(reglage)).await.status(), StatusCode::CREATED, "l'administrateur règle");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         #[tokio::test]
         async fn deconnexion_et_blocage() {
             let e = etat("blocage");
-            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
             let bon = serde_json::json!({ "nom": "mathieu", "mot_de_passe": "phrase-de-passe-longue" });
             let r = appel(&e, "POST", "/api/session", None, Some(bon.clone())).await;
             let cookie = r.headers()[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap().to_string();

@@ -18,6 +18,24 @@ pub struct Utilisateur {
     pub nom: String,
     /// Chaîne PHC Argon2id (`$argon2id$v=19$…`) ; jamais le mot de passe.
     pub hachage: String,
+    /// Absent des comptes d'avant les rôles : administrateur, comme ils l'étaient.
+    #[serde(default)]
+    pub role: Role,
+}
+
+/// L'opérateur imprime et découpe ; l'administrateur règle aussi le serveur (machines,
+/// tarifs, profils ICC, réglages enregistrés).
+#[derive(Clone, Copy, Default, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    #[default]
+    Admin,
+    Operateur,
+}
+
+/// Écritures réservées à l'administrateur.
+pub fn reserve_admin(methode: &axum::http::Method, chemin: &str) -> bool {
+    *methode != axum::http::Method::GET && (["/api/machines", "/api/tarifs", "/api/profils", "/api/reglages"].contains(&chemin) || chemin.starts_with("/api/reglages/"))
 }
 
 pub fn fichier(donnees: &Path) -> PathBuf {
@@ -131,7 +149,7 @@ mod tests {
     use super::*;
 
     fn mathieu() -> Vec<Utilisateur> {
-        vec![Utilisateur { nom: "mathieu".into(), hachage: hacher("bonne-phrase-de-passe").unwrap() }]
+        vec![Utilisateur { role: Role::Admin, nom: "mathieu".into(), hachage: hacher("bonne-phrase-de-passe").unwrap() }]
     }
 
     #[test]

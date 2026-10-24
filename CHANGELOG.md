@@ -24,6 +24,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   bas, numéro à 11 chiffres par page, coins à fenêtres (Type 2), angles de 125 mm et
   repères intermédiaires (Type 3) ; fichier de découpe nommé `Nom_SF|MF_<numéro>.plt`.
   Provisoires jusqu'au premier essai sur le Kona.
+- **Rôles administrateur et opérateur** : l'opérateur travaille (travaux, file, planches)
+  sans pouvoir régler le serveur (machines, tarifs, profils ICC, réglages enregistrés :
+  refus 403 `admin_requis`, écrans masqués). `utilisateur ajouter <nom> [admin|operateur]` ;
+  les comptes existants restent administrateurs.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

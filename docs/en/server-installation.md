@@ -129,7 +129,21 @@ without echo, 10 characters minimum):
 sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter mathieu
 ```
 
-`utilisateur liste` lists accounts; `utilisateur supprimer <name>` removes one (its
+Two roles:
+- **administrator**: everything, including server settings (machine catalogue, ink and
+  media prices, ICC profiles, saved presets);
+- **operator**: sends, edits, prints, cuts, runs the queue and sheets; sees the machines
+  and loaded media, but not the settings screens, which the server refuses anyway.
+
+The role is the third argument (`admin` or `operateur`). Without it: administrator if
+there is none yet, operator otherwise. Accounts created before 0.11 stay
+administrators. Declaring an account again changes its role and password.
+
+```bash
+sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter julie operateur
+```
+
+`utilisateur liste` lists accounts and their role; `utilisateur supprimer <name>` removes one (its
 sessions end at once). No restart needed. Passwords are stored hashed with Argon2id in
 `<data>/utilisateurs.json` (mode 0600).
 
