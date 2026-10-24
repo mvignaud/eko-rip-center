@@ -7,6 +7,24 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.18.0] — 2026-10-24
+
+Fin de la phase « supports et modes » de la feuille de route. Publiée sans la CI ; les
+clients de bureau de la 0.16.0 restent valables.
+
+### Ajouté
+- **Paquet support** : exporter un support, ses modes et les réglages qui s'en servent en
+  un seul fichier, et l'importer sur un autre serveur (identifiants conservés, réimport sans
+  doublon ; refus d'un paquet fait par une version plus récente). Sans profil ICC.
+- **Export / import de réglages** choisis (panneau Sauvegarde) ; si le nom existe déjà :
+  renommer (« nom 2 ») ou écraser.
+- **Pool d'imprimantes** : un même nom de pool sur des machines identiques (même modèle,
+  même laize) ; une impression envoyée au pool part sur la première machine prête ; refus
+  si les supports chargés diffèrent.
+
+*Added: media package export/import, preset export/import (rename or overwrite), printer
+pools.*
+
 ## [0.17.0] — 2026-10-24
 
 Fin de la phase « socle » de la feuille de route, et support chargé dans les machines.
