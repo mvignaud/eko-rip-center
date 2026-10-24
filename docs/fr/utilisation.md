@@ -65,8 +65,11 @@ du PDF. Pour l'Epson SC-S80600 :
 - **Blanc** : nommer le ton direct `White` dans Illustrator ;
 - **Argent métallisé** : nommer le ton direct `Silver`.
 
-Sur l'aperçu d'une plaque, le noir est l'encre et le blanc l'absence d'encre. Une
-plaque de découpe est marquée « découpe, non imprimée ».
+Sur l'aperçu d'une plaque, le noir est l'encre et le blanc l'absence d'encre.
+
+Les tons de découpe (`CutContour`…) ne sont jamais imprimés et n'effacent pas l'encre
+sous eux, même sans surimpression dans le fichier : au rendu, ils deviennent le colorant
+`None` de la norme PDF. Il n'y a donc pas de liseré blanc le long de la découpe.
 
 ## Blanc automatique
 

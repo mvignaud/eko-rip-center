@@ -63,8 +63,11 @@ the PDF. For the Epson SC-S80600:
 - **White**: name the spot colour `White` in Illustrator;
 - **Metallic silver**: name the spot colour `Silver`.
 
-On a plate preview, black is ink and white is no ink. A cut plate is marked “cut, not
-printed”.
+On a plate preview, black is ink and white is no ink.
+
+Cut spot colours (`CutContour`…) are never printed and never knock out the ink beneath
+them, even without overprint in the file: at rendering they become the PDF standard's
+`None` colorant. So there is no white hairline along the cut.
 
 ## Automatic white
 

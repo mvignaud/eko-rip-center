@@ -229,6 +229,50 @@ impl<'a> Lecteur<'a> {
     }
 }
 
+/// PDF à imprimer : chaque ton de découpe des espaces `Separation` et `DeviceN` devient le
+/// colorant spécial `None`, qui « ne produit jamais de sortie visible » (ISO 32000-1,
+/// 8.6.6.4). Sans cela, un filet `CutContour` sans surimpression défonce l'encre dessous et
+/// laisse un liseré non imprimé le long de la découpe. Rend le PDF et le nombre de tons
+/// neutralisés (0 : le PDF est rendu tel quel).
+pub fn neutraliser(pdf: &[u8]) -> Result<(Vec<u8>, usize), String> {
+    fn nom_de_coupe(o: &Object) -> bool {
+        o.as_name().is_ok_and(|n| est_ton_de_decoupe(&String::from_utf8_lossy(n)))
+    }
+    fn visiter(o: &mut Object, n: &mut usize) {
+        match o {
+            Object::Array(a) => {
+                let genre = a.first().and_then(|g| g.as_name().ok()).map(<[u8]>::to_vec);
+                match (genre.as_deref(), a.get_mut(1)) {
+                    (Some(b"Separation"), Some(nom)) if nom_de_coupe(nom) => {
+                        *nom = Object::Name(b"None".to_vec());
+                        *n += 1;
+                    }
+                    (Some(b"DeviceN"), Some(Object::Array(noms))) => {
+                        for nom in noms.iter_mut().filter(|x| nom_de_coupe(x)) {
+                            *nom = Object::Name(b"None".to_vec());
+                            *n += 1;
+                        }
+                    }
+                    _ => {}
+                }
+                a.iter_mut().for_each(|x| visiter(x, n));
+            }
+            Object::Dictionary(d) => d.iter_mut().for_each(|(_, v)| visiter(v, n)),
+            Object::Stream(s) => s.dict.iter_mut().for_each(|(_, v)| visiter(v, n)),
+            _ => {}
+        }
+    }
+    let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    let mut n = 0;
+    doc.objects.values_mut().for_each(|o| visiter(o, &mut n));
+    if n == 0 {
+        return Ok((pdf.to_vec(), 0));
+    }
+    let mut sortie = vec![];
+    doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
+    Ok((sortie, n))
+}
+
 /// Ton attribué aux tracés en mode « tous les tracés » (lame).
 pub const TOUS: &str = "Tous";
 
@@ -617,5 +661,38 @@ mod tests {
         ];
         // 72 pt = 25,4 mm = 2540 unités.
         assert_eq!(hpgl(&traces), "IN;SP1;PU0,0;PD2540,0,2540,2540,0,0;SP2;PU0,0;PD0,2540;PU;SP0;");
+    }
+
+    /// Page cyan pleine, filet `CutContour` (1 pt) à 5 pt du bord, sans surimpression. À
+    /// 72 dpi, rendu de l'original : le filet défonce le cyan. Rendu du PDF neutralisé :
+    /// cyan intact sous le filet, aucune plaque de découpe ; les tracés restent extraits.
+    #[test]
+    fn ton_de_decoupe_neutralise_ne_defonce_plus() {
+        let pdf = crate::imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0));
+        let (neutre, n) = neutraliser(&pdf).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(neutraliser(&neutre).unwrap().1, 0, "rien de plus à neutraliser");
+        assert_eq!(extraire(&pdf, false).unwrap()[0].traces.len(), 1, "la découpe se lit sur l'original");
+        let d = std::env::temp_dir().join(format!("eko-rip-neutre-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let rendre = |nom: &str, octets: &[u8]| {
+            std::fs::write(d.join(format!("{nom}.pdf")), octets).unwrap();
+            let st = std::process::Command::new("gs")
+                .args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=tiffsep", "-r72"])
+                .arg(format!("-sOutputFile={}", d.join(format!("{nom}.tif")).display()))
+                .arg(d.join(format!("{nom}.pdf")))
+                .status()
+                .unwrap();
+            assert!(st.success());
+        };
+        rendre("orig", &pdf);
+        rendre("neutre", &neutre);
+        // Pixel sur le filet (x = 5 pt, mi-hauteur) et au milieu de la page.
+        let cyan = |nom: &str, x: u32| image::open(d.join(format!("{nom}(Cyan).tif"))).unwrap().to_luma8().get_pixel(x, 36)[0];
+        assert!(cyan("orig", 5) > 200 && cyan("orig", 72) == 0, "l'original défonce bien le cyan sous le filet");
+        assert_eq!((cyan("neutre", 5), cyan("neutre", 72)), (0, 0), "cyan intact sous le filet");
+        assert!(d.join("orig(CutContour).tif").exists());
+        assert!(!d.join("neutre(CutContour).tif").exists(), "plus de plaque de découpe");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 }

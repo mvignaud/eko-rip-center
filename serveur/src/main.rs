@@ -974,11 +974,17 @@ async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: bl
 
 async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
     let source = rep.join(Format::Pdf.fichier());
-    if choix == reperage::Reperage::Aucun {
+    let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
+    // Les tons de découpe ne marquent jamais le support : neutralisés avant le rendu.
+    let (pdf, neutralises) = tokio::task::spawn_blocking(move || decoupe::neutraliser(&pdf)).await.map_err(|e| e.to_string())??;
+    if choix == reperage::Reperage::Aucun && neutralises == 0 {
         return Ok((source, vec![]));
     }
-    let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
-    let (imprime, mises) = tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??;
+    let (imprime, mises) = if choix == reperage::Reperage::Aucun {
+        (pdf, vec![])
+    } else {
+        tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??
+    };
     let chemin = rep.join("imprime.pdf");
     tokio::fs::write(&chemin, imprime).await.map_err(|e| e.to_string())?;
     Ok((chemin, mises))
@@ -1535,7 +1541,8 @@ mod tests {
             let surface = 2.0 * 0.0254 * 0.0254;
             assert!((page["surface_m2"].as_f64().unwrap() - surface).abs() < surface * 0.03, "{page}");
             let cyan = page["couverture"]["Cyan"].as_f64().unwrap();
-            assert!(cyan > 0.85, "page pleine de cyan (moins le filet de découpe) : {cyan}");
+            assert!(cyan > 0.995, "page pleine de cyan, le filet de découpe ne défonce plus : {cyan}");
+            assert!(!page["plaques"].as_array().unwrap().iter().any(|p| p == "CutContour"), "ton de découpe neutralisé au rendu");
             assert!(page["couverture"]["Magenta"].as_f64().unwrap() < 0.01);
             let est = &page["estimation"];
             assert!(est["encres"].as_array().unwrap().iter().all(|l| l["nom"] != "CutContour"), "{est}");

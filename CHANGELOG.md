@@ -26,6 +26,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   travail » avec zone de dépôt ; cartes avec vignette et badges d'état ; recherche et
   filtres ; vue file par machine ; affichage téléphone.
 
+### Corrigé
+- Un filet `CutContour` sans surimpression effaçait l'encre dessous (liseré non imprimé
+  le long de la découpe). Les tons de découpe deviennent le colorant `None` dans le PDF
+  imprimé : jamais imprimés, jamais de défonce. La découpe se lit toujours sur l'original.
+
 ### Modifié
 - Les messages s'affichent dans un bandeau flottant, visible depuis toutes les vues.
 - L'écran ne se reconstruit plus que si les données changent (un clic ne tombe plus sur
