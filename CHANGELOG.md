@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.11.0] — 2026-10-24
+
 ### Ajouté
 - Image d'installation, profils avec bureau : **CUPS** (cups, cups-browsed, pilotes
   Gutenprint, réglage des imprimantes) et la suite **ArtCraft** (13 applications d'édition)
@@ -51,6 +53,15 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des
   rectangles englobants.
+
+*English: Mutoh Kona print & cut proven in the workshop with a RIP type 2 frame (frame and
+barcode read, cut on target): sent as CutServer does (AL5 frame reading), Kona axes,
+CutServer-like cut settings per machine (speed, force, acceleration, cutter defaults,
+tool, cut pattern with spread), insertion arrow; Epson print preparation (channels,
+white/silver layers, cut plates never sent); shape nesting; Kona type 2/3 frames with
+POSTNET; administrator/operator roles; configuration backup and restore; cut offset;
+step & repeat with half drop; print time estimate; notifications; administration guide
+and FAQ; full ISO installation tested in CI; ArtCraft and CUPS on desktop profiles.*
 
 ## [0.10.0] — 2026-10-24
 
