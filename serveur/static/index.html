@@ -148,6 +148,20 @@
   </div>
 </div></header>
 <p id="acces-libre" class="bandeau" data-t="acces_libre" hidden></p>
+<dialog id="fenetre-edition">
+  <form id="form-edition">
+    <strong id="titre-edition"></strong>
+    <div id="edition-travail" style="display: grid; gap: 10px"></div>
+    <p id="erreur-edition" class="erreur" role="alert"></p>
+    <div class="ligne"><button data-t="appliquer"></button><button type="button" class="discret" id="fermer-edition" data-t="fermer"></button></div>
+  </form>
+</dialog>
+<dialog id="visionneuse">
+  <form method="dialog" style="padding: 12px; display: grid; gap: 8px; max-width: 92vw">
+    <img id="image-vue" alt="" style="max-width: 88vw; max-height: 78vh; background: #fff; border: 1px solid var(--trait); border-radius: 6px">
+    <div class="ligne" style="justify-content: space-between"><span id="legende-vue" class="meta"></span><button class="discret" data-t="fermer"></button></div>
+  </form>
+</dialog>
 <dialog id="connexion">
   <form id="form-connexion">
     <strong data-t="connexion"></strong>
@@ -165,7 +179,7 @@
       <form id="envoi" class="corps">
         <label class="depot">
           <strong data-t="deposer_ici"></strong><span data-t="fichier"></span>
-          <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" hidden>
+          <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" multiple hidden>
           <span id="nom-fichier" class="meta"></span>
         </label>
         <div class="ligne bas">
@@ -194,6 +208,13 @@
           <label><span data-t="intention"></span><select name="intention"></select></label>
           <label class="case"><input type="checkbox" name="forcer_profils" value="oui"> <span data-t="forcer"></span></label>
           <label class="lien"><span data-t="deposer"></span><input type="file" id="profil" accept=".icc,.icm" hidden></label>
+        </div></details>
+        <details class="section"><summary data-t="edition"></summary><div id="edition-envoi"></div></details>
+        <details class="section"><summary data-t="auto"></summary><div>
+          <label class="case"><input type="checkbox" name="auto_imprimer" value="oui"> <span data-t="auto_imprimer"></span></label>
+          <label class="case"><input type="checkbox" name="auto_decouper" value="oui"> <span data-t="auto_decouper"></span></label>
+          <label class="case"><input type="checkbox" name="auto_suspendre" value="oui"> <span data-t="auto_suspendre"></span></label>
+          <p class="meta" style="margin: 0" data-t="note_auto"></p>
         </div></details>
         <details class="section"><summary data-t="blanc"></summary><div>
           <label><span data-t="blanc_mode"></span>
@@ -263,6 +284,13 @@ const textes = {
     acces_libre: "Accès libre : aucun utilisateur n'est déclaré sur ce serveur. Créer un compte sur le serveur : eko-rip-serveur utilisateur ajouter <nom>",
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer…", supprimer_reglage: "Supprimer",
     nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
+    edition: "Édition rapide", echelle: "Échelle (%)", rotation_ed: "Rotation", marge: "Marge blanche (mm)", miroir: "Miroir (vitrophanie)",
+    oeillets: "Œillets (repères imprimés)", espacement_oe: "Écart maximal (mm)", retrait_oe: "Distance au bord (mm)", diametre_oe: "Diamètre (mm)",
+    bords: ["Haut", "Bas", "Gauche", "Droite"], contour: "Contour de découpe rectangulaire", contour_mm: "Décalage du contour (mm, négatif = dedans)",
+    auto: "Mise en file automatique", auto_imprimer: "Imprimer sur l'Epson une fois rendu", auto_decouper: "Découper sur le Kona",
+    auto_suspendre: "Ajouter en suspendu (à libérer depuis la file)", note_auto: "Une découpe qui suit une impression est toujours ajoutée suspendue : le support doit d'abord passer au Kona.",
+    editer: "Éditer", editer_titre: (n) => `Édition rapide — ${n}`, appliquer: "Appliquer et refaire le rendu", fermer: "Fermer",
+    taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} fichiers choisis`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
     blanc_aplat: "Aplat sur toute la page", retraction: "Rétraction (mm)", seuil: "Encre minimale (%)",
     note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre.",
@@ -329,6 +357,13 @@ const textes = {
     acces_libre: "Open access: no user is declared on this server. Create an account on the server: eko-rip-serveur utilisateur ajouter <name>",
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save…", supprimer_reglage: "Delete",
     nom_reglage: "Preset name (its hot folder will have this name):", reglage_enregistre: (n) => `Preset “${n}” saved; hot folder: entrees/${n}/`,
+    edition: "Quick edit", echelle: "Scale (%)", rotation_ed: "Rotation", marge: "White margin (mm)", miroir: "Mirror (window film)",
+    oeillets: "Grommets (printed marks)", espacement_oe: "Maximum spacing (mm)", retrait_oe: "Distance from edge (mm)", diametre_oe: "Diameter (mm)",
+    bords: ["Top", "Bottom", "Left", "Right"], contour: "Rectangular cut contour", contour_mm: "Contour offset (mm, negative = inside)",
+    auto: "Automatic queueing", auto_imprimer: "Print on the Epson once rendered", auto_decouper: "Cut on the Kona",
+    auto_suspendre: "Add on hold (release from the queue)", note_auto: "A cut that follows a print is always added on hold: the media must first move to the Kona.",
+    editer: "Edit", editer_titre: (n) => `Quick edit — ${n}`, appliquer: "Apply and render again", fermer: "Close",
+    taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} files chosen`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
     blanc_aplat: "Flood over the whole page", retraction: "Choke (mm)", seuil: "Minimum ink (%)",
     note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge.",
@@ -578,6 +613,35 @@ function demandeDuFormulaire() {
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
     mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value, reperes: f.reperes_les.checked } : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
+    edition: lireEdition($("edition-envoi")),
+    auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
+  };
+}
+
+/** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
+function champsEdition(racine, e) {
+  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, ...(e || {}) };
+  const o = e.oeillets || { espacement_mm: 500, retrait_mm: 20, diametre_mm: 10, bords: [true, true, true, true] };
+  const nombre = (nom, valeur, attrs = {}) => el("input", { type: "number", step: "any", name: `ed_${nom}`, value: valeur, ...attrs });
+  const cocher = (nom, valeur) => el("input", { type: "checkbox", name: `ed_${nom}`, checked: valeur });
+  const rotation = el("select", { name: "ed_rotation" }, ...[0, 90, 180, 270].map((r) => el("option", { value: String(r), selected: e.rotation === r }, `${r}°`)));
+  racine.replaceChildren(
+    el("div", { className: "deux" }, el("label", {}, T().echelle, nombre("echelle", e.echelle, { min: 1, max: 1000 })), el("label", {}, T().rotation_ed, rotation)),
+    el("div", { className: "deux" }, el("label", {}, T().marge, nombre("marge", e.marge_mm, { min: 0, max: 500 })), el("label", { className: "case" }, cocher("miroir", e.miroir), T().miroir)),
+    el("label", { className: "case" }, cocher("oeillets", !!e.oeillets), T().oeillets),
+    el("div", { className: "deux" }, el("label", {}, T().espacement_oe, nombre("espacement", o.espacement_mm, { min: 50, max: 5000 })), el("label", {}, T().retrait_oe, nombre("retrait", o.retrait_mm, { min: 3, max: 200 }))),
+    el("div", { className: "deux" }, el("label", {}, T().diametre_oe, nombre("diametre", o.diametre_mm, { min: 2, max: 50 })),
+      el("div", { className: "ligne" }, ...T().bords.map((b, i) => el("label", { className: "case" }, cocher(`bord${i}`, o.bords[i]), b)))),
+    el("label", { className: "case" }, cocher("contour", e.contour_mm !== null && e.contour_mm !== undefined), T().contour),
+    el("label", {}, T().contour_mm, nombre("contour_mm", e.contour_mm ?? 0, { min: -50, max: 50 })));
+}
+function lireEdition(racine) {
+  const q = (n) => racine.querySelector(`[name=ed_${n}]`);
+  if (!q("echelle")) return undefined;
+  return {
+    echelle: +q("echelle").value, rotation: +q("rotation").value, miroir: q("miroir").checked, marge_mm: +q("marge").value,
+    oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked) } : null,
+    contour_mm: q("contour").checked ? +q("contour_mm").value : null,
   };
 }
 function appliquerDemande(d) {
@@ -591,6 +655,9 @@ function appliquerDemande(d) {
   if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; f.reperes_les.checked = !!d.mosaique.reperes; }
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
+  champsEdition($("edition-envoi"), d.edition);
+  const a = d.auto || {};
+  f.auto_imprimer.checked = !!a.imprimer; f.auto_decouper.checked = !!a.decouper; f.auto_suspendre.checked = !!a.suspendre;
 }
 choixReglage.addEventListener("change", () => {
   const r = reglages.find((x) => x.nom === choixReglage.value);
@@ -619,6 +686,7 @@ function appliquerLangue() {
   boutonLangue.textContent = T().autre;
   remplirProfils();
   remplirReglages();
+  champsEdition($("edition-envoi"), lireEdition($("edition-envoi")));
   afficherSysteme();
   afficherTarifs();
   afficherSession();
@@ -635,13 +703,18 @@ boutonLangue.addEventListener("click", () => {
 /** Envoie le formulaire ; `fichier` remplace celui du champ (glisser-déposer). */
 async function envoyerFichier(fichier) {
   const corps = new FormData(form);
+  [...corps.keys()].filter((k) => k.startsWith("ed_")).forEach((k) => corps.delete(k));
+  corps.set("edition", JSON.stringify(lireEdition($("edition-envoi"))));
   if (fichier) corps.set("fichier", fichier, fichier.name);
   dire(T().envoi);
   const c = await api("/api/travaux", { method: "POST", body: corps });
   if (c) dire(T().recu(c.nom));
   return c;
 }
-form.fichier.addEventListener("change", () => { $("nom-fichier").textContent = form.fichier.files[0]?.name || ""; });
+form.fichier.addEventListener("change", () => {
+  const f = form.fichier.files;
+  $("nom-fichier").textContent = f.length > 1 ? T().fichiers_choisis(f.length) : f[0]?.name || "";
+});
 
 // Glisser-déposer : un ou plusieurs fichiers lâchés sur la page partent avec les réglages du formulaire.
 document.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); document.body.classList.add("glisse"); } });
@@ -660,10 +733,42 @@ form.addEventListener("submit", async (e) => {
   if (!form.fichier.files.length) { dire(T().choisir_fichier, true); return; }
   const b = form.querySelector("button[type=submit]");
   b.disabled = true;
-  if (await envoyerFichier()) { form.fichier.value = ""; $("nom-fichier").textContent = ""; }
+  let tous = true;
+  for (const f of [...form.fichier.files]) tous = !!(await envoyerFichier(f)) && tous;
+  if (tous) { form.fichier.value = ""; $("nom-fichier").textContent = ""; }
   b.disabled = false;
   rafraichir();
 });
+
+// Fenêtre « Éditer » : édition rapide d'un travail existant, rendu refait depuis l'original.
+let travailEdite = null;
+function ouvrirEdition(t) {
+  travailEdite = t;
+  $("titre-edition").textContent = T().editer_titre(t.nom);
+  $("erreur-edition").textContent = "";
+  champsEdition($("edition-travail"), t.edition);
+  $("fenetre-edition").showModal();
+}
+$("fermer-edition").addEventListener("click", () => $("fenetre-edition").close());
+$("form-edition").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const r = await fetch(`/api/travaux/${travailEdite.id}/editer`, json("POST", lireEdition($("edition-travail")))).catch(() => null);
+  if (!r) { $("erreur-edition").textContent = texteErreur("reseau"); return; }
+  if (!r.ok) { const c = await r.json().catch(() => ({})); $("erreur-edition").textContent = texteErreur(c.code, c.detail); return; }
+  $("fenetre-edition").close();
+  rafraichir();
+});
+
+/** Visionneuse : aperçu en grand ; pour un aperçu à 50 dpi, ses dimensions en mm. */
+function voir(src, legende, mesurable) {
+  const img = $("image-vue");
+  $("legende-vue").textContent = legende;
+  img.onload = () => {
+    if (mesurable) $("legende-vue").textContent = `${legende} · ${T().taille_mm(Math.round(img.naturalWidth / 50 * 25.4), Math.round(img.naturalHeight / 50 * 25.4))}`;
+  };
+  img.src = src;
+  $("visionneuse").showModal();
+}
 
 // --- Travaux ---
 let travaux = [], sorties = [], filtre = "";
@@ -719,6 +824,7 @@ function carteTravail(t) {
     t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null,
     t.alertes && t.alertes.length ? el("span", { className: "badge alerte" }, T().nb_alertes(t.alertes.length)) : null);
   const actions = el("div", { className: "ligne" });
+  if (t.format === "pdf" && (t.statut === "termine" || t.statut === "echec")) actions.append(bouton(T().editer, () => ouvrirEdition(t)));
   if (t.statut === "echec") actions.append(bouton(T().relancer, () => agir(`/api/travaux/${t.id}/relancer`, "POST")));
   if (t.statut === "termine" || t.statut === "echec") actions.append(bouton(T().supprimer, () => confirm(T().confirmer(t.nom)) && agir(`/api/travaux/${t.id}`, "DELETE"), "discret danger"));
   const carte = el("details", { className: "travail panneau", open: ouverts.has(t.id) },
@@ -745,7 +851,11 @@ const derniereSortie = (t, n, machine) => sorties.filter((s) => s.travail === t.
 /** Une page : ses sorties (Epson, Kona), puis ses aperçus (composite, découpe, plaques). */
 function vuePage(t, page, n) {
   const base = `/api/travaux/${t.id}/pages/${n}`;
-  const vignette = (src, legende) => el("figure", {}, el("img", { src, alt: legende, loading: "lazy" }), el("figcaption", {}, legende));
+  const vignette = (src, legende) => {
+    const img = el("img", { src, alt: legende, loading: "lazy", style: "cursor: zoom-in" });
+    img.addEventListener("click", () => voir(src, legende, !src.endsWith(".svg")));
+    return el("figure", {}, img, el("figcaption", {}, legende));
+  };
   const vignettes = t.mode === "decouper" ? [] : [vignette(`${base}/apercu.png`, T().composite)];
   if (page.traces_decoupe) vignettes.push(vignette(`${base}/decoupe.svg`, T().apercu_decoupe));
   const taux = (p) => (page.couverture && p in page.couverture ? ` · ${nombre(page.couverture[p] * 100, 0)} %` : "");

@@ -19,6 +19,34 @@ screen asks you to sign in first (see *Security* in the server installation guid
 
 Accepted formats: PDF, AI (saved with “Create PDF Compatible File”) and SVG (cut only).
 
+## Quick edit
+
+**Quick edit** block of the send panel, or **Edit** button on a finished job (rendering
+is redone from the original file, no need to send it again):
+- **Scale** (%), **Rotation** (0, 90, 180, 270°), **Mirror** (window film, lightbox
+  seen from behind), **White margin** around the image;
+- **Grommets**: printed marks (ring and centre cross) along the ticked edges, at the
+  given **distance from edge**, corners included, evenly spread with a **maximum
+  spacing**;
+- **Rectangular cut contour** around the image, offset by a few mm (negative = inside).
+
+Cutting follows the edit. A job with an output in the queue cannot be edited: cancel or
+finish the output first.
+
+## Automatic queueing
+
+**Automatic queueing** block: once rendered, each printable page goes to the Epson
+queue and each page to cut to the Kona queue. **Add on hold** holds them: import ten
+files and release the ones you want from the queue. A cut that follows a print is
+always added on hold (the media must first move to the Kona). The setting is saved with
+the others: a hot folder can thus print on its own.
+
+Several files can be chosen at once; each is sent with the same settings.
+
+## Viewer
+
+Clicking a thumbnail (composite, plate, cut) opens it large, with its size in mm.
+
 ## Following jobs
 
 Each job is a card: thumbnail, name, badges (state, mode or resolution, page count,

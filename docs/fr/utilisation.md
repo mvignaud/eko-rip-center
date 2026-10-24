@@ -20,6 +20,37 @@ l'écran demande d'abord de se connecter (voir *Sécurité* dans l'installation 
 Formats acceptés : PDF, AI (enregistré avec « Créer un fichier compatible PDF ») et SVG
 (découpe seulement).
 
+## Édition rapide
+
+Bloc **Édition rapide** du panneau d'envoi, ou bouton **Éditer** d'un travail fini (le
+rendu est refait depuis le fichier d'origine, sans le renvoyer) :
+- **Échelle** (%), **Rotation** (0, 90, 180, 270°), **Miroir** (vitrophanie, caisson vu
+  de l'arrière), **Marge blanche** autour de l'image ;
+- **Œillets** : repères imprimés (anneau et croix de centre) le long des bords cochés,
+  à la **distance au bord** donnée, coins compris, répartis régulièrement avec un **écart
+  maximal** ;
+- **Contour de découpe rectangulaire** autour de l'image, décalé de quelques mm
+  (négatif = vers l'intérieur).
+
+La découpe suit l'édition. Un travail qui a une sortie en file ne s'édite pas : annuler
+ou finir la sortie d'abord.
+
+## Mise en file automatique
+
+Bloc **Mise en file automatique** : une fois le rendu fini, chaque page imprimable part
+dans la file de l'Epson et chaque page à découper dans celle du Kona. **Ajouter en
+suspendu** les met en attente : on importe dix fichiers et on libère ceux qu'on veut
+depuis la file. Une découpe qui suit une impression est toujours ajoutée suspendue (le
+support doit d'abord passer au Kona). Le réglage s'enregistre avec les autres : un
+dossier surveillé peut ainsi imprimer seul.
+
+On peut choisir plusieurs fichiers à la fois ; ils partent chacun avec les mêmes réglages.
+
+## Visionneuse
+
+Un clic sur une vignette (composite, plaque, découpe) l'ouvre en grand, avec ses
+dimensions en mm.
+
 ## Suivre les travaux
 
 Chaque travail est une carte : vignette, nom, badges (état, mode ou résolution, nombre
