@@ -23,6 +23,7 @@ mod reglages;
 mod releves;
 mod reperage;
 mod sauvegarde;
+mod supports;
 
 use axum::{
     Json, Router,
@@ -219,6 +220,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/machines", get(lister_machines).post(enregistrer_machines))
         .route("/api/machines/{id}/media", get(media_machine))
         .route("/api/machines/{id}/consommation", get(consommation_machine))
+        .route("/api/machines/{id}/supports", get(lister_supports).post(enregistrer_supports))
         .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
@@ -920,6 +922,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         tarifs: couverture::lire(&etat.config.donnees),
         reglages: reglages::lire(&etat.config.donnees),
         profils,
+        supports: Some(supports::lire(&etat.config.donnees, "epson")),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -941,6 +944,16 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     }
     if let Err(code) = machines::verifier(&s.machines).and(s.tarifs.verifier()) {
         return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    if let Some(c) = &s.supports {
+        let mut ids: Vec<_> = c.supports.iter().map(|x| x.id).chain(c.supports.iter().flat_map(|x| x.modes.iter().map(|m| m.id))).collect();
+        let nb = ids.len();
+        ids.sort();
+        ids.dedup();
+        let par_machine_bons = s.machines.iter().all(|m| supports::verifier(&c.supports.iter().filter(|x| x.machine == m.id).cloned().collect::<Vec<_>>()).is_ok());
+        if c.version > supports::VERSION || ids.len() != nb || ids.contains(&None) || !par_machine_bons || c.supports.iter().any(|x| !s.machines.iter().any(|m| m.id == x.machine)) {
+            return refus(StatusCode::BAD_REQUEST, "supports_invalides", None);
+        }
     }
     // Les réglages peuvent citer un profil de la sauvegarde ou un profil déjà là.
     let mut connus = couleur::lister(&etat.config.profils);
@@ -967,6 +980,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         machines::ecrire(&etat.config.donnees, &s.machines)?;
         couverture::ecrire(&etat.config.donnees, &s.tarifs)?;
+        if let Some(c) = &s.supports {
+            supports::ecrire(&etat.config.donnees, c)?;
+        }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
     if let Err(e) = ecrire() {
@@ -974,6 +990,38 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     }
     *etat.machines.write().unwrap() = s.machines.clone();
     Json(serde_json::json!({ "machines": s.machines.len(), "reglages": liste.len(), "profils": profils.len() })).into_response()
+}
+
+/// Supports d'une machine et leurs modes d'impression (`supports.json`).
+async fn lister_supports(State(etat): State<Partage>, Chemin(id): Chemin<String>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let c = supports::lire(&etat.config.donnees, "epson");
+    Json(c.supports.into_iter().filter(|s| s.machine == id).collect::<Vec<_>>()).into_response()
+}
+
+/// Remplace les supports d'une machine ; les identifiants connus sont gardés, les nouveaux
+/// attribués par le serveur, un identifiant inventé est refusé.
+async fn enregistrer_supports(State(etat): State<Partage>, Chemin(id): Chemin<String>, Json(mut liste): Json<Vec<supports::Support>>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let _verrou = etat.reglages.lock().await;
+    let mut c = supports::lire(&etat.config.donnees, "epson");
+    liste.iter_mut().for_each(|s| s.machine = id.clone());
+    if !supports::attribuer_ids(&mut liste, &c.supports) {
+        return refus(StatusCode::BAD_REQUEST, "supports_invalides", Some("identifiant inconnu".into()));
+    }
+    if let Err(code) = supports::verifier(&liste) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    c.supports.retain(|s| s.machine != id);
+    c.supports.extend(liste.iter().cloned());
+    if let Err(e) = supports::ecrire(&etat.config.donnees, &c) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    Json(liste).into_response()
 }
 
 /// Média chargé dans une machine (largeur réelle), lu par SNMP dans la Printer-MIB.
@@ -2228,9 +2276,43 @@ mod tests {
             assert_eq!(std::fs::read(b.config.profils.join("atelier.icc")).unwrap(), icc);
             assert_eq!(reglages::lire(&b.config.donnees)[0].demande.dpi, 360);
             assert_eq!(b.machines.read().unwrap()[0].nom, "Epson de l'atelier", "catalogue rechargé");
+            assert_eq!(supports::lire(&b.config.donnees, "epson"), supports::lire(&a.config.donnees, "epson"), "supports et identifiants repris");
             for e in [a, b] {
                 std::fs::remove_dir_all(&e.config.donnees).unwrap();
             }
+        }
+
+        /// Supports par machine : repris de tarifs.json, identifiants stables, contrôlés.
+        #[tokio::test]
+        async fn supports_et_modes_par_machine() {
+            let e = etat("supports");
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            let v = corps(appel(&e, "GET", "/api/machines/epson/supports", None, None).await).await;
+            let premier = v[0].clone();
+            assert_eq!(premier["nom"], couverture::lire(&e.config.donnees).supports[0].nom.as_str(), "{v}");
+            assert!(premier["id"].is_string() && premier["modes"][0]["id"].is_string(), "{v}");
+            assert_eq!(corps(appel(&e, "GET", "/api/machines/epson/supports", None, None).await).await, v, "identifiants stables d'une lecture à l'autre");
+
+            let mut renomme = v.clone();
+            renomme[0]["nom"] = "Vinyle mat".into();
+            renomme.as_array_mut().unwrap().push(serde_json::json!({ "machine": "x", "nom": "Bâche", "encres": ["C", "M", "Y", "BK"], "modes": [{ "nom": "360", "dpi": [360, 360], "passes": 4 }] }));
+            let r = appel(&e, "POST", "/api/machines/epson/supports", None, Some(renomme)).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let w = corps(r).await;
+            assert_eq!((w[0]["id"].clone(), w[0]["nom"].clone()), (premier["id"].clone(), "Vinyle mat".into()), "renommer garde l'identifiant");
+            assert_eq!(w[1]["machine"], "epson");
+            assert!(w[1]["id"].is_string());
+            assert_eq!(corps(appel(&e, "GET", "/api/machines/kona/supports", None, None).await).await, serde_json::json!([]));
+
+            let mut invente = w.clone();
+            invente[0]["id"] = Uuid::new_v4().to_string().into();
+            assert_eq!(appel(&e, "POST", "/api/machines/epson/supports", None, Some(invente)).await.status(), StatusCode::BAD_REQUEST);
+            let mut casse = w.clone();
+            casse[1]["encres"] = serde_json::json!(["WH", "MS"]);
+            assert_eq!(appel(&e, "POST", "/api/machines/epson/supports", None, Some(casse)).await.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(appel(&e, "GET", "/api/machines/inconnue/supports", None, None).await.status(), StatusCode::NOT_FOUND);
+            assert_eq!(corps(appel(&e, "GET", "/api/machines/epson/supports", None, None).await).await, w, "un refus n'écrit rien");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         #[tokio::test]

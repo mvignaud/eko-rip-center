@@ -29,6 +29,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `machines.json` | catalogue des machines |
 | `tarifs.json` | prix d'encre et de support, HT ou TTC |
 | `reglages.json` | réglages enregistrés |
+| `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
 | `utilisateurs.json` | comptes (mots de passe hachés, droits 0600) |
 | `file.json` | file des sorties et historique |
 | `profils/` | profils ICC déposés |

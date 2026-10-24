@@ -1,8 +1,8 @@
 //! Sauvegarde de la configuration en un seul fichier JSON : catalogue des machines, tarifs,
-//! réglages enregistrés et profils ICC (en hexadécimal). Ni les comptes (mots de passe
+//! réglages enregistrés, supports et modes, et profils ICC (en hexadécimal). Ni les comptes (mots de passe
 //! hachés : ils se recréent sur le serveur), ni les travaux, ni la file.
 
-use crate::{couverture, machines, reglages};
+use crate::{couverture, machines, reglages, supports};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -19,6 +19,9 @@ pub struct Sauvegarde {
     pub reglages: Vec<reglages::Reglage>,
     /// Nom du fichier → contenu en hexadécimal.
     pub profils: BTreeMap<String, String>,
+    /// Absent des sauvegardes d'avant la 0.14 : les supports en place sont alors gardés.
+    #[serde(default)]
+    pub supports: Option<supports::Catalogue>,
 }
 
 pub fn hex(octets: &[u8]) -> String {

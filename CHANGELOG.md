@@ -7,6 +7,21 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.14.0] — 2026-10-24
+
+### Ajouté
+- **Supports et modes d'impression par machine** (`supports.json`) : un support porte son
+  nom, sa configuration d'encres et sa laize ; un mode porte sa résolution, son nombre de
+  passes et son chauffage. Chacun a un identifiant stable, distinct de son nom (renommer ne
+  le change pas ; un identifiant inventé est refusé). API `GET/POST
+  /api/machines/{id}/supports` (écriture réservée aux administrateurs). Au premier
+  démarrage, les supports de `tarifs.json` sont repris (mode 720 × 720 en 8 passes), sans
+  toucher aux prix, qui restent dans les tarifs. Compris dans la sauvegarde de la
+  configuration.
+
+*Added: media and print modes per machine with stable identifiers (`supports.json`, API
+`/api/machines/{id}/supports`), migrated from the price list, included in the backup.*
+
 ## [0.13.3] — 2026-10-24
 
 ### Corrigé
