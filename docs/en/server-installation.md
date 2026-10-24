@@ -10,15 +10,20 @@ backups, updates, FAQ).
 
 > ⚠️ **Installing wipes the PC's whole disk.**
 
-The image is built from Ubuntu 24.04 LTS (about 4 GB). A GitHub release refuses files over
-2 GB: it is published in parts (`.part0`, `.part1`, `.part2`…) with a `.sha256` file.
-Download every part and the `.sha256` into one folder, then join them in order:
+The image is built from Ubuntu 24.04 LTS (about 4 GB). It downloads as a single file, with
+its SHA-256 checksum, from the E-KO cloud:
 
-- Linux or macOS: `cat <name>.iso.part* > <name>.iso`, then `shasum -a 256 -c <name>.iso.sha256`;
-- Windows: `copy /b <name>.iso.part0 + <name>.iso.part1 + <name>.iso.part2 <name>.iso` (as many
-  parts as published), then `certutil -hashfile <name>.iso SHA256` to compare with the `.sha256`.
-  In **PowerShell**, `copy` is another command: use `cmd /c "copy /b …"`, and check with
-  `(Get-FileHash <name>.iso -Algorithm SHA256).Hash`.
+| Version | Image | Checksum | Folder |
+|---|---|---|---|
+| 0.16.0 | [eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso](https://nuage.e-ko.fr/public.php/dav/files/5fekYTc2pzXRor6/eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso) | [.sha256](https://nuage.e-ko.fr/public.php/dav/files/5fekYTc2pzXRor6/eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso.sha256) | [link](https://nuage.e-ko.fr/s/5fekYTc2pzXRor6) |
+
+Newer server versions are then installed by updating the package (see
+[running the server](administration.md)): the image is only for the first install.
+Check the downloaded file:
+
+- Linux or macOS: `shasum -a 256 -c eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso.sha256`;
+- Windows: `certutil -hashfile eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso SHA256`, or in PowerShell
+  `(Get-FileHash eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso -Algorithm SHA256).Hash`, to compare with the `.sha256`.
 
 Write the image to a USB stick (balenaEtcher, Rufus in **DD Image mode** — not ISO mode,
 which rebuilds the boot and loses the profile menu —, or `dd`), connect the PC to the workshop

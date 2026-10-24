@@ -10,17 +10,20 @@ Quatre façons de l'installer, au choix. Ensuite : [administrer le serveur](admi
 
 > ⚠️ **L'installation efface entièrement le disque du PC.**
 
-L'image est faite à partir d'Ubuntu 24.04 LTS (environ 4 Go). Une release GitHub refuse
-les fichiers de plus de 2 Go : elle est publiée en morceaux (`.part0`, `.part1`, `.part2`…)
-avec un fichier `.sha256`. Télécharger tous les morceaux et le `.sha256` dans un même
-dossier, puis les réunir dans l'ordre :
+L'image est faite à partir d'Ubuntu 24.04 LTS (environ 4 Go). Elle se télécharge en un
+seul fichier, avec son empreinte SHA-256, depuis le nuage d'E-KO :
 
-- Linux ou macOS : `cat eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part* > eko-rip-center-<version>-ubuntu-24.04-amd64.iso`
-  puis `shasum -a 256 -c eko-rip-center-<version>-ubuntu-24.04-amd64.iso.sha256` ;
-- Windows, invite de commandes : `copy /b fichier.iso.part0 + fichier.iso.part1 + fichier.iso.part2 fichier.iso`
-  (autant de morceaux que publiés), puis `certutil -hashfile fichier.iso SHA256` à comparer au `.sha256`.
-  Dans **PowerShell**, `copy` est une autre commande : passer par `cmd /c "copy /b …"`, et
-  vérifier par `(Get-FileHash fichier.iso -Algorithm SHA256).Hash`.
+| Version | Image | Empreinte | Dossier |
+|---|---|---|---|
+| 0.16.0 | [eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso](https://nuage.e-ko.fr/public.php/dav/files/5fekYTc2pzXRor6/eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso) | [.sha256](https://nuage.e-ko.fr/public.php/dav/files/5fekYTc2pzXRor6/eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso.sha256) | [lien](https://nuage.e-ko.fr/s/5fekYTc2pzXRor6) |
+
+Les versions plus récentes du serveur s'installent ensuite par mise à jour du paquet (voir
+[l'administration](administration.md)) : l'image ne sert qu'à la première installation.
+Vérifier le fichier téléchargé :
+
+- Linux ou macOS : `shasum -a 256 -c eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso.sha256` ;
+- Windows : `certutil -hashfile eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso SHA256`, ou dans PowerShell
+  `(Get-FileHash eko-rip-center-0.16.0-ubuntu-24.04-amd64.iso -Algorithm SHA256).Hash`, à comparer au `.sha256`.
 
 Écrire l'image sur une clé USB (balenaEtcher, Rufus en **mode Image DD** — pas le mode ISO,
 qui refait le démarrage et perd le menu des profils —, ou `dd`), brancher le PC au réseau de

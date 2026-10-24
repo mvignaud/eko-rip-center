@@ -6,10 +6,18 @@ sont branchées ; un navigateur ne voit qu'une page d'état.
 
 État : le PDF reçu est rendu en plaques d'encre (CMJN + une plaque par ton direct,
 `White` et `Silver` compris) avec un aperçu dans l'écran, et ses tracés de découpe sont
-convertis en HP-GL. Aucun envoi direct aux machines pour l'instant.
+convertis en HP-GL. Les découpeuses (Mutoh Kona, Graphtec) sont pilotées en direct ;
+le pilote direct de l'Epson SC-S80600 (ESC/P2 par le réseau) est en essai.
 
 Deux paquets : le **serveur** (Linux : `.deb`, Docker, binaire) et le **client** de
 bureau (macOS, Windows, Linux), qui ouvre l'écran du serveur dans sa fenêtre.
+
+**Image d'installation** (PC dédié, Ubuntu 24.04, ⚠️ efface le disque) : elle n'est plus
+publiée sur GitHub. Elle se construit en local (`image/construire-iso.sh`) et se dépose sur
+le nuage d'E-KO, un dossier par version (`EKO RIP/vX.Y.Z/`), avec un lien public en lecture
+seule ; le lien de chaque version est dans
+[l'installation du serveur](docs/fr/installation-serveur.md#0-pc-dédié--image-dinstallation-ubuntu).
+Dernière image : 0.16.0.
 
 Documentation : [français](docs/fr/) · [English](docs/en/) ·
 [changelog](CHANGELOG.md). Administration et questions fréquentes :
