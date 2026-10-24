@@ -82,6 +82,12 @@ pub struct Machine {
     pub decoupe_retournee: bool,
 }
 
+/// Couches de découpe de CutServer à l'atelier (relevées le 24/10), reprises pour le Kona.
+fn couches_cutserver() -> Vec<ParametreDecoupe> {
+    let couche = |nom: &str, force_g| ParametreDecoupe { nom: nom.into(), vitesse_cm_s: 15.0, force_g, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
+    vec![couche("Mi-chair V3000", 145.0), couche("V3000WG - Laminé", 305.0)]
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParametreDecoupe {
     pub nom: String,
@@ -222,7 +228,7 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
         Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
-        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
+        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false },
     ]
 }
 
