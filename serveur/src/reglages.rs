@@ -1,7 +1,7 @@
 //! Réglages d'un travail (`Demande`) et réglages enregistrés sous un nom, avec leur
 //! dossier surveillé `<données>/entrees/<nom>/`.
 
-use crate::{blanc, couleur, reperage};
+use crate::{blanc, couleur, edition, reperage};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -42,6 +42,26 @@ pub struct Demande {
     /// Blanc généré après le rendu (sous-couche ou aplat).
     #[serde(default)]
     pub blanc: blanc::Blanc,
+    /// Édition rapide appliquée au PDF avant le rendu.
+    #[serde(default)]
+    pub edition: edition::Edition,
+    /// Mise en file automatique une fois le rendu fini.
+    #[serde(default)]
+    pub auto: Auto,
+}
+
+/// Sorties ajoutées d'office à la file quand le rendu est fini.
+#[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Auto {
+    /// Chaque page imprimable vers l'Epson.
+    #[serde(default)]
+    pub imprimer: bool,
+    /// Chaque page qui a des tracés vers le Kona.
+    #[serde(default)]
+    pub decouper: bool,
+    /// Ajoutées suspendues, à libérer depuis la file.
+    #[serde(default)]
+    pub suspendre: bool,
 }
 
 pub fn dpi_defaut() -> u32 {
@@ -50,7 +70,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default() }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), edition: edition::Edition::default(), auto: Auto::default() }
     }
 }
 
@@ -66,6 +86,7 @@ impl Demande {
             return Err("mosaique_invalide");
         }
         self.blanc.verifier()?;
+        self.edition.verifier()?;
         couleur::verifier(&self.couleur, profils)
     }
 
@@ -76,6 +97,9 @@ impl Demande {
             self.couleur = couleur::Couleur::default();
             self.mosaique = None;
             self.blanc = blanc::Blanc::default();
+            // Rien n'est imprimé : pas d'œillets ni de marge ; échelle, rotation, miroir et
+            // contour restent (ils changent la découpe).
+            (self.edition.oeillets, self.edition.marge_mm) = (None, 0.0);
         }
         self
     }

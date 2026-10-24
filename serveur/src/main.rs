@@ -7,6 +7,7 @@ mod couleur;
 mod controle;
 mod couverture;
 mod decoupe;
+mod edition;
 mod file;
 mod imbrication;
 mod mosaique;
@@ -187,6 +188,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
+        .route("/api/travaux/{id}/editer", axum::routing::post(editer))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
@@ -411,6 +413,19 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "recouvrement_mm" => valeur.parse().map(|v| recouvrement_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            "edition" => serde_json::from_str(&valeur).map(|e| d.edition = e).map_err(|_| erreur("edition_invalide")),
+            "auto_imprimer" => {
+                d.auto.imprimer = valeur == "oui";
+                Ok(())
+            }
+            "auto_decouper" => {
+                d.auto.decouper = valeur == "oui";
+                Ok(())
+            }
+            "auto_suspendre" => {
+                d.auto.suspendre = valeur == "oui";
+                Ok(())
+            }
             "blanc" => serde_json::from_value(serde_json::Value::String(valeur)).map(|m| d.blanc.mode = m).map_err(|_| erreur("blanc_invalide")),
             "blanc_retraction_mm" => valeur.parse().map(|v| d.blanc.retraction_mm = v).map_err(|_| erreur("blanc_invalide")),
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
@@ -450,19 +465,8 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     } else {
         vec![]
     };
-    // Mosaïque : la source est remplacée par ses lés ; l'original est gardé à côté.
     let mosaique = d.mosaique.filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
-    if let Some(m) = mosaique {
-        let source = rep.join(Format::Pdf.fichier());
-        let original = rep.join("source-original.pdf");
-        tokio::fs::rename(&source, &original).await.map_err(|e| interne(e.to_string()))?;
-        let pdf = tokio::fs::read(&original).await.map_err(|e| interne(e.to_string()))?;
-        let les = tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm, m.reperes))
-            .await
-            .unwrap_or_else(|e| Err(e.to_string()))
-            .map_err(|e| mauvais("mosaique_invalide", Some(e)))?;
-        tokio::fs::write(&source, les).await.map_err(|e| interne(e.to_string()))?;
-    }
+    construire_source(&rep, format, &Demande { mosaique, ..d.clone() }).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
     let travail = Travail {
         id,
         nom,
@@ -478,6 +482,38 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
     Ok(travail)
+}
+
+/// `source.pdf` à rendre, depuis l'original : édition rapide puis mosaïque. L'original est
+/// gardé dans `source-original.pdf` dès qu'une transformation s'applique, pour pouvoir
+/// rééditer sans renvoyer le fichier. Erreur : (code, détail).
+async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande) -> Result<(), (&'static str, String)> {
+    let interne = |e: std::io::Error| ("erreur_interne", e.to_string());
+    if format != Format::Pdf {
+        return Ok(());
+    }
+    let (source, original) = (rep.join(Format::Pdf.fichier()), rep.join("source-original.pdf"));
+    let (edition, mosaique) = (d.edition, d.mosaique);
+    if edition.neutre() && mosaique.is_none() {
+        if tokio::fs::try_exists(&original).await.unwrap_or(false) {
+            tokio::fs::copy(&original, &source).await.map_err(interne)?;
+        }
+        return Ok(());
+    }
+    if !tokio::fs::try_exists(&original).await.unwrap_or(false) {
+        tokio::fs::copy(&source, &original).await.map_err(interne)?;
+    }
+    let pdf = tokio::fs::read(&original).await.map_err(interne)?;
+    let produit = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, (&'static str, String)> {
+        let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition).map_err(|e| ("edition_invalide", e))? };
+        match mosaique {
+            Some(m) => mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm, m.reperes).map_err(|e| ("mosaique_invalide", e)),
+            None => Ok(pdf),
+        }
+    })
+    .await
+    .map_err(|e| ("erreur_interne", e.to_string()))??;
+    tokio::fs::write(&source, produit).await.map_err(interne)
 }
 
 /// Octets lus avant de reconnaître le format.
@@ -578,6 +614,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                     })
                     .collect();
                 t.statut = Statut::Termine;
+                mettre_en_file_auto(&etat, &t);
             }
             Err(e) => {
                 eprintln!("travail {} : {e}", t.id);
@@ -960,6 +997,35 @@ fn png(octets: Vec<u8>) -> Response {
 
 /// PDF à rendre : la source telle quelle, ou `imprime.pdf` agrandi avec ses repères
 /// (une mise en page par page).
+/// Sorties ajoutées d'office après le rendu (réglage `auto`). Une découpe qui suit une
+/// impression part toujours suspendue : le support doit d'abord passer de l'Epson au Kona.
+fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
+    let a = t.demande.auto;
+    if !a.imprimer && !a.decouper {
+        return;
+    }
+    let mut f = etat.file.lock().unwrap();
+    for (i, p) in t.pages.iter().enumerate() {
+        let imprime = a.imprimer && t.demande.mode == Mode::Imprimer && p.plaques.iter().any(|x| !p.plaques_decoupe.contains(x));
+        let mut ajouter = |machine, suspendue: bool| {
+            let mut s = file::Sortie::nouvelle(machine, t.id, &t.nom, i + 1, maintenant());
+            if suspendue {
+                s.etat = file::Etat::Suspendue;
+            }
+            f.sorties.push(s);
+        };
+        if imprime {
+            ajouter(file::Machine::Epson, a.suspendre);
+        }
+        if a.decouper && p.traces_decoupe > 0 {
+            ajouter(file::Machine::Kona, a.suspendre || imprime);
+        }
+    }
+    if let Err(e) = f.ecrire(&etat.config.donnees) {
+        eprintln!("travail {} : file non enregistrée : {e}", t.id);
+    }
+}
+
 /// Génère la plaque `White` de chaque page (production et aperçu) selon le réglage de
 /// blanc ; rend les listes de plaques, `White` comprise.
 async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: blanc::Blanc, dpi: u32) -> Result<Vec<Vec<String>>, String> {
@@ -1083,11 +1149,36 @@ async fn supprimer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Res
 
 /// Recommence le rendu et la préparation de la découpe à partir du fichier reçu.
 async fn relancer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
-    let donnees = &etat.config.donnees;
-    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    let Some(t) = lire_travail(&etat.config.donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
     if occupe(&etat, &t) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
+    refaire(&etat, t).await
+}
+
+/// Édition rapide d'un travail existant : nouvelle édition appliquée à l'original, puis
+/// nouveau rendu (le fichier n'est pas à renvoyer).
+async fn editer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(e): Json<edition::Edition>) -> Response {
+    let Some(mut t) = lire_travail(&etat.config.donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if occupe(&etat, &t) {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    if t.format != Format::Pdf {
+        return refus(StatusCode::CONFLICT, "edition_invalide", Some("PDF seulement".into()));
+    }
+    t.demande = Demande { edition: e, ..t.demande }.normaliser();
+    if let Err(code) = t.demande.edition.verifier() {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    if let Err((code, detail)) = construire_source(&dossier(&etat.config.donnees, id), t.format, &t.demande).await {
+        let statut = if code == "erreur_interne" { StatusCode::INTERNAL_SERVER_ERROR } else { StatusCode::BAD_REQUEST };
+        return refus(statut, code, Some(detail));
+    }
+    refaire(&etat, t).await
+}
+
+async fn refaire(etat: &Partage, mut t: Travail) -> Response {
+    let (donnees, id) = (&etat.config.donnees, t.id);
     // Les sorties d'avant ne doivent pas survivre au nouveau rendu (un .plt périmé partirait au plotter).
     let rep = dossier(donnees, id);
     for sous in ["prod", "apercu"] {
@@ -1313,7 +1404,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -1486,6 +1577,62 @@ mod tests {
             assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
             assert!(e.file.lock().unwrap().sorties.is_empty());
             assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Mise en file automatique (Epson en attente, Kona suspendu après l'impression),
+        /// puis réédition à 200 % : rendu refait depuis l'original, surface × 4.
+        #[tokio::test]
+        async fn file_automatique_puis_reedition() {
+            let e = etat("auto");
+            let donnees = e.config.donnees.clone();
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "auto.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { dpi: 36, auto: reglages::Auto { imprimer: true, decouper: true, suspendre: false }, ..Default::default() },
+                statut: Statut::EnAttente,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![],
+                alertes: vec![],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            traiter(e.clone(), t.clone()).await;
+            let etats: Vec<_> = e.file.lock().unwrap().sorties.iter().map(|s| (s.machine, s.etat)).collect();
+            assert_eq!(etats, [(file::Machine::Epson, file::Etat::EnAttente), (file::Machine::Kona, file::Etat::Suspendue)]);
+            let surface = lire_travail(&donnees, t.id).unwrap().pages[0].surface_m2;
+
+            // Sorties à passer : réédition refusée, puis acceptée une fois la file vidée.
+            let corps = serde_json::json!({ "echelle": 200.0 });
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{}/editer", t.id), None, Some(corps.clone())).await.status(), StatusCode::CONFLICT);
+            e.file.lock().unwrap().sorties.clear();
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{}/editer", t.id), None, Some(serde_json::json!({ "rotation": 45 }))).await.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{}/editer", t.id), None, Some(corps)).await.status(), StatusCode::ACCEPTED);
+            let attendre = || async {
+                for _ in 0..100 {
+                    let x = lire_travail(&donnees, t.id).unwrap();
+                    if !matches!(x.statut, Statut::EnAttente | Statut::EnCours) {
+                        return x;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                panic!("rendu trop long");
+            };
+            let x = attendre().await;
+            assert!(matches!(x.statut, Statut::Termine), "{:?}", x.erreur);
+            assert!((x.pages[0].surface_m2 / surface - 4.0).abs() < 0.05, "{} / {surface}", x.pages[0].surface_m2);
+            assert!(rep.join("source-original.pdf").exists());
+            assert_eq!(e.file.lock().unwrap().sorties.len(), 2, "le nouveau rendu repasse en file d'office");
+            e.file.lock().unwrap().sorties.clear();
+            // Retour à 100 % : la source redevient l'original.
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{}/editer", t.id), None, Some(serde_json::json!({}))).await.status(), StatusCode::ACCEPTED);
+            assert_eq!(std::fs::read(rep.join("source.pdf")).unwrap(), std::fs::read(rep.join("source-original.pdf")).unwrap());
+            attendre().await;
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 
