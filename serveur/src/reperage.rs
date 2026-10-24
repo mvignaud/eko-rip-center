@@ -189,6 +189,35 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
     }
 }
 
+/// Consigne du support Kona (repères non lus) : 5 à 8 cm de blanc autour des repères,
+/// image d'au moins 25 cm de côté. ⚠️ À confirmer sur le Kona : nos cadres laissent 10 mm
+/// entre l'image et le cadre (6 mm minimum au manuel), donc le blanc est toujours signalé.
+pub const BLANC_CONSEILLE_MM: f64 = 50.0;
+pub const IMAGE_MIN_MM: f64 = 250.0;
+
+/// Écarts d'une page `largeur × hauteur` (pt) à la consigne : (code, détail).
+/// `reperes_image_petite` : un côté sous 25 cm ; `reperes_blanc` : moins de 5 cm de blanc
+/// entre un repère et l'image.
+pub fn ecarts(reperage: Reperage, largeur: f64, hauteur: f64) -> Vec<(&'static str, String)> {
+    if reperage == Reperage::Aucun {
+        return vec![];
+    }
+    let mm = |v: f64| v / PT_PAR_MM;
+    let mut e = vec![];
+    if mm(largeur.min(hauteur)) < IMAGE_MIN_MM - 1e-6 {
+        e.push(("reperes_image_petite", format!("{:.0} × {:.0} mm", mm(largeur), mm(hauteur))));
+    }
+    let m = mise_en_page(reperage, largeur, hauteur, 0);
+    let (x0, y0) = m.decalage;
+    let (x1, y1) = (x0 + largeur, y0 + hauteur);
+    // Écart de chaque repère à l'image : la plus grande des distances sur les deux axes.
+    let blanc = m.rectangles.iter().map(|[x, y, l, h]| (x0 - (x + l)).max(x - x1).max(y0 - (y + h)).max(y - y1).max(0.0)).fold(f64::MAX, f64::min);
+    if blanc.is_finite() && mm(blanc) < BLANC_CONSEILLE_MM - 1e-6 {
+        e.push(("reperes_blanc", format!("{:.0} mm", mm(blanc))));
+    }
+    e
+}
+
 /// Côté du triangle de la flèche d'insertion, en mm.
 const FLECHE: f64 = 5.0;
 

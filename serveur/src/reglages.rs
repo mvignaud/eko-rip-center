@@ -185,6 +185,8 @@ impl Demande {
             // Rien n'est imprimé : pas d'œillets ni de marge ; échelle, rotation, miroir et
             // contour restent (ils changent la découpe).
             (self.edition.oeillets, self.edition.marge_mm) = (None, 0.0);
+            // Ni marques, ni fond perdu, ni étiquette, ni code.
+            (self.edition.marques, self.edition.fond_perdu, self.edition.etiquette, self.edition.code) = (None, None, None, None);
         }
         self
     }

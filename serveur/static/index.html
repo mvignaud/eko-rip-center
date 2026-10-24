@@ -200,7 +200,8 @@
   #vue-laize { position: absolute; left: 0; top: -100000px; bottom: -100000px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); background: rgb(61 143 224 / .06); pointer-events: none; }
   #vue-hors { position: absolute; top: 0; bottom: 0; background: rgb(249 112 102 / .3); pointer-events: none; }
   /* Mosaïque (3.C) : lés en pointillés, recouvrements teintés, soudure, tuiles décochées. */
-  #vue-les-calque { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  #vue-les-calque, #vue-kona-calque { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  #vue-kona-calque rect { fill: rgb(0 0 0 / .55); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; }
   #vue-les-calque .le { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
   #vue-les-calque .rec { fill: rgb(61 143 224 / .22); }
   #vue-les-calque .soudure { fill: rgb(249 112 102 / .4); }
@@ -287,6 +288,7 @@
           <div id="vue-hors" hidden></div>
           <div id="vue-laize" hidden></div>
           <svg id="vue-les-calque" aria-hidden="true"></svg>
+          <svg id="vue-kona-calque" aria-hidden="true"></svg>
         </div>
         <div id="vue-rect" hidden></div>
       </div>
@@ -487,6 +489,19 @@ const textes = {
     edition: "Édition rapide", echelle: "Échelle (%)", rotation_ed: "Rotation", marge: "Marge blanche (mm)", miroir: "Miroir (vitrophanie)",
     oeillets: "Œillets (repères imprimés)", espacement_oe: "Écart maximal (mm)", retrait_oe: "Distance au bord (mm)", diametre_oe: "Diamètre (mm)",
     bords: ["Haut", "Bas", "Gauche", "Droite"], contour: "Contour de découpe rectangulaire", contour_mm: "Décalage du contour (mm, négatif = dedans)",
+    fi_repartition: "Répartition", fi_par_espacement: "par espacement", fi_par_quantite: "par quantité", fi_quantites: "Nombre par bord, coins compris (haut, bas, gauche, droite)", fi_forme: "Forme",
+    fi_formes: { cercle: "Cercle", disque: "Disque plein", croix: "Croix", cercle_croix: "Cercle et croix" }, fi_depuis_coupe: "Distance comptée depuis le trait de coupe (vers l'intérieur)",
+    fi_marques: "Marques imprimées", fi_coupe: "Traits de coupe aux angles", fi_croix: "Croix de repérage aux angles (remplacent les traits de coupe)", fi_contour_imprime: "Contour imprimé sur le trait de coupe",
+    fi_distance: "Distance au fond perdu (mm)", fi_longueur: "Longueur (mm)", fi_trait: "Trait", fi_genres: { plein: "Plein", pointille: "Pointillé", alterne: "Alterné (tirets sur blanc)" },
+    fi_couleur: "Couleur", fi_couleurs: { noir: "Noir", reperage: "Repérage (CMJN 100 %)", blanc: "Blanc" }, fi_tiret: "Tiret (mm)", fi_vide: "Vide (mm)", fi_epaisseur: "Épaisseur (mm)",
+    fi_plis: "Repères de pli et de couture", fi_pli_ajouter: "Ajouter un repère", fi_pli_retirer: "Retirer", fi_couture: "Couture (trait continu)", fi_visible: "Imprimé", fi_pli_distance: "Distance au côté (mm)",
+    fi_cotes: { haut: "Haut", bas: "Bas", gauche: "Gauche", droite: "Droite" }, note_kona_marques: "Avec un repérage Kona, les traits de coupe et les croix ne sont pas imprimés. La marge s'agrandit d'elle-même pour loger les marques, l'étiquette et le code.",
+    fi_fond: "Fond perdu", fi_lies: "Côtés liés", fi_fond_cotes: "Fond perdu (mm) : haut, bas, gauche, droite", fi_remplissage: "Remplissage",
+    fi_remplissages: { couleur: "Couleur", premier_pixel: "Premier pixel", miroir: "Miroir de l'image", duplication: "Duplication des bords" }, fi_cmjn: "Couleur (C, M, J, N en %)", fi_rogne: "Blanc de rogne (mm) : haut, bas, gauche, droite",
+    fi_etiquette: "Étiquette imprimée (nom, date, L × H, lé, copies, mode, commande)", fi_cote: "Côté", fi_corps: "Corps du texte (mm)", note_etiquette: "Copies et référence de commande s'impriment vides (« — ») tant que la fiche travail n'existe pas.",
+    fi_code: "QR code en marge", fi_cote_code: "Côté du code (mm)", fi_marge_code: "Blanc autour (mm)", fi_niveau: "Correction d'erreur", fi_contour_code: "Contour de découpe autour du code", fi_balises: "Balises",
+    fi_noms_balises: { nom: "Nom", page: "Page", tuile: "Tuile/total", date: "Date", travail: "N° de travail", coupe: "N° de coupe", machine: "Machine", commande: "Réf. commande" },
+    fi_kona: "Repères Kona", fi_kona_note: "Pointillés : repères Kona autour de la taille à venir ; ils suivent l'image.",
     auto: "Mise en file automatique", auto_imprimer: "Imprimer sur l'Epson une fois rendu", auto_decouper: "Découper sur le Kona",
     auto_suspendre: "Ajouter en suspendu (à libérer depuis la file)", note_auto: "Une découpe qui suit une impression est toujours ajoutée suspendue : le support doit d'abord passer au Kona.",
     bat: "BAT (PDF)", editer: "Éditer", editer_titre: (n) => `Édition rapide — ${n}`, appliquer: "Appliquer et refaire le rendu", fermer: "Fermer",
@@ -529,6 +544,9 @@ const textes = {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
       rotation_auto: (d) => `Tourné de 90° pour tenir dans la laize de l'imprimante (${d}).`,
+      marques_neutralisees: () => "Repérage Kona : traits de coupe et croix non imprimés (ils gêneraient la lecture des repères).",
+      reperes_image_petite: (d, p) => `Page ${p} : ${d}, sous les 25 cm de côté conseillés pour le repérage Kona.`,
+      reperes_blanc: (d, p) => `Page ${p} : ${d} de blanc entre l'image et les repères Kona, sous les 5 cm conseillés (consigne à confirmer sur le Kona).`,
     },
     rechercher: "Rechercher un travail…", filtre_tous: "Tous", filtre_actifs: "En cours", aucun_travail: "Aucun travail. Déposer un fichier pour commencer.",
     decoupe: (n) => (n ? `${n} tracé${n > 1 ? "s" : ""} de découpe` : "Aucun tracé de découpe"), telecharger: "Fichier .plt",
@@ -586,6 +604,9 @@ const textes = {
       machine_occupee: "Une sortie attend encore cette machine dans la file.", operation_impossible: "Cette machine ne fait pas cette opération.",
       media_indisponible: "L'Epson ne répond pas ou ne donne pas la largeur du média.", media_non_configure: "Lecture du média non configurée.",
       recadrage_invalide: "Recadrage impossible : le cadre doit faire au moins 1 × 1 mm et rester dans la page.",
+      oeillets_invalides: "Œillets : de 1 à 200 par bord.", marques_invalides: "Marques impossibles (distance 0 à 100 mm, longueur 1 à 100 mm, épaisseur 0,05 à 5 mm, tiret et vide 0,1 à 50 mm, 20 repères de pli au plus).",
+      fond_perdu_invalide: "Fond perdu impossible (0 à 100 mm par côté, rogne 0 à 200 mm, couleur 0 à 100 %).", etiquette_invalide: "Étiquette impossible (corps 1,5 à 20 mm, en haut ou en bas).",
+      code_invalide: "QR code impossible (côté 5 à 100 mm, blanc 0 à 50 mm, en haut ou en bas).",
       edition_invalide: "Édition impossible (échelle 1 à 1000 %, marge 0 à 500 mm, œillets : écart 50 à 5000 mm, retrait 3 à 200 mm, diamètre 2 à 50 mm).",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
@@ -622,6 +643,19 @@ const textes = {
     edition: "Quick edit", echelle: "Scale (%)", rotation_ed: "Rotation", marge: "White margin (mm)", miroir: "Mirror (window film)",
     oeillets: "Grommets (printed marks)", espacement_oe: "Maximum spacing (mm)", retrait_oe: "Distance from edge (mm)", diametre_oe: "Diameter (mm)",
     bords: ["Top", "Bottom", "Left", "Right"], contour: "Rectangular cut contour", contour_mm: "Contour offset (mm, negative = inside)",
+    fi_repartition: "Placement", fi_par_espacement: "by spacing", fi_par_quantite: "by quantity", fi_quantites: "Number per edge, corners included (top, bottom, left, right)", fi_forme: "Shape",
+    fi_formes: { cercle: "Circle", disque: "Filled disc", croix: "Cross", cercle_croix: "Circle and cross" }, fi_depuis_coupe: "Distance measured from the cut line (inwards)",
+    fi_marques: "Printed marks", fi_coupe: "Corner crop marks", fi_croix: "Corner registration crosses (replace the crop marks)", fi_contour_imprime: "Contour printed on the cut line",
+    fi_distance: "Distance from the bleed (mm)", fi_longueur: "Length (mm)", fi_trait: "Line", fi_genres: { plein: "Solid", pointille: "Dashed", alterne: "Alternate (dashes on white)" },
+    fi_couleur: "Colour", fi_couleurs: { noir: "Black", reperage: "Registration (CMYK 100 %)", blanc: "White" }, fi_tiret: "Dash (mm)", fi_vide: "Gap (mm)", fi_epaisseur: "Width (mm)",
+    fi_plis: "Fold and sewing marks", fi_pli_ajouter: "Add a mark", fi_pli_retirer: "Remove", fi_couture: "Sewing (continuous line)", fi_visible: "Printed", fi_pli_distance: "Distance from the edge (mm)",
+    fi_cotes: { haut: "Top", bas: "Bottom", gauche: "Left", droite: "Right" }, note_kona_marques: "With Kona registration, crop marks and crosses are not printed. The margin grows by itself to hold the marks, the label and the code.",
+    fi_fond: "Bleed", fi_lies: "Sides linked", fi_fond_cotes: "Bleed (mm): top, bottom, left, right", fi_remplissage: "Fill",
+    fi_remplissages: { couleur: "Colour", premier_pixel: "First pixel", miroir: "Mirrored image", duplication: "Edge duplication" }, fi_cmjn: "Colour (C, M, Y, K in %)", fi_rogne: "Trim white (mm): top, bottom, left, right",
+    fi_etiquette: "Printed label (name, date, W × H, panel, copies, mode, order)", fi_cote: "Side", fi_corps: "Text size (mm)", note_etiquette: "Copies and order reference print empty (“—”) until the job sheet exists.",
+    fi_code: "QR code in the margin", fi_cote_code: "Code size (mm)", fi_marge_code: "White around (mm)", fi_niveau: "Error correction", fi_contour_code: "Cut contour around the code", fi_balises: "Tags",
+    fi_noms_balises: { nom: "Name", page: "Page", tuile: "Tile/total", date: "Date", travail: "Job ID", coupe: "Cut ID", machine: "Machine", commande: "Order ref." },
+    fi_kona: "Kona marks", fi_kona_note: "Dotted: Kona marks around the size to come; they follow the image.",
     auto: "Automatic queueing", auto_imprimer: "Print on the Epson once rendered", auto_decouper: "Cut on the Kona",
     auto_suspendre: "Add on hold (release from the queue)", note_auto: "A cut that follows a print is always added on hold: the media must first move to the Kona.",
     bat: "Proof (PDF)", editer: "Edit", editer_titre: (n) => `Quick edit — ${n}`, appliquer: "Apply and render again", fermer: "Close",
@@ -664,6 +698,9 @@ const textes = {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
       rotation_auto: (d) => `Turned 90° to fit the printer's roll width (${d}).`,
+      marques_neutralisees: () => "Kona registration: crop marks and crosses not printed (they would disturb the reading of the marks).",
+      reperes_image_petite: (d, p) => `Page ${p}: ${d}, under the 25 cm per side advised for Kona registration.`,
+      reperes_blanc: (d, p) => `Page ${p}: ${d} of white between the image and the Kona marks, under the advised 5 cm (to confirm on the Kona).`,
     },
     rechercher: "Search jobs…", filtre_tous: "All", filtre_actifs: "In progress", aucun_travail: "No job yet. Drop a file to start.",
     decoupe: (n) => (n ? `${n} cut path${n > 1 ? "s" : ""}` : "No cut path"), telecharger: ".plt file",
@@ -721,6 +758,9 @@ const textes = {
       machine_occupee: "An output is still waiting for this machine in the queue.", operation_impossible: "This machine does not do this operation.",
       media_indisponible: "The Epson does not answer or gives no media width.", media_non_configure: "Media reading not set up.",
       recadrage_invalide: "Cannot crop: the frame must be at least 1 × 1 mm and stay inside the page.",
+      oeillets_invalides: "Grommets: 1 to 200 per edge.", marques_invalides: "Cannot draw the marks (distance 0 to 100 mm, length 1 to 100 mm, width 0.05 to 5 mm, dash and gap 0.1 to 50 mm, at most 20 fold marks).",
+      fond_perdu_invalide: "Cannot add the bleed (0 to 100 mm per side, trim 0 to 200 mm, colour 0 to 100 %).", etiquette_invalide: "Cannot print the label (text 1.5 to 20 mm, top or bottom).",
+      code_invalide: "Cannot print the QR code (size 5 to 100 mm, white 0 to 50 mm, top or bottom).",
       edition_invalide: "Cannot edit (scale 1 to 1000 %, margin 0 to 500 mm, grommets: spacing 50 to 5000 mm, inset 3 to 200 mm, diameter 2 to 50 mm).",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
@@ -1093,37 +1133,108 @@ function mosaiqueDuFormulaire(f) {
   return a && a.laize_mm === m.laize_mm && a.recouvrement_mm === m.recouvrement_mm && (a.hauteur_max_mm ?? null) === m.hauteur_max_mm ? { ...a, ...m } : m;
 }
 
+/** Valeurs par défaut des finitions, comme le serveur (`edition.rs`). */
+const FINITIONS = {
+  oeillets: { espacement_mm: 500, retrait_mm: 20, diametre_mm: 10, bords: [true, true, true, true], quantites: null, forme: "cercle_croix", depuis_coupe: false },
+  marques: { coupe: true, reperage: false, contour: false, distance_mm: 3, longueur_mm: 5, plis: [], style: { genre: "plein", trait_mm: 3, vide_mm: 2, epaisseur_mm: 0.25, couleur: "noir" } },
+  fond_perdu: { cotes_mm: [5, 5, 5, 5], genre: "couleur", couleur: [0, 0, 0, 0], rogne_mm: [0, 0, 0, 0] },
+  etiquette: { cote: "bas", taille_mm: 3 },
+  code: { balises: { nom: true, page: true, tuile: true, date: false, travail: true, coupe: false, machine: false, commande: false }, taille_mm: 20, marge_mm: 3, niveau: "M", contour: false, cote: "bas" },
+};
+const COTES = ["haut", "bas", "gauche", "droite"];
+
 /** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
 function champsEdition(racine, e) {
-  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", ...(e || {}) };
+  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, ...(e || {}) };
   // Réglés dans la visionneuse : gardés tels quels ; l'échelle déliée tombe si on retouche le %.
   racine._garde = { recadrage: e.recadrage, echelle_xy: e.echelle_xy, echelle: e.echelle };
-  const portee = el("select", { name: "ed_portee" }, ...["image_et_decoupe", "image_seule"].map((v) => el("option", { value: v, selected: e.miroir_portee === v }, T()[`portee_${v}`])));
-  const o = e.oeillets || { espacement_mm: 500, retrait_mm: 20, diametre_mm: 10, bords: [true, true, true, true] };
+  const d = T();
+  const portee = el("select", { name: "ed_portee" }, ...["image_et_decoupe", "image_seule"].map((v) => el("option", { value: v, selected: e.miroir_portee === v }, d[`portee_${v}`])));
+  const o = { ...FINITIONS.oeillets, ...(e.oeillets || {}) };
+  const mq = { ...FINITIONS.marques, ...(e.marques || {}) }, st = { ...FINITIONS.marques.style, ...(mq.style || {}) };
+  const fp = { ...FINITIONS.fond_perdu, ...(e.fond_perdu || {}) }, et = { ...FINITIONS.etiquette, ...(e.etiquette || {}) };
+  const qr = { ...FINITIONS.code, ...(e.code || {}) }, bal = { ...FINITIONS.code.balises, ...(qr.balises || {}) };
   const nombre = (nom, valeur, attrs = {}) => el("input", { type: "number", step: "any", name: `ed_${nom}`, value: valeur, ...attrs });
   const cocher = (nom, valeur) => el("input", { type: "checkbox", name: `ed_${nom}`, checked: valeur });
+  const choix = (nom, valeur, options, textes) => el("select", { name: `ed_${nom}` }, ...options.map((v) => el("option", { value: v, selected: valeur === v }, textes[v] ?? v)));
+  const champ = (texte, entree) => el("label", {}, texte, entree);
+  const caseA = (nom, valeur, texte) => el("label", { className: "case" }, cocher(nom, valeur), texte);
+  const quatre = (nom, valeurs, attrs) => el("div", { className: "ligne" }, ...valeurs.map((v, i) => nombre(`${nom}${i}`, v, { ...attrs, ariaLabel: d.bords[i] })));
+  const groupe = (titre, ouvert, ...enfants) => el("details", { open: ouvert }, el("summary", {}, titre), el("div", { style: "display: grid; gap: 6px" }, ...enfants));
   const rotation = el("select", { name: "ed_rotation" }, ...[0, 90, 180, 270].map((r) => el("option", { value: String(r), selected: e.rotation === r }, `${r}°`)));
+  // Fond perdu lié : un côté saisi recopié sur les trois autres.
+  const fond = quatre("fond", fp.cotes_mm, { min: 0, max: 100 }), lies = cocher("fond_lies", fp.cotes_mm.every((v) => v === fp.cotes_mm[0]));
+  fond.addEventListener("input", (ev) => { if (lies.checked) for (const i of fond.querySelectorAll("input")) if (i !== ev.target) i.value = ev.target.value; });
+  // Plis : la liste se redessine avec les valeurs saisies.
+  const redessiner = (plis) => { const lu = lireEdition(racine); champsEdition(racine, { ...lu, marques: { ...(lu.marques || FINITIONS.marques), plis } }); };
+  const plis = mq.plis.map((p, i) => el("div", { className: "ligne" },
+    choix(`pli_cote${i}`, p.cote, COTES, d.fi_cotes), nombre(`pli_distance${i}`, p.distance_mm, { min: 0, max: 5000, ariaLabel: d.fi_pli_distance }),
+    caseA(`pli_couture${i}`, p.couture, d.fi_couture), caseA(`pli_visible${i}`, p.visible !== false, d.fi_visible),
+    bouton(d.fi_pli_retirer, () => redessiner(lireEdition(racine).marques_plis.filter((_, k) => k !== i)))));
+  racine._plis = mq.plis.length;
   racine.replaceChildren(
-    el("div", { className: "deux" }, el("label", {}, T().echelle, nombre("echelle", e.echelle, { min: 1, max: 1000 })), el("label", {}, T().rotation_ed, rotation)),
-    el("div", { className: "deux" }, el("label", {}, T().marge, nombre("marge", e.marge_mm, { min: 0, max: 500 })), el("label", { className: "case" }, cocher("miroir", e.miroir), T().miroir)),
-    el("label", {}, T().ed_portee, portee),
-    el("label", { className: "case" }, cocher("oeillets", !!e.oeillets), T().oeillets),
-    el("div", { className: "deux" }, el("label", {}, T().espacement_oe, nombre("espacement", o.espacement_mm, { min: 50, max: 5000 })), el("label", {}, T().retrait_oe, nombre("retrait", o.retrait_mm, { min: 3, max: 200 }))),
-    el("div", { className: "deux" }, el("label", {}, T().diametre_oe, nombre("diametre", o.diametre_mm, { min: 2, max: 50 })),
-      el("div", { className: "ligne" }, ...T().bords.map((b, i) => el("label", { className: "case" }, cocher(`bord${i}`, o.bords[i]), b)))),
-    el("label", { className: "case" }, cocher("contour", e.contour_mm !== null && e.contour_mm !== undefined), T().contour),
-    el("label", {}, T().contour_mm, nombre("contour_mm", e.contour_mm ?? 0, { min: -50, max: 50 })));
+    el("div", { className: "deux" }, el("label", {}, d.echelle, nombre("echelle", e.echelle, { min: 1, max: 1000 })), el("label", {}, d.rotation_ed, rotation)),
+    el("div", { className: "deux" }, el("label", {}, d.marge, nombre("marge", e.marge_mm, { min: 0, max: 500 })), el("label", { className: "case" }, cocher("miroir", e.miroir), d.miroir)),
+    el("label", {}, d.ed_portee, portee),
+    el("label", { className: "case" }, cocher("oeillets", !!e.oeillets), d.oeillets),
+    el("div", { className: "deux" }, champ(d.fi_repartition, choix("oe_mode", o.quantites ? "quantite" : "espacement", ["espacement", "quantite"], { espacement: d.fi_par_espacement, quantite: d.fi_par_quantite })), champ(d.fi_forme, choix("oe_forme", o.forme, ["cercle", "disque", "croix", "cercle_croix"], d.fi_formes))),
+    el("div", { className: "deux" }, el("label", {}, d.espacement_oe, nombre("espacement", o.espacement_mm, { min: 50, max: 5000 })), el("label", {}, d.retrait_oe, nombre("retrait", o.retrait_mm, { min: 3, max: 200 }))),
+    champ(d.fi_quantites, quatre("oe_quantite", o.quantites || [3, 3, 2, 2], { min: 1, max: 200, step: 1 })),
+    caseA("oe_depuis_coupe", o.depuis_coupe, d.fi_depuis_coupe),
+    el("div", { className: "deux" }, el("label", {}, d.diametre_oe, nombre("diametre", o.diametre_mm, { min: 2, max: 50 })),
+      el("div", { className: "ligne" }, ...d.bords.map((b, i) => el("label", { className: "case" }, cocher(`bord${i}`, o.bords[i]), b)))),
+    el("label", { className: "case" }, cocher("contour", e.contour_mm !== null && e.contour_mm !== undefined), d.contour),
+    el("label", {}, d.contour_mm, nombre("contour_mm", e.contour_mm ?? 0, { min: -50, max: 50 })),
+    groupe(d.fi_marques, !!e.marques,
+      caseA("marques", !!e.marques, d.fi_marques),
+      caseA("mq_coupe", mq.coupe, d.fi_coupe), caseA("mq_reperage", mq.reperage, d.fi_croix), caseA("mq_contour", mq.contour, d.fi_contour_imprime),
+      el("div", { className: "deux" }, champ(d.fi_distance, nombre("mq_distance", mq.distance_mm, { min: 0, max: 100 })), champ(d.fi_longueur, nombre("mq_longueur", mq.longueur_mm, { min: 1, max: 100 }))),
+      el("div", { className: "deux" }, champ(d.fi_trait, choix("mq_genre", st.genre, ["plein", "pointille", "alterne"], d.fi_genres)), champ(d.fi_couleur, choix("mq_couleur", st.couleur, ["noir", "reperage", "blanc"], d.fi_couleurs))),
+      el("div", { className: "deux" }, champ(d.fi_tiret, nombre("mq_tiret", st.trait_mm, { min: 0.1, max: 50 })), champ(d.fi_vide, nombre("mq_vide", st.vide_mm, { min: 0.1, max: 50 }))),
+      champ(d.fi_epaisseur, nombre("mq_epaisseur", st.epaisseur_mm, { min: 0.05, max: 5 })),
+      el("strong", {}, d.fi_plis), ...plis,
+      bouton(d.fi_pli_ajouter, () => redessiner([...lireEdition(racine).marques_plis, { cote: "haut", distance_mm: 25.4, couture: false, visible: true }])),
+      el("p", { className: "meta" }, d.note_kona_marques)),
+    groupe(d.fi_fond, !!e.fond_perdu,
+      caseA("fond_perdu", !!e.fond_perdu, d.fi_fond),
+      champ(d.fi_fond_cotes, fond), el("label", { className: "case" }, lies, d.fi_lies),
+      champ(d.fi_remplissage, choix("fond_genre", fp.genre, ["couleur", "premier_pixel", "miroir", "duplication"], d.fi_remplissages)),
+      champ(d.fi_cmjn, quatre("fond_cmjn", fp.couleur.map((v) => Math.round(v * 1000) / 10), { min: 0, max: 100 })),
+      champ(d.fi_rogne, quatre("rogne", fp.rogne_mm, { min: 0, max: 200 }))),
+    groupe(d.fi_etiquette, !!e.etiquette,
+      caseA("etiquette", !!e.etiquette, d.fi_etiquette),
+      el("div", { className: "deux" }, champ(d.fi_cote, choix("et_cote", et.cote, ["bas", "haut"], d.fi_cotes)), champ(d.fi_corps, nombre("et_taille", et.taille_mm, { min: 1.5, max: 20 }))),
+      el("p", { className: "meta" }, d.note_etiquette)),
+    groupe(d.fi_code, !!e.code,
+      caseA("code", !!e.code, d.fi_code),
+      el("div", { className: "deux" }, champ(d.fi_cote_code, nombre("qr_taille", qr.taille_mm, { min: 5, max: 100 })), champ(d.fi_marge_code, nombre("qr_marge", qr.marge_mm, { min: 0, max: 50 }))),
+      el("div", { className: "deux" }, champ(d.fi_cote, choix("qr_cote", qr.cote, ["bas", "haut"], d.fi_cotes)), champ(d.fi_niveau, choix("qr_niveau", qr.niveau, ["L", "M", "Q", "H"], {}))),
+      caseA("qr_contour", qr.contour, d.fi_contour_code),
+      el("strong", {}, d.fi_balises),
+      el("div", { className: "ligne" }, ...Object.keys(FINITIONS.code.balises).map((b) => caseA(`qr_b_${b}`, bal[b], d.fi_noms_balises[b])))));
 }
 function lireEdition(racine) {
   const q = (n) => racine.querySelector(`[name=ed_${n}]`);
   if (!q("echelle")) return undefined;
   const g = racine._garde || {};
-  return {
+  const n4 = (nom, k = 1) => [0, 1, 2, 3].map((i) => +q(`${nom}${i}`).value * k);
+  const plis = Array.from({ length: racine._plis || 0 }, (_, i) => ({ cote: q(`pli_cote${i}`).value, distance_mm: +q(`pli_distance${i}`).value, couture: q(`pli_couture${i}`).checked, visible: q(`pli_visible${i}`).checked }));
+  const marques = { coupe: q("mq_coupe").checked, reperage: q("mq_reperage").checked, contour: q("mq_contour").checked, distance_mm: +q("mq_distance").value, longueur_mm: +q("mq_longueur").value, plis,
+    style: { genre: q("mq_genre").value, trait_mm: +q("mq_tiret").value, vide_mm: +q("mq_vide").value, epaisseur_mm: +q("mq_epaisseur").value, couleur: q("mq_couleur").value } };
+  const r = {
     echelle: +q("echelle").value, rotation: +q("rotation").value, miroir: q("miroir").checked, marge_mm: +q("marge").value,
     miroir_portee: q("portee").value, recadrage: g.recadrage || null, echelle_xy: +q("echelle").value === g.echelle ? g.echelle_xy || null : null,
-    oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked) } : null,
+    oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked),
+      quantites: q("oe_mode").value === "quantite" ? n4("oe_quantite").map(Math.round) : null, forme: q("oe_forme").value, depuis_coupe: q("oe_depuis_coupe").checked } : null,
     contour_mm: q("contour").checked ? +q("contour_mm").value : null,
+    marques: q("marques").checked ? marques : null,
+    fond_perdu: q("fond_perdu").checked ? { cotes_mm: n4("fond"), genre: q("fond_genre").value, couleur: n4("fond_cmjn", 0.01), rogne_mm: n4("rogne") } : null,
+    etiquette: q("etiquette").checked ? { cote: q("et_cote").value, taille_mm: +q("et_taille").value } : null,
+    code: q("code").checked ? { balises: Object.fromEntries(Object.keys(FINITIONS.code.balises).map((b) => [b, q(`qr_b_${b}`).checked])), taille_mm: +q("qr_taille").value, marge_mm: +q("qr_marge").value, niveau: q("qr_niveau").value, contour: q("qr_contour").checked, cote: q("qr_cote").value } : null,
   };
+  // Liste des plis même marques décochées (pour la redessiner) ; hors de ce que reçoit le serveur.
+  Object.defineProperty(r, "marques_plis", { value: plis, enumerable: false });
+  return r;
 }
 function appliquerDemande(d) {
   const f = form;
@@ -1440,6 +1551,7 @@ function dessinerVue() {
   $("vue-selection").hidden = !vue.selection;
   dessinerCadreEd();
   dessinerLesVue(k);
+  dessinerKonaVue(k);
   if (laize) $("vue-laize").style.width = `${laize.mm * k}px`;
   if (hors) Object.assign($("vue-hors").style, { left: `${laize.mm * k}px`, width: `${(vue.l - laize.mm) * k}px` });
   const pc = Math.round(vue.z * 100), choix = $("vue-zoom");
@@ -1572,7 +1684,7 @@ function boiteA(m, [x, y, l, h]) {
   const p = appliquerA(m, [x, y]), q = appliquerA(m, [x + l, y + h]);
   return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
 }
-const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", ...(t.edition || {}) });
+const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, ...(t.edition || {}) });
 const echellesDe = (e) => (e.echelle_xy ? e.echelle_xy.map((v) => v / 100) : [e.echelle / 100, e.echelle / 100]);
 const geomVue = () => vue.travail.pages[vue.n - 1].geometrie;
 const arrondi = (v) => Math.round(v * 100) / 100;
@@ -1689,6 +1801,7 @@ function afficherEditionVue() {
       el("label", { className: "case" }, liees, " ", d.ed_liees),
       el("p", { className: "meta" }, d.note_taille));
   }
+  if (ED.outil) blocs.push(remplirKonaVue(el("div", { id: "vue-kona-infos", style: "display: grid; gap: 6px" })));
   const change = JSON.stringify(ed) !== ED.initiale;
   const appliquer = el("button", { type: "button", disabled: !change || ED.attente }, d.ed_appliquer);
   appliquer.addEventListener("click", appliquerEditionVue);
@@ -1711,6 +1824,42 @@ function dessinerCadreEd() {
   const b = rectEd(), k = vue.z * PX_MM;
   d.className = ED.outil;
   Object.assign(d.style, { left: `${b[0] * k}px`, top: `${b[1] * k}px`, width: `${(b[2] - b[0]) * k}px`, height: `${(b[3] - b[1]) * k}px` });
+}
+/** Repères Kona du travail autour de la taille à venir, pendant un geste d'édition (roadmap
+ *  3.D2) : le serveur les calcule (`/api/reperage/apercu`, mêmes cotes que le rendu) pour la
+ *  page éditée, bords compris ; ils suivent le cadre de l'outil. Ses alertes vont au panneau. */
+const KONA = { cle: "", donnees: null, minuterie: null };
+function dessinerKonaVue(k) {
+  const s = $("vue-kona-calque"), t = vue.travail, g = t?.pages?.[vue.n - 1]?.geometrie;
+  if (!ED.ed || !ED.outil || !t || !g || !t.reperage || t.reperage === "aucun") { s.innerHTML = ""; KONA.donnees = null; KONA.cle = ""; return; }
+  const b = rectEd(), [bg, bb, bd, bh] = g.bords_mm || [0, 0, 0, 0];
+  const W = b[2] - b[0] + bg + bd, H = b[3] - b[1] + bb + bh, cle = `${t.reperage}|${W.toFixed(1)}|${H.toFixed(1)}`;
+  if (cle !== KONA.cle) {
+    KONA.cle = cle;
+    clearTimeout(KONA.minuterie);
+    KONA.minuterie = setTimeout(async () => {
+      const r = await fetch("/api/reperage/apercu", json("POST", { reperage: t.reperage, largeur_mm: W, hauteur_mm: H })).catch(() => null);
+      if (!r?.ok || KONA.cle !== cle) return;
+      KONA.donnees = { ...(await r.json()), cle };
+      // Pas de panneau redessiné : un champ en cours de saisie y perdrait sa valeur.
+      const infos = $("vue-kona-infos");
+      if (infos) remplirKonaVue(infos);
+      dessinerVue();
+    }, 120);
+  }
+  const dn = KONA.donnees;
+  if (!dn) { s.innerHTML = ""; return; }
+  // Repère du serveur : mm, bas gauche de la page enveloppée ; la page éditée y est en
+  // `decalage_mm`. Ici : haut gauche de l'aperçu, page éditée en (b0 − bg, b1 − bh).
+  const [dx, dy] = dn.decalage_mm, x0 = b[0] - bg, y0 = b[1] - bh;
+  s.innerHTML = dn.rectangles_mm.map(([x, y, l, h]) => `<rect x="${(x0 + x - dx) * k}" y="${(y0 + dy + H - y - h) * k}" width="${l * k}" height="${h * k}"/>`).join("");
+}
+/** Bloc « Repères Kona » du panneau d'édition : note et alertes de la consigne. */
+function remplirKonaVue(n) {
+  const dn = KONA.donnees, d = T();
+  n.replaceChildren(...(dn ? [el("strong", {}, d.fi_kona), el("p", { className: "meta" }, d.fi_kona_note),
+    ...dn.alertes.map((a) => el("p", { className: "erreur" }, `⚠ ${(d.alertes[a.code] || ((x) => x))(a.detail, vue.n)}`))] : []));
+  return n;
 }
 /** Poignée sous le point (mm de l'aperçu) : [hx, hy] en 0 / 0,5 / 1, « dedans », ou null. */
 function poigneeEd(m) {
@@ -1841,8 +1990,10 @@ function preparerLesVue() {
     const u = page.tuile;
     Object.assign(LES, { mode: "tuile", m: structuredClone(t.mosaique), W: u.source_mm[0], H: u.source_mm[1], sel: u.numero });
   } else if (ok && page?.geometrie && vue.laize) {
-    const g = page.geometrie, marge = editionDe(t).marge_mm, W = g.image_mm[2] + 2 * marge, H = g.image_mm[3] + 2 * marge;
-    if (W > vue.laize.mm + 0.05) Object.assign(LES, { mode: "page", W, H, x0: g.image_mm[0] - marge, y0: vue.h - (g.image_mm[1] - marge) - H,
+    // Bords posés autour de l'image (marge, rogne, fond perdu) ; travaux d'avant : la marge.
+    const g = page.geometrie, m = editionDe(t).marge_mm, [bg, bb, bd, bh] = g.bords_mm || [m, m, m, m];
+    const W = g.image_mm[2] + bg + bd, H = g.image_mm[3] + bb + bh;
+    if (W > vue.laize.mm + 0.05) Object.assign(LES, { mode: "page", W, H, x0: g.image_mm[0] - bg, y0: vue.h - (g.image_mm[1] - bb) - H,
       m: { laize_mm: Math.floor(vue.laize.mm), recouvrement_mm: +form.recouvrement_mm.value || 20, reperes: form.reperes_les.checked, les_mm: null, colonnes: null, hauteur_max_mm: null, rangees: null, rangees_mm: null, soudure: false, coupe_milieu: false, exclus: [], ordre: [], recouvrement_tuiles_mm: [] } });
   }
   LES.initiale = JSON.stringify(LES.m);

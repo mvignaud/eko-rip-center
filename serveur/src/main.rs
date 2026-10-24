@@ -13,6 +13,7 @@ mod erp;
 mod etat;
 mod epson;
 mod escp2;
+mod etiquette;
 mod machines;
 mod media;
 mod file;
@@ -135,6 +136,10 @@ struct Geometrie {
     source_mm: [f64; 2],
     /// Rotation appliquée, rotation automatique comprise.
     rotation: u16,
+    /// Du bord de la page éditée au trait de coupe (marge, rogne, fond perdu), en mm :
+    /// gauche, bas, droite, haut.
+    #[serde(default)]
+    bords_mm: [f64; 4],
 }
 
 /// Géométrie de chaque page du travail (rien pour un SVG ou des lés de mosaïque).
@@ -142,7 +147,7 @@ fn geometries(rep: &std::path::Path, t: &Travail, mises: &[reperage::Mise]) -> V
     let lire = |nom: &str| std::fs::read(rep.join(nom)).ok();
     let (Some(produit), true, None) = (lire(Format::Pdf.fichier()), t.format == Format::Pdf, t.demande.mosaique.as_ref()) else { return vec![] };
     let original = lire("source-original.pdf").unwrap_or_else(|| produit.clone());
-    let e = &t.demande.edition;
+    let e = &edition_effective(&t.demande).0;
     let rotation = if e.rotation == 0 && t.alertes.iter().any(|a| a.code == "rotation_auto") { 90 } else { e.rotation };
     let mm = imbrication::PT_PAR_MM;
     (1..)
@@ -150,8 +155,8 @@ fn geometries(rep: &std::path::Path, t: &Travail, mises: &[reperage::Mise]) -> V
         .map(|(n, p)| {
             let s = imbrication::taille_page(&original, n).ok()?;
             let (dx, dy) = mises.get(n - 1).map_or((0.0, 0.0), |m| m.decalage);
-            let m = e.marge_mm;
-            Some(Geometrie { image_mm: [dx / mm + m, dy / mm + m, p.largeur / mm - 2.0 * m, p.hauteur / mm - 2.0 * m], source_mm: [s.largeur / mm, s.hauteur / mm], rotation })
+            let b = e.bords_mm();
+            Some(Geometrie { image_mm: [dx / mm + b[0], dy / mm + b[1], p.largeur / mm - b[0] - b[2], p.hauteur / mm - b[1] - b[3]], source_mm: [s.largeur / mm, s.hauteur / mm], rotation, bords_mm: b })
         })
         .collect()
 }
@@ -284,6 +289,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/planches", axum::routing::post(creer_planche))
         .route("/api/planches/apercu", axum::routing::post(apercu_planche))
+        .route("/api/reperage/apercu", axum::routing::post(apercu_reperage))
         .route("/api/systeme", get(systeme))
         .route("/api/machines", get(lister_machines).post(enregistrer_machines))
         .route("/api/machines/{id}/media", get(media_machine))
@@ -629,7 +635,8 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     };
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     let mut alertes = alertes;
-    let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), ..d.clone() }, laize_imprimante(etat)).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+    let infos = infos_travail(etat, id, &nom, &d);
+    let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), ..d.clone() }, laize_imprimante(etat), infos).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
     alertes.extend(tourne);
     let travail = Travail {
         id,
@@ -648,25 +655,30 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     Ok(travail)
 }
 
-/// `source.pdf` à rendre, depuis l'original : édition rapide puis mosaïque. L'original est
-/// gardé dans `source-original.pdf` dès qu'une transformation s'applique, pour pouvoir
-/// rééditer sans renvoyer le fichier. Erreur : (code, détail).
-async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, laize_mm: Option<f64>) -> Result<Option<controle::Alerte>, (&'static str, String)> {
+/// `source.pdf` à rendre, depuis l'original : édition rapide, mosaïque, puis étiquette et
+/// code de chaque page. L'original est gardé dans `source-original.pdf` dès qu'une
+/// transformation s'applique, pour pouvoir rééditer sans renvoyer le fichier. Rend les
+/// alertes de la construction (`ALERTES_CONSTRUCTION`). Erreur : (code, détail).
+async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, laize_mm: Option<f64>, infos: etiquette::Infos) -> Result<Vec<controle::Alerte>, (&'static str, String)> {
     let interne = |e: std::io::Error| ("erreur_interne", e.to_string());
     if format != Format::Pdf {
-        return Ok(None);
+        return Ok(vec![]);
     }
     let (source, original) = (rep.join(Format::Pdf.fichier()), rep.join("source-original.pdf"));
-    let (mut edition, mosaique, reperage) = (d.edition, d.mosaique.clone(), d.reperage);
+    let ((mut edition, neutralisees), mosaique, reperage) = (edition_effective(d), d.mosaique.clone(), d.reperage);
+    let mut alertes = vec![];
+    if neutralisees {
+        alertes.push(controle::Alerte { code: "marques_neutralisees".into(), page: None, detail: String::new() });
+    }
     let a_original = tokio::fs::try_exists(&original).await.unwrap_or(false);
     let pdf = tokio::fs::read(if a_original { &original } else { &source }).await.map_err(interne)?;
     // Rotation automatique : décidée sur la page éditée (échelle, marge…), repérage compris.
     let auto = (d.rotation_auto && d.mode == Mode::Imprimer && edition.rotation == 0 && mosaique.is_none()).then_some(laize_mm).flatten();
     let tourne = match auto {
         Some(laize) => {
-            let copie = pdf.clone();
+            let (copie, ed) = (pdf.clone(), edition.clone());
             tokio::task::spawn_blocking(move || -> Result<Option<controle::Alerte>, (&'static str, String)> {
-                let edite = if edition.neutre() { copie } else { edition::appliquer(&copie, &edition)? };
+                let edite = if ed.neutre() { copie } else { edition::appliquer(&copie, &ed)? };
                 Ok(trop_large(&edite, reperage, laize))
             })
             .await
@@ -677,35 +689,104 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
     if tourne.is_some() {
         edition.rotation = 90;
     }
+    alertes.extend(tourne);
     // Tuiles du PDF produit, pour la visionneuse (`Page::tuile`).
     let tuiles = rep.join("tuiles.json");
     if mosaique.is_none() {
         let _ = tokio::fs::remove_file(&tuiles).await;
     }
+    let kona = |pdf: &[u8]| if d.mode == Mode::Imprimer { alertes_kona(pdf, reperage) } else { vec![] };
     if edition.neutre() && mosaique.is_none() {
         if a_original {
             tokio::fs::copy(&original, &source).await.map_err(interne)?;
         }
-        return Ok(None);
+        alertes.extend(kona(&pdf));
+        return Ok(alertes);
     }
     if !a_original {
         tokio::fs::copy(&source, &original).await.map_err(interne)?;
     }
     let (produit, decoupe) = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, mosaique::Tuiles), (&'static str, String)> {
         let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition)? };
-        match mosaique {
-            Some(m) => mosaique::composer(&pdf, &m),
-            None => Ok((pdf, vec![])),
-        }
+        let (pdf, tuiles) = match mosaique {
+            Some(m) => mosaique::composer(&pdf, &m)?,
+            None => (pdf, vec![]),
+        };
+        let pdf = etiquette::annoter(&pdf, &edition, &infos, &tuiles).map_err(|e| ("edition_invalide", e))?;
+        Ok((pdf, tuiles))
     })
     .await
     .map_err(|e| ("erreur_interne", e.to_string()))??;
+    alertes.extend(kona(&produit));
     tokio::fs::write(&source, produit).await.map_err(interne)?;
     // Une mosaïque produit au moins une page : vide, il n'y en a pas.
     if !decoupe.is_empty() {
         tokio::fs::write(&tuiles, serde_json::to_vec(&decoupe).unwrap_or_default()).await.map_err(interne)?;
     }
-    Ok(tourne)
+    Ok(alertes)
+}
+
+/// Édition réellement appliquée : avec un repérage Kona, des traits de coupe ou des croix
+/// près de ses repères gêneraient leur lecture ; ils ne sont pas imprimés (contour et plis
+/// restent). Vrai s'il y en avait.
+fn edition_effective(d: &Demande) -> (edition::Edition, bool) {
+    let mut e = d.edition.clone();
+    let gene = d.reperage != reperage::Reperage::Aucun && e.marques.as_ref().is_some_and(|m| m.coupe || m.reperage);
+    if gene && let Some(m) = e.marques.as_mut() {
+        (m.coupe, m.reperage) = (false, false);
+    }
+    (e, gene)
+}
+
+#[derive(Deserialize)]
+struct DemandeApercuReperage {
+    reperage: reperage::Reperage,
+    /// Page éditée (marge comprise) à envelopper, en mm.
+    largeur_mm: f64,
+    hauteur_mm: f64,
+}
+
+/// Repères Kona d'une page de cette taille, pour les dessiner autour de l'image pendant
+/// l'édition (roadmap 3.D2) : page, place de l'image et rectangles en mm, origine en bas à
+/// gauche, et écarts à la consigne du support.
+async fn apercu_reperage(Json(d): Json<DemandeApercuReperage>) -> Response {
+    if ![d.largeur_mm, d.hauteur_mm].iter().all(|v| (1.0..=20_000.0).contains(v)) {
+        return refus(StatusCode::BAD_REQUEST, "edition_invalide", Some("1 à 20 000 mm".into()));
+    }
+    let mm = imbrication::PT_PAR_MM;
+    let m = reperage::mise_en_page(d.reperage, d.largeur_mm * mm, d.hauteur_mm * mm, 0);
+    let ecarts: Vec<_> = reperage::ecarts(d.reperage, d.largeur_mm * mm, d.hauteur_mm * mm).into_iter().map(|(code, detail)| serde_json::json!({ "code": code, "detail": detail })).collect();
+    Json(serde_json::json!({
+        "page_mm": [m.page.0 / mm, m.page.1 / mm],
+        "decalage_mm": [m.decalage.0 / mm, m.decalage.1 / mm],
+        "rectangles_mm": m.rectangles.iter().map(|r| r.map(|v| v / mm)).collect::<Vec<_>>(),
+        "alertes": ecarts,
+    }))
+    .into_response()
+}
+
+/// Codes des alertes que `construire_source` recalcule à chaque reconstruction.
+const ALERTES_CONSTRUCTION: [&str; 4] = ["rotation_auto", "marques_neutralisees", "reperes_image_petite", "reperes_blanc"];
+
+/// Consigne des repères Kona (`reperage::ecarts`) sur chaque page à envelopper.
+fn alertes_kona(pdf: &[u8], reperage: reperage::Reperage) -> Vec<controle::Alerte> {
+    if reperage == reperage::Reperage::Aucun {
+        return vec![];
+    }
+    (1..)
+        .map_while(|n| imbrication::taille_page(pdf, n).ok().map(|t| (n, t)))
+        .flat_map(|(n, t)| reperage::ecarts(reperage, t.largeur, t.hauteur).into_iter().map(move |(code, detail)| controle::Alerte { code: code.into(), page: Some(n), detail }))
+        .collect()
+}
+
+/// Ce que l'étiquette et le code impriment d'un travail.
+fn infos_travail(etat: &Etat, id: Uuid, nom: &str, d: &Demande) -> etiquette::Infos {
+    let machine = etat.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).map(|m| m.nom.clone()).unwrap_or_default();
+    let mode = match &d.support {
+        Some(s) => format!("{} dpi · {s}", d.dpi),
+        None => format!("{} dpi", d.dpi),
+    };
+    etiquette::Infos { nom: nom.to_string(), date: format!("{} UTC", date_utc(maintenant())), travail: id, machine, mode, commande: None, copies: None }
 }
 
 /// Une page plus large que la laize (repérage compris) qui y tient tournée de 90° : rend
@@ -2122,10 +2203,11 @@ async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>
 
 /// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
 async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
-    match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &t.demande, laize_imprimante(etat)).await {
-        Ok(tourne) => {
-            t.alertes.retain(|a| a.code != "rotation_auto");
-            t.alertes.extend(tourne);
+    let infos = infos_travail(etat, t.id, &t.nom, &t.demande);
+    match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &t.demande, laize_imprimante(etat), infos).await {
+        Ok(alertes) => {
+            t.alertes.retain(|a| !ALERTES_CONSTRUCTION.contains(&a.code.as_str()));
+            t.alertes.extend(alertes);
         }
         Err((code, detail)) => {
             let statut = if code == "erreur_interne" { StatusCode::INTERNAL_SERVER_ERROR } else { StatusCode::BAD_REQUEST };
@@ -4131,7 +4213,7 @@ mod tests {
             let defaut = edition::Edition { miroir: true, ..Default::default() };
             assert_eq!(defaut.miroir_portee, edition::PorteeMiroir::ImageEtDecoupe, "défaut : comme avant ce champ");
             for (portee, coupe_attendue) in [(edition::PorteeMiroir::ImageEtDecoupe, [142.0, 12.0, 188.0, 38.0]), (edition::PorteeMiroir::ImageSeule, [12.0, 12.0, 58.0, 38.0])] {
-                let t = rendre(&e, pdf_decentre(), edite(edition::Edition { miroir_portee: portee, ..defaut })).await;
+                let t = rendre(&e, pdf_decentre(), edite(edition::Edition { miroir_portee: portee, ..defaut.clone() })).await;
                 let rep = dossier(&e.config.donnees, t.id);
                 let (_, cyan) = encre(&rep, 1, "Cyan", 36);
                 assert!(proches(cyan, [140.0, 10.0, 190.0, 40.0], 1.5 * px), "{portee:?} : encre {cyan:?}");
@@ -4286,6 +4368,94 @@ mod tests {
             e.machines.write().unwrap()[0].connexion = machines::Connexion::Dossier;
             let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson" }))).await;
             assert_eq!(r.status(), StatusCode::CREATED);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
+
+    /// Finitions de l'éditeur (roadmap 3.D) par le vrai circuit : création du travail,
+    /// édition, mosaïque, étiquette, repérage, rendu et découpe.
+    mod finitions {
+        use super::controle_d_acces::{appel, etat};
+        use super::regression_geometrie::rendre;
+        use super::*;
+
+        const MM: f64 = imbrication::PT_PAR_MM;
+
+        fn codes(t: &Travail) -> Vec<&str> {
+            t.alertes.iter().map(|a| a.code.as_str()).collect()
+        }
+
+        /// 3.D1 et 3.D2 — repérage Kona : les traits de coupe sont neutralisés (et la marge qui
+        /// les logeait), une page de 200 mm lève les deux alertes de la consigne ; à 300 mm,
+        /// seul le blanc reste signalé ; reconstruire ne les double pas.
+        #[tokio::test]
+        async fn kona_neutralise_les_traits_et_signale_la_consigne() {
+            let e = etat("finitions-kona");
+            let edition = edition::Edition { marques: Some(edition::Marques::default()), ..Default::default() };
+            let d = Demande { dpi: 36, rotation_auto: false, reperage: reperage::Reperage::Cadre, edition: edition.clone(), ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(200.0 * MM, 150.0 * MM, "1 0 0 0", (0.0, 0.0)), d.clone()).await;
+            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite", "reperes_blanc"], "{:?}", t.alertes);
+            assert_eq!(t.alertes[1].detail, "200 × 150 mm");
+            assert_eq!(t.pages[0].geometrie.unwrap().bords_mm, [0.0; 4], "ni traits ni marge pour eux");
+            let source = std::fs::read(dossier(&e.config.donnees, t.id).join("source.pdf")).unwrap();
+            assert!((imbrication::taille_page(&source, 1).unwrap().largeur / MM - 200.0).abs() < 1e-3, "page non agrandie");
+            // Reconstruire : mêmes alertes, une fois chacune.
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/reglages", t.id), None, Some(serde_json::to_value(&d).unwrap())).await;
+            assert!(r.status().is_success(), "{}", r.status());
+            let t = lire_travail(&e.config.donnees, t.id).unwrap();
+            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite", "reperes_blanc"]);
+            let t2 = rendre(&e, imbrication::tests::pdf(300.0 * MM, 260.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { reperage: reperage::Reperage::Manuel, edition: edition::Edition::default(), ..d }).await;
+            assert_eq!(codes(&t2), ["reperes_blanc"]);
+            // Sans repérage, les traits restent et la marge s'agrandit pour eux.
+            let t3 = rendre(&e, imbrication::tests::pdf(200.0 * MM, 150.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi: 36, rotation_auto: false, edition, ..Default::default() }).await;
+            assert!(t3.alertes.is_empty() && (t3.pages[0].geometrie.unwrap().bords_mm[0] - 8.25).abs() < 1e-9);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 3.D2 — l'aperçu des repères pour l'éditeur : rectangles, place de l'image, alertes.
+        #[tokio::test]
+        async fn apercu_des_reperes_pour_l_editeur() {
+            let e = etat("finitions-apercu");
+            let r = appel(&e, "POST", "/api/reperage/apercu", None, Some(serde_json::json!({ "reperage": "manuel", "largeur_mm": 200.0, "hauteur_mm": 150.0 }))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(v["rectangles_mm"].as_array().unwrap().len(), 8);
+            assert!((v["decalage_mm"][0].as_f64().unwrap() - 35.0).abs() < 1e-9, "{v}");
+            let alertes: Vec<&str> = v["alertes"].as_array().unwrap().iter().map(|a| a["code"].as_str().unwrap()).collect();
+            assert_eq!(alertes, ["reperes_image_petite", "reperes_blanc"]);
+            let r = appel(&e, "POST", "/api/reperage/apercu", None, Some(serde_json::json!({ "reperage": "cadre", "largeur_mm": 0.0, "hauteur_mm": 150.0 }))).await;
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 3.D5 et 3.D6 — bannière de 500 × 100 mm en deux lés : chaque lé porte son étiquette
+        /// (nom, L × H, numéro de lé) et son QR code ; le contour du code s'ajoute à la découpe
+        /// de chaque lé, et le QR rendu sur la plaque noire est celui de la chaîne attendue.
+        #[tokio::test]
+        async fn etiquette_et_qr_sur_chaque_le() {
+            let e = etat("finitions-etiquette");
+            let code = edition::CodeMarge { contour: true, ..Default::default() };
+            let edition = edition::Edition { etiquette: Some(edition::Etiquette::default()), code: Some(code), ..Default::default() };
+            let dpi = 254;
+            let d = Demande { dpi, rotation_auto: false, edition: edition.clone(), mosaique: Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, ..Default::default() }), ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(500.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let source = std::fs::read(rep.join("source.pdf")).unwrap();
+            assert_eq!(t.pages.len(), 2);
+            let marge = edition.marge_effective();
+            for k in 1..=2 {
+                let texte = etiquette::tests::textes(&source, k as u32);
+                assert!(texte.contains("essai.pdf \u{b7} ") && texte.contains(&format!("500 \u{d7} 100 mm \u{b7} l\u{e9} {k}/2 \u{b7} copies")), "lé {k} : {texte}");
+                // Contour de l'image (lé rogné) et contour du code.
+                assert_eq!(t.pages[k - 1].traces_decoupe, 2, "lé {k}");
+            }
+            // QR du lé 2 (dernier : à 2 mm du bord droit de l'image), lu sur la plaque rendue.
+            let (l, _) = (t.pages[1].largeur_mm, t.pages[1].hauteur_mm);
+            let attendu = etiquette::modules(&format!("nom=essai.pdf;page=2;tuile=2/2;travail={}", t.id), code.niveau).unwrap();
+            let noir = image::open(render::chemin_plaque(&rep, 2, "Black")).unwrap().to_luma8();
+            let lire = |x: f64, y: f64| noir.get_pixel((x / 25.4 * dpi as f64) as u32, noir.height() - 1 - (y / 25.4 * dpi as f64) as u32)[0];
+            let (x, y) = (l - marge - 2.0 - code.marge_mm - code.taille_mm, (marge - code.taille_mm) / 2.0);
+            assert_eq!(etiquette::tests::lire_qr(lire, attendu.len(), (x, y, code.taille_mm)), attendu, "QR du lé 2");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }
