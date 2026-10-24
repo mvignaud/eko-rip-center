@@ -1,14 +1,23 @@
 # Utilisation
 
-L'écran a trois vues, en haut : **Travaux**, **File d'attente** et **Système**. Le
-bouton à droite change de langue (français ou anglais). Si le serveur a des comptes,
-l'écran demande d'abord de se connecter (voir *Sécurité* dans l'installation du serveur).
+On travaille dans le **client E-KO RIP Center** (voir son installation). L'écran se lit
+comme une file de RIP :
+- en haut, la **barre d'outils** : **Importer**, puis les actions sur le travail choisi
+  (**Imprimer**, **Découper**, **Éditer**, **BAT**, **Relancer**, **Supprimer**), la
+  recherche, le thème (sombre ou clair, ◐) et la langue ;
+- à gauche, les **vues** (Travaux, File d'attente, Système), les **machines** du
+  catalogue avec le nombre de sorties en file (un clic ouvre leur file) et les
+  **réglages enregistrés** (un clic ouvre l'import avec ce réglage) ;
+- au centre, le **tableau des travaux** ; à droite, l'**inspecteur** du travail choisi.
+
+Si le serveur a des comptes, le client demande d'abord de se connecter (voir *Sécurité*
+dans l'installation du serveur).
 
 ## Envoyer un travail
 
-1. Vue **Travaux**, panneau **Nouveau travail** : déposer un fichier dans la zone en
-   pointillés, ou cliquer dessus pour le choisir. On peut aussi lâcher un ou plusieurs
-   fichiers n'importe où sur la page : ils partent tous avec les réglages du panneau.
+1. **Importer** : déposer un fichier dans la zone en pointillés, ou cliquer dessus pour
+   le choisir. On peut aussi lâcher un ou plusieurs fichiers n'importe où sur la
+   fenêtre : ils partent tous avec les réglages de l'import.
 2. Choisir le **Mode** :
    - **Imprimer (et découper)** : rendu en plaques d'encre, plus la découpe s'il y a
      des tracés de découpe ;

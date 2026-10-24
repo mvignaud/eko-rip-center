@@ -19,6 +19,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   (Roland) reçoit l'impression puis la découpe suspendue.
 
 ### Modifié
+- **Nouvelle interface façon file de RIP** : barre d'outils (Importer, Imprimer, Découper,
+  Éditer, BAT, Relancer, Supprimer sur le travail choisi), barre latérale (vues, machines du
+  catalogue avec leur file, réglages enregistrés), tableau des travaux, inspecteur à droite,
+  import en fenêtre ; thème sombre par défaut, clair au choix. Les boutons d'impression et
+  de découpe et les colonnes de la file viennent du catalogue de machines.
 - `GET /api/machines/epson/media` devient `GET /api/machines/{id}/media`.
 - **On travaille seulement depuis le client** : un navigateur ouvert sur l'adresse du
   serveur ne voit qu'une page d'état (version, machines, adresse à saisir dans le

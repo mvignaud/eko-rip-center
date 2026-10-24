@@ -4,6 +4,14 @@ The screen has three views, at the top: **Jobs**, **Queue** and **System**. The 
 on the right switches language (French or English). If the server has accounts, the
 screen asks you to sign in first (see *Security* in the server installation guide).
 
+## The screen
+
+Work happens in the **E-KO RIP Center client**. The screen reads like a RIP queue: the
+**toolbar** on top (**Import**, then actions on the selected job: **Print**, **Cut**,
+**Edit**, **Proof**, **Retry**, **Delete**; search, theme ◐, language), on the left the
+**views**, the catalogue **machines** with their queued outputs and the **saved presets**,
+in the middle the **job table**, on the right the **inspector** of the selected job.
+
 ## Sending a job
 
 1. **Jobs** view, **New job** panel: drop a file onto the dashed area, or click it to

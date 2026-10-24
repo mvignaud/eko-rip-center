@@ -5,19 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>E-KO RIP Center</title>
 <style>
+  /* Thème sombre par défaut (atelier, écrans de production) ; clair au choix. */
   :root {
-    --fond: #f3f5f8; --carte: #fff; --creux: #f7f8fa; --texte: #18202a; --doux: #5f6b78; --trait: #dfe3e8;
-    --accent: #0b6bcb; --accent-doux: #e6f0fb; --ok: #1a7f37; --ok-doux: #e5f4ea; --echec: #b42318; --echec-doux: #fdecea;
-    --alerte: #9a5b00; --alerte-doux: #fff4e0;
-    --attente: #6b7280; --attente-doux: #eef0f3; --ombre: 0 1px 2px rgb(16 24 40 / .06), 0 1px 3px rgb(16 24 40 / .08);
+    --fond: #1b1f24; --barre: #14171b; --lateral: #181c21; --carte: #232930; --creux: #1e2329; --texte: #e6e9ec; --doux: #98a2ad; --trait: #333b44;
+    --accent: #3d8fe0; --accent-doux: #1d3550; --ok: #4ac26b; --ok-doux: #15301f; --echec: #f97066; --echec-doux: #3a1d1b;
+    --alerte: #f5b64f; --alerte-doux: #33280f; --attente: #a0aab4; --attente-doux: #2a313a; --ombre: none; --ligne-sel: #24405f;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --fond: #0f1318; --carte: #171c23; --creux: #12161c; --texte: #e8ebee; --doux: #9aa4ae; --trait: #2a323c;
-      --accent: #5aa7f0; --accent-doux: #13263a; --ok: #4ac26b; --ok-doux: #11281a; --echec: #f97066; --echec-doux: #2d1513;
-      --attente: #9aa4ae; --attente-doux: #222a33; --ombre: none;
-      --alerte: #f5b64f; --alerte-doux: #2e2210;
-    }
+  :root[data-theme=clair] {
+    --fond: #eef1f4; --barre: #ffffff; --lateral: #f7f8fa; --carte: #ffffff; --creux: #f5f7f9; --texte: #18202a; --doux: #5f6b78; --trait: #dce1e6;
+    --accent: #0b6bcb; --accent-doux: #e3eefa; --ok: #1a7f37; --ok-doux: #e5f4ea; --echec: #b42318; --echec-doux: #fdecea;
+    --alerte: #9a5b00; --alerte-doux: #fff4e0; --attente: #6b7280; --attente-doux: #eef0f3; --ombre: 0 1px 2px rgb(16 24 40 / .06); --ligne-sel: #d6e7fa;
   }
   * { box-sizing: border-box; }
   body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fond); color: var(--texte); }
@@ -33,26 +30,48 @@
   .meta { color: var(--doux); font-size: 13px; }
   [hidden] { display: none !important; }
 
-  /* Barre du haut */
-  .barre { position: sticky; top: 0; z-index: 5; background: var(--carte); border-bottom: 1px solid var(--trait); }
-  .barre-int { max-width: 1280px; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; min-height: 56px; }
-  .logo { font-weight: 700; font-size: 16px; letter-spacing: .2px; }
+  /* Coque : barre d'outils, latéral, contenu, inspecteur */
+  body { height: 100vh; display: grid; grid-template-rows: auto auto 1fr; overflow: hidden; }
+  .barre { background: var(--barre); border-bottom: 1px solid var(--trait); display: flex; align-items: center; gap: 6px; padding: 6px 12px; flex-wrap: wrap; }
+  .logo { font-weight: 700; font-size: 15px; letter-spacing: .2px; margin-right: 12px; white-space: nowrap; }
   .logo span { color: var(--accent); }
-  nav { display: flex; gap: 4px; flex: 1; }
-  nav button { background: none; color: var(--doux); border-radius: 6px; padding: 8px 12px; }
-  nav button[aria-current=page] { background: var(--accent-doux); color: var(--accent); }
-  nav .compte { margin-left: 6px; background: var(--accent); color: #fff; border-radius: 10px; padding: 0 7px; font-size: 12px; }
-  .outils { display: flex; align-items: center; gap: 8px; }
-  .bandeau { max-width: 1280px; margin: 12px auto 0; padding: 10px 16px; background: var(--echec-doux); color: var(--echec); border-radius: 8px; }
-
-  main { max-width: 1280px; margin: 0 auto; padding: 16px; }
-  .vue-travaux { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
-  @media (max-width: 900px) { .vue-travaux { grid-template-columns: 1fr; } }
-  .panneau { background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; box-shadow: var(--ombre); }
-  .panneau > h2, .panneau > header { margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--trait); font-size: 14px; }
-  .corps { padding: 16px; display: grid; gap: 12px; }
-  aside.panneau { position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow: auto; }
-  @media (max-width: 900px) { aside.panneau { position: static; max-height: none; } }
+  .outil { background: transparent; color: var(--texte); border: 1px solid transparent; border-radius: 6px; padding: 5px 10px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+  .outil:hover:not(:disabled) { background: var(--accent-doux); border-color: var(--trait); }
+  .outil.principal { background: var(--accent); color: #fff; }
+  .outil .ico { font-size: 15px; line-height: 1; }
+  .sep { width: 1px; align-self: stretch; background: var(--trait); margin: 2px 4px; }
+  .barre .recherche { margin-left: auto; width: 220px; }
+  .outils { display: flex; align-items: center; gap: 6px; }
+  .bandeau { margin: 0; padding: 8px 16px; background: var(--echec-doux); color: var(--echec); }
+  .coque { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
+  .lateral { background: var(--lateral); border-right: 1px solid var(--trait); overflow: auto; padding: 10px 0; }
+  .lateral h3 { margin: 14px 14px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--doux); }
+  .lateral button.entree { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; background: none; color: var(--texte); border-radius: 0; padding: 7px 14px; font-weight: 400; text-align: left; }
+  .lateral button.entree:hover { background: var(--accent-doux); }
+  .lateral button.entree[aria-current=page] { background: var(--ligne-sel); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+  .lateral .pastille { font-size: 11px; border-radius: 10px; padding: 0 7px; background: var(--attente-doux); color: var(--attente); }
+  .lateral .pastille.active { background: var(--accent); color: #fff; }
+  .lateral .sous { display: block; font-size: 11px; color: var(--doux); font-weight: 400; }
+  main { min-height: 0; overflow: auto; padding: 14px; }
+  .vue-travaux { display: grid; grid-template-columns: 1fr 380px; gap: 14px; align-items: start; min-height: 100%; }
+  @media (max-width: 1100px) { .vue-travaux { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .coque { grid-template-columns: 1fr; } .lateral { display: none; } body { overflow: auto; height: auto; } }
+  .panneau { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; box-shadow: var(--ombre); }
+  .panneau > h2, .panneau > header { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--trait); font-size: 13px; }
+  .corps { padding: 14px; display: grid; gap: 12px; }
+  #inspecteur { position: sticky; top: 0; max-height: calc(100vh - 90px); overflow: auto; }
+  /* Tableau des travaux */
+  table.tableau { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .tableau th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); padding: 8px 10px; border-bottom: 1px solid var(--trait); position: sticky; top: 0; background: var(--carte); }
+  .tableau td { padding: 6px 10px; border-bottom: 1px solid var(--trait); vertical-align: middle; }
+  .tableau tbody tr { cursor: pointer; }
+  .tableau tbody tr:hover { background: var(--creux); }
+  .tableau tbody tr[aria-selected=true] { background: var(--ligne-sel); }
+  .tableau .mini { width: 52px; height: 38px; border-radius: 4px; border: 1px solid var(--trait); background: #fff center/contain no-repeat; }
+  .tableau .mini.vide { background: var(--creux); }
+  .tableau .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  dialog#importer form#envoi { width: min(460px, 92vw); max-height: 82vh; overflow: auto; }
+  .entete-fenetre { display: flex; justify-content: space-between; align-items: center; }
 
   /* Formulaire */
   label { display: grid; gap: 4px; font-size: 12px; color: var(--doux); }
@@ -82,10 +101,6 @@
   .filtres input[type=search] { flex: 1; min-width: 180px; }
   .puce { background: var(--carte); color: var(--doux); border: 1px solid var(--trait); border-radius: 999px; padding: 4px 12px; font-weight: 400; }
   .puce[aria-pressed=true] { background: var(--accent-doux); color: var(--accent); border-color: var(--accent); }
-  .travail { margin-bottom: 10px; overflow: hidden; }
-  .travail > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 72px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; }
-  .travail > summary::-webkit-details-marker { display: none; }
-  @media (max-width: 560px) { .travail > summary { grid-template-columns: 56px 1fr; } .travail > summary > .ligne { grid-column: 1 / -1; } }
   .vignette { width: 100%; aspect-ratio: 4 / 3; border-radius: 6px; border: 1px solid var(--trait); background: #fff center/contain no-repeat; }
   .vignette.vide { background: var(--creux); }
   .nom { font-weight: 600; overflow-wrap: anywhere; }
@@ -134,19 +149,24 @@
 </style>
 </head>
 <body>
-<header class="barre"><div class="barre-int">
+<header class="barre">
   <div class="logo">E-KO <span>RIP</span> Center</div>
-  <nav aria-label="Navigation">
-    <button type="button" data-vue="travaux" data-t="nav_travaux"></button>
-    <button type="button" data-vue="file"><span data-t="nav_file"></span><span id="compte-file" class="compte" hidden></span></button>
-    <button type="button" data-vue="systeme" data-t="nav_systeme"></button>
-  </nav>
+  <button type="button" class="outil principal" id="ouvrir-importer"><span class="ico">＋</span><span data-t="importer"></span></button>
+  <span class="sep"></span>
+  <button type="button" class="outil" id="o-imprimer"><span class="ico">⎙</span><span data-t="o_imprimer"></span></button>
+  <button type="button" class="outil" id="o-decouper"><span class="ico">✂</span><span data-t="o_decouper"></span></button>
+  <button type="button" class="outil" id="o-editer"><span class="ico">✎</span><span data-t="editer"></span></button>
+  <button type="button" class="outil" id="o-bat"><span class="ico">✓</span><span data-t="o_bat"></span></button>
+  <button type="button" class="outil" id="o-relancer"><span class="ico">↻</span><span data-t="relancer"></span></button>
+  <button type="button" class="outil" id="o-supprimer"><span class="ico">🗑</span><span data-t="supprimer"></span></button>
+  <input type="search" id="recherche" class="recherche" data-t-placeholder="rechercher">
   <div class="outils">
     <span id="qui" class="meta"></span>
     <button type="button" id="deconnexion" class="discret" data-t="deconnexion" hidden></button>
+    <button type="button" id="theme" class="discret" aria-label="Thème">◐</button>
     <button type="button" id="langue" class="discret"></button>
   </div>
-</div></header>
+</header>
 <p id="acces-libre" class="bandeau" data-t="acces_libre" hidden></p>
 <dialog id="fenetre-edition">
   <form id="form-edition">
@@ -172,11 +192,9 @@
   </form>
 </dialog>
 
-<main>
-  <section id="vue-travaux" class="vue-travaux">
-    <aside class="panneau">
-      <h2 data-t="nouveau_travail"></h2>
+<dialog id="importer">
       <form id="envoi" class="corps">
+        <div class="entete-fenetre"><strong data-t="nouveau_travail"></strong><button type="button" class="discret" id="fermer-importer" data-t="fermer"></button></div>
         <label class="depot">
           <strong data-t="deposer_ici"></strong><span data-t="fichier"></span>
           <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" multiple hidden>
@@ -237,10 +255,25 @@
         </div></details>
         <button type="submit" data-t="envoyer"></button>
       </form>
-    </aside>
+</dialog>
 
+<div class="coque">
+  <aside class="lateral">
+    <nav aria-label="Navigation">
+      <h3 data-t="vues"></h3>
+      <button type="button" class="entree" data-vue="travaux"><span data-t="nav_travaux"></span><span id="compte-travaux" class="pastille"></span></button>
+      <button type="button" class="entree" data-vue="file"><span data-t="nav_file"></span><span id="compte-file" class="pastille active" hidden></span></button>
+      <button type="button" class="entree" data-vue="systeme"><span data-t="nav_systeme"></span></button>
+    </nav>
+    <h3 data-t="machines_titre"></h3>
+    <div id="liste-machines"></div>
+    <h3 data-t="reglages_titre"></h3>
+    <div id="liste-reglages"></div>
+  </aside>
+<main>
+  <section id="vue-travaux" class="vue-travaux">
     <div>
-      <section id="planche" class="panneau" hidden>
+      <section id="planche" class="panneau" hidden style="margin-bottom: 14px">
         <header><strong data-t="planche"></strong></header>
         <div class="corps">
           <label><span data-t="laize"></span> <input type="number" id="laize" value="1600" min="50" max="5000" step="1"></label>
@@ -251,14 +284,14 @@
         <div id="imposition" style="padding: 0 16px 16px"></div>
       </section>
       <div class="filtres">
-        <input type="search" id="recherche" data-t-placeholder="rechercher">
         <button type="button" class="puce" data-filtre="" aria-pressed="true" data-t="filtre_tous"></button>
         <button type="button" class="puce" data-filtre="actif" aria-pressed="false" data-t="filtre_actifs"></button>
         <button type="button" class="puce" data-filtre="termine" aria-pressed="false" data-t="termine"></button>
         <button type="button" class="puce" data-filtre="echec" aria-pressed="false" data-t="echec"></button>
       </div>
-      <section id="travaux" aria-live="polite"></section>
+      <section id="travaux" class="panneau" aria-live="polite"></section>
     </div>
+    <aside id="inspecteur" class="panneau"></aside>
   </section>
 
   <section id="vue-file" class="vue-file" hidden></section>
@@ -269,10 +302,16 @@
     <section class="panneau"><h2 data-t="couts"></h2><form class="corps" id="tarifs"></form></section>
   </section>
 </main>
+</div>
 <p id="message" role="status" hidden></p>
 <script>
 const textes = {
   fr: {
+    importer: "Importer", o_imprimer: "Imprimer", o_decouper: "Découper", o_bat: "BAT", vues: "Vues", machines_titre: "Machines",
+    reglages_titre: "Réglages enregistrés", aucun_reglage_enregistre: "Aucun pour l'instant.", aucune_selection: "Sélectionner un travail dans la liste.",
+    col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
+    laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, decouper_sur: (n) => `Découper sur ${n}`,
+    mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} en file sur ${m}.`,
     nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nouveau_travail: "Nouveau travail",
     deposer_ici: "Déposer un fichier ici", fichier: "PDF, AI ou SVG — ou cliquer pour choisir", resolution: "Résolution", mode: "Mode",
     imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
@@ -358,6 +397,11 @@ const textes = {
     },
   },
   en: {
+    importer: "Import", o_imprimer: "Print", o_decouper: "Cut", o_bat: "Proof", vues: "Views", machines_titre: "Machines",
+    reglages_titre: "Saved presets", aucun_reglage_enregistre: "None yet.", aucune_selection: "Select a job in the list.",
+    col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
+    laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, decouper_sur: (n) => `Cut on ${n}`,
+    mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} queued on ${m}.`,
     nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nouveau_travail: "New job",
     deposer_ici: "Drop a file here", fichier: "PDF, AI or SVG — or click to choose", resolution: "Resolution", mode: "Mode",
     imprimer: "Print (and cut)", decouper: "Cut only",
@@ -669,6 +713,7 @@ function remplirReglages() {
   choixReglage.replaceChildren(el("option", { value: "" }, T().aucun_reglage), ...reglages.map((r) => el("option", { value: r.nom }, r.nom)));
   choixReglage.value = reglages.some((r) => r.nom === garde) ? garde : "";
   $("supprimer-reglage").hidden = !choixReglage.value;
+  afficherLateral();
 }
 /** Formulaire → réglages d'un travail (même forme que le serveur). */
 function demandeDuFormulaire() {
@@ -805,7 +850,7 @@ form.addEventListener("submit", async (e) => {
   b.disabled = true;
   let tous = true;
   for (const f of [...form.fichier.files]) tous = !!(await envoyerFichier(f)) && tous;
-  if (tous) { form.fichier.value = ""; $("nom-fichier").textContent = ""; }
+  if (tous) { form.fichier.value = ""; $("nom-fichier").textContent = ""; $("importer").close(); }
   b.disabled = false;
   rafraichir();
 });
@@ -842,14 +887,13 @@ function voir(src, legende, mesurable) {
 
 // --- Travaux ---
 let travaux = [], sorties = [], filtre = "";
-const ouverts = new Set();
 $("recherche").addEventListener("input", () => afficherTravaux());
 document.querySelectorAll("[data-filtre]").forEach((b) => b.addEventListener("click", () => {
   filtre = b.dataset.filtre;
   document.querySelectorAll("[data-filtre]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   afficherTravaux();
 }));
-const saisieDansListe = () => liste.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
+const saisieDansListe = () => $("inspecteur").contains(document.activeElement) && document.activeElement.tagName === "INPUT";
 
 async function rafraichir() {
   const lire = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -858,6 +902,8 @@ async function rafraichir() {
   if (s) sorties = s;
   const aPasser = sorties.filter((x) => ["en_attente", "en_cours", "suspendue"].includes(x.etat)).length;
   $("compte-file").hidden = !aPasser; $("compte-file").textContent = aPasser;
+  $("compte-travaux").textContent = travaux.length;
+  afficherLateral();
   // Reconstruire seulement si quelque chose a changé : un clic en cours ne doit pas tomber
   // sur un bouton remplacé entre l'appui et le relâchement.
   const empreinte = JSON.stringify([t, s, vueCourante()]);
@@ -871,46 +917,97 @@ function afficherVue() {
   if (vueCourante() === "file") afficherFile();
 }
 
+let selectionne = null;
+const travailSelectionne = () => travaux.find((t) => t.id === selectionne);
+
 function afficherTravaux() {
-  // Pas de reconstruction pendant une saisie dans la liste (nombre de copies…).
+  // Pas de reconstruction pendant une saisie dans l'inspecteur (nombre de copies…).
   if (saisieDansListe()) return;
   const q = $("recherche").value.trim().toLowerCase();
   const visibles = travaux.filter((t) => (!q || t.nom.toLowerCase().includes(q))
     && (!filtre || (filtre === "actif" ? ["en_attente", "en_cours"].includes(t.statut) : t.statut === filtre)));
-  if (!visibles.length) { liste.replaceChildren(el("p", { className: "vide-liste panneau" }, T().aucun_travail)); return; }
-  liste.replaceChildren(...visibles.map(carteTravail));
+  if (!visibles.length) {
+    liste.replaceChildren(el("p", { className: "vide-liste" }, T().aucun_travail));
+  } else {
+    const tete = el("tr", {}, ...["", T().col_nom, T().col_etat, T().col_format, T().col_pages, T().col_support, T().col_prix, T().col_date].map((x, k) => el("th", { className: k >= 4 && k !== 5 ? "num" : "" }, x)));
+    liste.replaceChildren(el("table", { className: "tableau" }, el("thead", {}, tete), el("tbody", {}, ...visibles.map(ligneTravail))));
+  }
+  afficherInspecteur();
+  majOutils();
 }
 
-function carteTravail(t) {
+function ligneTravail(t) {
   const base = `/api/travaux/${t.id}/pages/1`, pret = t.statut === "termine" && t.pages.length;
   const image = pret ? (t.mode === "decouper" ? `${base}/decoupe.svg` : `${base}/apercu.png`) : null;
-  const vignette = el("div", { className: image ? "vignette" : "vignette vide" });
-  if (image) vignette.style.backgroundImage = `url("${image}")`;
+  const mini = el("div", { className: image ? "mini" : "mini vide" });
+  if (image) mini.style.backgroundImage = `url("${image}")`;
+  const p = t.pages[0];
+  const format = p && p.largeur_mm ? `${Math.round(p.largeur_mm)} × ${Math.round(p.hauteur_mm)}` : "—";
+  const prix = t.prix_de_revient > 0 ? `${nombre(t.prix_de_revient, 2)} €` : "—";
+  const etat = el("td", {}, el("span", { className: `badge ${t.statut}` }, T()[t.statut]), t.alertes?.length ? el("span", { className: "badge alerte", style: "margin-left: 4px" }, "⚠") : null);
+  const ligne = el("tr", { ariaSelected: String(t.id === selectionne) },
+    el("td", {}, mini), el("td", {}, el("div", { className: "nom" }, t.nom), el("div", { className: "meta" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`)),
+    etat, el("td", { className: "num" }, format), el("td", { className: "num" }, String(t.pages.length || "—")),
+    el("td", {}, t.support || "—"), el("td", { className: "num" }, prix), el("td", { className: "num" }, date(t.cree_le)));
+  ligne.setAttribute("aria-selected", String(t.id === selectionne));
+  ligne.addEventListener("click", () => { selectionne = t.id; afficherTravaux(); });
+  ligne.addEventListener("dblclick", () => { selectionne = t.id; if (t.format === "pdf" && t.statut !== "en_cours") ouvrirEdition(t); });
+  return ligne;
+}
+
+/** Panneau d'inspection : le travail choisi dans le tableau, en détail. */
+function afficherInspecteur() {
+  const z = $("inspecteur"), t = travailSelectionne();
+  if (z.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  if (!t) { z.replaceChildren(el("p", { className: "vide-liste" }, T().aucune_selection)); return; }
   const badges = el("div", { className: "badges" },
     el("span", { className: `badge ${t.statut}` }, T()[t.statut]),
     el("span", { className: "badge" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`),
     t.pages.length ? el("span", { className: "badge" }, T().pages(t.pages.length)) : null,
     t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null,
     t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null,
-    t.alertes && t.alertes.length ? el("span", { className: "badge alerte" }, T().nb_alertes(t.alertes.length)) : null,
     t.prix_de_revient > 0 ? el("span", { className: "badge", title: T().prix_de_revient }, `≈ ${nombre(t.prix_de_revient, 2)} € ${t.pages[0]?.estimation?.ttc ? T().ttc : T().ht}`) : null);
-  const actions = el("div", { className: "ligne" });
-  if (t.format === "pdf" && (t.statut === "termine" || t.statut === "echec")) actions.append(bouton(T().editer, () => ouvrirEdition(t)));
-  if (t.format === "pdf" && t.statut === "termine") actions.append(el("a", { href: `/api/travaux/${t.id}/bat.pdf?langue=${langue}`, target: "_blank", rel: "noopener", className: "meta", onclick: (e) => e.stopPropagation() }, T().bat));
-  if (t.statut === "echec") actions.append(bouton(T().relancer, () => agir(`/api/travaux/${t.id}/relancer`, "POST")));
-  if (t.statut === "termine" || t.statut === "echec") actions.append(bouton(T().supprimer, () => confirm(T().confirmer(t.nom)) && agir(`/api/travaux/${t.id}`, "DELETE"), "discret danger"));
-  const carte = el("details", { className: "travail panneau", open: ouverts.has(t.id) },
-    el("summary", {}, vignette, el("div", {}, el("div", { className: "nom" }, t.nom), badges, el("div", { className: "meta" }, date(t.cree_le))), actions));
-  carte.addEventListener("toggle", () => { carte.open ? ouverts.add(t.id) : ouverts.delete(t.id); });
-  const detail = el("div", { className: "detail" });
-  if (t.statut === "echec") detail.append(el("p", { className: "erreur" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
+  const corps = el("div", { className: "corps" }, el("div", {}, el("div", { className: "nom" }, t.nom), badges, el("div", { className: "meta" }, date(t.cree_le))));
+  if (t.statut === "echec") corps.append(el("p", { className: "erreur", style: "margin: 0" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
   if (t.alertes && t.alertes.length) {
-    detail.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
+    corps.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
   }
-  if (t.statut === "termine") t.pages.forEach((page, i) => detail.append(vuePage(t, page, i + 1)));
-  if (detail.childNodes.length) carte.append(detail);
-  return carte;
+  if (t.statut === "termine") t.pages.forEach((page, i) => corps.append(vuePage(t, page, i + 1)));
+  z.replaceChildren(corps);
 }
+
+/** Barre d'outils : actions sur le travail choisi. */
+function majOutils() {
+  const t = travailSelectionne(), fini = t && t.statut === "termine";
+  const imprimable = fini && t.mode === "imprimer" && t.pages.some((p) => p.plaques.some((x) => !(p.plaques_decoupe || []).includes(x)));
+  $("o-imprimer").disabled = !imprimable || !catalogue.some((m) => m.modele_imprime);
+  $("o-decouper").disabled = !fini || !t.pages.some((p) => p.traces_decoupe) || !catalogue.some((m) => m.modele_decoupe);
+  $("o-editer").disabled = !t || t.format !== "pdf" || !["termine", "echec"].includes(t.statut);
+  $("o-bat").disabled = !fini || t.format !== "pdf";
+  $("o-relancer").disabled = !t || t.statut !== "echec";
+  $("o-supprimer").disabled = !t || !["termine", "echec"].includes(t.statut);
+}
+/** Toutes les pages du travail choisi vers la première machine qui fait l'opération. */
+async function versFile(operation) {
+  const t = travailSelectionne(), m = catalogue.find((x) => (operation === "impression" ? x.modele_imprime : x.modele_decoupe));
+  if (!t || !m) return;
+  let n = 0;
+  for (const [i, p] of t.pages.entries()) {
+    const utile = operation === "impression" ? p.plaques.some((x) => !(p.plaques_decoupe || []).includes(x)) : p.traces_decoupe > 0;
+    if (utile && (await api("/api/file", json("POST", { travail: t.id, page: i + 1, machine: m.id, operation })))) n++;
+  }
+  if (n) dire(T().mis_en_file_n(n, m.nom));
+  rafraichir();
+}
+$("o-imprimer").addEventListener("click", () => versFile("impression"));
+$("o-decouper").addEventListener("click", () => versFile("decoupe"));
+$("o-editer").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirEdition(t); });
+$("o-bat").addEventListener("click", () => { const t = travailSelectionne(); if (t) window.open(`/api/travaux/${t.id}/bat.pdf?langue=${langue}`, "_blank", "noopener"); });
+$("o-relancer").addEventListener("click", () => { const t = travailSelectionne(); if (t) agir(`/api/travaux/${t.id}/relancer`, "POST"); });
+$("o-supprimer").addEventListener("click", () => {
+  const t = travailSelectionne();
+  if (t && confirm(T().confirmer(t.nom))) { selectionne = null; agir(`/api/travaux/${t.id}`, "DELETE"); }
+});
 
 async function agir(url, methode) {
   await api(url, { method: methode });
@@ -935,19 +1032,19 @@ function vuePage(t, page, n) {
     (page.plaques_decoupe || []).includes(p) ? T().non_imprimee(p) : p + taux(p))));
 
   const sortiesPage = el("div", { className: "ligne" });
-  const versMachine = (machine, texte) => {
-    const s = derniereSortie(t, n, machine);
+  const versMachine = (m, operation, texte) => {
+    const s = sorties.filter((x) => x.travail === t.id && x.page === n && x.machine === m.id && (x.operation || (x.machine === "kona" ? "decoupe" : "impression")) === operation).at(-1);
     sortiesPage.append(bouton(texte, async (b) => {
       b.disabled = true;
-      if (await api("/api/file", json("POST", { travail: t.id, page: n, machine }))) dire(T().mis_en_file);
+      if (await api("/api/file", json("POST", { travail: t.id, page: n, machine: m.id, operation }))) dire(T().mis_en_file);
       rafraichir();
     }));
     if (s) sortiesPage.append(el("span", { className: `badge ${s.etat}` }, T().etats[s.etat]));
   };
   const imprimables = page.plaques.filter((p) => !(page.plaques_decoupe || []).includes(p));
-  if (t.mode === "imprimer" && imprimables.length) versMachine("epson", T().vers_epson);
+  if (t.mode === "imprimer" && imprimables.length) catalogue.filter((m) => m.modele_imprime).forEach((m) => versMachine(m, "impression", T().imprimer_sur(m.nom)));
   if (page.traces_decoupe) {
-    versMachine("kona", T().vers_kona);
+    catalogue.filter((m) => m.modele_decoupe).forEach((m) => versMachine(m, "decoupe", T().decouper_sur(m.nom)));
     sortiesPage.append(el("a", { href: `${base}/decoupe.plt`, download: `decoupe-${String(n).padStart(3, "0")}.plt`, className: "meta" }, T().telecharger));
   }
 
@@ -1031,11 +1128,12 @@ const aPasser = (s) => ["en_cours", "en_attente", "suspendue"].includes(s.etat);
 function afficherFile() {
   // L'historique ouvert reste ouvert d'un rafraîchissement à l'autre.
   const ouvert = [...$("vue-file").querySelectorAll("details")].map((d) => d.open);
-  const colonnes = ["kona", "epson"].map((machine) => {
+  const colonnes = catalogue.map((m) => {
+    const machine = m.id;
     const miennes = sorties.filter((s) => s.machine === machine);
     const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
     const ligne = (s) => el("div", { className: "sortie" },
-      el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}`)),
+      el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}`)),
         el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, T().etats[s.etat]),
           el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le)))),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
@@ -1043,7 +1141,7 @@ function afficherFile() {
         (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
     const enCours = miennes.filter(aPasser);
     return el("section", { className: "panneau" },
-      el("header", {}, el("strong", {}, T().machines[machine]), machine === "epson" ? el("div", { className: "meta" }, T().note_epson) : null),
+      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
       el("div", {}, ...(enCours.length ? enCours.map(ligne) : [el("p", { className: "vide-liste" }, T().aucune_sortie)])),
       finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null);
   });
@@ -1079,7 +1177,43 @@ function afficherMedia() {
   }
 }
 
+/** Catalogue des machines ; les capacités suivent le modèle (comme côté serveur). */
+let catalogue = [];
+async function chargerMachines() {
+  const c = await api("/api/machines");
+  if (!c) return;
+  catalogue = c.map((m) => ({ ...m, modele_imprime: ["epson_sc_s80600", "roland_versacamm"].includes(m.modele), modele_decoupe: m.modele !== "epson_sc_s80600" }));
+  afficherLateral();
+  derniereEmpreinte = "";
+  rafraichir();
+}
+function afficherLateral() {
+  $("liste-machines").replaceChildren(...catalogue.map((m) => {
+    const actives = sorties.filter((s) => s.machine === m.id && ["en_attente", "en_cours", "suspendue"].includes(s.etat));
+    const enCours = actives.some((s) => s.etat === "en_cours");
+    const b = el("button", { type: "button", className: "entree" },
+      el("span", {}, m.nom, el("span", { className: "sous" }, enCours ? T().etats.en_cours : T().laize_mm(Math.round(m.laize_mm)))),
+      el("span", { className: actives.length ? "pastille active" : "pastille" }, String(actives.length)));
+    b.addEventListener("click", () => { montrer("file"); setTimeout(() => $(`file-${m.id}`)?.scrollIntoView({ block: "start" }), 50); });
+    return b;
+  }));
+  $("liste-reglages").replaceChildren(...(reglages.length ? reglages.map((r) => {
+    const b = el("button", { type: "button", className: "entree" }, el("span", {}, r.nom));
+    b.addEventListener("click", () => { choixReglage.value = r.nom; appliquerDemande(r.demande); $("supprimer-reglage").hidden = false; $("importer").showModal(); });
+    return b;
+  }) : [el("p", { className: "meta", style: "margin: 0 14px" }, T().aucun_reglage_enregistre)]));
+}
+
+// Thème sombre (par défaut) ou clair, gardé sur le poste.
+const appliquerTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem("theme", t); } catch {} };
+appliquerTheme((() => { try { return localStorage.getItem("theme"); } catch { return null; } })() || "sombre");
+$("theme").addEventListener("click", () => appliquerTheme(document.documentElement.dataset.theme === "clair" ? "sombre" : "clair"));
+
+$("ouvrir-importer").addEventListener("click", () => $("importer").showModal());
+$("fermer-importer").addEventListener("click", () => $("importer").close());
+
 function toutCharger() {
+  chargerMachines();
   chargerMedia();
   chargerProfils().then(chargerReglages);
   chargerTarifs();
