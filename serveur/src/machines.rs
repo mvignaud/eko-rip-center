@@ -83,6 +83,10 @@ pub struct Machine {
     /// Kona avec cadre : feuille chargée dans l'autre sens (découpe tournée de 180°).
     #[serde(default)]
     pub decoupe_retournee: bool,
+    /// Pool (roadmap 1.7) : une file commune à des machines identiques (même modèle, même
+    /// laize) ; une sortie envoyée au pool part sur la première machine prête.
+    #[serde(default)]
+    pub pool: Option<String>,
 }
 
 /// Couches de découpe de CutServer à l'atelier (relevées le 24/10), reprises pour le Kona.
@@ -232,8 +236,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None },
     ]
 }
 
@@ -280,7 +284,19 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && m.parametres_decoupe.len() <= 20
             && m.parametres_decoupe.iter().all(ParametreDecoupe::valide)
     });
-    if bon { Ok(()) } else { Err("machine_invalide") }
+    if !bon {
+        return Err("machine_invalide");
+    }
+    // Pool : nom au format d'un identifiant, distinct de toute machine, membres identiques.
+    let pool_bon = machines.iter().filter_map(|m| m.pool.as_deref().map(|p| (m, p))).all(|(m, p)| {
+        id_valide(p) && !machines.iter().any(|x| x.id == p) && machines.iter().filter(|x| x.pool.as_deref() == Some(p)).all(|x| x.modele == m.modele && (x.laize_mm - m.laize_mm).abs() < 0.5)
+    });
+    if pool_bon { Ok(()) } else { Err("pool_incoherent") }
+}
+
+/// Machines d'un pool.
+pub fn membres<'a>(machines: &'a [Machine], pool: &str) -> Vec<&'a Machine> {
+    machines.iter().filter(|m| m.pool.as_deref() == Some(pool)).collect()
 }
 
 /// Convertit le HP-GL produit par le RIP (pas de 0,01 mm, commandes `PU`/`PD` à coordonnées

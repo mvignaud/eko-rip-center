@@ -2154,7 +2154,15 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
-                v["raison_attente"] = serde_json::json!(raison_attente(&donnees, &s, catalogue.iter().find(|m| m.id == s.machine), charges.get(&s.machine)));
+                let raison = match catalogue.iter().find(|m| m.id == s.machine) {
+                    Some(m) => raison_attente(&donnees, &s, Some(m), charges.get(&m.id)),
+                    // Envoyée à un pool : en attente seulement si aucun membre ne peut la prendre.
+                    None => {
+                        let raisons: Vec<_> = machines::membres(&catalogue, &s.machine).iter().map(|m| raison_attente(&donnees, &s, Some(m), charges.get(&m.id))).collect();
+                        if raisons.is_empty() { raison_attente(&donnees, &s, None, None) } else if raisons.contains(&None) { None } else { raisons[0] }
+                    }
+                };
+                v["raison_attente"] = serde_json::json!(raison);
                 v
             })
             .collect(),
@@ -2184,7 +2192,22 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
     if !matches!(t.statut, Statut::Termine) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
-    let Some(m) = machine(&etat, &d.machine) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    // Pool : contrôles faits sur un membre ; les supports chargés connus doivent concorder.
+    let catalogue = etat.machines.read().unwrap().clone();
+    let membres = machines::membres(&catalogue, &d.machine);
+    let m = match machine(&etat, &d.machine) {
+        Some(m) => m,
+        None if !membres.is_empty() => {
+            let charges = supports::lire_charges(&etat.config.donnees);
+            let mut connus: Vec<_> = membres.iter().filter_map(|x| charges.get(&x.id).and_then(|c| c.support_uuid)).collect();
+            connus.dedup();
+            if connus.len() > 1 {
+                return refus(StatusCode::CONFLICT, "support_different", None);
+            }
+            membres[0].clone()
+        }
+        None => return refus(StatusCode::NOT_FOUND, "introuvable", None),
+    };
     use machines::Operation::{Decoupe, Impression};
     let operation = match d.operation {
         Some(o) => o,
@@ -2205,7 +2228,8 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         }
         _ => {}
     }
-    let s = file::Sortie::nouvelle(&m.id, operation, t.id, &t.nom, d.page, maintenant());
+    let cible = if membres.is_empty() { m.id.clone() } else { d.machine.clone() };
+    let s = file::Sortie::nouvelle(&cible, operation, t.id, &t.nom, d.page, maintenant());
     let rendu = s.clone();
     match modifier_file(&etat, |f| {
         f.sorties.push(s);
@@ -2241,8 +2265,11 @@ async fn repartir(etat: Partage) {
                 let mut f = etat.file.lock().unwrap();
                 let m = etat.machines.read().unwrap().iter().find(|m| m.id == id).cloned();
                 let charge = supports::lire_charges(&etat.config.donnees).remove(&id);
-                f.prochaine_si(&id, |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref()).is_none()).map(|i| {
+                let pool = m.as_ref().and_then(|m| m.pool.clone());
+                f.prochaine_dans(&id, pool.as_deref(), |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref()).is_none()).map(|i| {
                     let s = &mut f.sorties[i];
+                    // Envoyée au pool : elle revient à la machine qui la prend.
+                    s.machine = id.clone();
                     (s.etat, s.debut) = (file::Etat::EnCours, Some(maintenant()));
                     let s = s.clone();
                     let _ = f.ecrire(&etat.config.donnees);
@@ -2815,6 +2842,55 @@ mod tests {
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
+        /// Pool (roadmap 1.7) : 2 machines en dossier, répartition ; supports différents refusés.
+        #[tokio::test]
+        async fn pool_d_imprimantes() {
+            let e = etat("pool");
+            let donnees = e.config.donnees.clone();
+            let base = e.machines.read().unwrap()[0].clone();
+            let mut cat = vec![
+                machines::Machine { id: "epson-1".into(), uuid: None, pool: Some("epsons".into()), ..base.clone() },
+                machines::Machine { id: "epson-2".into(), uuid: None, pool: Some("epsons".into()), ..base.clone() },
+            ];
+            assert_eq!(machines::verifier(&cat), Ok(()));
+            let mut faux = cat.clone();
+            faux[1].laize_mm = 1000.0;
+            assert_eq!(machines::verifier(&faux), Err("pool_incoherent"), "laizes différentes");
+            faux[1] = machines::Machine { id: "epsons".into(), pool: None, ..base.clone() };
+            assert_eq!(machines::verifier(&faux), Err("pool_incoherent"), "pool au nom d'une machine");
+            machines::identifier(&mut cat, &[]).unwrap();
+            *e.machines.write().unwrap() = cat;
+            // Deux sorties envoyées au pool : chaque machine en prend une.
+            let mut f = file::File::default();
+            for n in 0..2 {
+                f.sorties.push(file::Sortie::nouvelle("epsons", machines::Operation::Impression, Uuid::new_v4(), &format!("t{n}"), 1, 0));
+            }
+            let i1 = f.prochaine_dans("epson-1", Some("epsons"), |_| true).unwrap();
+            (f.sorties[i1].etat, f.sorties[i1].machine) = (file::Etat::EnCours, "epson-1".into());
+            assert_eq!(f.prochaine_dans("epson-1", Some("epsons"), |_| true), None, "une à la fois par machine");
+            let i2 = f.prochaine_dans("epson-2", Some("epsons"), |_| true).unwrap();
+            assert_ne!(i1, i2, "la seconde part sur l'autre machine");
+            assert_eq!(f.prochaine_dans("autre", None, |_| true), None, "hors du pool : rien");
+            // Supports chargés différents : refus d'entrer dans le pool.
+            let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
+            for (m, u) in [("epson-1", a), ("epson-2", b)] {
+                supports::ecrire_charge(&donnees, m, supports::Charge { support_uuid: Some(u), laize_mm: None, source: "saisie".into(), le: 0 }).unwrap();
+            }
+            let id = Uuid::new_v4();
+            std::fs::create_dir_all(dossier(&donnees, id)).unwrap();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "x", "statut": "termine", "erreur": null, "cree_le": 0,
+                "pages": [{ "plaques": ["Cyan"], "traces_decoupe": 0, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": id, "page": 1, "machine": "epsons", "operation": "impression" }))).await;
+            assert_eq!(r.status(), StatusCode::CONFLICT);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(v["code"], "support_different");
+            supports::ecrire_charge(&donnees, "epson-2", supports::Charge { support_uuid: Some(a), laize_mm: None, source: "saisie".into(), le: 0 }).unwrap();
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": id, "page": 1, "machine": "epsons", "operation": "impression" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED, "même support : accepté");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
         /// Import de réglages choisis (roadmap 1.6) : doublon écrasé ou renommé.
         #[tokio::test]
         async fn import_de_reglages_ecraser_ou_renommer() {
@@ -3074,6 +3150,7 @@ mod tests {
                 m2_heure: None,
                 parametres_decoupe: vec![],
                 decoupe_retournee: false,
+                pool: None,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
