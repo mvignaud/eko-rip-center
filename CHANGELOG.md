@@ -5,7 +5,7 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
-## [Non publié]
+## [0.5.0] — 2026-10-24
 
 ### Ajouté
 - **Mosaïque** : option à l'envoi ; une page plus large que la laize est coupée en lés de
@@ -18,6 +18,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Dossiers surveillés** : chaque réglage a son dossier `<données>/entrees/<nom>/` ; un
   fichier déposé (PDF, AI, SVG), une fois sa copie terminée, devient un travail avec ce
   réglage ; un fichier refusé part dans `refuses/` avec la raison.
+
+*English: tiling (panels of equal width with overlap when the page is wider than the
+roll, cut clipped per panel), cut paths clipped to the page, saved presets and hot
+folders (`entrees/<preset>/`, rejected files moved to `refuses/` with the reason).*
 
 ## [0.4.0] — 2026-10-24
 
