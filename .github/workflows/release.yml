@@ -89,8 +89,8 @@ jobs:
           NOM="eko-rip-center-$VERSION-ubuntu-24.04-amd64.iso"
           image/construire-iso.sh "$UBUNTU" serveur-dist/eko-rip-serveur_*_amd64.deb client-dist/eko-rip-client-ubuntu24.deb "$NOM"
           rm -f "$UBUNTU"
-          # Une release GitHub refuse les fichiers de plus de 2 Go : l'image part en deux
-          # morceaux, avec l'empreinte de l'image entière.
+          # Une release GitHub refuse les fichiers de plus de 2 Go : l'image part en morceaux
+          # de 1,9 Go, avec l'empreinte de l'image entière.
           mkdir iso-dist
           sha256sum "$NOM" > "iso-dist/$NOM.sha256"
           split -b 1900m -d -a 1 "$NOM" "iso-dist/$NOM.part"
@@ -175,7 +175,7 @@ jobs:
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
-          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- PC dédié (Ubuntu 24.04, ⚠️ efface le disque) : réunir les deux morceaux `eko-rip-center-%s-ubuntu-24.04-amd64.iso.part0` et `.part1` (Linux/macOS : `cat *.part0 *.part1 > eko-rip-center-%s-ubuntu-24.04-amd64.iso` ; Windows : `copy /b fichier.part0 + fichier.part1 fichier.iso`), vérifier avec le fichier `.sha256`, puis copier sur une clé USB\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" "$VERSION" "$VERSION" >> notes.md
+          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- PC dédié (Ubuntu 24.04, ⚠️ efface le disque) : réunir tous les morceaux `eko-rip-center-%s-ubuntu-24.04-amd64.iso.part*` dans l’ordre (Linux/macOS : `cat *.iso.part* > eko-rip-center-%s-ubuntu-24.04-amd64.iso` ; Windows : `copy /b fichier.part0 + fichier.part1 + fichier.part2 fichier.iso`), vérifier avec le fichier `.sha256`, puis copier sur une clé USB\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" "$VERSION" "$VERSION" >> notes.md
           cat notes.md
       - name: Publication
         env: { GH_TOKEN: "${{ github.token }}" }

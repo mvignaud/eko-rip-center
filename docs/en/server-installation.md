@@ -9,13 +9,13 @@ Four ways to install it.
 
 > ⚠️ **Installing wipes the PC's whole disk.**
 
-The image is built from Ubuntu 24.04 LTS. It is published in two parts (a GitHub release
-refuses files over 2 GB): download `eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0`,
-`.part1` and `.sha256`, then join them:
+The image is built from Ubuntu 24.04 LTS (about 4 GB). A GitHub release refuses files over
+2 GB: it is published in parts (`.part0`, `.part1`, `.part2`…) with a `.sha256` file.
+Download every part and the `.sha256` into one folder, then join them in order:
 
-- Linux or macOS: `cat <name>.iso.part0 <name>.iso.part1 > <name>.iso`, then
-  `shasum -a 256 -c <name>.iso.sha256`;
-- Windows: `copy /b <name>.iso.part0 + <name>.iso.part1 <name>.iso`.
+- Linux or macOS: `cat <name>.iso.part* > <name>.iso`, then `shasum -a 256 -c <name>.iso.sha256`;
+- Windows: `copy /b <name>.iso.part0 + <name>.iso.part1 + <name>.iso.part2 <name>.iso` (as many
+  parts as published), then `certutil -hashfile <name>.iso SHA256` to compare with the `.sha256`.
 
 Write the image to a USB stick (balenaEtcher, or `dd`), connect the PC to the workshop
 network (cable advised: the Ubuntu desktop is downloaded during installation) and boot

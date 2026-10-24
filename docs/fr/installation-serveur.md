@@ -9,14 +9,15 @@ Quatre façons de l'installer, au choix.
 
 > ⚠️ **L'installation efface entièrement le disque du PC.**
 
-L'image est faite à partir d'Ubuntu 24.04 LTS. Elle est publiée en deux morceaux (une
-release GitHub refuse les fichiers de plus de 2 Go) : télécharger
-`eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0`, `.part1` et `.sha256`, puis les
-réunir :
+L'image est faite à partir d'Ubuntu 24.04 LTS (environ 4 Go). Une release GitHub refuse
+les fichiers de plus de 2 Go : elle est publiée en morceaux (`.part0`, `.part1`, `.part2`…)
+avec un fichier `.sha256`. Télécharger tous les morceaux et le `.sha256` dans un même
+dossier, puis les réunir dans l'ordre :
 
-- Linux ou macOS : `cat eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part0 eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part1 > eko-rip-center-<version>-ubuntu-24.04-amd64.iso`
+- Linux ou macOS : `cat eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part* > eko-rip-center-<version>-ubuntu-24.04-amd64.iso`
   puis `shasum -a 256 -c eko-rip-center-<version>-ubuntu-24.04-amd64.iso.sha256` ;
-- Windows : `copy /b fichier.iso.part0 + fichier.iso.part1 fichier.iso`.
+- Windows : `copy /b fichier.iso.part0 + fichier.iso.part1 + fichier.iso.part2 fichier.iso`
+  (autant de morceaux que publiés), puis `certutil -hashfile fichier.iso SHA256` à comparer au `.sha256`.
 
 Écrire l'image sur une clé USB (balenaEtcher, ou `dd`), brancher le PC au réseau de
 l'atelier (câble conseillé : le bureau Ubuntu se télécharge pendant l'installation) et

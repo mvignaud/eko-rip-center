@@ -25,8 +25,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - **Image d'installation : Ubuntu 24.04 LTS** au lieu de Debian, avec trois profils au
   démarrage : serveur + client sur ce PC (petit atelier), serveur + bureau Ubuntu, serveur
   seul. Installation automatique (nom et mot de passe demandés, effacement du disque
-  confirmé). Publiée en deux morceaux (limite de 2 Go des releases) avec l'empreinte de
-  l'image entière.
+  confirmé). Publiée en morceaux de 1,9 Go (limite de 2 Go des releases) avec l'empreinte
+  de l'image entière.
 - Le client se connecte tout seul au serveur local (`localhost:8640`) au premier lancement
   s'il y en a un.
 - **Nouvelle interface façon file de RIP** : barre d'outils (Importer, Imprimer, Découper,
