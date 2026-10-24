@@ -205,6 +205,14 @@ async fn main() {
         reglages::identifier(&mut liste_reglages, &[]);
         reglages::ecrire(&config.donnees, &liste_reglages).expect("reglages.json");
     }
+    // Dossiers attendus (dossiers surveillés, sorties des machines sans pilote) : un dossier
+    // supprimé pendant l'arrêt est recréé et signalé, sans bloquer le démarrage.
+    for r in &liste_reglages {
+        etat::assurer_dossier(&reglages::dossier_entree(&config.donnees, &r.nom));
+    }
+    for m in catalogue.iter().filter(|m| m.connexion == machines::Connexion::Dossier) {
+        etat::assurer_dossier(&config.donnees.join("sorties").join(&m.id));
+    }
     let etat: Partage = Arc::new(Etat {
         config,
         rendu: Semaphore::new(1),
@@ -1543,7 +1551,12 @@ async fn surveiller(etat: Partage) {
         let liste = reglages::lire(&donnees);
         let mut fichiers = vec![];
         for r in &liste {
-            let Ok(entrees) = std::fs::read_dir(reglages::dossier_entree(&donnees, &r.nom)) else { continue };
+            let dossier = reglages::dossier_entree(&donnees, &r.nom);
+            // Disparu en marche : recréé et signalé, la surveillance continue.
+            if !etat::assurer_dossier(&dossier) {
+                continue;
+            }
+            let Ok(entrees) = std::fs::read_dir(dossier) else { continue };
             for e in entrees.flatten() {
                 let (Ok(meta), Ok(nom)) = (e.metadata(), e.file_name().into_string()) else { continue };
                 if meta.is_file() && !nom.starts_with('.') {

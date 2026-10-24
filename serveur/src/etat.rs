@@ -11,11 +11,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-/// Fichier d'état trouvé illisible ; `reprise` : la version N-1 a été reprise.
+/// Fichier d'état trouvé illisible (`reprise` : la version N-1 a été reprise), ou dossier
+/// attendu trouvé absent et recréé (`dossier`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Alerte {
     pub fichier: String,
     pub reprise: bool,
+    pub dossier: bool,
 }
 
 static ALERTES: Mutex<Vec<Alerte>> = Mutex::new(Vec::new());
@@ -25,8 +27,24 @@ pub fn alertes() -> Vec<Alerte> {
     ALERTES.lock().unwrap().clone()
 }
 
+/// Crée `chemin` s'il manque ; s'il manquait, le signale (une fois) à l'écran Système.
+/// Rend faux si la création échoue.
+pub fn assurer_dossier(chemin: &Path) -> bool {
+    if chemin.is_dir() {
+        return true;
+    }
+    let cree = std::fs::create_dir_all(chemin).is_ok();
+    let a = Alerte { fichier: chemin.display().to_string(), reprise: cree, dossier: true };
+    let mut v = ALERTES.lock().unwrap();
+    if !v.contains(&a) {
+        eprintln!("ATTENTION : dossier {} absent : {}", a.fichier, if cree { "recréé" } else { "impossible à recréer" });
+        v.push(a);
+    }
+    cree
+}
+
 fn alerter(fichier: String, reprise: bool) {
-    let a = Alerte { fichier, reprise };
+    let a = Alerte { fichier, reprise, dossier: false };
     let mut v = ALERTES.lock().unwrap();
     if !v.contains(&a) {
         eprintln!("ATTENTION : {} illisible (coupure ?) : {}", a.fichier, if reprise { "version précédente reprise" } else { "sans version précédente lisible, copie gardée en .illisible" });
@@ -108,7 +126,7 @@ mod tests {
         std::fs::write(&f, b"[1, 2, 3").unwrap();
         assert_eq!(lire::<Vec<u32>>(&f), Ok(Some(vec![1])), "N-1 reprise");
         assert!(d.join("file.json.illisible").exists());
-        assert!(alertes().contains(&Alerte { fichier: "file.json".into(), reprise: true }));
+        assert!(alertes().contains(&Alerte { fichier: "file.json".into(), reprise: true, dossier: false }));
         // Une écriture sur un fichier abîmé ne remplace pas la bonne N-1.
         ecrire(&f, &vec![7u32], false).unwrap();
         assert_eq!(std::fs::read_to_string(precedent(&f)).unwrap().split_whitespace().collect::<String>(), "[1]");
@@ -116,6 +134,13 @@ mod tests {
         std::fs::write(&f, b"x").unwrap();
         std::fs::write(precedent(&f), b"y").unwrap();
         assert_eq!(lire::<Vec<u32>>(&f), Err(()));
+        // Dossier attendu absent : recréé et signalé ; présent : rien.
+        let entree = d.join("entrees").join("Vinyle");
+        assert!(assurer_dossier(&entree) && entree.is_dir());
+        assert!(alertes().iter().any(|a| a.dossier && a.reprise && a.fichier.ends_with("Vinyle")));
+        let n = alertes().len();
+        assert!(assurer_dossier(&entree));
+        assert_eq!(alertes().len(), n, "un dossier présent ne crée pas d'alerte");
         std::fs::remove_dir_all(d).unwrap();
     }
 }

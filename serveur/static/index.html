@@ -461,7 +461,7 @@ const textes = {
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `Reste ${m} m de rouleau`, fichiers_etat: "Fichiers d'état", fichier_illisible: (f, r) => r ? `${f} illisible (coupure ?) : version précédente reprise` : `${f} illisible, sans version précédente : à restaurer (copie dans ${f}.illisible)`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
+    longueur_restante: (m) => `Reste ${m} m de rouleau`, fichiers_etat: "Fichiers et dossiers", dossier_absent: (d, r) => r ? `dossier ${d} absent : recréé` : `dossier ${d} absent et impossible à recréer (droits ?)`, fichier_illisible: (f, r) => r ? `${f} illisible (coupure ?) : version précédente reprise` : `${f} illisible, sans version précédente : à restaurer (copie dans ${f}.illisible)`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
     media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
     sauvegarde: "Sauvegarde de la configuration", sauvegarder: "Télécharger la sauvegarde", restaurer: "Restaurer…",
     note_sauvegarde: "Un fichier JSON : machines, tarifs, réglages enregistrés et profils ICC. Les comptes n'y sont pas (ils se recréent sur le serveur), ni les travaux.",
@@ -572,7 +572,7 @@ const textes = {
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
-    longueur_restante: (m) => `${m} m of roll left`, fichiers_etat: "State files", fichier_illisible: (f, r) => r ? `${f} unreadable (power cut?): previous version restored` : `${f} unreadable, no previous version: restore it (copy in ${f}.illisible)`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
+    longueur_restante: (m) => `${m} m of roll left`, fichiers_etat: "Files and folders", dossier_absent: (d, r) => r ? `folder ${d} missing: recreated` : `folder ${d} missing and could not be recreated (permissions?)`, fichier_illisible: (f, r) => r ? `${f} unreadable (power cut?): previous version restored` : `${f} unreadable, no previous version: restore it (copy in ${f}.illisible)`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
     media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
     sauvegarde: "Configuration backup", sauvegarder: "Download the backup", restaurer: "Restore…",
     note_sauvegarde: "One JSON file: machines, prices, saved presets and ICC profiles. Accounts are not in it (recreate them on the server), nor jobs.",
@@ -850,7 +850,7 @@ function afficherSysteme() {
     const jauge = el("div", { className: basse ? "jauge basse" : "jauge" }, el("div", { style: `width: ${Math.round((1 - part) * 100)}%` }));
     dl.append(el("dt", {}, T().disque), el("dd", { className: basse ? "erreur" : "" }, T().libre_sur(go(s.disque_libre), go(s.disque_total)), jauge));
   }
-  if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
+  if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => a.dossier ? T().dossier_absent(a.fichier, a.reprise) : T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
   $("systeme").replaceChildren(dl);
 }
 
