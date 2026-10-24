@@ -17,6 +17,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - Menus du client en français (Édition, Présentation, Serveur, Fenêtre), sur macOS et
   Windows.
 
+### Modifié
+- Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
+  **Couches**, comme dans ONYX.
+
 ## [0.12.0] — 2026-10-24
 
 ### Ajouté
