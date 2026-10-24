@@ -34,6 +34,11 @@ clic sur la carte l'ouvre :
 - les aperçus : composite (avec l'épreuve du profil de support), découpe, et une
   vignette par plaque.
 
+**Alertes** (badge orange) : à l'envoi d'un PDF à imprimer, le serveur signale les
+polices non incorporées (une autre sera prise au rendu : vectoriser le texte ou
+incorporer la police) et les images de moins de 100 ppi à leur taille imprimée. Le
+travail part quand même : c'est à l'opérateur de juger.
+
 La barre de recherche filtre par nom ; les pastilles **Tous**, **En cours**,
 **Terminé** et **Échec** filtrent par état. **Relancer** refait un travail en échec ;
 **Supprimer** efface un travail fini (refusé tant qu'une sortie l'attend dans la file).

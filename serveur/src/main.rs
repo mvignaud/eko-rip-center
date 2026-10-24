@@ -4,6 +4,7 @@
 mod acces;
 mod blanc;
 mod couleur;
+mod controle;
 mod couverture;
 mod decoupe;
 mod file;
@@ -73,6 +74,9 @@ struct Travail {
     /// Pages rendues, dans l'ordre du document.
     #[serde(default)]
     pages: Vec<Page>,
+    /// Pré-vérification du fichier reçu (polices, définition des images).
+    #[serde(default)]
+    alertes: Vec<controle::Alerte>,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
 }
@@ -440,6 +444,12 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     }
     d.verifier(&couleur::lister(&etat.config.profils)).map_err(|code| mauvais(code, None))?;
     tokio::fs::rename(rep.join("source.tmp"), rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
+    let alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
+        let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
+        tokio::task::spawn_blocking(move || controle::verifier(&pdf)).await.unwrap_or_default()
+    } else {
+        vec![]
+    };
     // Mosaïque : la source est remplacée par ses lés ; l'original est gardé à côté.
     let mosaique = d.mosaique.filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     if let Some(m) = mosaique {
@@ -462,6 +472,7 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         code_erreur: None,
         erreur: None,
         pages: vec![],
+        alertes,
         cree_le: maintenant(),
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
@@ -1281,6 +1292,7 @@ mod tests {
             code_erreur: None,
             erreur: None,
             pages: vec![],
+            alertes: vec![],
             cree_le: 100 * jour - age_jours * jour,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
@@ -1434,6 +1446,7 @@ mod tests {
                 code_erreur: None,
                 erreur: None,
                 pages: vec![Page { plaques: vec!["Cyan".into(), "CutContour".into()], plaques_decoupe: vec!["CutContour".into()], ..Default::default() }],
+                alertes: vec![],
                 cree_le: maintenant(),
             };
             let rep = dossier(&donnees, t.id);
@@ -1492,6 +1505,7 @@ mod tests {
                 code_erreur: None,
                 erreur: None,
                 pages: vec![],
+                alertes: vec![],
                 cree_le: maintenant(),
             };
             let rep = dossier(&donnees, t.id);
@@ -1527,6 +1541,7 @@ mod tests {
                 code_erreur: None,
                 erreur: None,
                 pages: vec![],
+                alertes: vec![],
                 cree_le: maintenant(),
             };
             let rep = dossier(&donnees, t.id);

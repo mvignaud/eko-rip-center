@@ -33,6 +33,11 @@ to open it:
 - the previews: composite (soft-proofed with the media profile), cut, and one thumbnail
   per plate.
 
+**Warnings** (orange badge): when a PDF to print is sent, the server flags fonts that
+are not embedded (another one will be used at rendering: outline the text or embed the
+font) and images under 100 ppi at their printed size. The job still goes through: the
+operator decides.
+
 The search bar filters by name; the **All**, **In progress**, **Done** and **Failed**
 chips filter by state. **Retry** redoes a failed job; **Delete** removes a finished job
 (refused while an output is waiting for it in the queue).

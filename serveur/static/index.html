@@ -8,6 +8,7 @@
   :root {
     --fond: #f3f5f8; --carte: #fff; --creux: #f7f8fa; --texte: #18202a; --doux: #5f6b78; --trait: #dfe3e8;
     --accent: #0b6bcb; --accent-doux: #e6f0fb; --ok: #1a7f37; --ok-doux: #e5f4ea; --echec: #b42318; --echec-doux: #fdecea;
+    --alerte: #9a5b00; --alerte-doux: #fff4e0;
     --attente: #6b7280; --attente-doux: #eef0f3; --ombre: 0 1px 2px rgb(16 24 40 / .06), 0 1px 3px rgb(16 24 40 / .08);
   }
   @media (prefers-color-scheme: dark) {
@@ -15,6 +16,7 @@
       --fond: #0f1318; --carte: #171c23; --creux: #12161c; --texte: #e8ebee; --doux: #9aa4ae; --trait: #2a323c;
       --accent: #5aa7f0; --accent-doux: #13263a; --ok: #4ac26b; --ok-doux: #11281a; --echec: #f97066; --echec-doux: #2d1513;
       --attente: #9aa4ae; --attente-doux: #222a33; --ombre: none;
+      --alerte: #f5b64f; --alerte-doux: #2e2210;
     }
   }
   * { box-sizing: border-box; }
@@ -91,6 +93,8 @@
   .badge { font-size: 12px; border-radius: 999px; padding: 1px 8px; background: var(--attente-doux); color: var(--attente); white-space: nowrap; }
   .badge.termine, .badge.terminee { background: var(--ok-doux); color: var(--ok); }
   .badge.echec { background: var(--echec-doux); color: var(--echec); }
+  .badge.alerte { background: var(--alerte-doux); color: var(--alerte); }
+  ul.alertes { margin: 0; padding: 8px 12px 8px 28px; background: var(--alerte-doux); color: var(--alerte); border-radius: 8px; font-size: 13px; }
   .badge.en_cours { background: var(--accent-doux); color: var(--accent); }
   .badge.en_cours::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: currentColor; margin-right: 5px; animation: pouls 1s infinite alternate; }
   @keyframes pouls { from { opacity: .3; } to { opacity: 1; } }
@@ -271,6 +275,11 @@ const textes = {
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
     en_attente: "En attente", en_cours: "En cours", termine: "Terminé", echec: "Échec",
+    nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
+    alertes: {
+      police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
+      image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
+    },
     rechercher: "Rechercher un travail…", filtre_tous: "Tous", filtre_actifs: "En cours", aucun_travail: "Aucun travail. Déposer un fichier pour commencer.",
     decoupe: (n) => (n ? `${n} tracé${n > 1 ? "s" : ""} de découpe` : "Aucun tracé de découpe"), telecharger: "Fichier .plt",
     vers_kona: "Découper (Kona)", vers_epson: "Imprimer (Epson)", mis_en_file: "Ajouté à la file d'attente.",
@@ -331,6 +340,11 @@ const textes = {
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
     en_attente: "Queued", en_cours: "In progress", termine: "Done", echec: "Failed",
+    nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
+    alertes: {
+      police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
+      image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
+    },
     rechercher: "Search jobs…", filtre_tous: "All", filtre_actifs: "In progress", aucun_travail: "No job yet. Drop a file to start.",
     decoupe: (n) => (n ? `${n} cut path${n > 1 ? "s" : ""}` : "No cut path"), telecharger: ".plt file",
     vers_kona: "Cut (Kona)", vers_epson: "Print (Epson)", mis_en_file: "Added to the queue.",
@@ -700,7 +714,8 @@ function carteTravail(t) {
     el("span", { className: "badge" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`),
     t.pages.length ? el("span", { className: "badge" }, T().pages(t.pages.length)) : null,
     t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null,
-    t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null);
+    t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null,
+    t.alertes && t.alertes.length ? el("span", { className: "badge alerte" }, T().nb_alertes(t.alertes.length)) : null);
   const actions = el("div", { className: "ligne" });
   if (t.statut === "echec") actions.append(bouton(T().relancer, () => agir(`/api/travaux/${t.id}/relancer`, "POST")));
   if (t.statut === "termine" || t.statut === "echec") actions.append(bouton(T().supprimer, () => confirm(T().confirmer(t.nom)) && agir(`/api/travaux/${t.id}`, "DELETE"), "discret danger"));
@@ -709,6 +724,9 @@ function carteTravail(t) {
   carte.addEventListener("toggle", () => { carte.open ? ouverts.add(t.id) : ouverts.delete(t.id); });
   const detail = el("div", { className: "detail" });
   if (t.statut === "echec") detail.append(el("p", { className: "erreur" }, texteErreur(t.code_erreur || "rendu_echoue", t.erreur)));
+  if (t.alertes && t.alertes.length) {
+    detail.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
+  }
   if (t.statut === "termine") t.pages.forEach((page, i) => detail.append(vuePage(t, page, i + 1)));
   if (detail.childNodes.length) carte.append(detail);
   return carte;

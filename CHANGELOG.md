@@ -8,6 +8,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ## [Non publié]
 
 ### Ajouté
+- **Pré-vérification** à l'envoi d'un PDF à imprimer : polices non incorporées, images
+  de moins de 100 ppi à la taille imprimée (formulaires et images en ligne compris) ;
+  alertes affichées sur la carte, sans bloquer le travail.
 - **Ordre de découpe** : rainage, perforation et V-cut avant la coupe ; contours
   intérieurs avant ceux qui les contiennent ; à profondeur égale, le plus proche de la lame.
 - **Planche : rotation de 90°** (option) quand elle raccourcit la planche ; un élément plus
