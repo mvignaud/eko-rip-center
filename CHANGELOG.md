@@ -5,7 +5,7 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
-## [Non publié]
+## [0.4.0] — 2026-10-24
 
 ### Ajouté
 - **Gestion des couleurs** : profils ICC déposés depuis l'écran (en-tête vérifié, rangés
@@ -20,6 +20,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - Le CI vérifie la syntaxe JavaScript des pages.
 - Les plaques de découpe (`CutContour`…) sont signalées « découpe, non imprimée » ; la
   liste par page (`plaques_decoupe`) servira au pilote d'impression pour les exclure.
+
+*English: colour management (ICC profiles uploaded from the screen, CMYK/RGB input,
+media output, rendering intent, soft-proof preview), cut plates flagged as not printed,
+nesting (several jobs and copies on the roll width as one sheet).*
 
 ## [0.3.0] — 2026-10-24
 
