@@ -12,6 +12,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   rectangulaire ; à l'envoi ou après coup (« Éditer », rendu refait depuis l'original).
 - **Mise en file automatique** après le rendu (Epson, Kona), en attente ou suspendue ;
   enregistrée dans les réglages.
+- **Largeur du média chargé** lue sur l'Epson par SNMP (Printer-MIB, RFC 3805) et reprise
+  comme laize (`EKO_RIP_EPSON_SNMP`, `GET /api/machines/epson/media`) ; à valider sur la
+  machine.
 - **BAT** (`GET /api/travaux/{id}/bat.pdf?langue=fr|en`) : PDF A4 paysage, image en
   épreuve écran, découpe superposée, réglages, alertes, cadre « Bon pour accord ».
 - **Aperçu de l'imposition** de la planche avant de la créer (`POST /api/planches/apercu`) :

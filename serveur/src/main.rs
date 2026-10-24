@@ -9,6 +9,7 @@ mod controle;
 mod couverture;
 mod decoupe;
 mod edition;
+mod media;
 mod file;
 mod imbrication;
 mod mosaique;
@@ -117,6 +118,8 @@ struct Config {
     /// Port du plotter (le Kona : `/dev/kona`, créé par la règle udev du paquet).
     plotter: PathBuf,
     plotter_stty: String,
+    /// Adresse de l'Epson pour lire le média chargé par SNMP (aucune : pas de lecture).
+    epson_snmp: Option<String>,
 }
 
 struct Etat {
@@ -153,6 +156,7 @@ async fn main() {
         conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
         plotter_stty: env_ou("EKO_RIP_PLOTTER_STTY", plotter::STTY_DEFAUT),
+        epson_snmp: std::env::var("EKO_RIP_EPSON_SNMP").ok().filter(|v| !v.is_empty()),
     };
     let adresse = env_ou("EKO_RIP_ADDR", "0.0.0.0:8640");
     std::fs::create_dir_all(config.donnees.join("travaux")).expect("dossier de données");
@@ -186,6 +190,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/planches", axum::routing::post(creer_planche))
         .route("/api/planches/apercu", axum::routing::post(apercu_planche))
         .route("/api/systeme", get(systeme))
+        .route("/api/machines/epson/media", get(media_epson))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
@@ -759,6 +764,18 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
             ([(header::CONTENT_TYPE, "application/pdf".to_string()), (header::CONTENT_DISPOSITION, entete)], pdf).into_response()
         }
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "rendu_echoue", Some(e)),
+    }
+}
+
+/// Média chargé dans l'Epson (largeur réelle), lu par SNMP dans la Printer-MIB.
+async fn media_epson(State(etat): State<Partage>) -> Response {
+    let Some(hote) = etat.config.epson_snmp.clone() else { return refus(StatusCode::CONFLICT, "media_non_configure", None) };
+    let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
+    match tokio::task::spawn_blocking(move || media::lire_medias(&hote, &communaute, Duration::from_secs(2))).await {
+        Ok(Ok(m)) if !m.is_empty() => Json(serde_json::json!({ "medias": m })).into_response(),
+        Ok(Ok(_)) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some("aucune largeur dans la Printer-MIB".into())),
+        Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "media_indisponible", Some(e)),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
 }
 
@@ -1550,7 +1567,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -1601,6 +1618,7 @@ mod tests {
                 conservation_jours: 0,
                 plotter: "/dev/null".into(),
                 plotter_stty: String::new(),
+                epson_snmp: None,
             };
             Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default() })
         }

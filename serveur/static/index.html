@@ -264,6 +264,7 @@
 
   <section id="vue-systeme" class="vue-systeme" hidden>
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
+    <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
     <section class="panneau"><h2 data-t="couts"></h2><form class="corps" id="tarifs"></form></section>
   </section>
 </main>
@@ -317,6 +318,9 @@ const textes = {
     note_epson: "Pilote à venir : les plaques sont copiées dans sorties/epson/ sur le serveur.",
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" },
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
+    media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
+    utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
+    media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
     couts: "Coûts d'encre et de support", encre: "Encre", ml_m2: "ml/m² à 100 %", prix_litre: "€ / litre", autres_encres: "Toutes les autres",
     support_m2: "Support (€ / m²)", enregistrer: "Enregistrer", tarifs_enregistres: "Tarifs enregistrés.", export_csv: "Exporter la consommation (CSV)",
     note_tarifs: "Valeurs de départ à remplacer par celles de l'atelier (pesée des cartouches, factures). Une case vide prend la ligne « Toutes les autres ».",
@@ -338,6 +342,7 @@ const textes = {
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
       blanc_invalide: "Blanc : rétraction de 0 à 5 mm, encre minimale de 1 à 100 %.",
+      media_indisponible: "L'Epson ne répond pas ou ne donne pas la largeur du média.", media_non_configure: "Lecture du média non configurée.",
       edition_invalide: "Édition impossible (échelle 1 à 1000 %, marge 0 à 500 mm, œillets : écart 50 à 5000 mm, retrait 3 à 200 mm, diamètre 2 à 50 mm).",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
@@ -391,6 +396,9 @@ const textes = {
     note_epson: "Driver to come: plates are copied to sorties/epson/ on the server.",
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" },
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
+    media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
+    utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
+    media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
     couts: "Ink and media costs", encre: "Ink", ml_m2: "ml/m² at 100 %", prix_litre: "€ / litre", autres_encres: "All others",
     support_m2: "Media (€ / m²)", enregistrer: "Save", tarifs_enregistres: "Rates saved.", export_csv: "Export consumption (CSV)",
     note_tarifs: "Starting values, to be replaced by the workshop's own (cartridge weighing, invoices). An empty box takes the “All others” row.",
@@ -412,6 +420,7 @@ const textes = {
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
       blanc_invalide: "White: choke from 0 to 5 mm, minimum ink from 1 to 100 %.",
+      media_indisponible: "The Epson does not answer or gives no media width.", media_non_configure: "Media reading not set up.",
       edition_invalide: "Cannot edit (scale 1 to 1000 %, margin 0 to 500 mm, grommets: spacing 50 to 5000 mm, inset 3 to 200 mm, diameter 2 to 50 mm).",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
@@ -691,6 +700,7 @@ function appliquerLangue() {
   remplirReglages();
   champsEdition($("edition-envoi"), lireEdition($("edition-envoi")));
   afficherSysteme();
+  if (media || erreurMedia) afficherMedia();
   afficherTarifs();
   afficherSession();
   majPlanche();
@@ -982,7 +992,36 @@ function afficherFile() {
   $("vue-file").querySelectorAll("details").forEach((d, i) => { d.open = !!ouvert[i]; });
 }
 
+/** Média chargé dans l'Epson : sa largeur devient la laize des panneaux (planche, mosaïque). */
+let media = null, erreurMedia = null;
+async function chargerMedia() {
+  const r = await fetch("/api/machines/epson/media").catch(() => null);
+  const c = r ? await r.json().catch(() => ({})) : {};
+  [media, erreurMedia] = r && r.ok ? [c.medias[0], null] : [null, r ? c : { code: "reseau" }];
+  if (media) utiliserMedia(false);
+  afficherMedia();
+}
+function utiliserMedia(dire_le) {
+  if (!media) return;
+  $("laize").value = Math.floor(media.largeur_mm);
+  form.laize_mm.value = Math.floor(media.largeur_mm);
+  if (dire_le) dire(T().laize_reglee(Math.floor(media.largeur_mm)));
+  majPlanche();
+}
+function afficherMedia() {
+  const z = $("media");
+  if (media) {
+    z.replaceChildren(el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
+      el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia)));
+  } else {
+    const code = erreurMedia?.code;
+    z.replaceChildren(el("p", { className: code === "media_non_configure" ? "meta" : "erreur", style: "margin: 0" },
+      code === "media_non_configure" ? T().media_non_configure : texteErreur(code, erreurMedia?.detail)), el("div", { className: "ligne" }, bouton(T().relire, chargerMedia)));
+  }
+}
+
 function toutCharger() {
+  chargerMedia();
   chargerProfils().then(chargerReglages);
   chargerTarifs();
   chargerSysteme();

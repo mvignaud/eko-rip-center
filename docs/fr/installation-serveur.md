@@ -73,6 +73,8 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | travaux effacés après ce nombre de jours (0 : jamais) |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | port du plotter de découpe |
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | réglages du port du plotter |
+| `EKO_RIP_EPSON_SNMP` | (vide) | adresse IP de l'Epson : largeur du média chargé lue par SNMP |
+| `EKO_RIP_EPSON_COMMUNAUTE` | `public` | communauté SNMP de l'Epson |
 
 ## Partager les dossiers surveillés (Samba)
 

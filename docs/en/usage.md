@@ -196,6 +196,15 @@ Spot colours (`White`, `Silver`…) are never converted.
 **System** view: server version, job retention (30 days by default, set with
 `EKO_RIP_CONSERVATION_JOURS`) and free space on the data disk, in red under 10 %.
 
+## Media loaded in the Epson
+
+**System > Media loaded in the Epson**: the width of the loaded roll, which the printer
+measures when loading, is read over the network (SNMP, standard Printer-MIB) and becomes
+the roll width of the Sheet and Tiling panels (**Use as roll width**, **Read again**).
+Set the Epson's IP address in `EKO_RIP_EPSON_SNMP` (see the server installation guide).
+To be validated on the machine: if the SC-S80600 does not publish its width in the
+Printer-MIB, the screen says so, and reading will use another path after a capture.
+
 ## Ink and cost
 
 Each printed page shows its area, estimated ink and cost:

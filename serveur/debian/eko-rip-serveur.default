@@ -8,3 +8,6 @@
 # Plotter de découpe (le Mutoh Kona apparaît en /dev/kona) et réglages du port :
 #EKO_RIP_PLOTTER=/dev/kona
 #EKO_RIP_PLOTTER_STTY=9600 cs8 -cstopb -parenb crtscts raw -echo
+# Adresse IP de l'Epson (SNMP) : largeur du média chargé, reprise comme laize.
+#EKO_RIP_EPSON_SNMP=192.168.1.50
+#EKO_RIP_EPSON_COMMUNAUTE=public

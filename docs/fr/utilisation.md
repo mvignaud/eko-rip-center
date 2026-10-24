@@ -204,6 +204,15 @@ Vue **Système** : version du serveur, durée de conservation des travaux (30 jo
 défaut, réglée par `EKO_RIP_CONSERVATION_JOURS`) et espace libre du disque des données,
 en rouge sous 10 %.
 
+## Média chargé dans l'Epson
+
+**Système > Média chargé dans l'Epson** : la largeur du rouleau chargé, que l'imprimante
+mesure au chargement, est lue par le réseau (SNMP, Printer-MIB normalisée) et devient la
+laize des panneaux Planche et Mosaïque (**Utiliser comme laize**, **Relire**). Il faut
+renseigner l'adresse IP de l'Epson dans `EKO_RIP_EPSON_SNMP` (voir l'installation du
+serveur). À valider sur la machine : si la SC-S80600 ne publie pas sa largeur dans la
+Printer-MIB, l'écran le dit, et la lecture passera par une autre voie après capture.
+
 ## Encre et coût
 
 Chaque page imprimée indique sa surface, l'encre estimée et son coût :

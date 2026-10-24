@@ -73,6 +73,8 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | jobs deleted after this many days (0: never) |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | cutter port |
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | cutter port settings |
+| `EKO_RIP_EPSON_SNMP` | (empty) | Epson IP address: loaded media width read over SNMP |
+| `EKO_RIP_EPSON_COMMUNAUTE` | `public` | Epson SNMP community |
 
 ## Sharing the hot folders (Samba)
 
