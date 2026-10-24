@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.7.0] — 2026-10-24
+
 ### Ajouté
 - **File d'attente par machine** (Kona, Epson) : « Découper (Kona) » et « Imprimer
   (Epson) » mettent une page en file ; chaque machine passe une sortie à la fois, dans
@@ -42,6 +44,15 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ### Retiré
 - Route `POST /api/travaux/{id}/pages/{page}/decouper` : remplacée par `POST /api/file`.
+
+*English: per-machine output queue (Kona, Epson; to top, up, down, hold, resume,
+cancel, redo without re-rendering, history; Epson plates copied to `sorties/epson/`
+until its driver exists), new interface (Jobs, Queue, System views, drop area, cards
+with thumbnails and state badges, search and filters, phone layout), ink coverage and
+cost estimate per page with editable rates and CSV export, automatic white (underlay or
+flood, choke, union with the file's own white, streamed for multi-GB plates), cut spot
+colours no longer knock out the ink beneath them (rendered as the PDF `None` colorant),
+rewritten FR/EN usage guides.*
 
 ## [0.6.0] — 2026-10-24
 
