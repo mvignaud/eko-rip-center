@@ -121,6 +121,9 @@ struct Page {
     /// Où l'image éditée se trouve sur la page rendue, pour les outils de la visionneuse.
     #[serde(default)]
     geometrie: Option<Geometrie>,
+    /// Tuile de mosaïque que la page imprime (rien hors mosaïque).
+    #[serde(default)]
+    tuile: Option<mosaique::Tuile>,
 }
 
 /// Géométrie d'une page éditée (PDF sans mosaïque), en mm, origine en bas à gauche.
@@ -137,7 +140,7 @@ struct Geometrie {
 /// Géométrie de chaque page du travail (rien pour un SVG ou des lés de mosaïque).
 fn geometries(rep: &std::path::Path, t: &Travail, mises: &[reperage::Mise]) -> Vec<Option<Geometrie>> {
     let lire = |nom: &str| std::fs::read(rep.join(nom)).ok();
-    let (Some(produit), true, None) = (lire(Format::Pdf.fichier()), t.format == Format::Pdf, t.demande.mosaique) else { return vec![] };
+    let (Some(produit), true, None) = (lire(Format::Pdf.fichier()), t.format == Format::Pdf, t.demande.mosaique.as_ref()) else { return vec![] };
     let original = lire("source-original.pdf").unwrap_or_else(|| produit.clone());
     let e = &t.demande.edition;
     let rotation = if e.rotation == 0 && t.alertes.iter().any(|a| a.code == "rotation_auto") { 90 } else { e.rotation };
@@ -442,6 +445,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let (mut nom, mut format) = (String::new(), None);
     let mut d = Demande::default();
     let (mut mosaique, mut laize_mm, mut recouvrement_mm, mut reperes_les) = (false, 1600.0f64, 20.0f64, false);
+    let (mut hauteur_max_mm, mut soudure, mut coupe_milieu) = (None, false, false);
 
     loop {
         let champ = match form.next_field().await {
@@ -534,6 +538,16 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "recouvrement_mm" => valeur.parse().map(|v| recouvrement_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            "hauteur_max_mm" if valeur.is_empty() => Ok(()),
+            "hauteur_max_mm" => valeur.parse().map(|v| hauteur_max_mm = Some(v)).map_err(|_| erreur("mosaique_invalide")),
+            "soudure" => {
+                soudure = valeur == "oui";
+                Ok(())
+            }
+            "coupe_milieu" => {
+                coupe_milieu = valeur == "oui";
+                Ok(())
+            }
             "edition" => serde_json::from_str(&valeur).map(|e| d.edition = e).map_err(|_| erreur("edition_invalide")),
             "auto_imprimer" => {
                 d.auto.imprimer = valeur == "oui";
@@ -563,7 +577,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let Some(format) = format else {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     };
-    d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les });
+    d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les, hauteur_max_mm, soudure, coupe_milieu, ..Default::default() });
     match creer_travail(&etat, id, nom, format, d).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
@@ -613,9 +627,9 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     } else {
         vec![]
     };
-    let mosaique = d.mosaique.filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
+    let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     let mut alertes = alertes;
-    let tourne = construire_source(&rep, format, &Demande { mosaique, ..d.clone() }, laize_imprimante(etat)).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+    let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), ..d.clone() }, laize_imprimante(etat)).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
     alertes.extend(tourne);
     let travail = Travail {
         id,
@@ -643,7 +657,7 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
         return Ok(None);
     }
     let (source, original) = (rep.join(Format::Pdf.fichier()), rep.join("source-original.pdf"));
-    let (mut edition, mosaique, reperage) = (d.edition, d.mosaique, d.reperage);
+    let (mut edition, mosaique, reperage) = (d.edition, d.mosaique.clone(), d.reperage);
     let a_original = tokio::fs::try_exists(&original).await.unwrap_or(false);
     let pdf = tokio::fs::read(if a_original { &original } else { &source }).await.map_err(interne)?;
     // Rotation automatique : décidée sur la page éditée (échelle, marge…), repérage compris.
@@ -663,6 +677,11 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
     if tourne.is_some() {
         edition.rotation = 90;
     }
+    // Tuiles du PDF produit, pour la visionneuse (`Page::tuile`).
+    let tuiles = rep.join("tuiles.json");
+    if mosaique.is_none() {
+        let _ = tokio::fs::remove_file(&tuiles).await;
+    }
     if edition.neutre() && mosaique.is_none() {
         if a_original {
             tokio::fs::copy(&original, &source).await.map_err(interne)?;
@@ -672,16 +691,20 @@ async fn construire_source(rep: &std::path::Path, format: Format, d: &Demande, l
     if !a_original {
         tokio::fs::copy(&source, &original).await.map_err(interne)?;
     }
-    let produit = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, (&'static str, String)> {
+    let (produit, decoupe) = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, mosaique::Tuiles), (&'static str, String)> {
         let pdf = if edition.neutre() { pdf } else { edition::appliquer(&pdf, &edition)? };
         match mosaique {
-            Some(m) => mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm, m.reperes).map_err(|e| ("mosaique_invalide", e)),
-            None => Ok(pdf),
+            Some(m) => mosaique::composer(&pdf, &m),
+            None => Ok((pdf, vec![])),
         }
     })
     .await
     .map_err(|e| ("erreur_interne", e.to_string()))??;
     tokio::fs::write(&source, produit).await.map_err(interne)?;
+    // Une mosaïque produit au moins une page : vide, il n'y en a pas.
+    if !decoupe.is_empty() {
+        tokio::fs::write(&tuiles, serde_json::to_vec(&decoupe).unwrap_or_default()).await.map_err(interne)?;
+    }
     Ok(tourne)
 }
 
@@ -784,6 +807,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
                 let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
                 let geometrie = geometries(&rep, &t, &mises);
+                let tuiles: mosaique::Tuiles = if t.demande.mosaique.is_some() { std::fs::read(rep.join("tuiles.json")).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default() } else { vec![] };
                 t.pages = plaques
                     .into_iter()
                     .enumerate()
@@ -804,6 +828,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             hauteur_mm: mesure.hauteur_mm,
                             cadre_pt: mises.get(i).and_then(|m| m.coins),
                             geometrie: geometrie.get(i).copied().flatten(),
+                            tuile: tuiles.get(i).cloned().flatten().map(|t| mosaique::Tuile { decalage_mm: mises.get(i).map_or([0.0; 2], |m| [m.decalage.0 / imbrication::PT_PAR_MM, m.decalage.1 / imbrication::PT_PAR_MM]), ..t }),
                         }
                     })
                     .collect();
@@ -2091,7 +2116,7 @@ async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>
     if let Err(code) = supports::appliquer(&mut d, &supports::lire(&etat.config.donnees, "epson")).and_then(|()| d.verifier(&couleur::lister(&etat.config.profils))) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
-    t.demande = Demande { mosaique: d.mosaique.filter(|_| d.mode == Mode::Imprimer && t.format == Format::Pdf), ..d };
+    t.demande = Demande { mosaique: d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && t.format == Format::Pdf), ..d };
     reconstruire(&etat, t).await
 }
 
@@ -2593,7 +2618,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -3724,7 +3749,7 @@ mod tests {
             let e = etat("reg-les");
             let dpi = 36;
             let px = 25.4 / dpi as f64;
-            let d = Demande { dpi, mosaique: Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() };
+            let d = Demande { dpi, mosaique: Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, ..Default::default() }), ..Default::default() };
             let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
             let rep = dossier(&e.config.donnees, t.id);
             assert_eq!(t.pages.len(), 3, "trois lés");
@@ -3743,6 +3768,142 @@ mod tests {
                 assert_eq!(r.status(), StatusCode::OK, "lé {i} : fichier servi");
             }
             assert!(!fichier_plt(&rep, 4).exists());
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 3.C1 — lés inégaux : 700 × 50 mm en 200, 300 et 240 mm (somme = 700 + 2 × 20) ;
+        /// chaque plaque à la largeur saisie ± 0,1 mm (254 dpi : 0,1 mm le pixel), sa coupe rognée
+        /// à son bord, et une somme fausse refusée avec son code.
+        #[tokio::test]
+        async fn regression_les_inegaux() {
+            let e = etat("reg-inegaux");
+            let dpi = 254;
+            let saisies = [200.0, 300.0, 240.0];
+            let mosaique = Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, les_mm: Some(saisies.to_vec()), ..Default::default() });
+            let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 50.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi, mosaique: mosaique.clone(), ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert_eq!(t.pages.len(), 3);
+            let mut debut = 0.0;
+            for (i, l_mm) in saisies.into_iter().enumerate() {
+                let ((l, h), cyan) = encre(&rep, i + 1, "Cyan", dpi);
+                assert!((l - l_mm).abs() <= 0.1 && (h - 50.0).abs() <= 0.1, "lé {} : {l} × {h} mm au lieu de {l_mm}", i + 1);
+                assert!(proches(cyan, [0.0, 0.0, l_mm, 50.0], 0.1), "lé {} : encre {cyan:?}", i + 1);
+                let tuile = t.pages[i].tuile.as_ref().expect("tuile");
+                assert_eq!((tuile.numero, tuile.total), (i + 1, 3));
+                assert!((tuile.boite_mm[0] - debut).abs() < 1e-3 && (tuile.boite_mm[2] - debut - l_mm).abs() < 1e-3, "lé {} : {:?}", i + 1, tuile.boite_mm);
+                let attendu = [(RETRAIT - debut).max(0.0), RETRAIT, (700.0 - RETRAIT - debut).min(l_mm), 50.0 - RETRAIT];
+                let coupe = boite_hpgl(&fichier_plt(&rep, i + 1));
+                assert!(proches(coupe, attendu, 0.02), "lé {} : coupe {coupe:?}, attendu {attendu:?}", i + 1);
+                debut += l_mm - 20.0;
+            }
+            // Somme fausse : refus traduit, avec le détail.
+            let corps = serde_json::json!({ "mosaique": { "laize_mm": 300.0, "recouvrement_mm": 20.0, "les_mm": [200.0, 300.0, 200.0] } });
+            let r = super::controle_d_acces::appel(&e, "POST", &format!("/api/travaux/{}/reglages", t.id), None, Some(corps)).await;
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            let c: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(c["code"], "les_incoherents", "{c}");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 3.C2 — page de 3000 × 2000 mm, tuiles d'au plus 1100 × 1100 mm, 20 mm de
+        /// recouvrement : 3 colonnes × 2 rangées de 1013,33 × 1010 mm, numérotées de haut-gauche
+        /// à bas-droite ; chaque coupe est la part du contour de la page qui tombe dans sa tuile.
+        #[tokio::test]
+        async fn regression_tuiles_colonnes_et_rangees() {
+            let e = etat("reg-tuiles");
+            let dpi = 36;
+            let px = 25.4 / dpi as f64;
+            let mosaique = Some(Mosaique { laize_mm: 1100.0, hauteur_max_mm: Some(1100.0), recouvrement_mm: 20.0, ..Default::default() });
+            let t = rendre(&e, imbrication::tests::pdf(3000.0 * MM, 2000.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi, mosaique, ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert_eq!(t.pages.len(), 6, "3 × 2 tuiles");
+            let (l, h) = (3040.0 / 3.0, 1010.0);
+            for k in 0..6 {
+                let (i, j) = (k % 3, k / 3);
+                let tuile = t.pages[k].tuile.as_ref().expect("tuile");
+                assert_eq!((tuile.numero, tuile.colonne, tuile.rangee, tuile.colonnes, tuile.rangees), (k + 1, i + 1, j + 1, 3, 2));
+                // Rangée 1 en haut : y de 990 à 2000 mm ; rangée 2 de 0 à 1010.
+                let (x0, y0) = (i as f64 * (l - 20.0), if j == 0 { 990.0 } else { 0.0 });
+                assert!(proches(tuile.boite_mm, [x0, y0, x0 + l, y0 + h], 1e-3), "tuile {} : {:?}", k + 1, tuile.boite_mm);
+                let ((pl, ph), cyan) = encre(&rep, k + 1, "Cyan", dpi);
+                assert!((pl - l).abs() <= px && (ph - h).abs() <= px, "tuile {} : {pl} × {ph} mm", k + 1);
+                assert!(proches(cyan, [0.0, 0.0, l, h], 1.5 * px), "tuile {} : encre {cyan:?}", k + 1);
+                // Les côtés du contour rognés à la tuile, dans son repère (un côté dehors devient
+                // un point du bord, écarté).
+                let (a, b) = (3000.0 - RETRAIT, 2000.0 - RETRAIT);
+                let cotes = [[RETRAIT, RETRAIT, a, RETRAIT], [a, RETRAIT, a, b], [RETRAIT, b, a, b], [RETRAIT, RETRAIT, RETRAIT, b]];
+                let dedans: Vec<[f64; 4]> = cotes.iter()
+                    .map(|c| [c[0].clamp(x0, x0 + l) - x0, c[1].clamp(y0, y0 + h) - y0, c[2].clamp(x0, x0 + l) - x0, c[3].clamp(y0, y0 + h) - y0])
+                    .filter(|c| (c[0] == c[2] && c[0] > 0.0 && c[0] < l && c[1] < c[3]) || (c[1] == c[3] && c[1] > 0.0 && c[1] < h && c[0] < c[2]))
+                    .collect();
+                let attendu = [0, 1, 2, 3].map(|n| dedans.iter().map(|c| c[n]).fold(if n < 2 { f64::MAX } else { f64::MIN }, if n < 2 { f64::min } else { f64::max }));
+                let coupe = boite_hpgl(&fichier_plt(&rep, k + 1));
+                assert!(proches(coupe, attendu, 0.02), "tuile {} : coupe {coupe:?}, attendu {attendu:?}", k + 1);
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 3.C3 — soudure et coupe au milieu : 700 × 100 mm en 3 lés de 246,67 mm, 20 mm
+        /// de recouvrement. Les lés 2 et 3 n'ont pas d'encre dans leurs 20 premiers mm (sous la
+        /// voisine) ; le lé 1 imprime le sien jusqu'au bord ; un trait de coupe droit à 10 mm de
+        /// chaque jonction. Puis un lé décoché : ni rendu, ni en file.
+        #[tokio::test]
+        async fn regression_soudure_coupe_au_milieu_et_le_decoche() {
+            let e = etat("reg-soudure");
+            let dpi = 72;
+            let px = 25.4 / dpi as f64;
+            let base = Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, soudure: true, coupe_milieu: true, ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi, mosaique: Some(base.clone()), ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let le = 740.0 / 3.0;
+            let ((_, _), cyan) = encre(&rep, 1, "Cyan", dpi);
+            assert!(proches(cyan, [0.0, 0.0, le, 100.0], 1.5 * px), "lé 1 imprimé jusqu'au bord : {cyan:?}");
+            for i in [2, 3] {
+                let img = image::open(render::chemin_plaque(&rep, i, "Cyan")).unwrap().to_luma8();
+                let bande = (20.0 / px).floor() as u32 - 1;
+                assert!(img.enumerate_pixels().filter(|p| p.0 < bande).all(|p| p.2[0] == 255), "lé {i} : encre dans la bande de soudure");
+                let ((_, _), cyan) = encre(&rep, i, "Cyan", dpi);
+                assert!((cyan[0] - 20.0).abs() <= 1.5 * px, "lé {i} : l'encre reprend à 20 mm : {cyan:?}");
+            }
+            let pages = decoupe::extraire(&std::fs::read(rep.join("source.pdf")).unwrap(), false).unwrap();
+            let droit = |p: &decoupe::Decoupe, x_mm: f64| p.traces.iter().any(|t| t.points.iter().all(|q| (q.0 / MM - x_mm).abs() < 0.01));
+            assert!(droit(&pages[0], le - 10.0) && !droit(&pages[0], 10.0), "lé 1 : coupe au milieu de la jonction de droite seulement");
+            assert!(droit(&pages[1], 10.0) && droit(&pages[1], le - 10.0), "lé 2 : une coupe à chaque jonction");
+
+            // Lé 2 décoché, file automatique : deux pages (lés 1 et 3), deux sorties.
+            let auto = reglages::Auto { imprimer: true, ..Default::default() };
+            let mosaique = Some(Mosaique { exclus: vec![2], soudure: false, coupe_milieu: false, ..base });
+            let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi: 36, mosaique, auto, ..Default::default() }).await;
+            assert_eq!(t.pages.iter().map(|p| p.tuile.as_ref().unwrap().numero).collect::<Vec<_>>(), [1, 3]);
+            let file: Vec<usize> = e.file.lock().unwrap().sorties.iter().filter(|s| s.travail == t.id).map(|s| s.page).collect();
+            assert_eq!(file, [1, 2], "deux sorties : les pages des lés 1 et 3");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 3.C4 — recouvrement propre et ordre : 700 × 100 mm, 3 lés, 10 mm de
+        /// recouvrement, 20 mm pour le lé 2, ordre 3-1-2. Base : lés de 240 mm ; le lé 2 gagne
+        /// 5 mm de chaque côté (250 mm) ; la file suit l'ordre choisi.
+        #[tokio::test]
+        async fn regression_recouvrement_par_tuile_et_ordre() {
+            let e = etat("reg-ordre");
+            let dpi = 72;
+            let px = 25.4 / dpi as f64;
+            let mosaique = Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 10.0, recouvrement_tuiles_mm: vec![None, Some(20.0)], ordre: vec![3, 1, 2], ..Default::default() });
+            let auto = reglages::Auto { imprimer: true, ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi, mosaique, auto, ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let numeros: Vec<usize> = t.pages.iter().map(|p| p.tuile.as_ref().unwrap().numero).collect();
+            assert_eq!(numeros, [3, 1, 2], "pages dans l'ordre choisi");
+            let file: Vec<usize> = e.file.lock().unwrap().sorties.iter().filter(|s| s.travail == t.id).map(|s| t.pages[s.page - 1].tuile.as_ref().unwrap().numero).collect();
+            assert_eq!(file, [3, 1, 2], "file dans l'ordre choisi");
+            for (page, (numero, x0, l_mm)) in [(3, 460.0, 240.0), (1, 0.0, 240.0), (2, 225.0, 250.0)].into_iter().enumerate() {
+                let tuile = t.pages[page].tuile.as_ref().unwrap();
+                assert_eq!(tuile.numero, numero);
+                assert!((tuile.boite_mm[0] - x0).abs() < 1e-3 && (tuile.boite_mm[2] - x0 - l_mm).abs() < 1e-3, "lé {numero} : {:?}", tuile.boite_mm);
+                let ((l, _), _) = encre(&rep, page + 1, "Cyan", dpi);
+                assert!((l - l_mm).abs() <= px, "lé {numero} : plaque de {l} mm au lieu de {l_mm}");
+            }
+            assert!((t.pages[2].tuile.as_ref().unwrap().recouvrement_mm[0] - 15.0).abs() < 1e-3, "jonction 1-2 : (10 + 20) / 2");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
@@ -3832,7 +3993,7 @@ mod tests {
             assert!(proche(taille(&rep, 1), (400.0, 100.0)) && proche(taille(&rep, 2), (100.0, 400.0)), "{:?} {:?}", taille(&rep, 1), taille(&rep, 2));
 
             // Mosaïque : deux lés de 210 × 100 mm, pas une page tournée.
-            let mosaique = Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, reperes: false });
+            let mosaique = Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, ..Default::default() });
             let t = rendre(&e, imbrication::tests::pdf(400.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { mosaique, ..d.clone() }).await;
             let rep = dossier(&e.config.donnees, t.id);
             assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"));

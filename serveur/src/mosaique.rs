@@ -1,79 +1,220 @@
-//! Mosaïque : une page plus large que la laize est coupée en lés verticaux de même
-//! largeur (au plus la laize), qui se recouvrent pour le collage ou le soudage. Chaque lé
-//! devient une page du PDF ; le travail suit ensuite le circuit multipage ordinaire, et
-//! la découpe est rognée au bord de chaque lé.
+//! Mosaïque : une page plus grande que la laize (ou que la hauteur maximale) est coupée
+//! en tuiles — colonnes × rangées — qui se recouvrent pour le collage ou le soudage. Lés
+//! égaux par défaut, ou inégaux (largeurs et hauteurs saisies) ; recouvrement global ou
+//! propre à une tuile (négatif : espace entre deux tuiles). Chaque tuile imprimée devient une
+//! page du PDF, dans l'ordre choisi ; le travail suit ensuite le circuit multipage ordinaire,
+//! et la découpe est rognée au bord de chaque tuile.
 
 use crate::imbrication::{PT_PAR_MM, page_en_formulaire};
+use crate::reglages::Mosaique;
 use lopdf::{Dictionary, Document, Object, Stream, dictionary};
+use serde::{Deserialize, Serialize};
 
-/// Bornes en x (points) des lés d'une page de largeur `largeur` : `n` lés de même
-/// largeur `(W + (n − 1)·r) / n ≤ laize`, chacun recouvrant le suivant de `r`.
-pub fn les(largeur: f64, laize: f64, recouvrement: f64) -> Result<Vec<(f64, f64)>, String> {
-    if recouvrement < 0.0 || recouvrement >= laize {
-        return Err("le recouvrement doit être positif et plus petit que la laize".into());
+/// Une tuile du PDF produit, pour la visionneuse.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Tuile {
+    /// Numéro, de haut-gauche à bas-droite (rangée par rangée), de 1 à `total`.
+    pub numero: usize,
+    pub total: usize,
+    /// Colonne et rangée (de 1), sur `colonnes` × `rangees`.
+    pub colonne: usize,
+    pub rangee: usize,
+    pub colonnes: usize,
+    pub rangees: usize,
+    /// Page du PDF d'origine (de 1).
+    pub page_source: usize,
+    /// Place sur la page d'origine, en mm, origine en bas à gauche : x0, y0, x1, y1.
+    pub boite_mm: [f64; 4],
+    /// Format de la page d'origine (éditée), en mm.
+    pub source_mm: [f64; 2],
+    /// Recouvrement avec la voisine de chaque bord (gauche, bas, droite, haut), en mm ;
+    /// 0 sans voisine, négatif pour un espace.
+    pub recouvrement_mm: [f64; 4],
+    /// Bande de repères sous la tuile, en mm (0 sans repères).
+    pub bande_mm: f64,
+    /// Décalage de la tuile sur la page rendue (repérage), en mm : rempli au rendu.
+    #[serde(default)]
+    pub decalage_mm: [f64; 2],
+}
+
+/// Tuile de chaque page produite (rien pour une page qui tenait).
+pub type Tuiles = Vec<Option<Tuile>>;
+
+/// Bornes (début, fin), en mm, des tuiles le long d'un côté de `total` mm : les tailles
+/// `saisies` (leur somme vaut `total` plus un recouvrement par jonction), sinon `n` tuiles
+/// égales, sinon le moins de tuiles égales d'au plus `max`. Chaque tuile recouvre la
+/// suivante de `r`. Erreur : le détail, non traduit.
+pub fn axe(total: f64, max: Option<f64>, r: f64, n: Option<usize>, saisies: Option<&[f64]>) -> Result<Vec<(f64, f64)>, String> {
+    let tailles = match (saisies, n) {
+        (Some(s), _) => {
+            let attendu = total + s.len().saturating_sub(1) as f64 * r;
+            let somme: f64 = s.iter().sum();
+            if s.is_empty() || (somme - attendu).abs() > 0.1 {
+                return Err(format!("somme des tuiles {somme:.1} mm, attendu {attendu:.1} mm"));
+            }
+            s.to_vec()
+        }
+        (None, Some(n)) if n > 1 => vec![(total + (n - 1) as f64 * r) / n as f64; n],
+        _ => match max {
+            Some(m) if total > m + 1e-6 && n.is_none() => {
+                if r >= m {
+                    return Err("le recouvrement doit être plus petit que la laize".into());
+                }
+                let n = ((total - r) / (m - r)).ceil() as usize;
+                vec![(total + (n - 1) as f64 * r) / n as f64; n]
+            }
+            _ => vec![total],
+        },
+    };
+    if let Some(&t) = tailles.iter().find(|&&t| (tailles.len() > 1 && t <= r) || max.is_some_and(|m| t > m + 0.01)) {
+        return Err(format!("tuile de {t:.1} mm : plus grande que le maximum ou pas plus grande que le recouvrement"));
     }
-    if largeur <= laize + 1e-6 {
-        return Ok(vec![(0.0, largeur)]);
+    let mut x = 0.0;
+    let mut bornes: Vec<(f64, f64)> = tailles.iter().map(|t| {
+        let b = (x, x + t);
+        x += t - r;
+        b
+    }).collect();
+    // La dernière finit au bord, au centième près des tailles saisies.
+    if let Some(d) = bornes.last_mut() {
+        d.1 = total;
     }
-    let n = ((largeur - recouvrement) / (laize - recouvrement)).ceil() as usize;
-    let l = (largeur + (n - 1) as f64 * recouvrement) / n as f64;
-    Ok((0..n).map(|i| {
-        let x0 = i as f64 * (l - recouvrement);
-        (x0, x0 + l)
-    }).collect())
+    Ok(bornes)
+}
+
+/// Tuiles d'une page de `l` × `h` mm, dans l'ordre des numéros. Rien à couper : une seule.
+pub fn tuiles(l: f64, h: f64, m: &Mosaique) -> Result<Vec<Tuile>, String> {
+    let r = m.recouvrement_mm;
+    let colonnes = axe(l, Some(m.laize_mm), r, m.colonnes, m.les_mm.as_deref())?;
+    // Les rangées se comptent du haut ; y du PDF part du bas.
+    let rangees = axe(h, m.hauteur_max_mm, r, m.rangees, m.rangees_mm.as_deref())?;
+    let (nc, nr) = (colonnes.len(), rangees.len());
+    let mut v = vec![];
+    for (j, &(t0, t1)) in rangees.iter().enumerate() {
+        for (i, &(x0, x1)) in colonnes.iter().enumerate() {
+            let numero = j * nc + i + 1;
+            let mut b = [x0, h - t1, x1, h - t0];
+            // Recouvrement propre : la tuile s'étend (ou recule) de la moitié de l'écart avec
+            // le recouvrement global, sur ses bords intérieurs seulement.
+            if let Some(Some(propre)) = m.recouvrement_tuiles_mm.get(numero - 1) {
+                let d = (propre - r) / 2.0;
+                if i > 0 { b[0] -= d; }
+                if i + 1 < nc { b[2] += d; }
+                if j + 1 < nr { b[1] -= d; }
+                if j > 0 { b[3] += d; }
+            }
+            let (bl, bh) = (b[2] - b[0], b[3] - b[1]);
+            if bl <= 0.0 || bh <= 0.0 || bl > m.laize_mm + 0.01 || m.hauteur_max_mm.is_some_and(|hm| bh > hm + 0.01) {
+                return Err(format!("tuile {numero} de {bl:.1} × {bh:.1} mm : vide ou plus grande que le maximum"));
+            }
+            v.push(Tuile { numero, total: nc * nr, colonne: i + 1, rangee: j + 1, colonnes: nc, rangees: nr, page_source: 1, boite_mm: b, source_mm: [l, h], recouvrement_mm: [0.0; 4], bande_mm: 0.0, decalage_mm: [0.0; 2] });
+        }
+    }
+    // Recouvrement de chaque bord avec la voisine (gauche, bas, droite, haut).
+    for k in 0..v.len() {
+        let (i, j) = (k % nc, k / nc);
+        let b = v[k].boite_mm;
+        let mut rec = [0.0; 4];
+        if i > 0 { rec[0] = v[k - 1].boite_mm[2] - b[0]; }
+        if j + 1 < nr { rec[1] = v[k + nc].boite_mm[3] - b[1]; }
+        if i + 1 < nc { rec[2] = b[2] - v[k + 1].boite_mm[0]; }
+        if j > 0 { rec[3] = b[3] - v[k - nc].boite_mm[1]; }
+        v[k].recouvrement_mm = rec;
+    }
+    Ok(v)
+}
+
+/// Numéros des tuiles à imprimer, dans l'ordre : ceux de `ordre` d'abord, puis les autres
+/// par numéro ; les décochées (`exclus`) en sont retirées.
+fn a_imprimer(total: usize, m: &Mosaique) -> Result<Vec<usize>, String> {
+    if let Some(&k) = m.ordre.iter().chain(&m.exclus).find(|&&k| k == 0 || k > total) {
+        return Err(format!("tuile {k} : il n'y en a que {total}"));
+    }
+    if let Some(k) = m.ordre.iter().enumerate().find(|(i, k)| m.ordre[..*i].contains(k)).map(|(_, k)| k) {
+        return Err(format!("tuile {k} deux fois dans l'ordre"));
+    }
+    let v: Vec<usize> = m.ordre.iter().copied().chain((1..=total).filter(|k| !m.ordre.contains(k))).filter(|k| !m.exclus.contains(k)).collect();
+    if v.is_empty() {
+        return Err("aucune tuile à imprimer".into());
+    }
+    Ok(v)
 }
 
 /// Hauteur de la bande de repères, en mm.
 pub const BANDE_MM: f64 = 10.0;
 
-/// Bande de pied d'un lé (en noir) : son numéro et un trait vertical à chaque bord de
-/// recouvrement, là où le lé voisin s'arrête ou commence, pour aligner à la pose.
-fn reperes(i: usize, n: usize, largeur: f64, r: f64) -> String {
+/// Bande de pied d'une tuile (en noir) : son numéro et un trait vertical à chaque bord de
+/// recouvrement gauche ou droit, là où la voisine s'arrête ou commence, pour aligner à la pose.
+fn reperes(t: &Tuile, largeur: f64) -> String {
     let b = BANDE_MM * PT_PAR_MM;
     let mut s = String::from("q 0 0 0 1 K 0 0 0 1 k 0.5 w ");
-    let mut traits = vec![];
-    if i > 0 {
-        traits.push(r);
-    }
-    if i + 1 < n {
-        traits.push(largeur - r);
-    }
-    for x in traits {
-        s += &format!("{x:.4} 0 m {x:.4} {:.4} l S ", b);
+    let (g, d) = (t.recouvrement_mm[0] * PT_PAR_MM, t.recouvrement_mm[2] * PT_PAR_MM);
+    for x in [(g > 0.0).then_some(g), (d > 0.0).then_some(largeur - d)].into_iter().flatten() {
+        s += &format!("{x:.4} 0 m {x:.4} {b:.4} l S ");
     }
     // « Lé » en WinAnsi : é = \351.
-    s += &format!("BT /H 8 Tf {:.4} {:.4} Td (L\\351 {}/{n}) Tj ET Q\n", (r + 4.0).min(largeur / 2.0), b / 2.0 - 3.0, i + 1);
+    s += &format!("BT /H 8 Tf {:.4} {:.4} Td (L\\351 {}/{}) Tj ET Q\n", (g.max(0.0) + 4.0).min(largeur / 2.0), b / 2.0 - 3.0, t.numero, t.total);
     s
 }
 
-/// Réécrit le PDF : chaque page plus large que la laize est remplacée par ses lés. Avec
-/// `avec_reperes`, chaque lé reçoit en pied une bande de `BANDE_MM` (numéro, traits).
-pub fn composer(pdf: &[u8], laize_mm: f64, recouvrement_mm: f64, avec_reperes: bool) -> Result<Vec<u8>, String> {
-    let nb_pages = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?.get_pages().len();
+/// Réécrit le PDF : chaque page à couper est remplacée par ses tuiles à imprimer, dans
+/// l'ordre choisi. Rend aussi, pour chaque page produite, sa tuile (rien pour une page qui
+/// tenait). Erreur : (code, détail).
+pub fn composer(pdf: &[u8], m: &Mosaique) -> Result<(Vec<u8>, Tuiles), (&'static str, String)> {
+    let illisible = |e: String| ("mosaique_invalide", e);
+    let nb_pages = Document::load_mem(pdf).map_err(|e| illisible(format!("PDF illisible : {e}")))?.get_pages().len();
     let mut cible = Document::with_version("1.6");
     let pages_id = cible.new_object_id();
     let police = cible.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding" });
-    let bande = if avec_reperes { BANDE_MM * PT_PAR_MM } else { 0.0 };
-    let mut enfants = vec![];
+    // Ton de découpe des coupes au milieu des recouvrements.
+    let ton = cible.add_object(Object::Array(vec![
+        "Separation".into(),
+        "CutContour".into(),
+        "DeviceCMYK".into(),
+        Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
+    ]));
+    let (mut enfants, mut produites) = (vec![], vec![]);
+    let mm = PT_PAR_MM;
     for n in 1..=nb_pages {
-        let (form, taille, [llx, lly]) = page_en_formulaire(&mut cible, pdf, n).map_err(|e| format!("page {n} : {e}"))?;
-        let r = recouvrement_mm * PT_PAR_MM;
-        let decoupe = les(taille.largeur, laize_mm * PT_PAR_MM, r)?;
-        // Une page qui tient dans la laize n'est pas un lé : pas de bande.
-        let bande = if decoupe.len() > 1 { bande } else { 0.0 };
-        for (i, &(x0, x1)) in decoupe.iter().enumerate() {
-            let mut contenu = format!("q 1 0 0 1 {:.4} {:.4} cm /F Do Q\n", -x0 - llx, bande - lly);
+        let (form, taille, [llx, lly]) = page_en_formulaire(&mut cible, pdf, n).map_err(|e| illisible(format!("page {n} : {e}")))?;
+        let mut decoupe = tuiles(taille.largeur / mm, taille.hauteur / mm, m).map_err(|e| ("les_incoherents", format!("page {n} : {e}")))?;
+        // Une page qui tient n'est pas une tuile : ni bande, ni choix, ni ordre.
+        let seule = decoupe.len() == 1;
+        let ordre = if seule { vec![1] } else { a_imprimer(decoupe.len(), m).map_err(|e| ("les_incoherents", format!("page {n} : {e}")))? };
+        let bande = if m.reperes && !seule { BANDE_MM } else { 0.0 };
+        for k in ordre {
+            let t = &mut decoupe[k - 1];
+            (t.page_source, t.bande_mm) = (n, bande);
+            let [x0, y0, x1, y1] = t.boite_mm.map(|v| v * mm);
+            let (l, h, b) = (x1 - x0, y1 - y0, bande * mm);
+            let [g, bas, d, haut] = t.recouvrement_mm.map(|v| v * mm);
+            // Soudure : le recouvrement de gauche et du haut (celui qui passe sous la voisine)
+            // reste sans encre ; l'image est rognée à côté.
+            let (cg, ch) = if m.soudure { (g.max(0.0), haut.max(0.0)) } else { (0.0, 0.0) };
+            let mut contenu = format!("q {cg:.4} {b:.4} {:.4} {:.4} re W n 1 0 0 1 {:.4} {:.4} cm /F Do Q\n", l - cg, h - ch, -x0 - llx, b - y0 - lly);
+            if m.coupe_milieu {
+                contenu += "q /CC CS 1 SCN 0.5 w ";
+                for x in [(g > 0.0).then_some(g / 2.0), (d > 0.0).then_some(l - d / 2.0)].into_iter().flatten() {
+                    contenu += &format!("{x:.4} {b:.4} m {x:.4} {:.4} l S ", b + h);
+                }
+                for y in [(bas > 0.0).then_some(bas / 2.0), (haut > 0.0).then_some(h - haut / 2.0)].into_iter().flatten() {
+                    contenu += &format!("0 {:.4} m {l:.4} {:.4} l S ", b + y, b + y);
+                }
+                contenu += "Q\n";
+            }
             if bande > 0.0 {
-                contenu += &reperes(i, decoupe.len(), x1 - x0, r);
+                contenu += &reperes(t, l);
             }
             let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
             let mut xobjets = Dictionary::new();
             xobjets.set("F", form);
             enfants.push(Object::Reference(cible.add_object(dictionary! {
                 "Type" => "Page", "Parent" => pages_id,
-                "MediaBox" => vec![0.into(), 0.into(), Object::Real((x1 - x0) as f32), Object::Real((taille.hauteur + bande) as f32)],
-                "Contents" => flux, "Resources" => dictionary! { "XObject" => xobjets, "Font" => dictionary! { "H" => police } },
+                "MediaBox" => vec![0.into(), 0.into(), Object::Real(l as f32), Object::Real((h + b) as f32)],
+                "Contents" => flux,
+                "Resources" => dictionary! { "XObject" => xobjets, "Font" => dictionary! { "H" => police }, "ColorSpace" => dictionary! { "CC" => ton } },
             })));
+            produites.push((!seule).then(|| t.clone()));
         }
     }
     let compte = enfants.len() as i64;
@@ -82,8 +223,8 @@ pub fn composer(pdf: &[u8], laize_mm: f64, recouvrement_mm: f64, avec_reperes: b
     cible.trailer.set("Root", catalogue);
     cible.prune_objects();
     let mut sortie = vec![];
-    cible.save_to(&mut sortie).map_err(|e| e.to_string())?;
-    Ok(sortie)
+    cible.save_to(&mut sortie).map_err(|e| illisible(e.to_string()))?;
+    Ok((sortie, produites))
 }
 
 #[cfg(test)]
@@ -92,18 +233,55 @@ mod tests {
 
     const MM: f64 = PT_PAR_MM;
 
+    fn m(laize_mm: f64, recouvrement_mm: f64, reperes: bool) -> Mosaique {
+        Mosaique { laize_mm, recouvrement_mm, reperes, ..Default::default() }
+    }
+
     #[test]
     fn les_de_meme_largeur_avec_recouvrement() {
         // 3000 mm sur 1600 mm avec 20 mm : 2 lés de 1510 mm, qui se recouvrent de 20 mm.
-        let l = les(3000.0 * MM, 1600.0 * MM, 20.0 * MM).unwrap();
+        let l = axe(3000.0, Some(1600.0), 20.0, None, None).unwrap();
         assert_eq!(l.len(), 2);
         for (x0, x1) in &l {
-            assert!(((x1 - x0) / MM - 1510.0).abs() < 1e-6 && x1 - x0 <= 1600.0 * MM);
+            assert!((x1 - x0 - 1510.0).abs() < 1e-6);
         }
-        assert!((l[0].1 - l[1].0 - 20.0 * MM).abs() < 1e-6, "recouvrement de 20 mm");
-        assert!((l[1].1 - 3000.0 * MM).abs() < 1e-6, "le dernier lé finit au bord");
-        assert_eq!(les(1000.0 * MM, 1600.0 * MM, 20.0 * MM).unwrap(), [(0.0, 1000.0 * MM)], "page plus étroite : un seul lé");
-        assert!(les(3000.0 * MM, 1600.0 * MM, 1600.0 * MM).is_err());
+        assert!((l[0].1 - l[1].0 - 20.0).abs() < 1e-6, "recouvrement de 20 mm");
+        assert!((l[1].1 - 3000.0).abs() < 1e-6, "le dernier lé finit au bord");
+        assert_eq!(axe(1000.0, Some(1600.0), 20.0, None, None).unwrap(), [(0.0, 1000.0)], "page plus étroite : un seul lé");
+        assert!(axe(3000.0, Some(1600.0), 1600.0, None, None).is_err());
+    }
+
+    #[test]
+    fn les_inegaux_ordre_et_choix() {
+        // Largeurs saisies : leur somme vaut 3000 + 2 × 20.
+        let l = axe(3000.0, Some(1600.0), 20.0, None, Some(&[1000.0, 1500.0, 540.0])).unwrap();
+        assert_eq!(l, [(0.0, 1000.0), (980.0, 2480.0), (2460.0, 3000.0)]);
+        assert!(axe(3000.0, Some(1600.0), 20.0, None, Some(&[1000.0, 1500.0, 500.0])).is_err(), "somme fausse");
+        assert!(axe(3000.0, Some(1600.0), 20.0, None, Some(&[1000.0, 1700.0, 340.0])).is_err(), "plus large que la laize");
+        assert!(axe(3000.0, Some(1600.0), 20.0, None, Some(&[1520.0, 1520.0, 0.0])).is_err(), "lé vide");
+        // Ordre partiel puis le reste ; un décoché disparaît ; doublon ou hors plage refusés.
+        let o = |ordre: Vec<usize>, exclus: Vec<usize>| a_imprimer(4, &Mosaique { ordre, exclus, ..Default::default() });
+        assert_eq!(o(vec![3, 1], vec![]).unwrap(), [3, 1, 2, 4]);
+        assert_eq!(o(vec![3, 1], vec![1]).unwrap(), [3, 2, 4]);
+        assert!(o(vec![3, 3], vec![]).is_err() && o(vec![5], vec![]).is_err() && o(vec![], vec![1, 2, 3, 4]).is_err());
+    }
+
+    #[test]
+    fn tuiles_en_grille_et_recouvrement_propre() {
+        // 3000 × 2000 mm, 3 colonnes × 2 rangées, 20 mm : 1013,33 × 1010 mm.
+        let g = Mosaique { colonnes: Some(3), rangees: Some(2), ..m(1600.0, 20.0, false) };
+        let t = tuiles(3000.0, 2000.0, &g).unwrap();
+        assert_eq!(t.len(), 6);
+        // Tuile 1 : en haut à gauche ; tuile 4 : en bas à gauche.
+        assert_eq!((t[0].colonne, t[0].rangee, t[3].colonne, t[3].rangee), (1, 1, 1, 2));
+        assert!((t[0].boite_mm[1] - 990.0).abs() < 1e-6 && (t[0].boite_mm[3] - 2000.0).abs() < 1e-6);
+        assert_eq!(t[4].recouvrement_mm.map(|v| (v * 100.0).round() / 100.0), [20.0, 0.0, 20.0, 20.0]);
+        // Recouvrement propre de 40 mm sur la tuile 2 : 10 mm de plus de chaque côté intérieur.
+        let p = Mosaique { recouvrement_tuiles_mm: vec![None, Some(40.0)], ..g };
+        let t2 = tuiles(3000.0, 2000.0, &p).unwrap();
+        assert!((t2[1].boite_mm[0] - (t[1].boite_mm[0] - 10.0)).abs() < 1e-6 && (t2[1].boite_mm[2] - (t[1].boite_mm[2] + 10.0)).abs() < 1e-6);
+        assert!((t2[1].boite_mm[1] - (t[1].boite_mm[1] - 10.0)).abs() < 1e-6 && (t2[1].boite_mm[3] - t[1].boite_mm[3]).abs() < 1e-6, "pas de voisine en haut");
+        assert!((t2[0].recouvrement_mm[2] - 30.0).abs() < 1e-6, "jonction 1-2 : (20 + 40) / 2");
     }
 
     /// Page de 3000 × 300 mm : moitié gauche cyan, moitié droite magenta, contour
@@ -135,7 +313,7 @@ mod tests {
 
     #[test]
     fn banniere_en_deux_les_rendus_et_decoupes() {
-        let pdf = composer(&banniere(), 1600.0, 20.0, false).unwrap();
+        let pdf = composer(&banniere(), &m(1600.0, 20.0, false)).unwrap().0;
         // Découpe : chaque lé garde sa part du contour, rognée à son bord.
         let pages = crate::decoupe::extraire(&pdf, false).unwrap();
         assert_eq!(pages.len(), 2);
@@ -179,12 +357,12 @@ mod tests {
     /// trait noir dans la bande au bord du recouvrement (lé 1 : 1490 mm ; lé 2 : 20 mm).
     #[test]
     fn bande_de_reperes_des_les() {
-        let pdf = composer(&banniere(), 1600.0, 20.0, true).unwrap();
+        let pdf = composer(&banniere(), &m(1600.0, 20.0, true)).unwrap().0;
         let pages = crate::decoupe::extraire(&pdf, false).unwrap();
         assert!((pages[0].hauteur / MM - 310.0).abs() < 1e-3);
         let y_min = pages[0].traces[0].points.iter().map(|p| p.1).fold(f64::MAX, f64::min);
         assert!((y_min / MM - 20.0).abs() < 1e-3, "contour à 10 mm du bas de l'image, plus la bande : {} mm", y_min / MM);
-        assert!(composer(&banniere(), 4000.0, 20.0, true).map(|p| crate::decoupe::extraire(&p, false).unwrap()[0].hauteur / MM).unwrap() < 300.1, "pas de lé : pas de bande");
+        assert!(composer(&banniere(), &m(4000.0, 20.0, true)).map(|p| crate::decoupe::extraire(&p.0, false).unwrap()[0].hauteur / MM).unwrap() < 300.1, "pas de lé : pas de bande");
 
         let dossier = std::env::temp_dir().join(format!("eko-rip-reperes-{}", std::process::id()));
         std::fs::create_dir_all(&dossier).unwrap();

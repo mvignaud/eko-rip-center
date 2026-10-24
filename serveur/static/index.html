@@ -199,6 +199,20 @@
   #vue-scene #vue-decoupe { background: transparent; mix-blend-mode: multiply; }
   #vue-laize { position: absolute; left: 0; top: -100000px; bottom: -100000px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); background: rgb(61 143 224 / .06); pointer-events: none; }
   #vue-hors { position: absolute; top: 0; bottom: 0; background: rgb(249 112 102 / .3); pointer-events: none; }
+  /* Mosaïque (3.C) : lés en pointillés, recouvrements teintés, soudure, tuiles décochées. */
+  #vue-les-calque { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  #vue-les-calque .le { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 6 4; }
+  #vue-les-calque .rec { fill: rgb(61 143 224 / .22); }
+  #vue-les-calque .soudure { fill: rgb(249 112 102 / .4); }
+  #vue-les-calque .exclu { fill: rgb(0 0 0 / .35); }
+  #vue-les-calque text { font: 600 12px system-ui, sans-serif; fill: var(--accent); paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+  #vue-les { display: grid; align-content: start; gap: 6px; }
+  #vue-les[hidden] { display: none; }
+  #vue-les input[type=number], #vue-les input[type=text] { width: 100%; }
+  #vue-les .deux { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .vue-tuiles { display: grid; gap: 3px; }
+  .vue-tuiles span { display: flex; align-items: center; gap: 2px; }
+  .vue-tuiles button[aria-pressed=true] { background: var(--accent); color: #fff; }
   #vue-rect { position: absolute; border: 1px dashed var(--accent); background: rgb(61 143 224 / .15); pointer-events: none; }
   .vue-etat { display: flex; gap: 18px; flex-wrap: wrap; padding: 6px 10px; border-top: 1px solid var(--trait); font-size: 12px; font-variant-numeric: tabular-nums; }
   .vue-etat .hors { color: var(--echec); }
@@ -272,11 +286,12 @@
           <div id="vue-selection" hidden><span style="left: 0%; top: 0%"></span><span style="left: 50%; top: 0%"></span><span style="left: 100%; top: 0%"></span><span style="left: 100%; top: 50%"></span><span style="left: 100%; top: 100%"></span><span style="left: 50%; top: 100%"></span><span style="left: 0%; top: 100%"></span><span style="left: 0%; top: 50%"></span></div>
           <div id="vue-hors" hidden></div>
           <div id="vue-laize" hidden></div>
+          <svg id="vue-les-calque" aria-hidden="true"></svg>
         </div>
         <div id="vue-rect" hidden></div>
       </div>
     </div>
-    <aside class="vue-lateral"><div id="vue-couches" role="group" data-t-aria="vue_couches"></div><div id="vue-edition" hidden></div></aside>
+    <aside class="vue-lateral"><div id="vue-couches" role="group" data-t-aria="vue_couches"></div><div id="vue-edition" hidden></div><div id="vue-les" role="group" data-t-aria="les_titre" hidden></div></aside>
     </div>
     <div class="vue-etat" aria-live="polite"><span id="vue-dims"></span><span id="vue-pos"></span><span id="vue-info-laize"></span><span class="meta" data-t="vue_aide"></span></div>
   </form>
@@ -356,7 +371,10 @@
             <label><span data-t="laize"></span> <input type="number" name="laize_mm" value="1600" min="50" max="5000" step="1"></label>
             <label><span data-t="recouvrement"></span> <input type="number" name="recouvrement_mm" value="20" min="0" max="200" step="1"></label>
           </div>
+          <label><span data-t="hauteur_max"></span> <input type="number" name="hauteur_max_mm" min="50" max="10000" step="1" data-t-placeholder="sans_limite"></label>
           <label class="case"><input type="checkbox" name="reperes_les" value="oui"> <span data-t="reperes_les"></span></label>
+          <label class="case"><input type="checkbox" name="soudure" value="oui"> <span data-t="soudure"></span></label>
+          <label class="case"><input type="checkbox" name="coupe_milieu" value="oui"> <span data-t="coupe_milieu"></span></label>
         </div></details>
         <button type="submit" data-t="envoyer"></button>
       </form>
@@ -493,6 +511,11 @@ const textes = {
     couches: "Blanc ou argent", couches_dessous: "Sous la couleur", couches_dessus: "Sur la couleur (vitrophanie)",
     reperes_les: "Numéro et traits d'assemblage en pied de chaque lé (+10 mm)",
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
+    hauteur_max: "Hauteur maxi d'une tuile (mm)", sans_limite: "sans limite", soudure: "Soudure : recouvrement sans encre sous la voisine (12,7 mm au moins)", coupe_milieu: "Trait de coupe au milieu des recouvrements",
+    les_titre: "Lés", les_note_page: "La page dépasse la laize : les pointillés montrent les lés ; glisser un trait pour des lés inégaux.", les_largeurs: "Largeur des lés (mm)", les_hauteurs: "Hauteur des rangées (mm)",
+    les_egaux: "Lés égaux", les_tuiles: "Tuiles à imprimer (case) · réglage d'une tuile (numéro)", les_recouvrement_tuile: (n) => `Recouvrement de la tuile ${n} (mm, négatif = espace)`, les_defaut: "global",
+    les_ordre: "Ordre d'impression (ex. 3 1 2)", les_couper: "Couper en lés", les_page_entiere: "Page entière (sans mosaïque)", les_tuile_n: (k, n) => `Lé ${k}/${n}`,
+    les_resume: (c, r, n) => `${c} × ${r} = ${n} tuile${n > 1 ? "s" : ""}`, les_imprimer: "Imprimer cette tuile",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Longueur de rouleau : ${l} mm · surface utilisée : ${u} %`,
     rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", motif: "Motif step & repeat (une page en grille)", colonnes: "Colonnes", rangees: "Rangées", demi_saut: "Demi-saut (papier peint)", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
@@ -542,7 +565,7 @@ const textes = {
       trop_d_echecs: "Trop d'essais pour cet utilisateur : réessayer dans 5 minutes.", admin_requis: "Réservé à l'administrateur du RIP.", sauvegarde_invalide: "Ce fichier n'est pas une sauvegarde d'E-KO RIP Center.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
       profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
-      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
+      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", les_incoherents: "Lés incohérents : largeurs, recouvrements, ordre ou tuiles à imprimer.", soudure_invalide: "Soudure : il faut au moins 12,7 mm de recouvrement sur chaque tuile.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.", envoi_impossible: "Envoi à l'imprimante impossible.", imprimante_en_alerte: "L'imprimante signale une alerte : impression arrêtée.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
@@ -623,6 +646,11 @@ const textes = {
     couches: "White or silver", couches_dessous: "Under the colour", couches_dessus: "Over the colour (window film)",
     reperes_les: "Panel number and joining marks at the foot of each panel (+10 mm)",
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
+    hauteur_max: "Maximum tile height (mm)", sans_limite: "no limit", soudure: "Weld: no ink in the overlap under the neighbour (at least 12.7 mm)", coupe_milieu: "Cut line in the middle of each overlap",
+    les_titre: "Panels", les_note_page: "The page is wider than the roll: the dotted lines show the panels; drag a line for unequal panels.", les_largeurs: "Panel widths (mm)", les_hauteurs: "Row heights (mm)",
+    les_egaux: "Equal panels", les_tuiles: "Tiles to print (box) · settings of one tile (number)", les_recouvrement_tuile: (n) => `Overlap of tile ${n} (mm, negative = gap)`, les_defaut: "global",
+    les_ordre: "Print order (e.g. 3 1 2)", les_couper: "Split into panels", les_page_entiere: "Whole page (no tiling)", les_tuile_n: (k, n) => `Panel ${k}/${n}`,
+    les_resume: (c, r, n) => `${c} × ${r} = ${n} tile${n > 1 ? "s" : ""}`, les_imprimer: "Print this tile",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Roll length: ${l} mm · area used: ${u} %`,
     rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", motif: "Step & repeat pattern (one page in a grid)", colonnes: "Columns", rangees: "Rows", demi_saut: "Half drop (wallpaper)", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
@@ -672,7 +700,7 @@ const textes = {
       trop_d_echecs: "Too many attempts for this user: try again in 5 minutes.", admin_requis: "Reserved for the RIP administrator.", sauvegarde_invalide: "This file is not an E-KO RIP Center backup.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
       profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
-      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
+      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", les_incoherents: "Inconsistent panels: widths, overlaps, order or tiles to print.", soudure_invalide: "Weld: every tile needs an overlap of at least 12.7 mm.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
       rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.", envoi_impossible: "Cannot send to the printer.", imprimante_en_alerte: "The printer reports an alert: printing stopped.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
@@ -1044,7 +1072,7 @@ function demandeDuFormulaire() {
   return {
     mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
-    mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value, reperes: f.reperes_les.checked } : null,
+    mosaique: f.mosaique.checked ? mosaiqueDuFormulaire(f) : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
     couches: f.couches.value,
     edition: lireEdition($("edition-envoi")),
@@ -1055,6 +1083,14 @@ function demandeDuFormulaire() {
     parametre_decoupe: f.parametre_decoupe.value || null,
     rotation_auto: f.rotation_auto.checked,
   };
+}
+
+/** Mosaïque du formulaire. Pour un travail reçu, ce qui se règle dans la visionneuse (lés
+ *  inégaux, tuiles, ordre) est gardé tant que laize, hauteur et recouvrement ne changent pas. */
+function mosaiqueDuFormulaire(f) {
+  const m = { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value, reperes: f.reperes_les.checked, hauteur_max_mm: f.hauteur_max_mm.value ? +f.hauteur_max_mm.value : null, soudure: f.soudure.checked, coupe_milieu: f.coupe_milieu.checked };
+  const a = travailRegle?.mosaique;
+  return a && a.laize_mm === m.laize_mm && a.recouvrement_mm === m.recouvrement_mm && (a.hauteur_max_mm ?? null) === m.hauteur_max_mm ? { ...a, ...m } : m;
 }
 
 /** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
@@ -1097,7 +1133,11 @@ function appliquerDemande(d) {
   f.profil_cmjn.value = d.couleur.entree_cmjn || ""; f.profil_rvb.value = d.couleur.entree_rvb || ""; f.profil_sortie.value = d.couleur.sortie || "";
   f.intention.value = String(d.couleur.intention); f.forcer_profils.checked = d.couleur.forcer;
   f.mosaique.checked = !!d.mosaique;
-  if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; f.reperes_les.checked = !!d.mosaique.reperes; }
+  if (d.mosaique) {
+    const m = d.mosaique;
+    f.laize_mm.value = m.laize_mm; f.recouvrement_mm.value = m.recouvrement_mm; f.reperes_les.checked = !!m.reperes;
+    f.hauteur_max_mm.value = m.hauteur_max_mm ?? ""; f.soudure.checked = !!m.soudure; f.coupe_milieu.checked = !!m.coupe_milieu;
+  }
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
   f.couches.value = d.couches || "dessous";
@@ -1301,6 +1341,7 @@ async function afficherPageVue(src, legende, { t, page, n } = {}) {
   if (jeton !== vue.jeton) return; // une autre page a été demandée entretemps
   [vue.l, vue.h] = dims;
   preparerEditionVue();
+  preparerLesVue();
   ajusterVue();
 }
 /** Couches activables une à une ; leur état (`couchesVue`) dure le temps de la page,
@@ -1398,6 +1439,7 @@ function dessinerVue() {
   $("vue-hors").hidden = !hors;
   $("vue-selection").hidden = !vue.selection;
   dessinerCadreEd();
+  dessinerLesVue(k);
   if (laize) $("vue-laize").style.width = `${laize.mm * k}px`;
   if (hors) Object.assign($("vue-hors").style, { left: `${laize.mm * k}px`, width: `${(vue.l - laize.mm) * k}px` });
   const pc = Math.round(vue.z * 100), choix = $("vue-zoom");
@@ -1451,13 +1493,16 @@ zoneVue.addEventListener("pointerdown", (e) => {
   if (e.button !== 0) return;
   zoneVue.setPointerCapture(e.pointerId);
   const p = pointVue(e);
-  if (commencerGesteEd(mmVers(p.x, p.y))) return;
+  if (commencerGesteEd(mmVers(p.x, p.y)) || commencerGesteLes(mmVers(p.x, p.y))) return;
   vue.geste = { ...p, tx: vue.tx, ty: vue.ty, bouge: false };
 });
 zoneVue.addEventListener("pointermove", (e) => {
   const p = pointVue(e), g = vue.geste;
   vue.curseur = mmVers(p.x, p.y);
+  if (glisserLes(vue.curseur)) { afficherLesVue(); return; }
   if (survolEd(vue.curseur)) return;
+  const f = !g && zoneVue.style.cursor === "" && frontiereLes(vue.curseur);
+  if (f) zoneVue.style.cursor = f.cle === "les_mm" ? "col-resize" : "row-resize";
   if (g) {
     g.bouge ||= Math.hypot(p.x - g.x, p.y - g.y) > 3;
     if (zoneVue.dataset.outil === "main") { vue.tx = g.tx + p.x - g.x; vue.ty = g.ty + p.y - g.y; }
@@ -1470,6 +1515,7 @@ zoneVue.addEventListener("pointermove", (e) => {
 });
 zoneVue.addEventListener("pointerup", (e) => {
   if (ED.geste) { ED.geste = null; majEditionVue(); return; }
+  if (LES.geste) { LES.geste = null; afficherLesVue(); return; }
   const p = pointVue(e), g = vue.geste;
   vue.geste = null;
   $("vue-rect").hidden = true;
@@ -1591,7 +1637,7 @@ function afficherEditionVue() {
   p.hidden = !t;
   if (!t) return;
   const titre = el("strong", {}, d.ed_titre), erreur = ED.erreur ? el("p", { className: "erreur", role: "alert" }, ED.erreur) : null;
-  if (!ED.ed) { p.replaceChildren(titre, el("p", { className: "meta" }, ED.attente ? d.ed_en_cours : d.ed_indisponible), erreur); return; }
+  if (!ED.ed) { p.replaceChildren(...[titre, el("p", { className: "meta" }, ED.attente ? d.ed_en_cours : d.ed_indisponible), erreur].filter(Boolean)); return; }
   const ed = ED.ed;
   const champ = (texte, valeur, poser, attrs = {}) => {
     const i = el("input", { type: "number", step: "any", value: arrondi(valeur), ...attrs });
@@ -1721,19 +1767,23 @@ function survolEd(m) {
   majEditionVue();
   return true;
 }
-async function appliquerEditionVue() {
+const appliquerEditionVue = () => envoyerReglagesVue({ edition: ED.ed });
+/** Réglages du travail ouvert changés (`changes`), rendu refait, puis la page revue. */
+async function envoyerReglagesVue(changes) {
   const t = vue.travail, n = vue.n;
-  const r = await fetch(`/api/travaux/${t.id}/reglages`, json("POST", { ...t, edition: ED.ed })).catch(() => null);
+  const r = await fetch(`/api/travaux/${t.id}/reglages`, json("POST", { ...t, ...changes })).catch(() => null);
   if (!r || !r.ok) {
     const c = r ? await r.json().catch(() => ({})) : { code: "reseau" };
-    ED.erreur = texteErreur(c.code, c.detail);
+    ED.erreur = LES.erreur = texteErreur(c.code, c.detail);
     afficherEditionVue();
+    afficherLesVue();
     return;
   }
   Object.assign(ED, { erreur: null, attente: true, outil: null, ed: null });
+  Object.assign(LES, { erreur: null, m: null, geste: null });
   ED.versions[t.id] = Date.now();
   afficherEditionVue();
-  dessinerVue();
+  afficherLesVue();
   dire(T().reglages_appliques);
   for (let i = 0; i < 600 && $("visionneuse").open && vue.travail?.id === t.id; i++) {
     await new Promise((ok) => setTimeout(ok, 500));
@@ -1744,7 +1794,7 @@ async function appliquerEditionVue() {
     const k = Math.min(n, nt.pages.length) || 1;
     if (nt.pages.length) await voir(`/api/travaux/${nt.id}/pages/${k}/${principalVue(nt)}`, T().composite, { t: nt, page: nt.pages[k - 1], n: k });
     else { vue.travail = nt; preparerEditionVue(); }
-    if (nt.statut !== "termine") { ED.erreur = texteErreur(nt.code_erreur, nt.erreur); afficherEditionVue(); }
+    if (nt.statut !== "termine") { ED.erreur = LES.erreur = texteErreur(nt.code_erreur, nt.erreur); afficherEditionVue(); afficherLesVue(); }
     return;
   }
   ED.attente = false;
@@ -1755,6 +1805,188 @@ $("vue-echelle").addEventListener("click", () => outilEd("echelle"));
 $("vue-tourner-g").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 90) % 360; majEditionVue(); });
 $("vue-tourner-d").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 270) % 360; majEditionVue(); });
 $("vue-miroir").addEventListener("click", () => { ED.ed.miroir = !ED.ed.miroir; majEditionVue(); });
+
+/** Mosaïque dans la visionneuse (roadmap 3.C). Page plus large que la laize : les lés en
+ *  pointillés, recouvrements teintés, numéros ; traits à glisser pour des lés inégaux (et des
+ *  rangées inégales). Lé déjà coupé : ses recouvrements, et le réglage de toute la mosaïque.
+ *  Mêmes calculs que `mosaique.rs` (`axe`, `tuiles`) ; le serveur reste juge. Repère : mm,
+ *  origine en haut à gauche de la page éditée, placée en (`x0`, `y0`) sur l'aperçu. */
+const LES = { m: null, mode: null, initiale: "", W: 0, H: 0, x0: 0, y0: 0, geste: null, sel: null, erreur: null };
+function axeLes(total, max, r, n, saisies) {
+  let t;
+  if (saisies?.length) t = [...saisies];
+  else if (n > 1) t = Array(n).fill((total + (n - 1) * r) / n);
+  else if (!n && max && total > max + 1e-6 && r < max) { const k = Math.ceil((total - r) / (max - r)); t = Array(k).fill((total + (k - 1) * r) / k); }
+  else t = [total];
+  let x = 0;
+  const b = t.map((w) => { const v = [x, x + w]; x += w - r; return v; });
+  b[b.length - 1][1] = total;
+  return b;
+}
+function grilleLes() {
+  const m = LES.m, r = m.recouvrement_mm;
+  const cols = axeLes(LES.W, m.laize_mm, r, m.colonnes, m.les_mm), rangs = axeLes(LES.H, m.hauteur_max_mm, r, m.rangees, m.rangees_mm);
+  const nc = cols.length, nr = rangs.length;
+  // Recouvrement propre : la tuile s'étend de la moitié de l'écart, sur ses bords intérieurs.
+  const tuiles = rangs.flatMap(([t0, t1], j) => cols.map(([x0, x1], i) => {
+    const k = j * nc + i + 1, p = m.recouvrement_tuiles_mm?.[k - 1], d = p == null ? 0 : (p - r) / 2;
+    return { k, i, j, b: [x0 - (i > 0 ? d : 0), t0 - (j > 0 ? d : 0), x1 + (i < nc - 1 ? d : 0), t1 + (j < nr - 1 ? d : 0)] };
+  }));
+  return { cols, rangs, tuiles };
+}
+function preparerLesVue() {
+  const t = vue.travail, page = t?.pages[vue.n - 1], ok = t?.statut === "termine" && !ED.attente && t.mode !== "decouper";
+  Object.assign(LES, { m: null, mode: null, geste: null, sel: null, erreur: ED.attente ? LES.erreur : null });
+  if (ok && page?.tuile) {
+    const u = page.tuile;
+    Object.assign(LES, { mode: "tuile", m: structuredClone(t.mosaique), W: u.source_mm[0], H: u.source_mm[1], sel: u.numero });
+  } else if (ok && page?.geometrie && vue.laize) {
+    const g = page.geometrie, marge = editionDe(t).marge_mm, W = g.image_mm[2] + 2 * marge, H = g.image_mm[3] + 2 * marge;
+    if (W > vue.laize.mm + 0.05) Object.assign(LES, { mode: "page", W, H, x0: g.image_mm[0] - marge, y0: vue.h - (g.image_mm[1] - marge) - H,
+      m: { laize_mm: Math.floor(vue.laize.mm), recouvrement_mm: +form.recouvrement_mm.value || 20, reperes: form.reperes_les.checked, les_mm: null, colonnes: null, hauteur_max_mm: null, rangees: null, rangees_mm: null, soudure: false, coupe_milieu: false, exclus: [], ordre: [], recouvrement_tuiles_mm: [] } });
+  }
+  LES.initiale = JSON.stringify(LES.m);
+  afficherLesVue();
+}
+/** Taille `i` d'un côté (`les_mm` ou `rangees_mm`) changée : la voisine compense. */
+function poserTailleLes(cle, s, i, v) {
+  const r = LES.m.recouvrement_mm, total = (cle === "les_mm" ? LES.W : LES.H) + (s.length - 1) * r, j = i < s.length - 1 ? i + 1 : i - 1;
+  s = s.map(arrondi);
+  s[i] = arrondi(v);
+  s[j] = arrondi(total - s.reduce((a, x, k) => (k === j ? a : a + x), 0));
+  LES.m[cle] = s;
+}
+function afficherLesVue() {
+  const p = $("vue-les"), m = LES.m, d = T();
+  p.hidden = !m && !LES.erreur;
+  dessinerVue();
+  const erreur = LES.erreur ? el("p", { className: "erreur", role: "alert" }, LES.erreur) : null;
+  if (!m) { p.replaceChildren(...[el("strong", {}, d.les_titre), erreur].filter(Boolean)); return; }
+  const { cols, rangs, tuiles } = grilleLes(), n = tuiles.length;
+  const champ = (texte, valeur, poser, attrs = {}) => {
+    const i = el("input", { type: "number", step: "any", value: valeur ?? "", ...attrs });
+    i.addEventListener("change", () => { poser(i.value === "" ? null : +i.value); afficherLesVue(); });
+    i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); i.dispatchEvent(new Event("change")); } });
+    return el("label", {}, texte, i);
+  };
+  const cocher = (texte, valeur, poser) => {
+    const c = el("input", { type: "checkbox", checked: valeur });
+    c.addEventListener("change", () => { poser(c.checked); afficherLesVue(); });
+    return el("label", { className: "case" }, c, " ", texte);
+  };
+  // Laize (hauteur) changée : les largeurs (hauteurs) saisies repartent égales ; les deux
+  // pour le recouvrement, qui entre dans leur somme.
+  const egaux = (cles = ["les_mm", "rangees_mm"]) => { for (const c of cles) m[c] = null; };
+  const tailles = (titre, bornes, cle) => (bornes.length < 2 ? null : el("div", {}, titre, el("div", { className: "deux" },
+    ...bornes.map(([a, b], i) => champ(String(i + 1), arrondi(b - a), (v) => { if (v !== null) poserTailleLes(cle, bornes.map(([x, y]) => y - x), i, v); }, { min: 1 })))));
+  const cases = el("div", { className: "vue-tuiles", style: `grid-template-columns: repeat(${cols.length}, 1fr)` }, ...tuiles.map(({ k }) => {
+    const c = el("input", { type: "checkbox", checked: !m.exclus.includes(k), title: d.les_imprimer });
+    c.addEventListener("change", () => { m.exclus = c.checked ? m.exclus.filter((x) => x !== k) : [...m.exclus, k].sort((a, b) => a - b); afficherLesVue(); });
+    const b = el("button", { type: "button", className: "discret" }, String(k));
+    b.setAttribute("aria-pressed", String(LES.sel === k));
+    b.addEventListener("click", () => { LES.sel = LES.sel === k ? null : k; afficherLesVue(); });
+    return el("span", {}, c, b);
+  }));
+  const propre = LES.sel && LES.sel <= n ? champ(d.les_recouvrement_tuile(LES.sel), m.recouvrement_tuiles_mm[LES.sel - 1], (v) => {
+    const a = [...m.recouvrement_tuiles_mm];
+    while (a.length < LES.sel) a.push(null);
+    a[LES.sel - 1] = v;
+    m.recouvrement_tuiles_mm = a;
+  }, { min: -200, max: 200, placeholder: `${m.recouvrement_mm} (${d.les_defaut})` }) : null;
+  const ordre = el("input", { type: "text", value: m.ordre.join(" "), placeholder: "1 2 3", inputMode: "numeric" });
+  ordre.addEventListener("change", () => { m.ordre = ordre.value.split(/\D+/).filter(Boolean).map(Number); afficherLesVue(); });
+  const change = LES.mode === "page" || JSON.stringify(m) !== LES.initiale;
+  const appliquer = el("button", { type: "button", disabled: !change || ED.attente }, LES.mode === "page" ? d.les_couper : d.ed_appliquer);
+  appliquer.addEventListener("click", () => appliquerLesVue(false));
+  const annuler = bouton(d.ed_annuler, () => preparerLesVue());
+  annuler.disabled = JSON.stringify(m) === LES.initiale;
+  p.replaceChildren(...[
+    el("strong", {}, d.les_titre),
+    el("div", { className: "meta" }, LES.mode === "page" ? d.les_note_page : d.les_tuile_n(vue.travail.pages[vue.n - 1].tuile.numero, n)),
+    el("div", {}, d.les_resume(cols.length, rangs.length, n)),
+    el("div", { className: "deux" },
+      champ(d.laize, m.laize_mm, (v) => { m.laize_mm = v; egaux(["les_mm"]); }, { min: 50, max: 5000 }),
+      champ(d.hauteur_max, m.hauteur_max_mm, (v) => { m.hauteur_max_mm = v; egaux(["rangees_mm"]); }, { min: 50, max: 10000, placeholder: d.sans_limite })),
+    champ(d.recouvrement, m.recouvrement_mm, (v) => { m.recouvrement_mm = v ?? 0; egaux(); }, { min: 0, max: 200 }),
+    cocher(d.soudure, m.soudure, (v) => { m.soudure = v; }),
+    cocher(d.coupe_milieu, m.coupe_milieu, (v) => { m.coupe_milieu = v; }),
+    cocher(d.reperes_les, m.reperes, (v) => { m.reperes = v; }),
+    tailles(d.les_largeurs, cols, "les_mm"),
+    tailles(d.les_hauteurs, rangs, "rangees_mm"),
+    m.les_mm || m.rangees_mm ? bouton(d.les_egaux, () => { egaux(); afficherLesVue(); }) : null,
+    n > 1 ? el("div", {}, d.les_tuiles, cases) : null,
+    propre,
+    n > 1 ? el("label", {}, d.les_ordre, ordre) : null,
+    erreur,
+    el("div", { className: "ligne" }, appliquer, annuler),
+    LES.mode === "tuile" ? bouton(d.les_page_entiere, () => appliquerLesVue(true)) : null,
+  ].filter(Boolean));
+}
+function appliquerLesVue(sansMosaique) {
+  const m = LES.m, n = grilleLes().tuiles.length, dans = (k) => k >= 1 && k <= n;
+  const mosaique = sansMosaique ? null : { ...m, exclus: m.exclus.filter(dans), ordre: m.ordre.filter(dans), recouvrement_tuiles_mm: m.recouvrement_tuiles_mm.slice(0, n) };
+  return envoyerReglagesVue({ mosaique });
+}
+/** Calque des lés (px de la scène, `k` px par mm). */
+function dessinerLesVue(k) {
+  const s = $("vue-les-calque"), m = LES.m;
+  if (!m || !$("vue-voir-laize").checked) { s.innerHTML = ""; return; }
+  const parts = [];
+  const rect = (x0, y0, x1, y1, classe) => { if (x1 > x0 && y1 > y0) parts.push(`<rect class="${classe}" x="${x0 * k}" y="${y0 * k}" width="${(x1 - x0) * k}" height="${(y1 - y0) * k}"/>`); };
+  const texte = (x, y, t) => parts.push(`<text x="${x * k + 4}" y="${y * k + 15}">${t}</text>`);
+  if (LES.mode === "page") {
+    const { cols, tuiles } = grilleLes(), nc = cols.length, n = tuiles.length, ox = LES.x0, oy = LES.y0;
+    for (const a of tuiles) {
+      // Recouvrement avec la voisine de droite et celle du dessous ; la soudure tombe sur elle.
+      for (const b of [a.i < nc - 1 ? tuiles[a.k] : null, tuiles[a.k - 1 + nc]].filter(Boolean)) {
+        rect(ox + Math.max(a.b[0], b.b[0]), oy + Math.max(a.b[1], b.b[1]), ox + Math.min(a.b[2], b.b[2]), oy + Math.min(a.b[3], b.b[3]), m.soudure ? "soudure" : "rec");
+      }
+      if (m.exclus.includes(a.k)) rect(ox + a.b[0], oy + a.b[1], ox + a.b[2], oy + a.b[3], "exclu");
+    }
+    for (const a of tuiles) {
+      rect(ox + a.b[0], oy + a.b[1], ox + a.b[2], oy + a.b[3], "le");
+      texte(ox + a.b[0], oy + a.b[1], T().les_tuile_n(a.k, n));
+    }
+  } else {
+    const u = vue.travail.pages[vue.n - 1].tuile, [g, bas, dr, haut] = u.recouvrement_mm;
+    const l = u.boite_mm[2] - u.boite_mm[0], h = u.boite_mm[3] - u.boite_mm[1], x = u.decalage_mm[0], y = vue.h - u.decalage_mm[1] - u.bande_mm - h;
+    const sous = m.soudure ? "soudure" : "rec";
+    rect(x, y, x + g, y + h, sous);
+    rect(x, y, x + l, y + haut, sous);
+    rect(x + l - dr, y, x + l, y + h, "rec");
+    rect(x, y + h - bas, x + l, y + h, "rec");
+    texte(x + Math.max(g, 0), y + Math.max(haut, 0), T().les_tuile_n(u.numero, u.total));
+  }
+  s.innerHTML = parts.join("");
+}
+/** Frontière de lés sous le point (mm de l'aperçu) : celle d'une colonne ou d'une rangée. */
+function frontiereLes(pt) {
+  if (LES.mode !== "page" || !$("vue-voir-laize").checked || ED.outil) return null;
+  const { cols, rangs } = grilleLes(), r = LES.m.recouvrement_mm, tol = 6 / (vue.z * PX_MM), x = pt.x - LES.x0, y = pt.y - LES.y0;
+  for (let i = 0; y >= 0 && y <= LES.H && i < cols.length - 1; i++) if (Math.abs(x - (cols[i][1] - r / 2)) <= tol) return { cle: "les_mm", i };
+  for (let i = 0; x >= 0 && x <= LES.W && i < rangs.length - 1; i++) if (Math.abs(y - (rangs[i][1] - r / 2)) <= tol) return { cle: "rangees_mm", i };
+  return null;
+}
+function commencerGesteLes(pt) {
+  const f = frontiereLes(pt);
+  if (!f) return false;
+  const { cols, rangs } = grilleLes();
+  LES.geste = { ...f, p0: pt, s0: (f.cle === "les_mm" ? cols : rangs).map(([a, b]) => b - a) };
+  return true;
+}
+/** Glissement d'une frontière : les deux lés voisins échangent la largeur ; chacun garde plus
+ *  que le recouvrement et au plus la laize (ou la hauteur maxi). Vrai si le geste est le sien. */
+function glisserLes(pt) {
+  const g = LES.geste;
+  if (!g) return false;
+  const m = LES.m, r = m.recouvrement_mm, max = g.cle === "les_mm" ? m.laize_mm : m.hauteur_max_mm || Infinity;
+  const s = [...g.s0], somme = s[g.i] + s[g.i + 1], lo = Math.max(r + 1, somme - max), hi = Math.min(max, somme - r - 1);
+  if (lo > hi) return true;
+  s[g.i] = arrondi(borner(s[g.i] + (g.cle === "les_mm" ? pt.x - g.p0.x : pt.y - g.p0.y), lo, hi));
+  s[g.i + 1] = somme - s[g.i];
+  m[g.cle] = s;
+  return true;
+}
 
 // --- Travaux ---
 let travaux = [], sorties = [], filtre = "";

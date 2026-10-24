@@ -14,13 +14,73 @@ pub enum Mode {
     Decouper,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+/// Mosaïque (`mosaique.rs`) : tuiles d'au plus `laize_mm` de large, qui se recouvrent.
+#[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Mosaique {
     pub laize_mm: f64,
     pub recouvrement_mm: f64,
     /// Bande de pied avec le numéro du lé et les traits d'assemblage.
     #[serde(default)]
     pub reperes: bool,
+    /// Lés inégaux : largeur imprimée de chaque colonne, recouvrements compris ; leur somme
+    /// vaut la largeur de la page plus un recouvrement par jonction.
+    #[serde(default)]
+    pub les_mm: Option<Vec<f64>>,
+    /// Nombre de colonnes égales imposé (sinon le moins possible).
+    #[serde(default)]
+    pub colonnes: Option<usize>,
+    /// Hauteur maximale d'une tuile : au-delà, la page est aussi coupée en rangées.
+    #[serde(default)]
+    pub hauteur_max_mm: Option<f64>,
+    #[serde(default)]
+    pub rangees: Option<usize>,
+    /// Rangées inégales : hauteur de chaque rangée, du haut vers le bas.
+    #[serde(default)]
+    pub rangees_mm: Option<Vec<f64>>,
+    /// Le recouvrement qui passe sous la voisine (à gauche, en haut) reste sans encre.
+    #[serde(default)]
+    pub soudure: bool,
+    /// Trait de coupe au milieu de chaque recouvrement.
+    #[serde(default)]
+    pub coupe_milieu: bool,
+    /// Tuiles décochées (numéros de 1) : ni rendues, ni mises en file.
+    #[serde(default)]
+    pub exclus: Vec<usize>,
+    /// Ordre d'impression : ces tuiles d'abord, puis les autres par numéro.
+    #[serde(default)]
+    pub ordre: Vec<usize>,
+    /// Recouvrement propre à une tuile (indice = numéro − 1), négatif pour un espace.
+    #[serde(default)]
+    pub recouvrement_tuiles_mm: Vec<Option<f64>>,
+}
+
+/// Recouvrement minimal d'une soudure : un demi-pouce.
+pub const SOUDURE_MIN_MM: f64 = 12.7;
+
+impl Mosaique {
+    fn verifier(&self) -> Result<(), &'static str> {
+        let tailles = |v: &Option<Vec<f64>>| v.as_ref().is_none_or(|v| !v.is_empty() && v.len() <= 50 && v.iter().all(|t| (1.0..=10000.0).contains(t)));
+        let compte = |n: Option<usize>| n.is_none_or(|n| (1..=50).contains(&n));
+        let ok = (50.0..=5000.0).contains(&self.laize_mm)
+            && (0.0..=200.0).contains(&self.recouvrement_mm)
+            && self.recouvrement_mm < self.laize_mm
+            && self.hauteur_max_mm.is_none_or(|h| (50.0..=10000.0).contains(&h) && h > self.recouvrement_mm)
+            && tailles(&self.les_mm)
+            && tailles(&self.rangees_mm)
+            && compte(self.colonnes)
+            && compte(self.rangees)
+            && self.exclus.len() <= 2500
+            && self.ordre.len() <= 2500
+            && self.recouvrement_tuiles_mm.len() <= 2500
+            && self.recouvrement_tuiles_mm.iter().flatten().all(|r| (-200.0..=200.0).contains(r));
+        if !ok {
+            return Err("mosaique_invalide");
+        }
+        if self.soudure && (self.recouvrement_mm < SOUDURE_MIN_MM || self.recouvrement_tuiles_mm.iter().flatten().any(|r| *r < SOUDURE_MIN_MM)) {
+            return Err("soudure_invalide");
+        }
+        Ok(())
+    }
 }
 
 /// Tout ce qui décide du traitement d'un fichier reçu.
@@ -104,10 +164,8 @@ impl Demande {
         if !(36..=2880).contains(&self.dpi) {
             return Err("dpi_invalide");
         }
-        if let Some(m) = self.mosaique
-            && (!(50.0..=5000.0).contains(&m.laize_mm) || !(0.0..=200.0).contains(&m.recouvrement_mm) || m.recouvrement_mm >= m.laize_mm)
-        {
-            return Err("mosaique_invalide");
+        if let Some(m) = &self.mosaique {
+            m.verifier()?;
         }
         self.blanc.verifier()?;
         self.edition.verifier()?;
@@ -219,7 +277,7 @@ mod tests {
         let r = Reglage {
             uuid: None,
             nom: "Vinyle + cadre".into(),
-            demande: Demande { reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() },
+            demande: Demande { reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, ..Default::default() }), ..Default::default() },
         };
         ecrire(&d, std::slice::from_ref(&r)).unwrap();
         assert_eq!(lire(&d), [r]);
@@ -229,10 +287,14 @@ mod tests {
 
     #[test]
     fn decoupe_seule_sans_impression() {
-        let d = Demande { mode: Mode::Decouper, reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() }.normaliser();
+        let d = Demande { mode: Mode::Decouper, reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, ..Default::default() }), ..Default::default() }.normaliser();
         assert_eq!((d.reperage, d.mosaique), (reperage::Reperage::Aucun, None));
-        let mauvaise = Demande { mosaique: Some(Mosaique { laize_mm: 100.0, recouvrement_mm: 150.0, reperes: false }), ..Default::default() };
+        let mauvaise = Demande { mosaique: Some(Mosaique { laize_mm: 100.0, recouvrement_mm: 150.0, ..Default::default() }), ..Default::default() };
         assert_eq!(mauvaise.verifier(&[]), Err("mosaique_invalide"));
+        let soudure = |r: f64, propre: Option<f64>| Demande { mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: r, soudure: true, recouvrement_tuiles_mm: vec![propre], ..Default::default() }), ..Default::default() }.verifier(&[]);
+        assert_eq!(soudure(10.0, None), Err("soudure_invalide"), "moins d'un demi-pouce");
+        assert_eq!(soudure(20.0, Some(10.0)), Err("soudure_invalide"), "une tuile sous le demi-pouce");
+        assert_eq!(soudure(12.7, None), Ok(()));
         assert_eq!(Demande { dpi: 10, ..Default::default() }.verifier(&[]), Err("dpi_invalide"));
     }
 
