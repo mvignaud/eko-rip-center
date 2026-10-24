@@ -7,6 +7,16 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Corrigé
+- Mutoh Kona : `/dev/kona` n'était jamais créé (la règle udev mêlait des attributs de
+  l'appareil USB et de l'interface dans une même condition, ce qu'udev refuse) ; constaté
+  et corrigé sur le serveur de l'atelier.
+- Client de bureau : **Supprimer**, la suppression d'un réglage, la restauration et
+  l'enregistrement d'un réglage ne faisaient rien (le client n'affiche pas `confirm()` ni
+  `prompt()`) : questions dessinées dans la page.
+- Menus du client en français (Édition, Présentation, Serveur, Fenêtre), sur macOS et
+  Windows.
+
 ## [0.12.0] — 2026-10-24
 
 ### Ajouté

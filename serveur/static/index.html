@@ -330,11 +330,23 @@
 </main>
 </div>
 <p id="message" role="status" hidden></p>
+<!-- Confirmation et saisie dessinées dans la page : le client de bureau (Tauri) n'affiche pas
+     confirm() ni prompt() (sur macOS, ils répondent « non » sans rien montrer). -->
+<dialog id="question">
+  <form method="dialog" class="corps">
+    <p id="question-texte" style="margin: 0"></p>
+    <input id="question-saisie" hidden>
+    <div class="ligne" style="justify-content: flex-end">
+      <button type="button" class="discret" id="question-non" data-t="bouton_annuler"></button>
+      <button type="submit" id="question-oui" value="oui">OK</button>
+    </div>
+  </form>
+</dialog>
 <script>
 const textes = {
   fr: {
     identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
-    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", coupes_titre: "Réglages de coupe", coupe_ajouter: "Ajouter un réglage", coupe_nom: "Nom", coupe_vitesse: "Vitesse (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Accélération (G)", retournee: "Découpe retournée (180°)", note_retournee: "Kona avec cadre : à cocher si la coupe sort tournée de 180° par rapport à l'impression.", coupe_choix: "Réglage de coupe", rotation_auto: "Tourner seul si le visuel dépasse la laize", note_rotation_auto: "Si la page, repérage compris, est plus large que la laize de l'imprimante mais y tient tournée de 90°, le RIP la tourne.", o_reglages: "Réglages", reglages_de: (n) => `Réglages de « ${n} »`, reglages_appliques: "Réglages appliqués : rendu en cours.", coupe_massicot: "Valeurs du massicot", note_massicot: "Ne rien envoyer : le Kona garde sa vitesse, sa force et son accélération.", coupe_outil: "Outil", coupe_motif: "Motif (bas/haut, mm)", coupe_diffusion: "Diffusion du motif", note_diffusion: "Un nombre entier de motifs par ligne droite : la coupe commence et finit aux angles.", note_motif: "Comme CutServer : jusqu'à 10 paires « bas/haut » en mm, séparées par des espaces (ex. 8/2 = couper 8 mm, lever 2 mm). Vide : coupe continue.", coupe_defaut: "— par défaut (le premier) —", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut", decalage_x: "Décalage X (mm)", coupes_titre: "Réglages de coupe", coupe_ajouter: "Ajouter un réglage", coupe_nom: "Nom", coupe_vitesse: "Vitesse (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Accélération (G)", retournee: "Découpe retournée (180°)", note_retournee: "Kona avec cadre : à cocher si la coupe sort tournée de 180° par rapport à l'impression.", coupe_choix: "Réglage de coupe", bouton_annuler: "Annuler", rotation_auto: "Tourner seul si le visuel dépasse la laize", note_rotation_auto: "Si la page, repérage compris, est plus large que la laize de l'imprimante mais y tient tournée de 90°, le RIP la tourne.", o_reglages: "Réglages", reglages_de: (n) => `Réglages de « ${n} »`, reglages_appliques: "Réglages appliqués : rendu en cours.", coupe_massicot: "Valeurs du massicot", note_massicot: "Ne rien envoyer : le Kona garde sa vitesse, sa force et son accélération.", coupe_outil: "Outil", coupe_motif: "Motif (bas/haut, mm)", coupe_diffusion: "Diffusion du motif", note_diffusion: "Un nombre entier de motifs par ligne droite : la coupe commence et finit aux angles.", note_motif: "Comme CutServer : jusqu'à 10 paires « bas/haut » en mm, séparées par des espaces (ex. 8/2 = couper 8 mm, lever 2 mm). Vide : coupe continue.", coupe_defaut: "— par défaut (le premier) —", cadence: "Cadence (m²/h)", note_cadence: "Pour estimer la durée d'impression, sur toute la laize. Vide pour l'Epson : 94 m²/h à 360 dpi, 17 à 720 dpi, 6,6 au-delà.", duree_estimee: "Durée d'impression estimée", reste: (d) => `${d} à passer`, notif_finie: (n, m) => `« ${n} » terminé sur ${m}.`, notif_echec: (n, m) => `« ${n} » a échoué sur ${m}.`, decalage_y: "Décalage Y (mm)", note_decalage: "Écart mesuré sur une coupe d'essai entre la découpe et l'impression, de −20 à 20 mm ; ajouté à chaque découpe envoyée à cette machine.",
     connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
@@ -437,7 +449,7 @@ const textes = {
   },
   en: {
     identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
-    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", coupes_titre: "Cut settings", coupe_ajouter: "Add a setting", coupe_nom: "Name", coupe_vitesse: "Speed (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Acceleration (G)", retournee: "Cut turned (180°)", note_retournee: "Kona with a frame: tick it if the cut comes out turned 180° from the print.", coupe_choix: "Cut setting", rotation_auto: "Turn by itself when wider than the roll", note_rotation_auto: "If the page, registration included, is wider than the printer's roll width but fits turned 90°, the RIP turns it.", o_reglages: "Settings", reglages_de: (n) => `Settings of “${n}”`, reglages_appliques: "Settings applied: rendering.", coupe_massicot: "Cutter defaults", note_massicot: "Send nothing: the Kona keeps its own speed, force and acceleration.", coupe_outil: "Tool", coupe_motif: "Pattern (down/up, mm)", coupe_diffusion: "Spread pattern", note_diffusion: "A whole number of patterns per straight line: the cut starts and ends at corners.", note_motif: "As in CutServer: up to 10 \"down/up\" pairs in mm, separated by spaces (e.g. 8/2 = cut 8 mm, lift 2 mm). Empty: continuous cut.", coupe_defaut: "— default (the first) —", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default", decalage_x: "Offset X (mm)", coupes_titre: "Cut settings", coupe_ajouter: "Add a setting", coupe_nom: "Name", coupe_vitesse: "Speed (cm/s)", coupe_force: "Force (g)", coupe_acceleration: "Acceleration (G)", retournee: "Cut turned (180°)", note_retournee: "Kona with a frame: tick it if the cut comes out turned 180° from the print.", coupe_choix: "Cut setting", bouton_annuler: "Cancel", rotation_auto: "Turn by itself when wider than the roll", note_rotation_auto: "If the page, registration included, is wider than the printer's roll width but fits turned 90°, the RIP turns it.", o_reglages: "Settings", reglages_de: (n) => `Settings of “${n}”`, reglages_appliques: "Settings applied: rendering.", coupe_massicot: "Cutter defaults", note_massicot: "Send nothing: the Kona keeps its own speed, force and acceleration.", coupe_outil: "Tool", coupe_motif: "Pattern (down/up, mm)", coupe_diffusion: "Spread pattern", note_diffusion: "A whole number of patterns per straight line: the cut starts and ends at corners.", note_motif: "As in CutServer: up to 10 \"down/up\" pairs in mm, separated by spaces (e.g. 8/2 = cut 8 mm, lift 2 mm). Empty: continuous cut.", coupe_defaut: "— default (the first) —", cadence: "Speed (m²/h)", note_cadence: "To estimate print time, over the full roll width. Empty for the Epson: 94 m²/h at 360 dpi, 17 at 720 dpi, 6.6 above.", duree_estimee: "Estimated print time", reste: (d) => `${d} to run`, notif_finie: (n, m) => `“${n}” finished on ${m}.`, notif_echec: (n, m) => `“${n}” failed on ${m}.`, decalage_y: "Offset Y (mm)", note_decalage: "Gap measured on a test cut between the cut and the print, −20 to 20 mm; added to every cut sent to this machine.",
     connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
@@ -585,6 +597,22 @@ async function api(url, options = {}) {
 }
 /** « ≈ 12 min » ou « ≈ 1 h 05 ». */
 const duree = (min) => (min < 60 ? `≈ ${Math.max(1, Math.round(min))} min` : `≈ ${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, "0")}`);
+/** Question à l'écran : rend true/false, ou le texte saisi (null si annulé) avec `saisie`. */
+function demander(texte, { saisie = null, danger = false } = {}) {
+  const d = $("question"), champ = $("question-saisie"), oui = $("question-oui");
+  $("question-texte").textContent = texte;
+  champ.hidden = saisie === null;
+  champ.value = saisie ?? "";
+  oui.className = danger ? "danger" : "";
+  return new Promise((fini) => {
+    const finir = (r) => { d.close(); fini(r); };
+    $("question-non").onclick = () => finir(saisie === null ? false : null);
+    d.onsubmit = (e) => { e.preventDefault(); finir(saisie === null ? true : champ.value); };
+    d.oncancel = (e) => { e.preventDefault(); finir(saisie === null ? false : null); };
+    d.showModal();
+    (saisie === null ? oui : champ).focus();
+  });
+}
 const json = (methode, corps) => ({ method: methode, headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) });
 
 // Session : toute réponse 401 de l'API ouvre la fenêtre de connexion.
@@ -841,7 +869,7 @@ choixReglage.addEventListener("change", () => {
   $("supprimer-reglage").hidden = !r;
 });
 $("enregistrer-reglage").addEventListener("click", async () => {
-  const nom = (prompt(T().nom_reglage, choixReglage.value) || "").trim();
+  const nom = ((await demander(T().nom_reglage, { saisie: choixReglage.value })) || "").trim();
   if (!nom) return;
   if (await api("/api/reglages", json("POST", { nom, demande: demandeDuFormulaire() }))) {
     await chargerReglages(); choixReglage.value = nom; remplirReglages();
@@ -851,7 +879,7 @@ $("enregistrer-reglage").addEventListener("click", async () => {
 $("restauration").addEventListener("change", async (e) => {
   const f = e.target.files[0];
   e.target.value = "";
-  if (!f || !confirm(T().confirmer_restauration(f.name))) return;
+  if (!f || !(await demander(T().confirmer_restauration(f.name), { danger: true }))) return;
   let corps;
   try { corps = JSON.parse(await f.text()); } catch { dire(texteErreur("sauvegarde_invalide"), true); return; }
   const r = await api("/api/sauvegarde", json("POST", corps));
@@ -859,7 +887,7 @@ $("restauration").addEventListener("change", async (e) => {
 });
 $("supprimer-reglage").addEventListener("click", async () => {
   const nom = choixReglage.value;
-  if (!nom || !confirm(T().confirmer(nom))) return;
+  if (!nom || !(await demander(T().confirmer(nom), { danger: true }))) return;
   await api(`/api/reglages/${encodeURIComponent(nom)}`, { method: "DELETE" });
   await chargerReglages();
 });
@@ -1119,9 +1147,9 @@ $("o-editer").addEventListener("click", () => { const t = travailSelectionne(); 
 $("o-reglages").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirReglages(t); });
 $("o-bat").addEventListener("click", () => { const t = travailSelectionne(); if (t) window.open(`/api/travaux/${t.id}/bat.pdf?langue=${langue}`, "_blank", "noopener"); });
 $("o-relancer").addEventListener("click", () => { const t = travailSelectionne(); if (t) agir(`/api/travaux/${t.id}/relancer`, "POST"); });
-$("o-supprimer").addEventListener("click", () => {
+$("o-supprimer").addEventListener("click", async () => {
   const t = travailSelectionne();
-  if (t && confirm(T().confirmer(t.nom))) { selectionne = null; agir(`/api/travaux/${t.id}`, "DELETE"); }
+  if (t && (await demander(T().confirmer(t.nom), { danger: true }))) { selectionne = null; agir(`/api/travaux/${t.id}`, "DELETE"); }
 });
 
 async function agir(url, methode) {

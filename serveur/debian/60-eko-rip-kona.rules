@@ -3,5 +3,9 @@
 # /dev/kona, accessible au groupe dialout (celui du service eko-rip-serveur).
 ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="0c30", ATTR{idProduct}=="6010", \
     RUN+="/bin/sh -c 'modprobe ftdi_sio; echo 0c30 6010 > /sys/bus/usb-serial/drivers/ftdi_sio/new_id || true'"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0c30", ATTRS{idProduct}=="6010", ATTRS{bInterfaceNumber}=="00", \
+# Les ATTRS d'une même règle doivent tous correspondre au MÊME parent : idVendor est porté
+# par l'appareil USB, bInterfaceNumber par l'interface. On lit donc l'interface dans les
+# propriétés du module usb_id (constaté sur le serveur de l'atelier le 24/10/2026).
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0c30", ATTRS{idProduct}=="6010", IMPORT{builtin}="usb_id"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0c30", ATTRS{idProduct}=="6010", ENV{ID_USB_INTERFACE_NUM}=="00", \
     SYMLINK+="kona", GROUP="dialout", MODE="0660"
