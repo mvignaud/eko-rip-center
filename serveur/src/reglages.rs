@@ -51,9 +51,16 @@ pub struct Demande {
     /// Mise en file automatique une fois le rendu fini.
     #[serde(default)]
     pub auto: Auto,
-    /// Support du catalogue des tarifs (prix de revient).
+    /// Support du catalogue des tarifs (prix de revient) ; déduit de `support_uuid` quand
+    /// celui-ci est donné.
     #[serde(default)]
     pub support: Option<String>,
+    /// Support et mode d'impression du catalogue (`supports.json`, roadmap 1.2) : le mode
+    /// impose la résolution du rendu.
+    #[serde(default)]
+    pub support_uuid: Option<uuid::Uuid>,
+    #[serde(default)]
+    pub mode_uuid: Option<uuid::Uuid>,
     /// Réglage de coupe de la découpeuse (nom), sinon son premier.
     #[serde(default)]
     pub parametre_decoupe: Option<String>,
@@ -87,7 +94,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, parametre_decoupe: None, rotation_auto: true }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, parametre_decoupe: None, rotation_auto: true }
     }
 }
 

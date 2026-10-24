@@ -96,6 +96,25 @@ pub fn lire(donnees: &Path, machine_par_defaut: &str) -> Catalogue {
     c
 }
 
+/// Applique au travail son support et son mode (roadmap 1.2) : le mode impose la
+/// résolution, le support donne le nom qui relie aux tarifs. Un mode doit appartenir au
+/// support donné ; un identifiant inconnu est refusé (`support_inconnu`).
+/// ponytail: résolution carrée seulement (dpi[0]) tant que le rendu ne sait pas x ≠ y.
+pub fn appliquer(d: &mut crate::reglages::Demande, c: &Catalogue) -> Result<(), &'static str> {
+    let support = match (d.support_uuid, d.mode_uuid) {
+        (None, None) => return Ok(()),
+        (Some(s), _) => c.supports.iter().find(|x| x.id == Some(s)).ok_or("support_inconnu")?,
+        (None, Some(m)) => c.supports.iter().find(|x| x.modes.iter().any(|y| y.id == Some(m))).ok_or("support_inconnu")?,
+    };
+    if let Some(m) = d.mode_uuid {
+        let mode = support.modes.iter().find(|y| y.id == Some(m)).ok_or("support_inconnu")?;
+        d.dpi = mode.dpi[0];
+    }
+    d.support_uuid = support.id;
+    d.support = Some(support.nom.clone());
+    Ok(())
+}
+
 pub fn ecrire(donnees: &Path, c: &Catalogue) -> std::io::Result<()> {
     crate::etat::ecrire(&fichier(donnees), c, false)
 }
@@ -196,5 +215,20 @@ mod tests {
         let mut double = s.clone();
         double.push(s[0].clone());
         assert_eq!(verifier(&double), Err("supports_invalides"));
+    }
+
+    #[test]
+    fn le_mode_impose_la_resolution() {
+        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None }] }];
+        attribuer_ids(&mut s, &[]);
+        let c = Catalogue { version: VERSION, supports: s.clone() };
+        let mut d = crate::reglages::Demande { mode_uuid: s[0].modes[1].id, ..Default::default() };
+        assert_eq!(appliquer(&mut d, &c), Ok(()));
+        assert_eq!((d.dpi, d.support.as_deref(), d.support_uuid), (360, Some("Vinyle"), s[0].id), "support déduit du mode");
+        let mut faux = crate::reglages::Demande { support_uuid: s[0].id, mode_uuid: Some(Uuid::new_v4()), ..Default::default() };
+        assert_eq!(appliquer(&mut faux, &c), Err("support_inconnu"));
+        let mut rien = crate::reglages::Demande::default();
+        let dpi = rien.dpi;
+        assert_eq!((appliquer(&mut rien, &c), rien.dpi), (Ok(()), dpi), "sans support ni mode : inchangé");
     }
 }

@@ -544,6 +544,8 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     if format == Format::Svg && d.mode == Mode::Imprimer {
         return Err(mauvais("svg_decoupe_seulement", None));
     }
+    let mut d = d;
+    supports::appliquer(&mut d, &supports::lire(&etat.config.donnees, "epson")).map_err(|code| mauvais(code, None))?;
     d.verifier(&couleur::lister(&etat.config.profils)).map_err(|code| mauvais(code, None))?;
     tokio::fs::rename(rep.join("source.tmp"), rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
     // CropBox et /Rotate ramenés à la MediaBox, une fois pour toutes : le rendu et la découpe
@@ -1872,11 +1874,11 @@ async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>
     if occupe(&etat, &t) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
-    let d = d.normaliser();
+    let mut d = d.normaliser();
     if t.format == Format::Svg && d.mode == Mode::Imprimer {
         return refus(StatusCode::BAD_REQUEST, "svg_decoupe_seulement", None);
     }
-    if let Err(code) = d.verifier(&couleur::lister(&etat.config.profils)) {
+    if let Err(code) = supports::appliquer(&mut d, &supports::lire(&etat.config.donnees, "epson")).and_then(|()| d.verifier(&couleur::lister(&etat.config.profils))) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     t.demande = Demande { mosaique: d.mosaique.filter(|_| d.mode == Mode::Imprimer && t.format == Format::Pdf), ..d };
@@ -2904,6 +2906,48 @@ mod tests {
             assert!(x.pages[0].largeur_mm > 400.0, "plus tournée, croix comprises : {} mm", x.pages[0].largeur_mm);
             assert!(!x.alertes.iter().any(|a| a.code == "rotation_auto"));
             assert_eq!(x.demande.reperage, reperage::Reperage::Manuel);
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Le travail désigne son support et son mode ; changer de mode refait le rendu à la
+        /// résolution du mode (roadmap 1.2).
+        #[tokio::test]
+        async fn support_et_mode_du_travail() {
+            let e = etat("mode-travail");
+            let donnees = e.config.donnees.clone();
+            let mut c = supports::lire(&donnees, "epson");
+            c.supports[0].modes.push(supports::ModeImpression { id: None, nom: "Brouillon 90".into(), dpi: [90, 90], passes: 2, chauffage_c: None });
+            let connus = supports::lire(&donnees, "epson").supports;
+            assert!(supports::attribuer_ids(&mut c.supports, &connus));
+            supports::ecrire(&donnees, &c).unwrap();
+            let (support, mode_720, mode_90) = (c.supports[0].clone(), c.supports[0].modes[0].id.unwrap(), c.supports[0].modes[1].id.unwrap());
+            let mm = imbrication::PT_PAR_MM;
+            let id = Uuid::new_v4();
+            let rep = dossier(&donnees, id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.tmp"), imbrication::tests::pdf(20.0 * mm, 10.0 * mm, "1 0 0 0", (0.0, 0.0))).unwrap();
+            let t = creer_travail(&e, id, "petit.pdf".into(), Format::Pdf, Demande { mode_uuid: Some(mode_90), ..Default::default() }).await.ok().unwrap();
+            assert_eq!((t.demande.dpi, t.demande.support_uuid, t.demande.support.clone()), (90, support.id, Some(support.nom.clone())), "support déduit du mode, résolution du mode");
+            let attendre = || async {
+                for _ in 0..400 {
+                    let x = lire_travail(&donnees, id).unwrap();
+                    if !matches!(x.statut, Statut::EnAttente | Statut::EnCours) {
+                        return x;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+                panic!("rendu trop long");
+            };
+            assert!(matches!(attendre().await.statut, Statut::Termine));
+            // Mode inconnu : refusé, le travail ne bouge pas.
+            let faux = serde_json::json!({ "mode_uuid": Uuid::new_v4() });
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{id}/reglages"), None, Some(faux)).await.status(), StatusCode::BAD_REQUEST);
+            // Autre mode : rendu refait à sa résolution.
+            let corps = serde_json::json!({ "support_uuid": support.id, "mode_uuid": mode_720 });
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{id}/reglages"), None, Some(corps)).await.status(), StatusCode::ACCEPTED);
+            let x = attendre().await;
+            assert!(matches!(x.statut, Statut::Termine));
+            assert_eq!((x.demande.dpi, x.demande.mode_uuid), (720, Some(mode_720)));
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 
