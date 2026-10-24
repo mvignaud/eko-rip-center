@@ -7,6 +7,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.8.0] — 2026-10-24
+
 ### Ajouté
 - **Édition rapide** : échelle, rotation, miroir, marge, œillets, contour de découpe
   rectangulaire ; à l'envoi ou après coup (« Éditer », rendu refait depuis l'original).
@@ -29,6 +31,13 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   large que la laize passe tourné au lieu d'être refusé.
 - **Mosaïque : numéro et traits d'assemblage** (option) dans une bande de 10 mm en pied
   de chaque lé.
+
+*English: loaded media width read from the Epson over SNMP (Printer-MIB) and used as
+roll width; proofs (BAT) as PDF; imposition preview before building a sheet; quick edit
+(scale, rotation, mirror, margin, grommets, rectangular cut contour) on sending or on a
+finished job; automatic queueing (on hold if wanted); several files at once; large
+viewer; preflight (fonts not embedded, low-resolution images); cutting order; sheet
+rotation; panel numbers and joining marks for tiles.*
 
 ## [0.7.0] — 2026-10-24
 
