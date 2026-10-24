@@ -1,0 +1,23 @@
+#!/bin/sh
+# Avant une mise à jour (roadmap 0.7) : copie de la configuration en place dans
+# /var/lib/eko-rip/sauvegardes/avant-<version d'origine>-<date>.tar.gz (droits 0600).
+# Repris : machines, supports, réglages, tarifs, comptes, pont ERP (*.json et leurs .prec)
+# et profils ICC. Ni les travaux ni la file. Les 10 plus récentes sont gardées.
+# Une sauvegarde impossible n'empêche jamais la mise à jour.
+set -e
+if [ "$1" = "upgrade" ] && [ -d /var/lib/eko-rip ]; then
+    (
+        set +e
+        cd /var/lib/eko-rip || exit 0
+        install -d -o eko-rip -g eko-rip -m 0700 sauvegardes
+        nom="sauvegardes/avant-${2:-inconnue}-$(date +%Y%m%d-%H%M%S).tar.gz"
+        fichiers=$(ls -d machines.json* supports.json* reglages.json* tarifs.json* utilisateurs.json* erp.json* profils 2>/dev/null)
+        if [ -n "$fichiers" ]; then
+            umask 077
+            # shellcheck disable=SC2086
+            tar -czf "$nom" $fichiers && chown eko-rip:eko-rip "$nom" && echo "eko-rip-serveur : configuration sauvegardée dans /var/lib/eko-rip/$nom"
+        fi
+        ls -1t sauvegardes/avant-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+    ) || true
+fi
+#DEBHELPER#

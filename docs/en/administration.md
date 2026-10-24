@@ -36,6 +36,7 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `travaux/<id>/` | one folder per job: source, `job.json`, plates (`prod/`), previews |
 | `sorties/<machine>/` | plates copied for a machine without a driver (Epson) |
 | `releves/<machine>.jsonl` | SNMP readings (inks, roll) for actual consumption |
+| `sauvegardes/avant-<version>-<date>.tar.gz` | configuration copied before every package update (machines, media, presets, prices, accounts, ERP bridge, profiles; 10 kept, mode 0600) |
 | `*.json.prec` | previous version of each state file, kept on every write |
 | `*.json.illisible` | copy of a state file found damaged (power cut) |
 

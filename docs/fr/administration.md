@@ -38,6 +38,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `travaux/<id>/` | un dossier par travail : source, `job.json`, plaques (`prod/`), aperçus |
 | `sorties/<machine>/` | plaques copiées pour une machine sans pilote (Epson) |
 | `releves/<machine>.jsonl` | relevés SNMP (encres, rouleau) pour la consommation réelle |
+| `sauvegardes/avant-<version>-<date>.tar.gz` | configuration copiée avant chaque mise à jour du paquet (machines, supports, réglages, tarifs, comptes, pont ERP, profils ; 10 gardées, droits 0600) |
 | `*.json.prec` | version précédente de chaque fichier d'état, gardée à chaque écriture |
 | `*.json.illisible` | copie d'un fichier d'état trouvé abîmé (coupure de courant) |
 
