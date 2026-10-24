@@ -99,6 +99,7 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_MAX_MO` | `2048` | taille maximale d'un PDF reçu, en Mo |
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu, en secondes |
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | travaux effacés après ce nombre de jours (0 : jamais) |
+| `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | espace libre à garder (Mo) : en dessous, les plus vieux travaux inactifs sont purgés et un travail qui ne tiendrait pas est refusé (`espace_insuffisant`) ; 0 : aucun seuil |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | port du plotter de découpe |
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | réglages du port du plotter |
 | `EKO_RIP_EPSON_SNMP` | (vide) | adresse IP de l'Epson : largeur du média chargé lue par SNMP |

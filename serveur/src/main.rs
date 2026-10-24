@@ -125,6 +125,7 @@ fn maintenant() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
 }
 
+#[derive(Clone)]
 struct Config {
     donnees: PathBuf,
     gs: String,
@@ -134,6 +135,10 @@ struct Config {
     profils: PathBuf,
     /// Durée de conservation des travaux, en jours (0 : jamais purgés).
     conservation_jours: u64,
+    /// Espace libre à garder sur le disque des données, en octets (0 : aucun seuil) : en
+    /// dessous, les plus vieux travaux inactifs sont purgés et un nouveau travail qui ne
+    /// tiendrait pas est refusé (roadmap 0.6).
+    seuil_libre: u64,
     /// Port du plotter (le Kona : `/dev/kona`, créé par la règle udev du paquet).
     plotter: PathBuf,
     plotter_stty: String,
@@ -180,6 +185,7 @@ async fn main() {
         max_octets: env_ou("EKO_RIP_MAX_MO", "2048").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
         delai: Duration::from_secs(env_ou("EKO_RIP_DELAI_S", "1800").parse().expect("EKO_RIP_DELAI_S")),
         conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
+        seuil_libre: env_ou("EKO_RIP_SEUIL_LIBRE_MO", "5120").parse::<u64>().expect("EKO_RIP_SEUIL_LIBRE_MO") * 1024 * 1024,
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
         plotter_stty: env_ou("EKO_RIP_PLOTTER_STTY", plotter::STTY_DEFAUT),
         epson_snmp: std::env::var("EKO_RIP_EPSON_SNMP").ok().filter(|v| !v.is_empty()),
@@ -548,6 +554,17 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         let pdf = tokio::fs::read(&chemin).await.map_err(|e| interne(e.to_string()))?;
         if let Ok(Ok(Some(normalise))) = tokio::task::spawn_blocking(move || imbrication::normaliser_pages(&pdf)).await {
             tokio::fs::write(&chemin, normalise).await.map_err(|e| interne(e.to_string()))?;
+        }
+    }
+    // Refus anticipé si le rendu ne tiendrait pas au-dessus du seuil d'espace libre.
+    if format == Format::Pdf && d.mode == Mode::Imprimer && etat.config.seuil_libre > 0 {
+        let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
+        let surface = (1..).map_while(|n| imbrication::taille_page(&pdf, n).ok()).map(|t| t.largeur * t.hauteur / (imbrication::PT_PAR_MM * imbrication::PT_PAR_MM) / 1e6).sum::<f64>();
+        let besoin = place_estimee(surface, d.dpi);
+        if let Some((_, libre)) = espace_disque(&etat.config.donnees).await
+            && libre < etat.config.seuil_libre.saturating_add(besoin)
+        {
+            return Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", Some(format!("≈ {} Mo nécessaires, {} Mo libres, seuil {} Mo", besoin >> 20, libre >> 20, etat.config.seuil_libre >> 20)))));
         }
     }
     let alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
@@ -1498,45 +1515,81 @@ fn a_purger(travaux: &[Travail], maintenant: u64, jours: u64) -> Vec<Uuid> {
     travaux.iter().filter(|t| !actif(&t.statut) && maintenant.saturating_sub(t.cree_le) > jours * 86_400).map(|t| t.id).collect()
 }
 
-/// Toutes les heures, efface les travaux trop vieux (le disque se remplit vite à 720 dpi).
+/// Toutes les 5 min, efface les travaux trop vieux, puis les plus vieux inactifs tant que
+/// l'espace libre est sous le seuil (le disque se remplit vite à 720 dpi).
 async fn purger(etat: Partage) {
     loop {
         let donnees = &etat.config.donnees;
         for id in a_purger(&lire_tous(donnees), maintenant(), etat.config.conservation_jours) {
-            if etat.file.lock().unwrap().active_pour(id) {
-                continue;
-            }
-            modifier_file(&etat, |f| {
-                f.oublier_travail(id);
-                Ok(())
-            })
-            .ok();
-            effacer_sorties(donnees, id);
-            match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
-                Ok(()) => eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours),
-                Err(e) => eprintln!("travail {id} : purge impossible : {e}"),
+            if effacer_travail(&etat, id).await {
+                eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours);
             }
         }
-        tokio::time::sleep(Duration::from_secs(3600)).await;
+        // Sous le seuil d'espace libre : le plus vieux inactif d'abord, jusqu'à repasser au-dessus.
+        if etat.config.seuil_libre > 0 {
+            for id in plus_vieux_inactifs(&lire_tous(donnees)) {
+                if espace_disque(donnees).await.is_none_or(|(_, libre)| libre >= etat.config.seuil_libre) {
+                    break;
+                }
+                if effacer_travail(&etat, id).await {
+                    eprintln!("travail {id} purgé (espace libre sous le seuil)");
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(300)).await;
     }
 }
 
-/// Espace du disque des données (`df -Pk`, présent sous Linux et macOS) et version.
+/// Efface un travail et ses sorties, sauf s'il a encore une sortie à passer.
+async fn effacer_travail(etat: &Partage, id: Uuid) -> bool {
+    if etat.file.lock().unwrap().active_pour(id) {
+        return false;
+    }
+    let donnees = &etat.config.donnees;
+    modifier_file(etat, |f| {
+        f.oublier_travail(id);
+        Ok(())
+    })
+    .ok();
+    effacer_sorties(donnees, id);
+    match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("travail {id} : purge impossible : {e}");
+            false
+        }
+    }
+}
+
+/// (total, libre) du disque de `chemin`, en octets (`df -Pk`, présent sous Linux et macOS).
+async fn espace_disque(chemin: &std::path::Path) -> Option<(u64, u64)> {
+    let o = tokio::process::Command::new("df").arg("-Pk").arg(chemin).output().await.ok()?;
+    let texte = String::from_utf8_lossy(&o.stdout).into_owned();
+    let champs: Vec<u64> = texte.lines().nth(1)?.split_whitespace().filter_map(|c| c.parse().ok()).collect();
+    Some((champs.first()? * 1024, champs.get(2)? * 1024))
+}
+
+/// Place estimée d'un travail rendu : ≈ 1 Go/m² à 600 dpi, au carré de la résolution.
+fn place_estimee(surface_m2: f64, dpi: u32) -> u64 {
+    (surface_m2 * 1e9 * (f64::from(dpi) / 600.0).powi(2)) as u64
+}
+
+/// Travaux inactifs, du plus vieux au plus récent : ordre de purge sous le seuil.
+fn plus_vieux_inactifs(travaux: &[Travail]) -> Vec<Uuid> {
+    let mut v: Vec<&Travail> = travaux.iter().filter(|t| !actif(&t.statut)).collect();
+    v.sort_by_key(|t| t.cree_le);
+    v.into_iter().map(|t| t.id).collect()
+}
+
+/// Espace du disque des données et version.
 async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
-    let df = tokio::process::Command::new("df").arg("-Pk").arg(&etat.config.donnees).output().await.ok();
-    let (total, libre) = df
-        .and_then(|o| {
-            let texte = String::from_utf8_lossy(&o.stdout).into_owned();
-            let ligne = texte.lines().nth(1)?.to_string();
-            let champs: Vec<u64> = ligne.split_whitespace().filter_map(|c| c.parse().ok()).collect();
-            Some((champs.first()? * 1024, champs.get(2)? * 1024))
-        })
-        .map_or((None, None), |(t, l)| (Some(t), Some(l)));
+    let (total, libre) = espace_disque(&etat.config.donnees).await.map_or((None, None), |(t, l)| (Some(t), Some(l)));
     Json(serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "disque_total": total,
         "disque_libre": libre,
         "conservation_jours": etat.config.conservation_jours,
+        "seuil_libre": etat.config.seuil_libre,
         "alertes": etat::alertes(),
     }))
 }
@@ -2252,6 +2305,7 @@ mod tests {
                 max_octets: 1 << 20,
                 delai: Duration::from_secs(5),
                 conservation_jours: 0,
+                seuil_libre: 0,
                 plotter: "/dev/null".into(),
                 plotter_stty: String::new(),
                 epson_snmp: None,
@@ -2423,6 +2477,41 @@ mod tests {
             assert_eq!(avec(&jeton, "/api/tarifs").await.unwrap().status(), StatusCode::FORBIDDEN, "le jeton n'ouvre pas le reste");
             let empreinte = std::fs::read_to_string(e.config.donnees.join("erp.json")).unwrap();
             assert!(!empreinte.contains(&jeton), "le jeton n'est jamais gardé en clair");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Seuil d'espace libre (roadmap 0.6) : refus anticipé, ordre de purge.
+        #[tokio::test]
+        async fn seuil_d_espace_libre() {
+            assert_eq!(place_estimee(1.0, 600), 1_000_000_000);
+            assert_eq!(place_estimee(1.0, 300), 250_000_000, "au carré de la résolution");
+            let t = |cree_le: u64, statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": Uuid::new_v4(), "nom": "x", "statut": statut, "erreur": null, "cree_le": cree_le, "pages": [] })).unwrap();
+            let v = [t(30, "termine"), t(10, "en_cours"), t(20, "echec"), t(40, "termine")];
+            assert_eq!(plus_vieux_inactifs(&v), [v[2].id, v[0].id, v[3].id], "du plus vieux au plus récent, jamais un actif");
+            // Seuil impossible à tenir : l'envoi est refusé avant tout rendu.
+            let e = etat("seuil");
+            let mut config = e.config.clone();
+            config.seuil_libre = u64::MAX / 2;
+            let e2: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(e.machines.read().unwrap().clone()) });
+            let id = Uuid::new_v4();
+            let rep = dossier(&e2.config.donnees, id);
+            std::fs::create_dir_all(&rep).unwrap();
+            let pdf = {
+                use lopdf::{Document, Object, Stream, dictionary};
+                let mut doc = Document::with_version("1.4");
+                let contenu = doc.add_object(Stream::new(dictionary! {}, b"0 0 1 rg 0 0 283 283 re f".to_vec()));
+                let pages = doc.new_object_id();
+                let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), 283.into(), 283.into()], "Contents" => contenu });
+                doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+                let catalogue = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+                doc.trailer.set("Root", catalogue);
+                let mut o = vec![];
+                doc.save_to(&mut o).unwrap();
+                o
+            };
+            std::fs::write(rep.join("source.tmp"), pdf).unwrap();
+            let r = creer_travail(&e2, id, "x.pdf".into(), Format::Pdf, Demande::default()).await;
+            assert!(matches!(r, Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", _)))), "{:?}", r.err().map(|e| e.1));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
