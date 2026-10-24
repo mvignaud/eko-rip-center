@@ -258,10 +258,27 @@ pub fn lire_alertes_bloquantes(hote: &str, communaute: &str, delai: Duration) ->
         .collect())
 }
 
-/// L'imprimante imprime-t-elle (`hrPrinterStatus` = 4) ? `None` sans réponse lisible.
+/// L'imprimante imprime-t-elle ? `None` sans réponse lisible.
 pub fn imprime(hote: &str, communaute: &str, delai: Duration) -> Option<bool> {
     let (socket, _) = connecter(hote, delai).ok()?;
-    parcourir(&socket, communaute, &STATUT_IMPRIMANTE).ok()?.into_iter().find_map(|(_, v)| if let Valeur::Entier(n) = v { Some(n == 4) } else { None })
+    let statut = parcourir(&socket, communaute, &STATUT_IMPRIMANTE).ok()?.into_iter().find_map(|(_, v)| if let Valeur::Entier(n) = v { Some(n) } else { None });
+    en_impression(statut, &lire_alertes(hote, communaute, delai).unwrap_or_default())
+}
+
+/// En impression : `hrPrinterStatus` = 4, ou, pendant la montée en température, statut 1
+/// (« other ») avec les alertes « printing » / « heater warm up » (S80600, relevé le
+/// 25/10 : 1 min 45 de chauffe avant que le statut passe à 4).
+pub fn en_impression(statut: Option<i64>, alertes: &[String]) -> Option<bool> {
+    let occupe = alertes.iter().any(|a| {
+        let a = a.to_ascii_lowercase();
+        a == "printing" || a.contains("warm up")
+    });
+    match statut {
+        Some(4) => Some(true),
+        Some(_) => Some(occupe),
+        None if occupe => Some(true),
+        None => None,
+    }
 }
 
 /// Encres, support et chauffages d'une Epson (MIB privée) ; `None` si elle ne répond pas.
@@ -386,6 +403,13 @@ pub(crate) mod tests {
         let vide = agent_factice(vec![]);
         assert_eq!(lire_alertes_bloquantes(&vide, "public", d).unwrap(), Vec::<String>::new());
         assert_eq!(imprime(&vide, "public", d), None);
+        // Relevé réel du 25/10 : chauffe (statut 1 + « printing » + « heater warm up »),
+        // impression (4), puis prête (3 + « ready »).
+        let a = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(en_impression(Some(1), &a(&["printing", "heater warm up"])), Some(true), "chauffe = en cours");
+        assert_eq!(en_impression(Some(4), &a(&["printing"])), Some(true));
+        assert_eq!(en_impression(Some(3), &a(&["ready"])), Some(false), "finie");
+        assert_eq!(en_impression(None, &[]), None);
     }
 
     /// Agent SNMP factice : un rouleau de 1615 mm (micromètres) en entrée 1, rien en entrée 2.
