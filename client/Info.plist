@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Fusionné par Tauri dans l'Info.plist du paquet macOS : l'application se déclare en
+     français, pour que les menus fournis par macOS (clic droit de la page : Copier,
+     Rechercher, Traduire, Services…) suivent la langue au lieu de rester en anglais. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>fr</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>fr</string>
+    <string>en</string>
+  </array>
+  <key>CFBundleAllowMixedLocalizations</key>
+  <true/>
+</dict>
+</plist>

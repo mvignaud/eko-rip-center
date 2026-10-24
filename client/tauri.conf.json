@@ -14,7 +14,8 @@
         "height": 850,
         "minWidth": 400,
         "minHeight": 400,
-        "userAgent": "Mozilla/5.0 (E-KO RIP Center) EKO-RIP-Client/1"
+        "userAgent": "Mozilla/5.0 (E-KO RIP Center) EKO-RIP-Client/1",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --lang=fr"
       }
     ],
     "security": {
