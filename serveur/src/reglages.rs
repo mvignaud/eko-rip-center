@@ -48,6 +48,9 @@ pub struct Demande {
     /// Mise en file automatique une fois le rendu fini.
     #[serde(default)]
     pub auto: Auto,
+    /// Support du catalogue des tarifs (prix de revient).
+    #[serde(default)]
+    pub support: Option<String>,
 }
 
 /// Sorties ajoutées d'office à la file quand le rendu est fini.
@@ -70,7 +73,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), edition: edition::Edition::default(), auto: Auto::default() }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None }
     }
 }
 
@@ -87,6 +90,9 @@ impl Demande {
         }
         self.blanc.verifier()?;
         self.edition.verifier()?;
+        if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
+            return Err("tarifs_invalides");
+        }
         couleur::verifier(&self.couleur, profils)
     }
 

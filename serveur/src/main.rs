@@ -99,6 +99,11 @@ struct Page {
     /// Part d'encre de chaque plaque, de 0 à 1.
     #[serde(default)]
     couverture: std::collections::BTreeMap<String, f64>,
+    /// Format de la page imprimée, en mm (0 : inconnu, travaux d'avant la 0.9).
+    #[serde(default)]
+    largeur_mm: f64,
+    #[serde(default)]
+    hauteur_mm: f64,
 }
 
 
@@ -250,11 +255,13 @@ async fn lister(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
         lire_tous(&etat.config.donnees)
             .into_iter()
             .map(|t| {
-                let estimations: Vec<_> = t.pages.iter().map(|p| couverture::estimer(p.surface_m2, &p.couverture, &p.plaques_decoupe, &tarifs)).collect();
+                let estimations: Vec<_> = t.pages.iter().map(|p| couverture::estimer(p.surface_m2, p.hauteur_mm, &p.couverture, &p.plaques_decoupe, &tarifs, t.demande.support.as_deref())).collect();
+                let prix_de_revient: f64 = estimations.iter().map(|e| e.total).sum();
                 let mut v = serde_json::to_value(&t).unwrap();
                 for (page, e) in v["pages"].as_array_mut().into_iter().flatten().zip(estimations) {
                     page["estimation"] = serde_json::to_value(e).unwrap();
                 }
+                v["prix_de_revient"] = serde_json::json!(prix_de_revient);
                 v
             })
             .collect(),
@@ -298,19 +305,19 @@ async fn rapport_consommation(State(etat): State<Partage>) -> Response {
     let mut lignes = vec![];
     for t in travaux.iter().filter(|t| matches!(t.statut, Statut::Termine) && t.demande.mode == Mode::Imprimer) {
         for (i, p) in t.pages.iter().enumerate() {
-            let e = couverture::estimer(p.surface_m2, &p.couverture, &p.plaques_decoupe, &tarifs);
+            let e = couverture::estimer(p.surface_m2, p.hauteur_mm, &p.couverture, &p.plaques_decoupe, &tarifs, t.demande.support.as_deref());
             encres.extend(e.encres.iter().map(|l| l.nom.clone()));
             lignes.push((t, i + 1, e));
         }
     }
     let csv_texte = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
-    let mut csv = String::from("date;travail;id;page;surface_m2");
+    let mut csv = String::from("date;travail;id;page;support;surface_m2;surface_support_m2");
     for n in &encres {
         csv.push_str(&format!(";{}", csv_texte(&format!("{n}_ml"))));
     }
     csv.push_str(";encre_ml;cout_encres;cout_support;total\n");
     for (t, page, e) in lignes {
-        csv.push_str(&format!("{};{};{};{page};{:.4}", date_utc(t.cree_le), csv_texte(&t.nom), t.id, e.surface_m2));
+        csv.push_str(&format!("{};{};{};{page};{};{:.4};{:.4}", date_utc(t.cree_le), csv_texte(&t.nom), t.id, csv_texte(e.support.as_deref().unwrap_or("")), e.surface_m2, e.surface_support_m2));
         for n in &encres {
             let ml = e.encres.iter().find(|l| &l.nom == n).map_or(0.0, |l| l.ml);
             csv.push_str(&format!(";{ml:.2}"));
@@ -436,6 +443,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
             }
             "blanc" => serde_json::from_value(serde_json::Value::String(valeur)).map(|m| d.blanc.mode = m).map_err(|_| erreur("blanc_invalide")),
             "blanc_retraction_mm" => valeur.parse().map(|v| d.blanc.retraction_mm = v).map_err(|_| erreur("blanc_invalide")),
+            "support" => {
+                d.support = Some(valeur).filter(|v| !v.is_empty());
+                Ok(())
+            }
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
             _ => Ok(()),
         };
@@ -610,7 +621,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                         // Une mesure impossible n'empêche pas d'imprimer : le coût reste à zéro.
                         let mesure = couverture::mesurer(&apercus, render::DPI_APERCU as f64).unwrap_or_else(|e| {
                             eprintln!("travail {} : couverture de la page {} : {e}", t.id, i + 1);
-                            couverture::Mesure { surface_m2: 0.0, couverture: Default::default() }
+                            couverture::Mesure::default()
                         });
                         Page {
                             plaques_decoupe: plaques.iter().filter(|p| decoupe::est_ton_de_decoupe(p)).cloned().collect(),
@@ -618,6 +629,8 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             traces_decoupe: traces.get(i).copied().unwrap_or(0),
                             surface_m2: mesure.surface_m2,
                             couverture: mesure.couverture,
+                            largeur_mm: mesure.largeur_mm,
+                            hauteur_mm: mesure.hauteur_mm,
                         }
                     })
                     .collect();

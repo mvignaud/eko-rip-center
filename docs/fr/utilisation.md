@@ -225,10 +225,17 @@ de découpe ne comptent pas.
 
 Les tarifs se règlent dans **Système > Coûts d'encre et de support** : une ligne par
 encre (ml/m² à 100 % et € par litre), une ligne **Toutes les autres** pour les cases
-vides, et le prix du support au m². Les valeurs livrées (10 ml/m², 140 €/l) sont des
+vides, et le prix du support au m². Les valeurs livrées (10 ml/m², cartouche Epson de 700 ml à 123,90 € TTC soit 177 €/l, support HEXIS V3000WG à 1,97 €/m² en rouleau de 1600 mm × 45 m) sont des
 valeurs de départ : les remplacer par celles de l'atelier (pesée des cartouches avant
 et après un tirage connu, factures). Un changement de tarif s'applique aussi aux
 travaux déjà faits.
+
+**Cartouches** : saisir la contenance (ml) et le prix d'une cartouche ; le prix au litre
+en est tiré. **Supports (rouleaux)** : un catalogue, chaque support avec son prix au m²,
+ou sa largeur, sa longueur et le prix payé du rouleau (le prix au m² est calculé). Le
+support se choisit à l'envoi (**Support (prix de revient)**, gardé dans les réglages) ;
+avec une largeur connue, la matière comptée est toute la largeur du rouleau sur la
+longueur imprimée. La carte du travail affiche son **prix de revient** (encre + matière).
 
 **Exporter la consommation (CSV)** télécharge une ligne par page imprimée (date UTC,
 travail, page, surface, ml par encre, coûts), séparateur `;`, décimales avec un point,

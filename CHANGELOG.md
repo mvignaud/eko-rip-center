@@ -7,6 +7,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- **Prix de revient par travail** (encre + matière), sur la carte et dans le CSV.
+- Encres : contenance et prix de la cartouche → prix au litre (par défaut : cartouche
+  Epson 700 ml à 123,90 € TTC, soit 177 €/l).
+- **Catalogue de supports** : prix au m², ou largeur + longueur + prix payé du rouleau ;
+  choisi à l'envoi ; matière comptée sur toute la laize (par défaut : HEXIS V3000WG,
+  1,97 €/m², 1600 mm × 45 m).
+
 ## [0.8.0] — 2026-10-24
 
 ### Ajouté

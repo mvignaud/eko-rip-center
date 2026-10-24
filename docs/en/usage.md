@@ -217,9 +217,16 @@ colours are not counted.
 
 Rates are set in **System > Ink and media costs**: one row per ink (ml/m² at 100 % and
 € per litre), an **All others** row for empty boxes, and the media price per m². The
-shipped values (10 ml/m², €140/l) are starting values: replace them with the workshop's
+shipped values (10 ml/m², Epson 700 ml cartridge at €123.90 incl. VAT i.e. €177/l, HEXIS V3000WG media at €1.97/m² on 1600 mm × 45 m rolls) are starting values: replace them with the workshop's
 own (weigh cartridges before and after a known print, invoices). A rate change also
 applies to jobs already done.
+
+**Cartridges**: enter a cartridge's size (ml) and price; the price per litre follows.
+**Media (rolls)**: a catalogue, each medium with its price per m², or its roll width,
+length and price paid (the price per m² is computed). The medium is chosen on sending
+(**Media (cost price)**, kept in presets); with a known width, the media counted is the
+whole roll width over the printed length. The job card shows its **cost price** (ink +
+media).
 
 **Export consumption (CSV)** downloads one row per printed page (UTC date, job, page,
 area, ml per ink, costs), `;` separator, dot decimals, for a spreadsheet or E-KO ERP.
