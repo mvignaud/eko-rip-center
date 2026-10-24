@@ -27,7 +27,12 @@ mod reglages;
 mod releves;
 mod reperage;
 mod sauvegarde;
+// Séparation 9 encres et tramage 2 bits : branchés sur la sortie Epson par l'item 2.6.
+#[cfg_attr(not(test), allow(dead_code))]
+mod separation;
 mod supports;
+#[cfg_attr(not(test), allow(dead_code))]
+mod tramage;
 
 use axum::{
     Json, Router,
