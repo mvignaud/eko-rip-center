@@ -187,6 +187,14 @@ the roll is kept; an item wider than the roll only fits rotated. The resolution 
 registration of the New job panel apply. Items are placed tallest first, left to right;
 the sheet is a new job, with all contours cut.
 
+With **Nest on the shape of the cut contours**, each item takes the room of its cut
+contour plus the spacing instead of its rectangle: circles staggered, triangles head to
+tail (with rotation, angles 0, 90, 180 and 270° are tried). An item without a closed
+contour keeps its rectangle. The imposition then draws the contours. Nesting runs on a
+grid whose step is 1/800 of the roll width (1 mm at least): a cut never touches its
+neighbour, but the actual gap may exceed the requested spacing by one step. The share of
+area used counts the area of the cut contours, in both modes.
+
 ## Colour
 
 **Colour** block (Print mode):

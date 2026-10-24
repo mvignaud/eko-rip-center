@@ -14,14 +14,33 @@ pub struct Taille {
     pub hauteur: f64,
 }
 
-/// Position (coin bas gauche) de l'élément `indice`, en points ; `tourne` : posé à 90°
-/// (sa largeur devient sa hauteur).
+/// Position (coin bas gauche de la case) de l'élément `indice`, en points, et son angle :
+/// 0, 90, 180 ou 270° vers la gauche (à 90 et 270°, sa largeur devient sa hauteur).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Place {
     pub indice: usize,
     pub x: f64,
     pub y: f64,
-    pub tourne: bool,
+    pub angle: u16,
+}
+
+impl Place {
+    /// Quart de tour (90 ou 270°) : largeur et hauteur échangées.
+    pub fn tourne(&self) -> bool {
+        self.angle % 180 == 90
+    }
+}
+
+/// Matrice PDF qui pose une page de taille `t` (MediaBox commençant en `ll`) tournée de
+/// `angle` dans la case dont le coin bas gauche est (x, y).
+pub fn matrice_pose(t: Taille, [llx, lly]: [f64; 2], angle: u16, x: f64, y: f64) -> [f64; 6] {
+    let (w, h) = (t.largeur, t.hauteur);
+    match angle {
+        90 => [0.0, 1.0, -1.0, 0.0, x + lly + h, y - llx],
+        180 => [-1.0, 0.0, 0.0, -1.0, x + llx + w, y + lly + h],
+        270 => [0.0, -1.0, 1.0, 0.0, x - lly, y + llx + w],
+        _ => [1.0, 0.0, 0.0, 1.0, x - llx, y - lly],
+    }
 }
 
 /// Placement en rangées : éléments par hauteur décroissante, de gauche à droite, nouvelle
@@ -65,7 +84,7 @@ fn rangees(tailles: &[Taille], tourne: &[bool], laize: f64, espace: f64) -> (Vec
             y += haut_rangee + espace;
             (x, haut_rangee) = (0.0, 0.0);
         }
-        places.push(Place { indice: i, x, y, tourne: tourne[i] });
+        places.push(Place { indice: i, x, y, angle: if tourne[i] { 90 } else { 0 } });
         large_max = large_max.max(x + t.largeur);
         haut_rangee = haut_rangee.max(t.hauteur);
         x += t.largeur + espace;
@@ -124,21 +143,53 @@ pub fn page_en_formulaire(cible: &mut Document, pdf: &[u8], page: usize) -> Resu
     Ok((id, Taille { largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] }, [boite[0], boite[1]]))
 }
 
+/// Imposition des copies déroulées : en rangées, ou sur la forme de leurs contours de
+/// découpe (`forme`).
+pub struct Imposition {
+    pub places: Vec<Place>,
+    pub planche: Taille,
+    /// Pour chaque copie : sa source et sa taille.
+    pub elements: Vec<usize>,
+    pub tailles: Vec<Taille>,
+    /// Contours fermés de chaque source (vides sans `forme`), en points de sa page.
+    pub contours: Vec<Vec<Vec<(f64, f64)>>>,
+}
+
+pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool) -> Result<Imposition, String> {
+    let tailles_sources = sources.iter().enumerate().map(|(n, s)| taille_page(s.pdf, s.page).map_err(|e| format!("source {} : {e}", n + 1))).collect::<Result<Vec<_>, _>>()?;
+    let elements: Vec<usize> = sources.iter().enumerate().flat_map(|(n, s)| std::iter::repeat_n(n, s.copies)).collect();
+    if elements.is_empty() {
+        return Err("rien à imbriquer".into());
+    }
+    let tailles: Vec<Taille> = elements.iter().map(|&n| tailles_sources[n]).collect();
+    let (laize, espace) = (laize_mm * PT_PAR_MM, espace_mm * PT_PAR_MM);
+    // Silhouette de chaque source : ses contours de découpe fermés (rien : la page).
+    // Toujours extraits : ils servent aussi à mesurer la surface réellement utilisée.
+    let contours: Vec<Vec<Vec<(f64, f64)>>> = sources
+        .iter()
+        .map(|s| {
+            let d = crate::decoupe::extraire(s.pdf, false).ok().and_then(|pages| pages.into_iter().nth(s.page - 1));
+            d.map(|d| d.traces.into_iter().filter(|t| t.ferme && t.points.len() >= 3).map(|t| t.points).collect()).unwrap_or_default()
+        })
+        .collect();
+    let (places, planche) = if forme {
+        let silhouettes: Vec<crate::forme::Silhouette> = elements.iter().map(|&n| crate::forme::Silhouette { taille: tailles_sources[n], polygones: contours[n].clone() }).collect();
+        crate::forme::placer(&silhouettes, laize, espace, rotation)?
+    } else {
+        placer(&tailles, laize, espace, rotation)?
+    };
+    Ok(Imposition { places, planche, elements, tailles, contours })
+}
+
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
-pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool) -> Result<(Vec<u8>, Vec<Place>), String> {
+pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool) -> Result<(Vec<u8>, Vec<Place>), String> {
+    let Imposition { places, planche, elements, .. } = imposer(sources, laize_mm, espace_mm, rotation, forme)?;
     let mut cible = Document::with_version("1.6");
     // Formulaires créés, un par source, et leur taille.
     let mut formulaires: Vec<(ObjectId, Taille, [f64; 2])> = vec![];
     for (n, s) in sources.iter().enumerate() {
         formulaires.push(page_en_formulaire(&mut cible, s.pdf, s.page).map_err(|e| format!("source {} : {e}", n + 1))?);
     }
-    // Copies déroulées : élément k → formulaire de sa source.
-    let elements: Vec<usize> = sources.iter().enumerate().flat_map(|(n, s)| std::iter::repeat_n(n, s.copies)).collect();
-    if elements.is_empty() {
-        return Err("rien à imbriquer".into());
-    }
-    let tailles: Vec<Taille> = elements.iter().map(|&n| formulaires[n].1).collect();
-    let (places, planche) = placer(&tailles, laize_mm * PT_PAR_MM, espace_mm * PT_PAR_MM, rotation)?;
 
     let mut xobjets = Dictionary::new();
     let mut contenu = String::new();
@@ -147,13 +198,8 @@ pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: boo
     }
     for p in &places {
         let n = elements[p.indice];
-        let ([llx, lly], h) = (formulaires[n].2, formulaires[n].1.hauteur);
-        contenu += &if p.tourne {
-            // Quart de tour à gauche, (x, y) → (−y, x) : le bas de la page se pose à droite.
-            format!("q 0 1 -1 0 {:.4} {:.4} cm /F{n} Do Q\n", p.x + lly + h, p.y - llx)
-        } else {
-            format!("q 1 0 0 1 {:.4} {:.4} cm /F{n} Do Q\n", p.x - llx, p.y - lly)
-        };
+        let m = matrice_pose(formulaires[n].1, formulaires[n].2, p.angle, p.x, p.y);
+        contenu += &format!("q {} {} {} {} {:.4} {:.4} cm /F{n} Do Q\n", m[0], m[1], m[2], m[3], m[4], m[5]);
     }
     let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
     let pages = cible.new_object_id();
@@ -209,14 +255,14 @@ pub(crate) mod tests {
         let (_, sans) = placer(&tailles, 320.0 * MM, 5.0 * MM, false).unwrap();
         let (places, avec) = placer(&tailles, 320.0 * MM, 5.0 * MM, true).unwrap();
         assert!((sans.hauteur / MM - 310.0).abs() < 1e-6 && (avec.hauteur / MM - 200.0).abs() < 1e-6);
-        assert!(places.iter().all(|p| p.tourne));
+        assert!(places.iter().all(|p| p.tourne()));
         // Un format plus large que la laize n'y passe que tourné ; sans rotation, refus.
         let (places, _) = placer(&[t(400.0, 100.0)], 320.0 * MM, 5.0 * MM, true).unwrap();
-        assert!(places[0].tourne);
+        assert!(places[0].tourne());
         assert!(placer(&[t(400.0, 100.0)], 320.0 * MM, 5.0 * MM, false).is_err());
         // Rien à gagner : pas de rotation.
         let (places, _) = placer(&[t(100.0, 50.0); 2], 320.0 * MM, 5.0 * MM, true).unwrap();
-        assert!(places.iter().all(|p| !p.tourne));
+        assert!(places.iter().all(|p| !p.tourne()));
     }
 
     /// Un élément tourné est rendu et découpé dans sa case : une page magenta de 60 × 40 pt
@@ -225,8 +271,8 @@ pub(crate) mod tests {
     fn element_tourne_rendu_et_decoupe_en_place() {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &magenta, page: 1, copies: 1 }];
-        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true).unwrap();
-        assert!(places[0].tourne);
+        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true, false).unwrap();
+        assert!(places[0].tourne());
         let d = crate::decoupe::extraire(&planche, false).unwrap();
         assert!((d[0].largeur - 40.0).abs() < 1e-3 && (d[0].hauteur - 60.0).abs() < 1e-3, "{} × {}", d[0].largeur, d[0].hauteur);
         let (xs, ys): (Vec<f64>, Vec<f64>) = d[0].traces[0].points.iter().copied().unzip();
@@ -248,6 +294,58 @@ pub(crate) mod tests {
         assert_eq!(m.dimensions(), (40, 60));
         assert_eq!((m.get_pixel(20, 30)[0], m.get_pixel(2, 2)[0], m.get_pixel(37, 57)[0]), (0, 0, 0), "toute la case est magenta");
         std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    /// Page carrée de `c` pt : triangle rectangle cyan bordé d'un contour `CutContour`.
+    fn pdf_triangle(c: f64) -> Vec<u8> {
+        let mut doc = Document::with_version("1.4");
+        let sep = Object::Array(vec![
+            "Separation".into(),
+            "CutContour".into(),
+            "DeviceCMYK".into(),
+            Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
+        ]);
+        let contenu = format!("1 0 0 0 k 0 0 m {c} 0 l 0 {c} l h f /CS0 CS 1 SCN 0 0 m {c} 0 l 0 {c} l h S");
+        let cs = doc.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real(c as f32), Object::Real(c as f32)], "Contents" => cs, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } });
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+        let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", cat);
+        let mut o = vec![];
+        doc.save_to(&mut o).unwrap();
+        o
+    }
+
+    /// Deux triangles de 100 mm sur une laize de 105 mm, sur la forme : la planche les pose
+    /// tête-bêche (≈ 100 mm de long au lieu de 200), et leurs contours découpés ne se
+    /// chevauchent pas.
+    #[test]
+    fn planche_sur_la_forme_tete_beche() {
+        let tri = pdf_triangle(100.0 * MM);
+        let sources = [Source { pdf: &tri, page: 1, copies: 2 }];
+        let (planche, places) = composer(&sources, 105.0, 0.0, true, true).unwrap();
+        assert!(places.iter().any(|p| p.angle == 180), "{places:?}");
+        let d = crate::decoupe::extraire(&planche, false).unwrap();
+        assert!(d[0].hauteur / MM < 120.0, "longueur {} mm", d[0].hauteur / MM);
+        assert_eq!(d[0].traces.len(), 2);
+        // Le centre de gravité de chaque triangle n'est pas dans l'autre.
+        let centre = |t: &crate::decoupe::Trace| { let n = t.points.len() as f64; t.points.iter().fold((0.0, 0.0), |(a, b), p| (a + p.0 / n, b + p.1 / n)) };
+        let dans = |p: (f64, f64), poly: &[(f64, f64)]| {
+            let mut v = false;
+            let mut j = poly.len() - 1;
+            for i in 0..poly.len() {
+                let ((xi, yi), (xj, yj)) = (poly[i], poly[j]);
+                if (yi > p.1) != (yj > p.1) && p.0 < (xj - xi) * (p.1 - yi) / (yj - yi) + xi { v = !v; }
+                j = i;
+            }
+            v
+        };
+        let (a, b) = (&d[0].traces[0], &d[0].traces[1]);
+        assert!(!dans(centre(a), &b.points) && !dans(centre(b), &a.points), "contours imbriqués l'un dans l'autre");
+        // En rangées (sans la forme), deux carrés l'un au-dessus de l'autre.
+        let (rangs, _) = composer(&sources, 105.0, 0.0, true, false).unwrap();
+        assert!(crate::decoupe::extraire(&rangs, false).unwrap()[0].hauteur / MM > 190.0);
     }
 
     #[test]
@@ -285,7 +383,7 @@ pub(crate) mod tests {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &cyan, page: 1, copies: 1 }, Source { pdf: &magenta, page: 1, copies: 2 }];
         // Laize 80 mm ≈ 226,8 pt : cyan (100) + magenta (60) + espace tiennent en rangée 1 ; le 2e magenta passe en rangée 2.
-        let (planche, places) = composer(&sources, 80.0, 5.0, false).unwrap();
+        let (planche, places) = composer(&sources, 80.0, 5.0, false, false).unwrap();
         assert_eq!(places.len(), 3);
 
         // Découpe : trois contours, chacun dans son élément placé.

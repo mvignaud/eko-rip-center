@@ -12,6 +12,13 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   Gutenprint, réglage des imprimantes) et la suite **ArtCraft** (13 applications d'édition)
   téléchargée pendant l'installation, empreintes vérifiées ; `sudo eko-artcraft` pour
   l'installer ou la mettre à jour ensuite.
+- **Imbrication sur la forme** des contours de découpe (option du panneau Planche) : ronds
+  en quinconce, triangles tête-bêche, rotations 0/90/180/270° ; l'imposition dessine les
+  contours. Sur 8 ronds et 6 triangles en laize 300 mm : 202 mm de rouleau au lieu de 289.
+
+### Corrigé
+- Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des
+  rectangles englobants.
 
 ## [0.10.0] — 2026-10-24
 

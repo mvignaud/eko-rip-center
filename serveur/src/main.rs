@@ -12,6 +12,7 @@ mod edition;
 mod machines;
 mod media;
 mod file;
+mod forme;
 mod imbrication;
 mod mosaique;
 mod plotter;
@@ -681,6 +682,9 @@ struct DemandePlanche {
     /// Autorise le quart de tour quand il raccourcit la planche.
     #[serde(default)]
     rotation: bool,
+    /// Imbrication sur la forme des contours de découpe (sinon en rangées de rectangles).
+    #[serde(default)]
+    forme: bool,
     elements: Vec<ElementPlanche>,
 }
 
@@ -838,45 +842,60 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
         return mauvais("laize 50–5000 mm, espacement 0–100 mm, 1 à 200 éléments, 1 à 500 copies".into());
     }
     let donnees = &etat.config.donnees;
-    let mut tailles = vec![];
+    let mut pdfs = vec![];
     let mut noms = vec![];
     for e in &d.elements {
         let Some((t, _)) = lire_page(donnees, e.id, e.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-        let pdf = match tokio::fs::read(dossier(donnees, e.id).join(Format::Pdf.fichier())).await {
-            Ok(o) => o,
+        match tokio::fs::read(dossier(donnees, e.id).join(Format::Pdf.fichier())).await {
+            Ok(o) => pdfs.push(o),
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
-        };
-        let page = e.page;
-        let taille = match tokio::task::spawn_blocking(move || imbrication::taille_page(&pdf, page)).await {
-            Ok(Ok(x)) => x,
-            Ok(Err(err)) => return mauvais(err),
-            Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
-        };
-        for _ in 0..e.copies {
-            tailles.push(taille);
-            noms.push(format!("{} p{}", t.nom, e.page));
         }
+        noms.push(format!("{} p{}", t.nom, e.page));
     }
+    let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
+    let (laize, espace, rotation, forme) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme);
+    let imp = match tokio::task::spawn_blocking(move || {
+        let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
+        imbrication::imposer(&sources, laize, espace, rotation, forme)
+    })
+    .await
+    {
+        Ok(Ok(x)) => x,
+        Ok(Err(e)) => return mauvais(e),
+        Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    };
     let mm = imbrication::PT_PAR_MM;
-    match imbrication::placer(&tailles, d.laize_mm * mm, d.espacement_mm * mm, d.rotation) {
-        Ok((places, planche)) => {
-            let utile: f64 = tailles.iter().map(|t| t.largeur * t.hauteur).sum();
-            let places: Vec<_> = places
+    // Aire du contour de découpe (le plus grand tracé fermé de la page), sinon du rectangle :
+    // sur la forme, les rectangles englobants se chevauchent.
+    let aire_contour = |n: usize| imp.contours[n].iter().map(|q| forme::aire(q)).fold(0.0, f64::max);
+    let utile: f64 = imp
+        .places
+        .iter()
+        .map(|p| {
+            let (n, t) = (imp.elements[p.indice], imp.tailles[p.indice]);
+            let a = aire_contour(n);
+            if a > 0.0 { a } else { t.largeur * t.hauteur }
+        })
+        .sum();
+    let places: Vec<_> = imp
+        .places
+        .iter()
+        .map(|p| {
+            let (n, t) = (imp.elements[p.indice], imp.tailles[p.indice]);
+            let (l, h) = if p.tourne() { (t.hauteur, t.largeur) } else { (t.largeur, t.hauteur) };
+            // Contours posés comme la page (même rotation), en mm sur la planche.
+            let contours: Vec<Vec<[f64; 2]>> = imp.contours[n]
                 .iter()
-                .map(|p| {
-                    let t = tailles[p.indice];
-                    let (l, h) = if p.tourne { (t.hauteur, t.largeur) } else { (t.largeur, t.hauteur) };
-                    serde_json::json!({ "nom": noms[p.indice], "x": p.x / mm, "y": p.y / mm, "largeur": l / mm, "hauteur": h / mm, "tourne": p.tourne })
-                })
+                .map(|poly| poly.iter().map(|&q| { let (x, y) = forme::tourner(q, t, p.angle); [(p.x + x) / mm, (p.y + y) / mm] }).collect())
                 .collect();
-            Json(serde_json::json!({
-                "laize_mm": d.laize_mm, "longueur_mm": planche.hauteur / mm, "largeur_mm": planche.largeur / mm,
-                "utilisation": utile / (d.laize_mm * mm * planche.hauteur).max(1e-9), "places": places,
-            }))
-            .into_response()
-        }
-        Err(e) => mauvais(e),
-    }
+            serde_json::json!({ "nom": noms[n], "x": p.x / mm, "y": p.y / mm, "largeur": l / mm, "hauteur": h / mm, "tourne": p.tourne(), "angle": p.angle, "contours": contours })
+        })
+        .collect();
+    Json(serde_json::json!({
+        "laize_mm": d.laize_mm, "longueur_mm": imp.planche.hauteur / mm, "largeur_mm": imp.planche.largeur / mm,
+        "utilisation": utile / (d.laize_mm * mm * imp.planche.hauteur).max(1e-9), "places": places,
+    }))
+    .into_response()
 }
 
 /// Imbrique des pages de travaux existants sur la laize, en un nouveau travail à imprimer.
@@ -900,11 +919,11 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
         }
     }
-    let (laize, espace, rotation) = (d.laize_mm, d.espacement_mm, d.rotation);
+    let (laize, espace, rotation, forme) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme);
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::composer(&sources, laize, espace, rotation)
+        imbrication::composer(&sources, laize, espace, rotation, forme)
     })
     .await;
     let planche = match compose {
@@ -2009,8 +2028,9 @@ mod tests {
             assert_eq!(places.len(), 3);
             assert!(places.iter().all(|p| p["tourne"] == true && (p["largeur"].as_f64().unwrap() - 100.0).abs() < 1e-3));
             assert_eq!(places[0]["nom"], "etiquette.pdf p1");
-            // 3 × 0,02 m² sur 0,32 × 0,2 m.
-            assert!((v["utilisation"].as_f64().unwrap() - 0.06 / 0.064).abs() < 1e-4);
+            // 3 contours de découpe (la page moins 5 pt par bord) sur 320 × 200 mm.
+            let cote = |c: f64| c * mm - 10.0;
+            assert!((v["utilisation"].as_f64().unwrap() - 3.0 * cote(200.0) * cote(100.0) / (320.0 * mm * 200.0 * mm)).abs() < 1e-4, "{v}");
             assert_eq!(lire_tous(&donnees).len(), 1, "rien de créé");
             std::fs::remove_dir_all(&donnees).unwrap();
         }

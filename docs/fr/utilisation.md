@@ -195,6 +195,14 @@ résolution et le repérage du panneau Nouveau travail s'appliquent. Les
 éléments sont rangés du plus haut au plus bas, de gauche à droite ; la planche est un
 nouveau travail, avec la découpe de tous les contours.
 
+Avec **Imbriquer sur la forme des contours de découpe**, chaque élément occupe la place de
+son contour de découpe, plus l'espacement, au lieu de son rectangle : ronds en quinconce,
+triangles tête-bêche (avec la rotation, les angles 0, 90, 180 et 270° sont essayés). Un
+élément sans contour fermé garde son rectangle. L'imposition dessine alors les contours.
+Sur une grille de pas égal au 1/800 de la laize (1 mm au moins) : une découpe ne touche
+jamais sa voisine, mais l'espace réel peut dépasser l'espacement demandé d'un pas. La part
+de surface utilisée compte l'aire des contours de découpe, dans les deux modes.
+
 ## Couleur
 
 Bloc **Couleur** (mode Imprimer) :

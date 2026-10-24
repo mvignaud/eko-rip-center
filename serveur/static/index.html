@@ -279,6 +279,7 @@
           <label><span data-t="laize"></span> <input type="number" id="laize" value="1600" min="50" max="5000" step="1"></label>
           <label><span data-t="espacement"></span> <input type="number" id="espacement" value="5" min="0" max="100" step="0.5"></label>
           <label class="case"><input type="checkbox" id="rotation"> <span data-t="rotation"></span></label>
+          <label class="case"><input type="checkbox" id="forme"> <span data-t="forme"></span></label>
           <button type="button" id="creer-planche"></button>
         </div>
         <div id="imposition" style="padding: 0 16px 16px"></div>
@@ -348,7 +349,7 @@ const textes = {
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Longueur de rouleau : ${l} mm · surface utilisée : ${u} %`,
-    rotation: "Tourner de 90° si la planche est plus courte", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
+    rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
@@ -445,7 +446,7 @@ const textes = {
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Roll length: ${l} mm · area used: ${u} %`,
-    rotation: "Rotate 90° when the sheet gets shorter", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
+    rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
@@ -1094,13 +1095,13 @@ function majPlanche() {
   if (n) dessinerImposition();
 }
 const elementsPlanche = () => [...selection].map(([cle, copies]) => { const [id, page] = cle.split(":"); return { id, page: +page, copies }; });
-["laize", "espacement", "rotation"].forEach((id) => $(id).addEventListener("change", majPlanche));
+["laize", "espacement", "rotation", "forme"].forEach((id) => $(id).addEventListener("change", majPlanche));
 
 /** Aperçu de l'imposition : la laize, les éléments à leur place, longueur et utilisation. */
 let imposition = 0;
 async function dessinerImposition() {
   const n = ++imposition;
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, rotation: $("rotation").checked, elements: elementsPlanche() };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, rotation: $("rotation").checked, forme: $("forme").checked, elements: elementsPlanche() };
   const r = await fetch("/api/planches/apercu", json("POST", corps)).catch(() => null);
   if (n !== imposition || !r) return;
   const c = await r.json().catch(() => ({}));
@@ -1119,18 +1120,26 @@ async function dessinerImposition() {
   c.places.forEach((p) => {
     // Le rouleau avance vers le bas de l'écran : y PDF retourné.
     const g = document.createElementNS(ns, "g");
-    const rect = document.createElementNS(ns, "rect");
-    Object.entries({ x: p.x, y: h - p.y - p.hauteur, width: p.largeur, height: p.hauteur, fill: "var(--accent-doux)", stroke: "var(--accent)", "stroke-width": trait }).forEach(([k, v]) => rect.setAttribute(k, v));
+    // Sur la forme : les contours de découpe ; sinon la case rectangulaire de la page.
+    const formes = (p.contours || []).length
+      ? p.contours.map((poly) => {
+          const f = document.createElementNS(ns, "polygon");
+          f.setAttribute("points", poly.map(([x, y]) => `${x},${h - y}`).join(" "));
+          return f;
+        })
+      : [Object.assign(document.createElementNS(ns, "rect"), {})];
+    if (!(p.contours || []).length) Object.entries({ x: p.x, y: h - p.y - p.hauteur, width: p.largeur, height: p.hauteur }).forEach(([k, v]) => formes[0].setAttribute(k, v));
+    formes.forEach((f) => Object.entries({ fill: "var(--accent-doux)", stroke: "var(--accent)", "stroke-width": trait }).forEach(([k, v]) => f.setAttribute(k, v)));
     const titre = document.createElementNS(ns, "title");
-    titre.textContent = `${p.nom} — ${Math.round(p.largeur)} × ${Math.round(p.hauteur)} mm${p.tourne ? " ⟲" : ""}`;
-    g.append(rect, titre);
+    titre.textContent = `${p.nom} — ${Math.round(p.largeur)} × ${Math.round(p.hauteur)} mm${p.angle ? ` · ${p.angle}°` : ""}`;
+    g.append(...formes, titre);
     svg.append(g);
   });
   $("imposition").replaceChildren(svg, el("p", { className: "meta", style: "margin: 6px 0 0" }, T().imposition(Math.round(c.longueur_mm), Math.round(c.utilisation * 100))));
 }
 $("creer-planche").addEventListener("click", async () => {
   const elements = elementsPlanche();
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, elements };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, forme: $("forme").checked, elements };
   if (await api("/api/planches", json("POST", corps))) { selection.clear(); majPlanche(); dire(T().planche_creee); rafraichir(); }
 });
 
