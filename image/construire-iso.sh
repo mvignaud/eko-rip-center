@@ -14,6 +14,11 @@
 # disque (« Continue with autoinstall? »). Le bureau se télécharge pendant l'installation.
 #
 #   image/construire-iso.sh <ubuntu-live-server.iso> <eko-rip-serveur.deb> <client.deb> <sortie.iso>
+#
+# Réglages d'essai (installation complète en machine virtuelle, jamais pour une vraie
+# image) : EKO_ESSAI_IDENTITE="<nom> <empreinte crypt du mot de passe>" fixe le compte au
+# lieu de le demander ; EKO_ENTREE_DEFAUT choisit l'entrée du menu (0 à 2) ;
+# EKO_OPTIONS_NOYAU ajoute des options au noyau (console série, autoinstall).
 set -euo pipefail
 
 source_iso=$1 serveur=$2 client=$3 sortie=$4
@@ -31,15 +36,20 @@ profil() {
     mkdir -p "$rep"
     : > "$rep/meta-data"
     {
-        cat <<'EOF'
-#cloud-config
-autoinstall:
-  version: 1
+        printf '#cloud-config\nautoinstall:\n  version: 1\n'
+        if [ -n "${EKO_ESSAI_IDENTITE:-}" ]; then
+            read -r nom empreinte <<< "$EKO_ESSAI_IDENTITE"
+            printf '  identity:\n    hostname: eko-rip-essai\n    username: %s\n    password: "%s"\n' "$nom" "$empreinte"
+        else
+            cat <<'EOF'
   # Nom, nom du PC, compte et mot de passe demandés à l'écran ; le reste est fixé. La
   # section « identity » est absente : Subiquity refuse une identité sans mot de passe,
   # même interactive (« Malformed autoinstall in 'identity' section », vu en VM le 24/10).
   interactive-sections:
     - identity
+EOF
+        fi
+        cat <<'EOF'
   locale: fr_FR.UTF-8
   keyboard:
     layout: fr
@@ -102,7 +112,7 @@ entree() {
     printf "menuentry '%s' {\n\tset gfxpayload=keep\n\tlinux\t/casper/vmlinuz 'ds=nocloud;s=/cdrom/eko/profils/%s/' %s---\n\tinitrd\t/casper/initrd\n}\n" "$1" "$2" "${EKO_OPTIONS_NOYAU:+$EKO_OPTIONS_NOYAU }"
 }
 {
-    echo 'set default=0'
+    echo "set default=${EKO_ENTREE_DEFAUT:-0}"
     echo 'set timeout=30'
     entree "E-KO RIP : serveur + client sur ce PC - EFFACE LE DISQUE" serveur-client
     entree "E-KO RIP : serveur + bureau Ubuntu - EFFACE LE DISQUE" serveur-bureau
