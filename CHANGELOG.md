@@ -7,6 +7,20 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- **Catalogue de machines** (`machines.json`, `GET/POST /api/machines`) : modèle (Epson
+  SC-S80600, Mutoh Kona, Graphtec FC7000, Roland VersaCAMM), laize, connexion (série,
+  réseau TCP, fichier de périphérique, dossier), adresse SNMP, pas de découpe. Sans fichier :
+  l'Epson et le Kona d'origine.
+- Découpe vers n'importe quelle découpeuse du catalogue : HP-GL converti au pas de la
+  machine (0,01 mm Kona, 0,025 mm par défaut ailleurs), envoi série, réseau ou fichier.
+  Graphtec FC7000 et Roland VP : à éprouver à l'atelier (protocoles non publiés en détail).
+- Répartiteur unique de la file pour toutes les machines ; une imprimante-découpeuse
+  (Roland) reçoit l'impression puis la découpe suspendue.
+
+### Modifié
+- `GET /api/machines/epson/media` devient `GET /api/machines/{id}/media`.
+
 ## [0.9.0] — 2026-10-24
 
 ### Ajouté

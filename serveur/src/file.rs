@@ -2,20 +2,10 @@
 //! est l'ordre de passage ; chaque machine prend la première sortie en attente qui la vise.
 //! Gardée dans `<données>/file.json`.
 
+use crate::machines::Operation;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Machine {
-    /// Plotter de découpe Mutoh Kona.
-    Kona,
-    /// Epson SureColor SC-S80600 ; sans pilote, les plaques sont copiées dans un dossier.
-    Epson,
-}
-
-pub const MACHINES: [Machine; 2] = [Machine::Kona, Machine::Epson];
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -31,7 +21,11 @@ pub enum Etat {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Sortie {
     pub id: Uuid,
-    pub machine: Machine,
+    /// Identifiant de la machine dans le catalogue (`epson`, `kona`…).
+    pub machine: String,
+    /// Absente des files d'avant le catalogue : déduite de la machine à la lecture.
+    #[serde(default)]
+    pub operation: Option<Operation>,
     pub travail: Uuid,
     /// Nom du travail, pour l'affichage.
     pub nom: String,
@@ -51,8 +45,12 @@ pub struct Sortie {
 }
 
 impl Sortie {
-    pub fn nouvelle(machine: Machine, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine, travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None }
+    pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None }
+    }
+
+    pub fn operation(&self) -> Operation {
+        self.operation.unwrap_or(if self.machine == "kona" { Operation::Decoupe } else { Operation::Impression })
     }
 
     /// En attente, suspendue ou en cours : le travail ne peut pas être supprimé ni relancé.
@@ -100,7 +98,7 @@ impl File {
     }
 
     /// Prochaine sortie à lancer sur `machine` (aucune si une y tourne déjà).
-    pub fn prochaine(&self, machine: Machine) -> Option<usize> {
+    pub fn prochaine(&self, machine: &str) -> Option<usize> {
         let mut pour = self.sorties.iter().enumerate().filter(|(_, s)| s.machine == machine);
         if pour.clone().any(|(_, s)| s.etat == Etat::EnCours) {
             return None;
@@ -123,7 +121,7 @@ impl File {
             Action::EnTete | Action::Monter | Action::Descendre if matches!(etat, Etat::EnAttente | Etat::Suspendue) => {
                 // Places des sorties encore à passer sur la même machine : on échange avec la
                 // voisine, les autres machines gardent leurs places.
-                let m = self.sorties[i].machine;
+                let m = self.sorties[i].machine.clone();
                 let places: Vec<usize> = self.sorties.iter().enumerate().filter(|(_, x)| x.machine == m && matches!(x.etat, Etat::EnAttente | Etat::Suspendue)).map(|(j, _)| j).collect();
                 let rang = places.iter().position(|&j| j == i).unwrap();
                 match action {
@@ -135,7 +133,7 @@ impl File {
             }
             Action::Refaire if !matches!(etat, Etat::EnCours) => {
                 let s = &self.sorties[i];
-                let copie = Sortie::nouvelle(s.machine, s.travail, &s.nom, s.page, le);
+                let copie = Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le);
                 self.sorties.push(copie);
             }
             _ => return Err("action_impossible"),
@@ -163,21 +161,20 @@ pub fn fichier(donnees: &Path) -> PathBuf {
     donnees.join("file.json")
 }
 
-/// Dossier où les plaques d'une sortie Epson sont copiées tant que le pilote n'existe pas.
-pub fn dossier_sortie(donnees: &Path, machine: Machine, s: &Sortie) -> PathBuf {
-    let m = match machine {
-        Machine::Kona => "kona",
-        Machine::Epson => "epson",
-    };
-    donnees.join("sorties").join(m).join(format!("{}-p{}-{}", s.travail, s.page, s.id))
+/// Dossier où une sortie sans pilote (plaques de l'Epson) est copiée.
+pub fn dossier_sortie(donnees: &Path, s: &Sortie) -> PathBuf {
+    donnees.join("sorties").join(&s.machine).join(format!("{}-p{}-{}", s.travail, s.page, s.id))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn file(machines: &[Machine]) -> File {
-        File { sorties: machines.iter().enumerate().map(|(i, &m)| Sortie::nouvelle(m, Uuid::new_v4(), &format!("t{i}"), 1, 0)).collect() }
+    const KONA: &str = "kona";
+    const EPSON: &str = "epson";
+
+    fn file(machines: &[&str]) -> File {
+        File { sorties: machines.iter().enumerate().map(|(i, &m)| Sortie::nouvelle(m, if m == KONA { Operation::Decoupe } else { Operation::Impression }, Uuid::new_v4(), &format!("t{i}"), 1, 0)).collect() }
     }
 
     fn noms(f: &File) -> Vec<&str> {
@@ -186,21 +183,19 @@ mod tests {
 
     #[test]
     fn chaque_machine_prend_la_premiere_en_attente() {
-        use Machine::*;
-        let mut f = file(&[Kona, Epson, Kona]);
-        assert_eq!((f.prochaine(Kona), f.prochaine(Epson)), (Some(0), Some(1)));
+        let mut f = file(&[KONA, EPSON, KONA]);
+        assert_eq!((f.prochaine(KONA), f.prochaine(EPSON)), (Some(0), Some(1)));
         f.sorties[0].etat = Etat::EnCours;
-        assert_eq!(f.prochaine(Kona), None, "une à la fois par machine");
-        assert_eq!(f.prochaine(Epson), Some(1), "l'autre machine n'attend pas");
+        assert_eq!(f.prochaine(KONA), None, "une à la fois par machine");
+        assert_eq!(f.prochaine(EPSON), Some(1), "l'autre machine n'attend pas");
         f.sorties[0].etat = Etat::Terminee;
         f.sorties[2].etat = Etat::Suspendue;
-        assert_eq!(f.prochaine(Kona), None, "suspendue : on ne la lance pas");
+        assert_eq!(f.prochaine(KONA), None, "suspendue : on ne la lance pas");
     }
 
     #[test]
     fn deplacer_dans_la_file_de_sa_machine() {
-        use Machine::*;
-        let mut f = file(&[Kona, Epson, Kona, Kona]);
+        let mut f = file(&[KONA, EPSON, KONA, KONA]);
         let (t2, t3) = (f.sorties[2].id, f.sorties[3].id);
         f.agir(t3, Action::EnTete, 0).unwrap();
         assert_eq!(noms(&f), ["t3", "t1", "t0", "t2"], "l'Epson garde sa place");
@@ -209,13 +204,13 @@ mod tests {
         f.agir(t2, Action::Descendre, 0).unwrap();
         f.agir(t2, Action::Descendre, 0).unwrap();
         assert_eq!(noms(&f), ["t3", "t1", "t0", "t2"], "descendre au-delà du dernier : il reste dernier");
-        assert_eq!(f.prochaine(Kona), Some(0));
-        assert_eq!(f.sorties[f.prochaine(Kona).unwrap()].nom, "t3");
+        assert_eq!(f.prochaine(KONA), Some(0));
+        assert_eq!(f.sorties[f.prochaine(KONA).unwrap()].nom, "t3");
     }
 
     #[test]
     fn etats_et_actions_permises() {
-        let mut f = file(&[Machine::Kona]);
+        let mut f = file(&[KONA]);
         let id = f.sorties[0].id;
         assert_eq!(f.agir(id, Action::Reprendre, 0), Err("action_impossible"));
         f.agir(id, Action::Suspendre, 0).unwrap();
@@ -231,10 +226,19 @@ mod tests {
     }
 
     #[test]
+    fn file_d_avant_le_catalogue() {
+        let ancienne = r#"{"id":"6f9619ff-8b86-d011-b42d-00c04fc964ff","machine":"kona","travail":"6f9619ff-8b86-d011-b42d-00c04fc964fe","nom":"x","page":1,"etat":"terminee","cree_le":0}"#;
+        let s: Sortie = serde_json::from_str(ancienne).unwrap();
+        assert_eq!((s.machine.as_str(), s.operation()), ("kona", Operation::Decoupe));
+        let s: Sortie = serde_json::from_str(&ancienne.replace("kona", "epson")).unwrap();
+        assert_eq!(s.operation(), Operation::Impression);
+    }
+
+    #[test]
     fn sortie_coupee_par_un_arret_ne_repart_pas() {
         let d = std::env::temp_dir().join(format!("eko-rip-file-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
-        let mut f = file(&[Machine::Kona, Machine::Kona]);
+        let mut f = file(&[KONA, KONA]);
         f.sorties[0].etat = Etat::EnCours;
         f.ecrire(&d).unwrap();
         let relue = File::lire(&d);
