@@ -20,6 +20,9 @@ To change it: **Server → Change server** menu (`Cmd/Ctrl + Shift + S`).
 
 ## First-launch warning
 
-Packages are not signed yet.
-- **macOS**: right-click the app → **Open**, then confirm.
+Packages are not signed yet (a deliberate choice for now: Apple and Microsoft signing will
+come with mature releases). One approval per computer is enough:
+- **macOS 15 and later**: after the refusal, open **System Settings → Privacy & Security**,
+  scroll to the message about E-KO RIP Center → **Open Anyway**, then confirm with the Mac
+  password. On older macOS: right-click the app → **Open**, then confirm.
 - **Windows**: “Windows protected your PC” → **More info** → **Run anyway**.
