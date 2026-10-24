@@ -7,6 +7,35 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.17.0] — 2026-10-24
+
+Fin de la phase « socle » de la feuille de route, et support chargé dans les machines.
+Publiée sans la CI (construite sur le serveur de test) ; les clients de bureau ne changent
+pas : ceux de la 0.16.0 restent valables.
+
+### Ajouté
+- **Support et mode du travail** : à l'envoi, « Support et mode d'impression » ; le mode
+  impose la résolution, le support relie aux tarifs ; changer de mode refait le rendu.
+- **Support chargé** dans l'Epson, reconnu par son n° de support lu sur l'imprimante, ou
+  saisi par l'opérateur (Système) ; **éditeur des supports** de l'Epson (nom, n° dans
+  l'imprimante, laize, encres, modes).
+- **Attente de support** : une impression attend que le bon support soit chargé, et part
+  d'elle-même ensuite ; la laize du rouleau chargé borne la page.
+- **Raison d'attente** affichée pour chaque sortie (retenue, machine injoignable, fichier
+  manquant, trop large, autre support) ; une sortie bloquée laisse passer les suivantes.
+- **Seuil d'espace libre** (`EKO_RIP_SEUIL_LIBRE_MO`, 5 Go par défaut) : purge des plus
+  vieux travaux inactifs, et refus anticipé d'un travail qui ne tiendrait pas.
+- **Sauvegarde automatique** de la configuration avant chaque mise à jour du paquet
+  (`/var/lib/eko-rip/sauvegardes/`).
+
+### Corrigé
+- Un dossier surveillé ou de sortie supprimé est recréé et signalé, au lieu d'être ignoré.
+- Page d'un travail en cours de rendu : « pas prêt » (409) au lieu de « introuvable ».
+
+*Added: job media and print mode, loaded media (read from the Epson or set by hand), media
+editor, wait-for-media, per-output wait reason, free-space threshold, automatic config
+backup before package updates. Fixed: missing folders recreated, 409 while rendering.*
+
 ## [0.16.0] — 2026-10-24
 
 ### Ajouté
