@@ -55,6 +55,9 @@ pub enum Connexion {
 pub struct Machine {
     /// Identifiant stable (lettres, chiffres, `-`) : file d'attente, dossiers de sortie.
     pub id: String,
+    /// Identifiant immuable pour les échanges (ERP) ; attribué par le serveur.
+    #[serde(default)]
+    pub uuid: Option<uuid::Uuid>,
     pub nom: String,
     pub modele: Modele,
     /// Laize utile, en mm.
@@ -84,12 +87,14 @@ pub struct Machine {
 
 /// Couches de découpe de CutServer à l'atelier (relevées le 24/10), reprises pour le Kona.
 fn couches_cutserver() -> Vec<ParametreDecoupe> {
-    let couche = |nom: &str, force_g| ParametreDecoupe { nom: nom.into(), vitesse_cm_s: 15.0, force_g, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
+    let couche = |nom: &str, force_g| ParametreDecoupe { uuid: None, nom: nom.into(), vitesse_cm_s: 15.0, force_g, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
     vec![couche("Mi-chair V3000", 145.0), couche("V3000WG - Laminé", 305.0)]
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParametreDecoupe {
+    #[serde(default)]
+    pub uuid: Option<uuid::Uuid>,
     pub nom: String,
     pub vitesse_cm_s: f64,
     pub force_g: f64,
@@ -227,8 +232,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
-        Machine { id: "kona".into(), nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false },
     ]
 }
 
@@ -238,6 +243,28 @@ pub fn lire(donnees: &Path) -> Option<Vec<Machine>> {
 
 pub fn ecrire(donnees: &Path, machines: &[Machine]) -> std::io::Result<()> {
     crate::etat::ecrire(&fichier(donnees), machines, false)
+}
+
+/// Identifiants immuables : repris de la machine connue de même `uuid`, sinon de même `id`
+/// texte (le client peut ne pas les renvoyer), sinon nouveaux ; de même pour les couches de
+/// découpe (par nom dans la machine). Un `uuid` inconnu est refusé : on ne le choisit pas.
+pub fn identifier(machines: &mut [Machine], connues: &[Machine]) -> Result<(), &'static str> {
+    for m in machines.iter_mut() {
+        let avant = match m.uuid {
+            Some(u) => Some(connues.iter().find(|c| c.uuid == Some(u)).ok_or("identifiant_inconnu")?),
+            None => connues.iter().find(|c| c.id == m.id),
+        };
+        m.uuid = Some(avant.and_then(|c| c.uuid).unwrap_or_else(uuid::Uuid::new_v4));
+        let couches_avant = avant.map(|c| c.parametres_decoupe.as_slice()).unwrap_or_default();
+        for p in m.parametres_decoupe.iter_mut() {
+            let ancien = match p.uuid {
+                Some(u) => Some(couches_avant.iter().find(|c| c.uuid == Some(u)).ok_or("identifiant_inconnu")?),
+                None => couches_avant.iter().find(|c| c.nom == p.nom),
+            };
+            p.uuid = Some(ancien.and_then(|c| c.uuid).unwrap_or_else(uuid::Uuid::new_v4));
+        }
+    }
+    Ok(())
 }
 
 pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
@@ -381,7 +408,7 @@ mod tests {
         // 25,4 mm : 2540 pas de 0,01 mm, 1016 pas de 0,025 mm (HP-GL standard).
         assert_eq!(changer_de_pas(rip, 0.025, [0.0; 2]), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
         // Kona avec cadre : axes tournés (X = y, Y = −x), coins min/max, une commande par ligne.
-        let p = ParametreDecoupe { nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
+        let p = ParametreDecoupe { uuid: None, nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
         let k = pour_kona(rip, Some([-500, -500, 3000, 3000]), Some(&p), false);
         assert!(k.starts_with("AL5,0;IN;\r\nPA;PROGSTEP10;\r\n@SEGMENTEDFILESTART1;\r\n@SEGMENTSTART1;\r\n\r\nAL5,0,0,1,-500,-3000,3000,500;\r\nSP1;\r\nAS 1.0;ZF 145;VS 15;LT;\r\nPU0,0;\r\nPD0,-2540;\r\nPD2540,-2540;\r\n"), "{k}");
         assert!(k.ends_with("PU-500,-3000;\r\nAL5,2;\r\n\r\n@SEGMENTEND1;\r\n\r\nSP0;@SEGMENTEDFILEEND1;\r\n"), "{k}");

@@ -127,6 +127,10 @@ impl Demande {
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Reglage {
+    /// Identifiant immuable pour les échanges (ERP) ; un réglage renommé est un autre réglage
+    /// (son nom est aussi son dossier surveillé).
+    #[serde(default)]
+    pub uuid: Option<uuid::Uuid>,
     pub nom: String,
     pub demande: Demande,
 }
@@ -152,6 +156,13 @@ pub fn lire(donnees: &Path) -> Vec<Reglage> {
 
 /// Écrit la liste (fichier temporaire puis renommage) et crée le dossier surveillé de
 /// chaque réglage.
+/// Identifiants des réglages : repris du réglage connu de même nom, sinon nouveaux.
+pub fn identifier(reglages: &mut [Reglage], connus: &[Reglage]) {
+    for r in reglages.iter_mut().filter(|r| r.uuid.is_none()) {
+        r.uuid = Some(connus.iter().find(|c| c.nom == r.nom).and_then(|c| c.uuid).unwrap_or_else(uuid::Uuid::new_v4));
+    }
+}
+
 pub fn ecrire(donnees: &Path, reglages: &[Reglage]) -> std::io::Result<()> {
     for r in reglages {
         std::fs::create_dir_all(dossier_entree(donnees, &r.nom))?;
@@ -186,6 +197,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("eko-rip-reglages-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         let r = Reglage {
+            uuid: None,
             nom: "Vinyle + cadre".into(),
             demande: Demande { reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() },
         };

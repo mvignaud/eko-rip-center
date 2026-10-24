@@ -491,6 +491,7 @@ const textes = {
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.", envoi_impossible: "Envoi à l'imprimante impossible.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
+      identifiant_inconnu: "Identifiant inconnu : un identifiant ne se choisit pas, il est attribué par le serveur.",
       supports_invalides: "Supports invalides : nom unique (60 caractères), encres connues sans blanc et argent ensemble, au moins un mode (90 à 2880 dpi, 1 à 64 passes).",
       blanc_invalide: "Blanc : rétraction de 0 à 5 mm, encre minimale de 1 à 100 %.",
       client_requis: "Réservé au client E-KO RIP Center.",
@@ -599,6 +600,7 @@ const textes = {
       rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.", envoi_impossible: "Cannot send to the printer.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
+      identifiant_inconnu: "Unknown identifier: identifiers are assigned by the server, never chosen.",
       supports_invalides: "Invalid media: unique name (60 characters), known inks without white and metallic together, at least one mode (90 to 2880 dpi, 1 to 64 passes).",
       blanc_invalide: "White: choke from 0 to 5 mm, minimum ink from 1 to 100 %.",
       client_requis: "For the E-KO RIP Center client only.",
@@ -1663,12 +1665,14 @@ function afficherEditeurMachines() {
         el("label", {}, T().coupe_outil, choix("c_outil", ["", "1", "2", "3", "4"], p.outil == null ? "" : String(p.outil), { "": T().pas_defaut })),
         el("label", { title: T().note_motif }, T().coupe_motif, champ("c_motif", (p.motif_mm || []).map(([b, h]) => `${b}/${h}`).join(" "), { placeholder: "8/2 8/2", style: "width: 9em" })),
         el("label", { className: "case", title: T().note_diffusion }, el("input", { type: "checkbox", name: "c_diffusion", checked: !!p.diffusion }), " ", T().coupe_diffusion));
+      if (p.uuid) r.dataset.uuid = p.uuid;
       r.append(bouton("✕", () => r.remove(), "discret danger"));
       coupes.append(r);
     };
     (m.parametres_decoupe || []).forEach((p) => ligneCoupe(p));
     bloc.append(el("div", { className: "ligne bas" }, el("strong", {}, T().coupes_titre), bouton(T().coupe_ajouter, () => ligneCoupe()),
       el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee)), coupes);
+    if (m.uuid) bloc.dataset.uuid = m.uuid;
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
   };
@@ -1682,10 +1686,10 @@ $("editeur-machines").addEventListener("submit", async (e) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
     const type = q("type");
     const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
-    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null,
+    return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null,
       parametres_decoupe: [...b.querySelectorAll(".ligne-coupe")].map((r) => {
         const v = (n) => r.querySelector(`[name=${n}]`).value;
-        return { nom: v("c_nom").trim(), vitesse_cm_s: +v("c_vitesse"), force_g: +v("c_force"), acceleration_g: +v("c_acc"), valeurs_machine: r.querySelector("[name=c_massicot]").checked,
+        return { uuid: r.dataset.uuid || null, nom: v("c_nom").trim(), vitesse_cm_s: +v("c_vitesse"), force_g: +v("c_force"), acceleration_g: +v("c_acc"), valeurs_machine: r.querySelector("[name=c_massicot]").checked,
           outil: v("c_outil") ? +v("c_outil") : null, diffusion: r.querySelector("[name=c_diffusion]").checked,
           // « 8/2 8/2 4/1 » : paires coupé/relevé en mm (virgule décimale acceptée).
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };

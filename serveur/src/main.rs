@@ -189,7 +189,18 @@ async fn main() {
     let max = config.max_octets;
     let file = file::File::lire(&config.donnees);
     file.ecrire(&config.donnees).expect("file d'attente");
-    let catalogue = machines::lire(&config.donnees).unwrap_or_else(|| machines::catalogue_initial(&config.plotter, &config.plotter_stty, config.epson_snmp.clone()));
+    let mut catalogue = machines::lire(&config.donnees).unwrap_or_else(|| machines::catalogue_initial(&config.plotter, &config.plotter_stty, config.epson_snmp.clone()));
+    // Identifiants immuables (pont ERP) : attribués une fois, puis gardés.
+    let avant = catalogue.clone();
+    machines::identifier(&mut catalogue, &avant).expect("identifiants des machines");
+    if catalogue != avant {
+        machines::ecrire(&config.donnees, &catalogue).expect("machines.json");
+    }
+    let mut liste_reglages = reglages::lire(&config.donnees);
+    if liste_reglages.iter().any(|r| r.uuid.is_none()) {
+        reglages::identifier(&mut liste_reglages, &[]);
+        reglages::ecrire(&config.donnees, &liste_reglages).expect("reglages.json");
+    }
     let etat: Partage = Arc::new(Etat {
         config,
         rendu: Semaphore::new(1),
@@ -893,8 +904,9 @@ async fn lister_machines(State(etat): State<Partage>) -> Json<Vec<machines::Mach
 }
 
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
-async fn enregistrer_machines(State(etat): State<Partage>, Json(liste): Json<Vec<machines::Machine>>) -> Response {
-    if let Err(code) = machines::verifier(&liste) {
+async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
+    let connues = etat.machines.read().unwrap().clone();
+    if let Err(code) = machines::identifier(&mut liste, &connues).and(machines::verifier(&liste)) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     let a_passer = etat.file.lock().unwrap().sorties.iter().any(|s| s.active() && !liste.iter().any(|m| m.id == s.machine));
@@ -945,7 +957,12 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
             None => return refus(StatusCode::BAD_REQUEST, "profil_invalide", Some(nom.clone())),
         }
     }
-    if let Err(code) = machines::verifier(&s.machines).and(s.tarifs.verifier()) {
+    let mut s = s;
+    let connues = etat.machines.read().unwrap().clone();
+    // Une sauvegarde porte ses identifiants : ils sont repris tels quels sur un serveur neuf.
+    let mut connues_et_sauvees = connues.clone();
+    connues_et_sauvees.extend(s.machines.iter().filter(|m| m.uuid.is_some()).cloned());
+    if let Err(code) = machines::identifier(&mut s.machines, &connues_et_sauvees).and(machines::verifier(&s.machines)).and(s.tarifs.verifier()) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     if let Some(c) = &s.supports {
@@ -972,6 +989,8 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         liste.push(r);
     }
+    let connus = reglages::lire(&etat.config.donnees);
+    reglages::identifier(&mut liste, &connus);
     let _verrou = etat.reglages.lock().await;
     if etat.file.lock().unwrap().sorties.iter().any(|x| x.active() && !s.machines.iter().any(|m| m.id == x.machine)) {
         return refus(StatusCode::CONFLICT, "machine_occupee", None);
@@ -1391,6 +1410,8 @@ async fn enregistrer_reglage(State(etat): State<Partage>, Json(r): Json<reglages
     }
     let _verrou = etat.reglages.lock().await;
     let mut liste = reglages::lire(&etat.config.donnees);
+    let mut r = reglages::Reglage { uuid: None, ..r };
+    reglages::identifier(std::slice::from_mut(&mut r), &liste);
     liste.retain(|x| x.nom != r.nom);
     liste.push(r.clone());
     liste.sort_by(|a, b| a.nom.cmp(&b.nom));
@@ -2285,6 +2306,53 @@ mod tests {
             }
         }
 
+        /// Identifiants immuables des machines, couches et réglages (pont ERP, lot R1).
+        #[tokio::test]
+        async fn identifiants_immuables_machines_couches_reglages() {
+            let e = etat("identifiants");
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            // Premier enregistrement, comme l'écran : sans uuid → attribués.
+            let mut v = corps(appel(&e, "GET", "/api/machines", None, None).await).await;
+            let sans = |v: &mut serde_json::Value| {
+                for m in v.as_array_mut().unwrap() {
+                    m.as_object_mut().unwrap().remove("uuid");
+                    for c in m["parametres_decoupe"].as_array_mut().unwrap() {
+                        c.as_object_mut().unwrap().remove("uuid");
+                    }
+                }
+            };
+            sans(&mut v);
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(v.clone())).await.status(), StatusCode::OK);
+            let w = corps(appel(&e, "GET", "/api/machines", None, None).await).await;
+            let kona = w.as_array().unwrap().iter().find(|m| m["id"] == "kona").unwrap().clone();
+            assert!(kona["uuid"].is_string() && kona["parametres_decoupe"][0]["uuid"].is_string(), "{kona}");
+            // Renvoyé sans uuid (ancien client) : même clé texte → même uuid.
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
+            assert_eq!(corps(appel(&e, "GET", "/api/machines", None, None).await).await, w, "rien ne change");
+            // Renommer l'id texte en gardant l'uuid : l'uuid suit.
+            let mut x = w.clone();
+            let k = x.as_array_mut().unwrap().iter_mut().find(|m| m["id"] == "kona").unwrap();
+            k["id"] = "kona-1".into();
+            k["parametres_decoupe"][0]["nom"] = "Mi-chair renommée".into();
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(x.clone())).await.status(), StatusCode::OK);
+            let y = corps(appel(&e, "GET", "/api/machines", None, None).await).await;
+            let k = y.as_array().unwrap().iter().find(|m| m["id"] == "kona-1").unwrap();
+            assert_eq!((k["uuid"].clone(), k["parametres_decoupe"][0]["uuid"].clone()), (kona["uuid"].clone(), kona["parametres_decoupe"][0]["uuid"].clone()));
+            // Uuid inventé : refusé, rien d'écrit.
+            x[0]["uuid"] = Uuid::new_v4().to_string().into();
+            let r = appel(&e, "POST", "/api/machines", None, Some(x)).await;
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(corps(r).await["code"], "identifiant_inconnu");
+            assert_eq!(corps(appel(&e, "GET", "/api/machines", None, None).await).await, y);
+            // Réglage réenregistré sous le même nom : même uuid.
+            let reglage = serde_json::json!({ "nom": "Vinyle", "demande": { "dpi": 360 } });
+            let a = corps(appel(&e, "POST", "/api/reglages", None, Some(reglage.clone())).await).await;
+            let b = corps(appel(&e, "POST", "/api/reglages", None, Some(reglage)).await).await;
+            assert!(a["uuid"].is_string());
+            assert_eq!(a["uuid"], b["uuid"]);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
         /// Supports par machine : repris de tarifs.json, identifiants stables, contrôlés.
         #[tokio::test]
         async fn supports_et_modes_par_machine() {
@@ -2446,6 +2514,7 @@ mod tests {
             let mut catalogue = e.machines.read().unwrap().clone();
             catalogue.push(machines::Machine {
                 id: "fc7000".into(),
+                uuid: None,
                 nom: "Graphtec FC7000-75".into(),
                 modele: machines::Modele::GraphtecFc7000,
                 laize_mm: 750.0,
