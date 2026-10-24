@@ -4,6 +4,7 @@
 mod acces;
 mod couleur;
 mod decoupe;
+mod file;
 mod imbrication;
 mod mosaique;
 mod plotter;
@@ -70,9 +71,6 @@ struct Travail {
     /// Pages rendues, dans l'ordre du document.
     #[serde(default)]
     pages: Vec<Page>,
-    /// Dernier envoi de la découpe au plotter.
-    #[serde(default)]
-    envoi_decoupe: Option<EnvoiDecoupe>,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
 }
@@ -88,21 +86,6 @@ struct Page {
     traces_decoupe: usize,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-struct EnvoiDecoupe {
-    /// Page envoyée (numérotée à partir de 1).
-    #[serde(default = "premiere_page")]
-    page: usize,
-    statut: Statut,
-    code_erreur: Option<String>,
-    erreur: Option<String>,
-    /// Secondes depuis l'époque Unix.
-    le: u64,
-}
-
-fn premiere_page() -> usize {
-    1
-}
 
 fn maintenant() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
@@ -127,8 +110,8 @@ struct Etat {
     // ponytail: un seul rendu à la fois sur le serveur ; un sémaphore par machine quand
     // plusieurs imprimantes tourneront en parallèle.
     rendu: Semaphore,
-    /// Un seul envoi à la fois vers le plotter.
-    plotter: Semaphore,
+    /// File des sorties vers les machines, gardée dans `file.json` à chaque changement.
+    file: std::sync::Mutex<file::File>,
     /// Écritures de `reglages.json` l'une après l'autre.
     reglages: tokio::sync::Mutex<()>,
     sessions: std::sync::Mutex<acces::Sessions>,
@@ -163,7 +146,12 @@ async fn main() {
     reprendre_travaux_interrompus(&config.donnees);
 
     let max = config.max_octets;
-    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: tokio::sync::Mutex::new(()), sessions: Default::default() });
+    let file = file::File::lire(&config.donnees);
+    file.ecrire(&config.donnees).expect("file d'attente");
+    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), file: std::sync::Mutex::new(file), reglages: tokio::sync::Mutex::new(()), sessions: Default::default() });
+    for m in file::MACHINES {
+        tokio::spawn(executer(etat.clone(), m));
+    }
     if acces::lire(&etat.config.donnees).is_empty() {
         eprintln!("ATTENTION : aucun utilisateur déclaré, l'accès est libre. Créer un compte : eko-rip-serveur utilisateur ajouter <nom>");
     }
@@ -191,7 +179,9 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
-        .route("/api/travaux/{id}/pages/{page}/decouper", axum::routing::post(decouper))
+        .route("/api/file", get(lister_file).post(mettre_en_file))
+        .route("/api/file/{id}", axum::routing::delete(retirer_de_la_file))
+        .route("/api/file/{id}/{action}", axum::routing::post(agir_sur_la_file))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -382,7 +372,6 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         code_erreur: None,
         erreur: None,
         pages: vec![],
-        envoi_decoupe: None,
         cree_le: maintenant(),
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
@@ -725,7 +714,7 @@ fn a_purger(travaux: &[Travail], maintenant: u64, jours: u64) -> Vec<Uuid> {
     if jours == 0 {
         return vec![];
     }
-    travaux.iter().filter(|t| !occupe(t) && maintenant.saturating_sub(t.cree_le) > jours * 86_400).map(|t| t.id).collect()
+    travaux.iter().filter(|t| !actif(&t.statut) && maintenant.saturating_sub(t.cree_le) > jours * 86_400).map(|t| t.id).collect()
 }
 
 /// Toutes les heures, efface les travaux trop vieux (le disque se remplit vite à 720 dpi).
@@ -733,6 +722,15 @@ async fn purger(etat: Partage) {
     loop {
         let donnees = &etat.config.donnees;
         for id in a_purger(&lire_tous(donnees), maintenant(), etat.config.conservation_jours) {
+            if etat.file.lock().unwrap().active_pour(id) {
+                continue;
+            }
+            modifier_file(&etat, |f| {
+                f.oublier_travail(id);
+                Ok(())
+            })
+            .ok();
+            effacer_sorties(donnees, id);
             match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
                 Ok(()) => eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours),
                 Err(e) => eprintln!("travail {id} : purge impossible : {e}"),
@@ -891,18 +889,39 @@ async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mis
     Ok(pages.iter().map(|d| d.traces.len()).collect())
 }
 
-/// Rendu ou envoi au plotter en cours : on ne touche pas au dossier du travail.
-fn occupe(t: &Travail) -> bool {
-    let actif = |s: &Statut| matches!(s, Statut::EnAttente | Statut::EnCours);
-    actif(&t.statut) || t.envoi_decoupe.as_ref().is_some_and(|e| actif(&e.statut))
+fn actif(s: &Statut) -> bool {
+    matches!(s, Statut::EnAttente | Statut::EnCours)
+}
+
+/// Rendu en cours ou sortie à passer : on ne touche pas au dossier du travail.
+fn occupe(etat: &Etat, t: &Travail) -> bool {
+    actif(&t.statut) || etat.file.lock().unwrap().active_pour(t.id)
+}
+
+/// Efface les sorties en dossier d'un travail (`sorties/<machine>/<travail>-…`).
+fn effacer_sorties(donnees: &std::path::Path, id: Uuid) {
+    for m in file::MACHINES {
+        let rep = file::dossier_sortie(donnees, m, &file::Sortie::nouvelle(m, id, "", 0, 0));
+        let Some(parent) = rep.parent() else { continue };
+        for e in std::fs::read_dir(parent).into_iter().flatten().flatten() {
+            if e.file_name().to_string_lossy().starts_with(&id.to_string()) {
+                let _ = std::fs::remove_dir_all(e.path());
+            }
+        }
+    }
 }
 
 async fn supprimer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
     let donnees = &etat.config.donnees;
     let Some(t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    if occupe(&t) {
+    if occupe(&etat, &t) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
+    let _ = modifier_file(&etat, |f| {
+        f.oublier_travail(id);
+        Ok(())
+    });
+    effacer_sorties(donnees, id);
     match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
@@ -913,7 +932,7 @@ async fn supprimer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Res
 async fn relancer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
     let donnees = &etat.config.donnees;
     let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    if occupe(&t) {
+    if occupe(&etat, &t) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
     }
     // Les sorties d'avant ne doivent pas survivre au nouveau rendu (un .plt périmé partirait au plotter).
@@ -923,7 +942,7 @@ async fn relancer(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Resp
     }
     let _ = tokio::fs::remove_file(rep.join("imprime.pdf")).await;
     t.statut = Statut::EnAttente;
-    (t.code_erreur, t.erreur, t.envoi_decoupe) = (None, None, None);
+    (t.code_erreur, t.erreur) = (None, None);
     t.pages = vec![];
     if let Err(e) = ecrire(donnees, &t) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
@@ -943,52 +962,122 @@ fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travai
     Some((t, p))
 }
 
-/// Envoie la découpe d'une page au plotter ; l'état de l'envoi est suivi dans le travail.
-async fn decouper(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
-    let donnees = &etat.config.donnees;
-    let Some((mut t, p)) = lire_page(donnees, id, page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    if p.traces_decoupe == 0 {
-        return refus(StatusCode::CONFLICT, "rien_a_decouper", None);
-    }
-    // ponytail: le contrôle puis l'écriture ne sont pas atomiques ; deux clics dans la même
-    // milliseconde enverraient deux fois. Le sémaphore les fait au moins passer l'un après l'autre.
-    if t.envoi_decoupe.as_ref().is_some_and(|e| matches!(e.statut, Statut::EnAttente | Statut::EnCours)) {
-        return refus(StatusCode::CONFLICT, "envoi_en_cours", None);
-    }
-    t.envoi_decoupe = Some(EnvoiDecoupe { page, statut: Statut::EnAttente, code_erreur: None, erreur: None, le: maintenant() });
-    if let Err(e) = ecrire(donnees, &t) {
-        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
-    }
-    tokio::spawn(envoyer_au_plotter(etat.clone(), id, page));
-    (StatusCode::ACCEPTED, Json(t)).into_response()
+async fn lister_file(State(etat): State<Partage>) -> Json<Vec<file::Sortie>> {
+    Json(etat.file.lock().unwrap().sorties.clone())
 }
 
-async fn envoyer_au_plotter(etat: Partage, id: Uuid, page: usize) {
-    let _jeton = etat.plotter.acquire().await.unwrap();
-    let donnees = &etat.config.donnees;
-    let maj = |statut: Statut, detail: Option<String>| {
-        if let Some(mut t) = lire_travail(donnees, id) {
-            let code_erreur = matches!(statut, Statut::Echec).then_some("envoi_decoupe_echoue".to_string());
-            t.envoi_decoupe = Some(EnvoiDecoupe { page, statut, code_erreur, erreur: detail, le: maintenant() });
-            let _ = ecrire(donnees, &t);
+/// Change la file sous son verrou et l'écrit ; `Err` : code d'erreur pour l'écran.
+fn modifier_file(etat: &Etat, f: impl FnOnce(&mut file::File) -> Result<(), &'static str>) -> Result<(), Box<Response>> {
+    let mut file = etat.file.lock().unwrap();
+    f(&mut file).map_err(|code| Box::new(refus(if code == "introuvable" { StatusCode::NOT_FOUND } else { StatusCode::CONFLICT }, code, None)))?;
+    file.ecrire(&etat.config.donnees).map_err(|e| Box::new(refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()))))
+}
+
+#[derive(Deserialize)]
+struct DemandeSortie {
+    travail: Uuid,
+    page: usize,
+    machine: file::Machine,
+}
+
+/// Met une page en file : découpe pour le Kona, plaques pour l'Epson.
+async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie>) -> Response {
+    let Some((t, p)) = lire_page(&etat.config.donnees, d.travail, d.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if !matches!(t.statut, Statut::Termine) {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    match d.machine {
+        file::Machine::Kona if p.traces_decoupe == 0 => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
+        file::Machine::Epson if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
+        _ => {}
+    }
+    let s = file::Sortie::nouvelle(d.machine, t.id, &t.nom, d.page, maintenant());
+    let rendu = s.clone();
+    match modifier_file(&etat, |f| {
+        f.sorties.push(s);
+        Ok(())
+    }) {
+        Ok(()) => (StatusCode::CREATED, Json(rendu)).into_response(),
+        Err(r) => *r,
+    }
+}
+
+async fn agir_sur_la_file(State(etat): State<Partage>, Chemin((id, action)): Chemin<(Uuid, String)>) -> Response {
+    let Ok(action) = serde_json::from_value::<file::Action>(serde_json::Value::String(action)) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    match modifier_file(&etat, |f| f.agir(id, action, maintenant())) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(r) => *r,
+    }
+}
+
+async fn retirer_de_la_file(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>) -> Response {
+    match modifier_file(&etat, |f| f.retirer(id)) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(r) => *r,
+    }
+}
+
+/// Boucle d'une machine : prend la première sortie en attente qui la vise, l'exécute, note
+/// le résultat. Une seule sortie à la fois par machine.
+async fn executer(etat: Partage, machine: file::Machine) {
+    loop {
+        let suivante = {
+            let mut f = etat.file.lock().unwrap();
+            f.prochaine(machine).map(|i| {
+                let s = &mut f.sorties[i];
+                (s.etat, s.debut) = (file::Etat::EnCours, Some(maintenant()));
+                let s = s.clone();
+                let _ = f.ecrire(&etat.config.donnees);
+                s
+            })
+        };
+        let Some(s) = suivante else {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            continue;
+        };
+        let resultat = match machine {
+            file::Machine::Kona => envoyer_au_plotter(&etat, &s).await,
+            file::Machine::Epson => sortir_les_plaques(&etat, &s).await,
+        };
+        if let Err(e) = &resultat {
+            eprintln!("sortie {} ({machine:?}, travail {} page {}) : {e}", s.id, s.travail, s.page);
         }
-    };
-    maj(Statut::EnCours, None);
-    let plt = fichier_plt(&dossier(donnees, id), page);
+        let mut f = etat.file.lock().unwrap();
+        if let Some(x) = f.sorties.iter_mut().find(|x| x.id == s.id) {
+            x.fin = Some(maintenant());
+            match resultat {
+                Ok(()) => x.etat = file::Etat::Terminee,
+                Err(e) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some("sortie_echouee".into()), Some(e)),
+            }
+        }
+        let _ = f.ecrire(&etat.config.donnees);
+    }
+}
+
+async fn envoyer_au_plotter(etat: &Etat, s: &file::Sortie) -> Result<(), String> {
+    let plt = fichier_plt(&dossier(&etat.config.donnees, s.travail), s.page);
     let (port, reglages) = (etat.config.plotter.clone(), etat.config.plotter_stty.clone());
-    let resultat = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let octets = std::fs::read(&plt).map_err(|e| format!("lecture de {} : {e}", plt.display()))?;
         plotter::envoyer(&port, &reglages, &octets)
     })
     .await
-    .unwrap_or_else(|e| Err(e.to_string()));
-    match resultat {
-        Ok(()) => maj(Statut::Termine, None),
-        Err(e) => {
-            eprintln!("travail {id} : découpe : {e}");
-            maj(Statut::Echec, Some(e));
-        }
+    .unwrap_or_else(|e| Err(e.to_string()))
+}
+
+/// Epson, en attendant son pilote : copie les plaques à imprimer (sans les tons de
+/// découpe) dans `<données>/sorties/epson/<travail>-p<page>-<sortie>/`.
+async fn sortir_les_plaques(etat: &Etat, s: &file::Sortie) -> Result<(), String> {
+    let donnees = &etat.config.donnees;
+    let (_, p) = lire_page(donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
+    let cible = file::dossier_sortie(donnees, s.machine, s);
+    tokio::fs::create_dir_all(&cible).await.map_err(|e| e.to_string())?;
+    let rep = dossier(donnees, s.travail);
+    for nom in p.plaques.iter().filter(|n| !p.plaques_decoupe.contains(n)) {
+        let source = render::chemin_plaque(&rep, s.page, nom);
+        tokio::fs::copy(&source, cible.join(format!("{nom}.tif"))).await.map_err(|e| format!("copie de {} : {e}", source.display()))?;
     }
+    Ok(())
 }
 
 /// Lit un fichier de sortie d'une page existante du travail ; `None` donne un 404.
@@ -1050,7 +1139,6 @@ mod tests {
             code_erreur: None,
             erreur: None,
             pages: vec![],
-            envoi_decoupe: None,
             cree_le: 100 * jour - age_jours * jour,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
@@ -1064,7 +1152,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -1087,7 +1175,7 @@ mod tests {
                 codes.push(code);
             }
         }
-        for code in ["introuvable", "format_inconnu", "ai_sans_pdf", "rendu_echoue", "interrompu", "dpi_invalide", "rien_a_decouper", "envoi_decoupe_echoue"] {
+        for code in ["introuvable", "format_inconnu", "ai_sans_pdf", "rendu_echoue", "interrompu", "dpi_invalide", "rien_a_decouper", "sortie_echouee", "action_impossible"] {
             assert!(codes.contains(&code), "le balayage n'a pas trouvé {code} : il est cassé");
         }
         for code in codes {
@@ -1116,7 +1204,7 @@ mod tests {
                 plotter: "/dev/null".into(),
                 plotter_stty: String::new(),
             };
-            Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: Default::default(), sessions: Default::default() })
+            Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default() })
         }
 
         async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
@@ -1180,6 +1268,63 @@ mod tests {
             }
             assert_eq!(appel(&e, "POST", "/api/session", None, Some(bon)).await.status(), StatusCode::TOO_MANY_REQUESTS);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Une page mise en file Epson sort ses plaques d'encre, jamais ses tons de découpe ;
+        /// le travail ne peut pas être supprimé tant que la sortie est à passer.
+        #[tokio::test]
+        async fn file_epson_de_bout_en_bout() {
+            let e = etat("file");
+            let donnees = e.config.donnees.clone();
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "essai.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande::default(),
+                statut: Statut::Termine,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![Page { plaques: vec!["Cyan".into(), "CutContour".into()], plaques_decoupe: vec!["CutContour".into()], traces_decoupe: 0 }],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(rep.join("prod")).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            for nom in ["Cyan", "CutContour"] {
+                std::fs::write(render::chemin_plaque(&rep, 1, nom), nom).unwrap();
+            }
+
+            let kona = serde_json::json!({ "travail": t.id, "page": 1, "machine": "kona" });
+            assert_eq!(appel(&e, "POST", "/api/file", None, Some(kona)).await.status(), StatusCode::CONFLICT, "rien à découper");
+            let epson = serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson" });
+            let r = appel(&e, "POST", "/api/file", None, Some(epson)).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let id = e.file.lock().unwrap().sorties[0].id;
+            assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::CONFLICT, "sortie à passer");
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{id}/inventee"), None, None).await.status(), StatusCode::NOT_FOUND);
+
+            tokio::spawn(executer(e.clone(), file::Machine::Epson));
+            for _ in 0..50 {
+                if e.file.lock().unwrap().sorties[0].etat == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            let s = e.file.lock().unwrap().sorties[0].clone();
+            assert_eq!(s.etat, file::Etat::Terminee, "{s:?}");
+            let sortie = file::dossier_sortie(&donnees, file::Machine::Epson, &s);
+            assert_eq!(std::fs::read_to_string(sortie.join("Cyan.tif")).unwrap(), "Cyan");
+            assert!(!sortie.join("CutContour.tif").exists(), "un ton de découpe ne part jamais à l'imprimante");
+            assert_eq!(file::File::lire(&donnees).sorties, [s], "file écrite sur le disque");
+
+            // Réimpression sans nouveau rendu, puis suppression : l'historique part avec le travail.
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{id}/refaire"), None, None).await.status(), StatusCode::NO_CONTENT);
+            let copie = e.file.lock().unwrap().sorties[1].id;
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{copie}/annuler"), None, None).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
+            assert!(e.file.lock().unwrap().sorties.is_empty());
+            assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
         }
     }
 }

@@ -7,6 +7,29 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- **File d'attente par machine** (Kona, Epson) : « Découper (Kona) » et « Imprimer
+  (Epson) » mettent une page en file ; chaque machine passe une sortie à la fois, dans
+  l'ordre ; en tête, monter, descendre, suspendre, reprendre, annuler ; historique avec
+  « Refaire » (sans nouveau rendu) et « Retirer ». File gardée dans `file.json` ; une
+  sortie coupée par un arrêt passe en échec au lieu de repartir au milieu.
+- Epson, en attendant son pilote : les plaques à imprimer (jamais les tons de découpe)
+  sont copiées dans `sorties/epson/`.
+- **Nouvelle interface** : vues Travaux, File d'attente et Système ; panneau « Nouveau
+  travail » avec zone de dépôt ; cartes avec vignette et badges d'état ; recherche et
+  filtres ; vue file par machine ; affichage téléphone.
+
+### Modifié
+- L'écran ne se reconstruit plus que si les données changent (un clic ne tombe plus sur
+  un bouton remplacé).
+- Guides d'utilisation FR/EN réécrits (file d'attente, nouvelle interface, glossaire) ;
+  le pas HP-GL indiqué est corrigé (0,010 mm).
+- Supprimer un travail efface aussi ses sorties en dossier ; refusé tant qu'une sortie
+  l'attend dans la file.
+
+### Retiré
+- Route `POST /api/travaux/{id}/pages/{page}/decouper` : remplacée par `POST /api/file`.
+
 ## [0.6.0] — 2026-10-24
 
 ### Ajouté

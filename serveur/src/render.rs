@@ -16,6 +16,11 @@ pub struct Rendu {
     pub pages: Vec<Vec<String>>,
 }
 
+/// Plaque de production (pleine définition) d'une page.
+pub fn chemin_plaque(dossier: &Path, page: usize, nom: &str) -> PathBuf {
+    dossier.join("prod").join(format!("{}({nom}).tif", prefixe(page)))
+}
+
 /// `plaque-001` : préfixe des fichiers d'une page (numérotée à partir de 1).
 fn prefixe(page: usize) -> String {
     format!("plaque-{page:03}")
