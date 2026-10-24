@@ -44,7 +44,42 @@ pub struct Support {
     /// Laize du rouleau (mm), si connue.
     #[serde(default)]
     pub laize_mm: Option<f64>,
+    /// N° du support enregistré dans l'imprimante (Epson : réglage « support n° »), qui
+    /// permet de reconnaître le support chargé par SNMP (roadmap 1.3).
+    #[serde(default)]
+    pub numero_machine: Option<u8>,
     pub modes: Vec<ModeImpression>,
+}
+
+/// Support chargé dans une machine (roadmap 1.3), gardé dans `charges.json`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Charge {
+    /// Support du catalogue ; `None` : chargé mais inconnu du catalogue.
+    pub support_uuid: Option<Uuid>,
+    /// Laize lue sur la machine (mm), si elle la donne.
+    pub laize_mm: Option<f64>,
+    /// `saisie` (opérateur) ou `machine` (lu sur l'imprimante).
+    pub source: String,
+    pub le: u64,
+}
+
+fn fichier_charges(donnees: &Path) -> PathBuf {
+    donnees.join("charges.json")
+}
+
+pub fn lire_charges(donnees: &Path) -> std::collections::BTreeMap<String, Charge> {
+    crate::etat::lire(&fichier_charges(donnees)).ok().flatten().unwrap_or_default()
+}
+
+pub fn ecrire_charge(donnees: &Path, machine: &str, c: Charge) -> std::io::Result<()> {
+    let mut toutes = lire_charges(donnees);
+    toutes.insert(machine.into(), c);
+    crate::etat::ecrire(&fichier_charges(donnees), &toutes, false)
+}
+
+/// Support de `machine` enregistré sous le n° `numero` dans l'imprimante.
+pub fn par_numero<'a>(c: &'a Catalogue, machine: &str, numero: u8) -> Option<&'a Support> {
+    c.supports.iter().find(|s| s.machine == machine && s.numero_machine == Some(numero))
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -81,6 +116,7 @@ pub fn lire(donnees: &Path, machine_par_defaut: &str) -> Catalogue {
                 id: None,
                 machine: machine_par_defaut.into(),
                 laize_mm: s.rouleau.as_ref().map(|r| r.largeur_mm),
+                numero_machine: None,
                 nom: s.nom,
                 encres: ENCRES[..9].iter().map(|e| e.to_string()).collect(),
                 modes: vec![mode_par_defaut()],
@@ -151,6 +187,7 @@ pub fn verifier(supports: &[Support]) -> Result<(), &'static str> {
             && s.encres.iter().enumerate().all(|(j, e)| ENCRES.contains(&e.as_str()) && !s.encres[..j].contains(e))
             && !(s.encres.iter().any(|e| e == "WH") && s.encres.iter().any(|e| e == "MS"))
             && s.laize_mm.is_none_or(|l| (50.0..=5000.0).contains(&l))
+            && s.numero_machine.is_none_or(|n| !supports[..i].iter().any(|x| x.numero_machine == Some(n)))
             && !s.modes.is_empty()
             && s.modes.iter().enumerate().all(|(j, m)| {
                 nom_bon(&m.nom)
@@ -189,7 +226,7 @@ mod tests {
 
     #[test]
     fn identifiants_et_controles() {
-        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into(), "M".into()], laize_mm: Some(1600.0), modes: vec![mode_par_defaut()] }];
+        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into(), "M".into()], laize_mm: Some(1600.0), numero_machine: None, modes: vec![mode_par_defaut()] }];
         assert!(attribuer_ids(&mut s, &[]));
         let connu = s.clone();
         let mut renomme = connu.clone();
@@ -219,7 +256,7 @@ mod tests {
 
     #[test]
     fn le_mode_impose_la_resolution() {
-        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None }] }];
+        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, numero_machine: Some(6), modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None }] }];
         attribuer_ids(&mut s, &[]);
         let c = Catalogue { version: VERSION, supports: s.clone() };
         let mut d = crate::reglages::Demande { mode_uuid: s[0].modes[1].id, ..Default::default() };
@@ -230,5 +267,7 @@ mod tests {
         let mut rien = crate::reglages::Demande::default();
         let dpi = rien.dpi;
         assert_eq!((appliquer(&mut rien, &c), rien.dpi), (Ok(()), dpi), "sans support ni mode : inchangé");
+        assert_eq!(par_numero(&c, "epson", 6).map(|x| x.id), Some(s[0].id), "support n° 6 lu sur l'Epson");
+        assert!(par_numero(&c, "epson", 7).is_none() && par_numero(&c, "kona", 6).is_none());
     }
 }

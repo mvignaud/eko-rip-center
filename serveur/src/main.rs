@@ -253,6 +253,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/machines/{id}/media", get(media_machine))
         .route("/api/machines/{id}/consommation", get(consommation_machine))
         .route("/api/machines/{id}/supports", get(lister_supports).post(enregistrer_supports))
+        .route("/api/machines/{id}/charge", get(lire_charge).post(saisir_charge))
         .route("/api/sauvegarde", get(exporter_config).post(restaurer_config))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
@@ -1046,6 +1047,38 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     Json(serde_json::json!({ "machines": s.machines.len(), "reglages": liste.len(), "profils": profils.len() })).into_response()
 }
 
+/// Support chargé dans la machine (roadmap 1.3) : `null` si rien n'est connu.
+async fn lire_charge(State(etat): State<Partage>, Chemin(id): Chemin<String>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    Json(supports::lire_charges(&etat.config.donnees).remove(&id)).into_response()
+}
+
+#[derive(Deserialize)]
+struct SaisieCharge {
+    /// `None` : revenir à la lecture par la machine.
+    support_uuid: Option<Uuid>,
+}
+
+/// L'opérateur dit quel support il a chargé ; une saisie prime sur la lecture de la machine
+/// jusqu'à ce qu'il revienne à la lecture (`support_uuid` nul).
+async fn saisir_charge(State(etat): State<Partage>, Chemin(id): Chemin<String>, Json(c): Json<SaisieCharge>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let catalogue = supports::lire(&etat.config.donnees, "epson");
+    if c.support_uuid.is_some_and(|u| !catalogue.supports.iter().any(|s| s.machine == id && s.id == Some(u))) {
+        return refus(StatusCode::BAD_REQUEST, "support_inconnu", None);
+    }
+    let laize_mm = supports::lire_charges(&etat.config.donnees).remove(&id).and_then(|a| a.laize_mm);
+    let charge = supports::Charge { support_uuid: c.support_uuid, laize_mm, source: if c.support_uuid.is_some() { "saisie" } else { "machine" }.into(), le: maintenant() };
+    match supports::ecrire_charge(&etat.config.donnees, &id, charge.clone()) {
+        Ok(()) => Json(charge).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
 /// Supports d'une machine et leurs modes d'impression (`supports.json`).
 async fn lister_supports(State(etat): State<Partage>, Chemin(id): Chemin<String>) -> Response {
     if machine(&etat, &id).is_none() {
@@ -1105,11 +1138,19 @@ async fn relever(etat: Partage) {
             let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
             let lecture = move || {
                 let d = Duration::from_secs(2);
-                let encres = media::lire_etat_epson(&hote, &communaute, d)?.encres;
-                let longueur_m = media::lire_medias(&hote, &communaute, d).ok()?.first()?.longueur_m;
-                (!encres.is_empty()).then_some((encres, longueur_m))
+                let e = media::lire_etat_epson(&hote, &communaute, d)?;
+                let media = media::lire_medias(&hote, &communaute, d).ok()?.into_iter().next()?;
+                (!e.encres.is_empty()).then_some((e.encres, media.longueur_m, e.support, media.largeur_mm))
             };
-            let Ok(Some((encres, longueur_m))) = tokio::task::spawn_blocking(lecture).await else { continue };
+            let Ok(Some((encres, longueur_m, numero, largeur_mm))) = tokio::task::spawn_blocking(lecture).await else { continue };
+            // Support chargé lu sur la machine (n° de support), s'il a changé (roadmap 1.3).
+            if let Some(n) = numero {
+                let support_uuid = supports::par_numero(&supports::lire(&etat.config.donnees, "epson"), &id, n).and_then(|s| s.id);
+                let avant = supports::lire_charges(&etat.config.donnees).remove(&id);
+                if avant.as_ref().is_none_or(|a| a.source != "saisie" && (a.support_uuid != support_uuid || a.laize_mm != Some(largeur_mm))) {
+                    let _ = supports::ecrire_charge(&etat.config.donnees, &id, supports::Charge { support_uuid, laize_mm: Some(largeur_mm), source: "machine".into(), le: maintenant() });
+                }
+            }
             let r = releves::Releve { le: maintenant(), encres, longueur_m };
             let dernier = derniers.entry(id.clone()).or_insert_with(|| releves::lire(&etat.config.donnees, &id).pop());
             if dernier.as_ref().is_some_and(|d| releves::identique(d, &r)) {
@@ -2615,6 +2656,24 @@ mod tests {
             let b = corps(appel(&e, "POST", "/api/reglages", None, Some(reglage)).await).await;
             assert!(a["uuid"].is_string());
             assert_eq!(a["uuid"], b["uuid"]);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Support chargé (roadmap 1.3) : saisi par l'opérateur, qui prime ; retour à la machine.
+        #[tokio::test]
+        async fn support_charge_saisi() {
+            let e = etat("charge");
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            assert_eq!(corps(appel(&e, "GET", "/api/machines/epson/charge", None, None).await).await, serde_json::Value::Null);
+            let s = supports::lire(&e.config.donnees, "epson").supports[0].id.unwrap();
+            let r = appel(&e, "POST", "/api/machines/epson/charge", None, Some(serde_json::json!({ "support_uuid": s }))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let v = corps(appel(&e, "GET", "/api/machines/epson/charge", None, None).await).await;
+            assert_eq!((v["support_uuid"].as_str(), v["source"].as_str()), (Some(s.to_string().as_str()), Some("saisie")));
+            assert_eq!(appel(&e, "POST", "/api/machines/epson/charge", None, Some(serde_json::json!({ "support_uuid": Uuid::new_v4() }))).await.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(appel(&e, "POST", "/api/machines/kona/charge", None, Some(serde_json::json!({ "support_uuid": s }))).await.status(), StatusCode::BAD_REQUEST, "support d'une autre machine");
+            let v = corps(appel(&e, "POST", "/api/machines/epson/charge", None, Some(serde_json::json!({ "support_uuid": null }))).await).await;
+            assert_eq!(v["source"], "machine", "retour à la lecture par la machine");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
