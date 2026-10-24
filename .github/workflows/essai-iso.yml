@@ -3,7 +3,8 @@ name: Essai de l'image d'installation
 # L'image Ubuntu démarre-t-elle sur nos profils ? Construite avec de faux paquets (ils ne
 # servent qu'après les questions), démarrée en machine virtuelle (KVM) sur le premier
 # profil, console série : l'installateur doit avoir lu et accepté notre profil et poser
-# « Continue with autoinstall? ». Un profil refusé (YAML ou schéma) échoue avant.
+# « Continue with autoinstall? » ou l'écran du profil (nom, mot de passe). Un profil
+# refusé (YAML ou schéma) échoue avant.
 on:
   workflow_dispatch:
   push:
@@ -38,17 +39,38 @@ jobs:
       - name: Démarrage jusqu'à la question de l'installateur
         run: |
           qemu-img create -f qcow2 disque.qcow2 25G
+          # Console série sur une socket : l'installateur y pose d'abord l'écran « Serial »
+          # (choix du mode d'affichage), auquel on répond Entrée.
           qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
             -drive file=disque.qcow2,if=virtio -cdrom essai.iso -boot d \
-            -display none -serial file:serie.log -monitor none &
-          for i in $(seq 1 120); do
-            if grep -aq "Continue with autoinstall" serie.log; then echo "question posée après $((i * 5)) s"; exit 0; fi
-            if grep -aiqE "autoinstall config did not validate|Traceback" serie.log; then break; fi
-            sleep 5
-          done
-          echo "--- fin de la console série ---"
-          tail -c 6000 serie.log | tr -d '\000'
-          exit 1
+            -display none -serial tcp:127.0.0.1:4555,server,nowait -monitor none &
+          sleep 3
+          python3 - <<'PY'
+          import re, socket, sys, time
+          s = socket.create_connection(("127.0.0.1", 4555))
+          s.settimeout(5)
+          journal, vu, fin = b"", 0, time.time() + 900
+          entree_faite = False
+          while time.time() < fin:
+              try:
+                  bloc = s.recv(65536)
+              except socket.timeout:
+                  bloc = b""
+              journal += bloc
+              texte = re.sub(rb"\x1b\[[0-9;?]*[A-Za-z]", b"", journal).decode("utf-8", "replace")
+              if not entree_faite and "Serial" in texte and "Help" in texte:
+                  time.sleep(2); s.sendall(b"\r"); entree_faite = True; print("écran Serial : Entrée envoyée", flush=True)
+              for preuve in ("Continue with autoinstall", "Profile configuration", "Profile setup", "Your name"):
+                  if preuve in texte:
+                      print(f"atteint : « {preuve} » après {int(900 - (fin - time.time()))} s")
+                      open("serie.log", "wb").write(journal)
+                      sys.exit(0)
+              if "did not validate" in texte or "Traceback" in texte:
+                  break
+          open("serie.log", "wb").write(journal)
+          print(re.sub(r"\s+\n", "\n", texte[-5000:]))
+          sys.exit(1)
+          PY
       - if: always()
         uses: actions/upload-artifact@v7
         with: { name: console-serie, path: serie.log, retention-days: 7 }
