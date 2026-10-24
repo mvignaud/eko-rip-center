@@ -159,6 +159,19 @@ In **Print** mode, **Kona registration** adds around the image:
 - **Mutoh frame (type 1)**: 5 mm black frame, 10 mm from the image, inside at least
   250 × 250 mm, margins of 25 mm on the sides, 30 mm at the front, 80 mm at the rear
   (minimum sizes from the Kona manual). The Kona measures it by itself.
+- **Mutoh frame + barcode (type 2, CutServer SF)**: the same frame, corners pierced with
+  four windows, and two 250 × 20 mm POSTNET codes (bottom left, top right, 50 mm from the
+  side and 9 mm from the frame) with the number in clear. The 11-digit number comes from
+  the job and page. The downloaded cut file has the name Mutoh CutServer expects,
+  `Name_SF_<number>.plt`: drop it in its folder, the Kona reads the code and CutServer
+  sends the file with the same number. Inside at least 310 mm wide.
+- **Multi-segment frame + barcode (type 3, CutServer MF)**: 125 mm corners, a 30 mm
+  marker at most every 500 mm on each side, same codes, file `Name_MF_<number>.plt`, for
+  long jobs cut segment by segment.
+
+Types 2 and 3 follow the tables of the Kona application guide (ch. 4.4.2); the corner
+windows, the place of the top code and the marker spacing are read from its drawings,
+without dimensions: provisional until the first test on the Kona.
 
 The printed page grows accordingly, and the cut file follows the same offset. The Kona
 must be set to a resolution of **0.010 mm**.

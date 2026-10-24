@@ -166,6 +166,20 @@ En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
 - **Cadre Mutoh (type 1)** : cadre noir de 5 mm, à 10 mm de l'image, intérieur d'au
   moins 250 × 250 mm, blancs de 25 mm sur les côtés, 30 mm à l'avant, 80 mm à
   l'arrière (cotes minimales du manuel Kona respectées). Le Kona le mesure seul.
+- **Cadre Mutoh + code-barres (type 2, CutServer SF)** : le même cadre, coins percés de
+  quatre fenêtres, et deux codes POSTNET de 250 × 20 mm (bas à gauche, haut à droite,
+  à 50 mm du côté et 9 mm du cadre) avec le numéro en clair. Le numéro (11 chiffres)
+  vient du travail et de la page. Le fichier de découpe téléchargé porte le nom attendu
+  par Mutoh CutServer, `Nom_SF_<numéro>.plt` : le déposer dans son dossier, le Kona lit
+  le code et CutServer envoie le fichier du même numéro. Intérieur d'au moins 310 mm de
+  large.
+- **Cadre multi-segments + code-barres (type 3, CutServer MF)** : angles de 125 mm, un
+  repère de 30 mm tous les 500 mm au plus sur chaque côté, mêmes codes, fichier
+  `Nom_MF_<numéro>.plt`, pour les grandes longueurs découpées par segments.
+
+Types 2 et 3 suivent les tableaux du guide d'application Kona (chap. 4.4.2) ; les
+fenêtres des coins, la place du code du haut et l'écart des repères sont lus sur ses
+schémas, sans cote : provisoires jusqu'au premier essai sur le Kona.
 
 La page imprimée est agrandie d'autant, et le fichier de découpe suit le même décalage.
 Le Kona doit être réglé sur une résolution de **0,010 mm**.

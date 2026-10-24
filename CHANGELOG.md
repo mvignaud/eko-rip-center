@@ -20,6 +20,10 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   sur la couleur, par travail ; sortie en dossier par canal avec `envoi.json`. Les tons de
   découpe ne partent jamais ; un autre ton direct, ou blanc et argent sur la même page,
   est refusé à la mise en file avec la raison.
+- **Cadres Mutoh Types 2 et 3** (CutServer SF et MF) : codes POSTNET 250 × 20 mm haut et
+  bas, numéro à 11 chiffres par page, coins à fenêtres (Type 2), angles de 125 mm et
+  repères intermédiaires (Type 3) ; fichier de découpe nommé `Nom_SF|MF_<numéro>.plt`.
+  Provisoires jusqu'au premier essai sur le Kona.
 
 ### Corrigé
 - Part de surface utilisée de la planche : aire des contours de découpe, et non plus celle des

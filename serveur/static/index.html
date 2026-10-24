@@ -218,7 +218,7 @@
         </label>
         <label><span data-t="support_choix"></span> <select name="support"></select></label>
         <label><span data-t="reperage"></span>
-          <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option></select>
+          <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option><option value="cadre_code" data-t="cadre_code"></option><option value="cadre_multi" data-t="cadre_multi"></option></select>
         </label>
         <details class="section" id="couleur"><summary data-t="couleur"></summary><div>
           <label><span data-t="profil_cmjn"></span><select name="profil_cmjn" data-espace="CMYK"></select></label>
@@ -356,7 +356,7 @@ const textes = {
     rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
-    reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
+    reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", cadre_code: "Cadre Mutoh + code-barres (CutServer SF, type 2)", cadre_multi: "Cadre Mutoh multi-segments + code-barres (CutServer MF, type 3)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
     en_attente: "En attente", en_cours: "En cours", termine: "Terminé", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
@@ -454,7 +454,7 @@ const textes = {
     rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
-    reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
+    reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", cadre_code: "Mutoh frame + barcode (CutServer SF, type 2)", cadre_multi: "Mutoh multi-segment frame + barcode (CutServer MF, type 3)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
     en_attente: "Queued", en_cours: "In progress", termine: "Done", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,

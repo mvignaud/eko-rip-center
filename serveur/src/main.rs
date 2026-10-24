@@ -414,6 +414,14 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                     d.reperage = reperage::Reperage::Cadre;
                     Ok(())
                 }
+                "cadre_code" => {
+                    d.reperage = reperage::Reperage::CadreCode;
+                    Ok(())
+                }
+                "cadre_multi" => {
+                    d.reperage = reperage::Reperage::CadreMulti;
+                    Ok(())
+                }
                 _ => Err(erreur("mode_invalide")),
             },
             "profil_cmjn" => {
@@ -611,7 +619,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
 
     let rep = dossier(donnees, t.id);
     let rendu = match t.demande.mode {
-        Mode::Imprimer => match preparer_impression(&rep, t.demande.reperage).await {
+        Mode::Imprimer => match preparer_impression(&rep, t.demande.reperage, t.id).await {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
                 match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await {
@@ -1332,7 +1340,7 @@ async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: bl
     Ok(pages)
 }
 
-async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
+async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage, id: Uuid) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
     let source = rep.join(Format::Pdf.fichier());
     let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
     // Les tons de découpe ne marquent jamais le support : neutralisés avant le rendu.
@@ -1343,7 +1351,7 @@ async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -
     let (imprime, mises) = if choix == reperage::Reperage::Aucun {
         (pdf, vec![])
     } else {
-        tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix)).await.map_err(|e| e.to_string())??
+        tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix, id)).await.map_err(|e| e.to_string())??
     };
     let chemin = rep.join("imprime.pdf");
     tokio::fs::write(&chemin, imprime).await.map_err(|e| e.to_string())?;
@@ -1652,10 +1660,16 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
     }
 }
 
+/// Avec un cadre à code-barres, nommé pour Mutoh CutServer : `Nom_SF|MF_<numéro>.plt`.
 async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+    let cutserver = lire_page(&etat.config.donnees, id, page).and_then(|(t, _)| {
+        let mot = t.demande.reperage.code_cutserver()?;
+        let base: String = std::path::Path::new(&t.nom).file_stem()?.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
+        Some(format!("{base}_{mot}_{:011}.plt", reperage::numero(id, page)))
+    });
     match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_plt(rep, page))).await {
         Some(o) => {
-            let nom = format!("attachment; filename=\"decoupe-{page:03}.plt\"");
+            let nom = format!("attachment; filename=\"{}\"", cutserver.unwrap_or_else(|| format!("decoupe-{page:03}.plt")));
             ([(header::CONTENT_TYPE, "application/vnd.hp-hpgl".to_string()), (header::CONTENT_DISPOSITION, nom)], o).into_response()
         }
         None => introuvable(),
