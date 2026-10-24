@@ -114,6 +114,8 @@ struct Config {
     delai: Duration,
     /// Profils ICC déposés depuis l'écran.
     profils: PathBuf,
+    /// Durée de conservation des travaux, en jours (0 : jamais purgés).
+    conservation_jours: u64,
     /// Port du plotter (le Kona : `/dev/kona`, créé par la règle udev du paquet).
     plotter: PathBuf,
     plotter_stty: String,
@@ -145,6 +147,7 @@ async fn main() {
         gs: env_ou("EKO_RIP_GS", if cfg!(windows) { "gswin64c" } else { "gs" }),
         max_octets: env_ou("EKO_RIP_MAX_MO", "2048").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
         delai: Duration::from_secs(env_ou("EKO_RIP_DELAI_S", "1800").parse().expect("EKO_RIP_DELAI_S")),
+        conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
         plotter_stty: env_ou("EKO_RIP_PLOTTER_STTY", plotter::STTY_DEFAUT),
     };
@@ -156,6 +159,7 @@ async fn main() {
     let max = config.max_octets;
     let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: tokio::sync::Mutex::new(()) });
     tokio::spawn(surveiller(etat.clone()));
+    tokio::spawn(purger(etat.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -169,6 +173,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/planches", axum::routing::post(creer_planche))
+        .route("/api/systeme", get(systeme))
         .route("/api/reglages", get(lister_reglages).post(enregistrer_reglage))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
@@ -592,6 +597,47 @@ async fn supprimer_reglage(State(etat): State<Partage>, Chemin(nom): Chemin<Stri
     }
 }
 
+/// Travaux à purger : plus vieux que `jours` jours et inactifs (`jours` = 0 : aucun).
+fn a_purger(travaux: &[Travail], maintenant: u64, jours: u64) -> Vec<Uuid> {
+    if jours == 0 {
+        return vec![];
+    }
+    travaux.iter().filter(|t| !occupe(t) && maintenant.saturating_sub(t.cree_le) > jours * 86_400).map(|t| t.id).collect()
+}
+
+/// Toutes les heures, efface les travaux trop vieux (le disque se remplit vite à 720 dpi).
+async fn purger(etat: Partage) {
+    loop {
+        let donnees = &etat.config.donnees;
+        for id in a_purger(&lire_tous(donnees), maintenant(), etat.config.conservation_jours) {
+            match tokio::fs::remove_dir_all(dossier(donnees, id)).await {
+                Ok(()) => eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours),
+                Err(e) => eprintln!("travail {id} : purge impossible : {e}"),
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(3600)).await;
+    }
+}
+
+/// Espace du disque des données (`df -Pk`, présent sous Linux et macOS) et version.
+async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    let df = tokio::process::Command::new("df").arg("-Pk").arg(&etat.config.donnees).output().await.ok();
+    let (total, libre) = df
+        .and_then(|o| {
+            let texte = String::from_utf8_lossy(&o.stdout).into_owned();
+            let ligne = texte.lines().nth(1)?.to_string();
+            let champs: Vec<u64> = ligne.split_whitespace().filter_map(|c| c.parse().ok()).collect();
+            Some((champs.first()? * 1024, champs.get(2)? * 1024))
+        })
+        .map_or((None, None), |(t, l)| (Some(t), Some(l)));
+    Json(serde_json::json!({
+        "version": env!("CARGO_PKG_VERSION"),
+        "disque_total": total,
+        "disque_libre": libre,
+        "conservation_jours": etat.config.conservation_jours,
+    }))
+}
+
 /// Dossiers surveillés : toutes les 5 s, chaque fichier stable de `entrees/<réglage>/`
 /// devient un travail avec ce réglage ; un refus range le fichier dans `refuses/`.
 async fn surveiller(etat: Partage) {
@@ -867,6 +913,29 @@ async fn plaque(State(etat): State<Partage>, Chemin((id, page, nom)): Chemin<(Uu
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn purge_des_vieux_travaux_inactifs() {
+        let jour = 86_400;
+        let t = |age_jours: u64, statut: Statut| Travail {
+            id: Uuid::new_v4(),
+            nom: String::new(),
+            format: Format::Pdf,
+            demande: Demande::default(),
+            statut,
+            code_erreur: None,
+            erreur: None,
+            pages: vec![],
+            envoi_decoupe: None,
+            cree_le: 100 * jour - age_jours * jour,
+        };
+        let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
+        let ids = a_purger(&travaux, 100 * jour, 30);
+        assert_eq!(ids, [travaux[0].id, travaux[3].id], "vieux et inactifs seulement");
+        assert!(a_purger(&travaux, 100 * jour, 0).is_empty(), "0 : jamais");
+    }
+
     /// Chaque code d'erreur émis par ce fichier doit être traduit en FR et en EN dans l'écran.
     #[test]
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {

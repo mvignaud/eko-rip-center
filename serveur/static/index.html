@@ -24,6 +24,7 @@
   legend { font-size: 13px; color: var(--doux); padding: 0 4px; }
   label.case { display: flex; align-items: center; gap: 6px; }
   label.discret { color: var(--accent); cursor: pointer; }
+  footer { margin: 24px 0 8px; }
   .ligne-reglage { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; width: 100%; }
   #planche { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
   #planche[hidden] { display: none; }
@@ -84,6 +85,7 @@
     <button type="button" id="creer-planche"></button>
   </section>
   <section id="travaux" aria-live="polite"></section>
+  <footer id="systeme" class="meta"></footer>
 </main>
 <script>
 const textes = {
@@ -93,6 +95,7 @@ const textes = {
     couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
+    systeme: (v, libre, total, jours) => `E-KO RIP Center ${v} · espace libre : ${libre} sur ${total}` + (jours ? ` · travaux gardés ${jours} jours` : ""),
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer ces réglages…", supprimer_reglage: "Supprimer le réglage",
     nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
@@ -125,6 +128,7 @@ const textes = {
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
+    systeme: (v, libre, total, jours) => `E-KO RIP Center ${v} · free space: ${libre} of ${total}` + (jours ? ` · jobs kept ${jours} days` : ""),
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save these settings…", supprimer_reglage: "Delete preset",
     nom_reglage: "Preset name (its hot folder will have this name):", reglage_enregistre: (n) => `Preset “${n}” saved; hot folder: entrees/${n}/`,
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
@@ -191,6 +195,19 @@ document.getElementById("profil").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 
+let infoSysteme = null;
+const go = (o) => `${(o / 1e9).toLocaleString(langue === "fr" ? "fr-FR" : "en-GB", { maximumFractionDigits: 1 })} ${langue === "fr" ? "Go" : "GB"}`;
+async function chargerSysteme() {
+  try { infoSysteme = await (await fetch("/api/systeme")).json(); } catch { return; }
+  afficherSysteme();
+}
+function afficherSysteme() {
+  const s = infoSysteme, pied = document.getElementById("systeme");
+  if (!s || s.disque_total == null) return;
+  pied.textContent = T().systeme(s.version, go(s.disque_libre), go(s.disque_total), s.conservation_jours);
+  pied.className = s.disque_libre / s.disque_total < 0.1 ? "meta erreur" : "meta";
+}
+
 let reglages = [];
 const choixReglage = document.getElementById("reglage");
 async function chargerReglages() {
@@ -252,6 +269,7 @@ function appliquerLangue() {
   boutonLangue.textContent = T().autre;
   remplirProfils();
   remplirReglages();
+  afficherSysteme();
   majPlanche();
   rafraichir();
 }
@@ -390,7 +408,9 @@ async function decouper(url, bouton) {
 
 appliquerLangue();
 chargerProfils().then(chargerReglages);
+chargerSysteme();
 setInterval(rafraichir, 3000);
+setInterval(chargerSysteme, 60000);
 </script>
 </body>
 </html>

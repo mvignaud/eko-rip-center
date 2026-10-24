@@ -5,6 +5,19 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
+## [Non publié]
+
+### Ajouté
+- **Purge automatique** des travaux plus vieux que `EKO_RIP_CONSERVATION_JOURS` jours
+  (30 par défaut, 0 = jamais), toutes les heures ; un travail en cours n'est jamais
+  purgé. ⚠️ À la mise à jour, les travaux de plus de 30 jours sont effacés au démarrage.
+- Pied de page : version, espace libre du disque des données (en rouge sous 10 %),
+  durée de conservation. Route `/api/systeme`.
+
+### Modifié
+- Les composites CMJN 32 bits et les TIFF d'aperçu sont effacés après le rendu (≈ 40 % de
+  place en moins) ; les plaques de production restent, compressées en LZW.
+
 ## [0.5.0] — 2026-10-24
 
 ### Ajouté

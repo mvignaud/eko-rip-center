@@ -44,6 +44,12 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
             image::open(&tif)
                 .and_then(|img| img.save(chemin_apercu_plaque(dossier, i + 1, nom)))
                 .map_err(|e| format!("aperçu de la plaque {nom}, page {} : {e}", i + 1))?;
+            let _ = std::fs::remove_file(&tif);
+        }
+        // Le composite CMJN 32 bits (≈ 40 % de la place) ne sert ni au pilote, qui lit les
+        // plaques, ni à l'aperçu, en PNG.
+        for d in [&prod, &apercu] {
+            let _ = std::fs::remove_file(d.join(format!("{}.tif", prefixe(i + 1))));
         }
     }
     Ok(Rendu { pages })
@@ -175,6 +181,8 @@ mod tests {
         assert_eq!(pixel(&dossier, 2, "Magenta", 25.0, dpi), 0, "page 2 : magenta plein");
         assert!(chemin_apercu_plaque(&dossier, 1, "White").exists());
         assert!(chemin_composite(&dossier, 2).exists());
+        assert!(!dossier.join("prod/plaque-001.tif").exists(), "composite TIFF effacé");
+        assert!(!dossier.join("apercu/plaque-001(Cyan).tif").exists(), "TIFF d'aperçu effacé après conversion");
 
         std::fs::remove_dir_all(&dossier).unwrap();
     }

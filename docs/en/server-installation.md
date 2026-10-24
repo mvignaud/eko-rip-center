@@ -70,6 +70,9 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_GS` | `gs` | Ghostscript command |
 | `EKO_RIP_MAX_MO` | `2048` | maximum PDF size, in MB |
 | `EKO_RIP_DELAI_S` | `1800` | maximum rendering time, in seconds |
+| `EKO_RIP_CONSERVATION_JOURS` | `30` | jobs deleted after this many days (0: never) |
+| `EKO_RIP_PLOTTER` | `/dev/kona` | cutter port |
+| `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | cutter port settings |
 
 ## Sharing the hot folders (Samba)
 
