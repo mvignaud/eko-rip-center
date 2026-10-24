@@ -96,12 +96,21 @@ impl File {
     }
 
     /// Prochaine sortie à lancer sur `machine` (aucune si une y tourne déjà).
+    // Seuls les tests l'appellent ; pas d'attribut cfg test ici : le contrôle des traductions
+    // coupe chaque source au premier.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn prochaine(&self, machine: &str) -> Option<usize> {
+        self.prochaine_si(machine, |_| true)
+    }
+
+    /// Première sortie en attente de `machine` que `prete` accepte (les autres gardent leur
+    /// raison d'attente et leur place) ; aucune si la machine a déjà une sortie en cours.
+    pub fn prochaine_si(&self, machine: &str, prete: impl Fn(&Sortie) -> bool) -> Option<usize> {
         let mut pour = self.sorties.iter().enumerate().filter(|(_, s)| s.machine == machine);
         if pour.clone().any(|(_, s)| s.etat == Etat::EnCours) {
             return None;
         }
-        pour.find(|(_, s)| s.etat == Etat::EnAttente).map(|(i, _)| i)
+        pour.find(|(_, s)| s.etat == Etat::EnAttente && prete(s)).map(|(i, _)| i)
     }
 
     pub fn active_pour(&self, travail: Uuid) -> bool {

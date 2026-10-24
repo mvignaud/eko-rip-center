@@ -1875,6 +1875,31 @@ fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travai
 }
 
 /// La file, chaque impression avec sa durée estimée (minutes, sur sa machine).
+/// Pourquoi une sortie ne part pas (roadmap 0.4) ; `None` : elle partira à son tour.
+/// Hors `attente_operateur`, la sortie est retenue tant que la raison dure.
+fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machines::Machine>) -> Option<&'static str> {
+    match s.etat {
+        file::Etat::Suspendue => return Some("attente_operateur"),
+        file::Etat::EnAttente => {}
+        _ => return None,
+    }
+    let Some(m) = m else { return Some("machine_hors_ligne") };
+    if let machines::Connexion::Serie { port, .. } = &m.connexion
+        && !port.exists()
+    {
+        return Some("machine_hors_ligne");
+    }
+    let Some((_, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
+    if s.operation() == machines::Operation::Decoupe && !fichier_plt(&dossier(donnees, s.travail), s.page).exists() {
+        return Some("source_absente");
+    }
+    // Page (repères compris) plus large que la laize utile : elle ne passe pas.
+    if p.largeur_mm > m.laize_mm + 0.5 {
+        return Some("format_trop_petit");
+    }
+    None
+}
+
 async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let catalogue = etat.machines.read().unwrap().clone();
@@ -1890,6 +1915,7 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
+                v["raison_attente"] = serde_json::json!(raison_attente(&donnees, &s, catalogue.iter().find(|m| m.id == s.machine)));
                 v
             })
             .collect(),
@@ -1974,7 +2000,8 @@ async fn repartir(etat: Partage) {
         for id in ids {
             let suivante = {
                 let mut f = etat.file.lock().unwrap();
-                f.prochaine(&id).map(|i| {
+                let m = etat.machines.read().unwrap().iter().find(|m| m.id == id).cloned();
+                f.prochaine_si(&id, |s| raison_attente(&etat.config.donnees, s, m.as_ref()).is_none()).map(|i| {
                     let s = &mut f.sorties[i];
                     (s.etat, s.debut) = (file::Etat::EnCours, Some(maintenant()));
                     let s = s.clone();
@@ -2167,7 +2194,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -2388,6 +2415,42 @@ mod tests {
             let empreinte = std::fs::read_to_string(e.config.donnees.join("erp.json")).unwrap();
             assert!(!empreinte.contains(&jeton), "le jeton n'est jamais gardé en clair");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Raison d'attente de chaque sortie (roadmap 0.4) ; une sortie bloquée ne part pas.
+        #[test]
+        fn raisons_d_attente() {
+            let e = etat("raisons");
+            let d = e.config.donnees.clone();
+            let m = |laize_mm, port: &str| machines::Machine { laize_mm, connexion: machines::Connexion::Serie { port: port.into(), stty: String::new() }, ..e.machines.read().unwrap()[1].clone() };
+            let id = Uuid::new_v4();
+            let rep = dossier(&d, id);
+            std::fs::create_dir_all(rep.join("prod")).unwrap();
+            let t = serde_json::json!({ "id": id, "nom": "essai", "statut": "termine", "erreur": null, "cree_le": 0,
+                "pages": [{ "plaques": [], "traces_decoupe": 1, "largeur_mm": 500.0, "hauteur_mm": 300.0 }] });
+            ecrire(&d, &serde_json::from_value::<Travail>(t).unwrap()).unwrap();
+            let mut s = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, id, "essai", 1, 0);
+            let present = d.join("port-present");
+            std::fs::write(&present, b"").unwrap();
+            let p = present.to_str().unwrap();
+            assert_eq!(raison_attente(&d, &s, None), Some("machine_hors_ligne"), "machine absente du catalogue");
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, "/dev/inexistant"))), Some("machine_hors_ligne"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), Some("source_absente"), "pas de tracé");
+            std::fs::write(fichier_plt(&rep, 1), b"IN;").unwrap();
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), None);
+            assert_eq!(raison_attente(&d, &s, Some(&m(400.0, p))), Some("format_trop_petit"));
+            s.etat = file::Etat::Suspendue;
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p))), Some("attente_operateur"));
+            s.etat = file::Etat::Terminee;
+            assert_eq!(raison_attente(&d, &s, None), None, "une sortie finie n'attend rien");
+            let mut f = file::File::default();
+            let mut bloquee = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, Uuid::new_v4(), "absente", 1, 0);
+            bloquee.etat = file::Etat::EnAttente;
+            let prete = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, id, "essai", 1, 0);
+            f.sorties = vec![bloquee, prete];
+            let machine = m(1650.0, p);
+            assert_eq!(f.prochaine_si("kona", |x| raison_attente(&d, x, Some(&machine)).is_none()), Some(1), "la bloquée garde sa place, la suivante part");
+            std::fs::remove_dir_all(&d).unwrap();
         }
 
         /// Identifiants immuables des machines, couches et réglages (pont ERP, lot R1).
