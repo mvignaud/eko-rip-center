@@ -14,6 +14,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   en sortie, intention de rendu, option « ignorer les profils du PDF ». L'aperçu
   composite simule le support (épreuve écran). Les tons directs ne sont pas convertis.
 - Le CI vérifie la syntaxe JavaScript des pages.
+- Les plaques de découpe (`CutContour`…) sont signalées « découpe, non imprimée » ; la
+  liste par page (`plaques_decoupe`) servira au pilote d'impression pour les exclure.
 
 ## [0.3.0] — 2026-10-24
 

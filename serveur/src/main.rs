@@ -94,6 +94,9 @@ struct Travail {
 struct Page {
     /// Plaques de la page (vide en découpe seule).
     plaques: Vec<String>,
+    /// Parmi elles, les tons de découpe (`CutContour`…) : jamais envoyés à l'imprimante.
+    #[serde(default)]
+    plaques_decoupe: Vec<String>,
     /// Tracés de découpe de la page (0 : rien à découper).
     traces_decoupe: usize,
 }
@@ -408,7 +411,11 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 t.pages = plaques
                     .into_iter()
                     .enumerate()
-                    .map(|(i, plaques)| Page { plaques, traces_decoupe: traces.get(i).copied().unwrap_or(0) })
+                    .map(|(i, plaques)| Page {
+                        plaques_decoupe: plaques.iter().filter(|p| decoupe::est_ton_de_decoupe(p)).cloned().collect(),
+                        plaques,
+                        traces_decoupe: traces.get(i).copied().unwrap_or(0),
+                    })
                     .collect();
                 t.statut = Statut::Termine;
             }

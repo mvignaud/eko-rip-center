@@ -73,7 +73,7 @@ const textes = {
     couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
-    page: (n) => `Page ${n}`, supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
+    non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
     en_attente: "En attente", en_cours: "Rendu en cours", termine: "Terminé", echec: "Échec",
@@ -100,7 +100,7 @@ const textes = {
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
-    page: (n) => `Page ${n}`, supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
+    non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
     en_attente: "Queued", en_cours: "Rendering", termine: "Done", echec: "Failed",
@@ -245,7 +245,8 @@ function vuePage(t, page, n) {
   const vignette = (src, legende) => el("figure", {}, el("img", { src, alt: legende, loading: "lazy" }), el("figcaption", {}, legende));
   const vignettes = t.mode === "decouper" ? [] : [vignette(`${base}/apercu.png`, T().composite)];
   if (page.traces_decoupe) vignettes.push(vignette(`${base}/decoupe.svg`, T().apercu_decoupe));
-  vignettes.push(...page.plaques.map((p) => vignette(`${base}/plaques/${encodeURIComponent(p)}`, p)));
+  vignettes.push(...page.plaques.map((p) => vignette(`${base}/plaques/${encodeURIComponent(p)}`,
+    (page.plaques_decoupe || []).includes(p) ? T().non_imprimee(p) : p)));
 
   const ligne = el("p", { className: "meta" });
   if (t.pages.length > 1) ligne.append(el("strong", {}, T().page(n)), " · ");
