@@ -5,6 +5,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
+## [Non publié]
+
+### Ajouté
+- **Mosaïque** : option à l'envoi ; une page plus large que la laize est coupée en lés de
+  même largeur avec recouvrement réglable (20 mm par défaut), un lé par page ; l'original
+  est gardé (`source-original.pdf`). La découpe de chaque lé est rognée à son bord.
+- Les tracés de découpe sont rognés à la page : la lame ne part jamais hors du support.
+
 ## [0.4.0] — 2026-10-24
 
 ### Ajouté

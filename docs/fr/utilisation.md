@@ -26,6 +26,12 @@ espaces et tirets indifférents). La fiche du travail indique leur nombre et pro
 **Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
 page). Un ton de découpe à 0 % n'est pas découpé.
 
+## Mosaïque
+
+Bloc **Mosaïque** : cocher **Couper en lés si plus large que la laize**, régler la laize
+et le **recouvrement** (zone imprimée sur les deux lés voisins, pour coller ou souder).
+Chaque lé devient une page du travail, avec sa propre découpe rognée à son bord.
+
 ## Planche (imbrication)
 
 Sur chaque page imprimable, cocher **Planche** et indiquer le nombre de copies. Le

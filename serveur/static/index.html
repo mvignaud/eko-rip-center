@@ -59,6 +59,11 @@
       <label class="case"><input type="checkbox" name="forcer_profils" value="oui"> <span data-t="forcer"></span></label>
       <label class="discret"><span data-t="deposer"></span><input type="file" id="profil" accept=".icc,.icm" hidden></label>
     </fieldset>
+    <fieldset><legend data-t="mosaique"></legend>
+      <label class="case"><input type="checkbox" name="mosaique" value="oui"> <span data-t="mosaique_activer"></span></label>
+      <label><span data-t="laize"></span> <input type="number" name="laize_mm" value="1600" min="50" max="5000" step="1"></label>
+      <label><span data-t="recouvrement"></span> <input type="number" name="recouvrement_mm" value="20" min="0" max="200" step="1"></label>
+    </fieldset>
     <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" required></label>
     <label><span data-t="resolution"></span>
       <select name="dpi"><option>360</option><option selected>720</option><option>1440</option></select>
@@ -82,6 +87,7 @@ const textes = {
     couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
+    mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     ajouter: "Planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
@@ -99,7 +105,7 @@ const textes = {
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
       profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
-      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.",
+      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", travail_occupe: "Ce travail est en cours de rendu ou d'envoi.", envoi_en_cours: "Un envoi au plotter est déjà en cours.",
       envoi_decoupe_echoue: "L'envoi au plotter a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
@@ -111,6 +117,7 @@ const textes = {
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
+    mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     ajouter: "Sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
@@ -128,7 +135,7 @@ const textes = {
       erreur_interne: "Server error.", introuvable: "Not found.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
       profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
-      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.",
+      profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.",
       rien_a_decouper: "This job has no cut path.", travail_occupe: "This job is being rendered or sent.", envoi_en_cours: "A cutter job is already being sent.",
       envoi_decoupe_echoue: "Sending to the cutter failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",

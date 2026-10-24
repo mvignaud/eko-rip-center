@@ -281,7 +281,8 @@ fn extraire_page(doc: &Document, page: lopdf::ObjectId, tous: bool) -> Result<De
 
     let mut lecteur = Lecteur { doc, tous, traces: vec![] };
     lecteur.lire(&doc.get_page_content(page), ressources, etat, 0)?;
-    Ok(Decoupe { traces: lecteur.traces, largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] })
+    let (largeur, hauteur) = (boite[2] - boite[0], boite[3] - boite[1]);
+    Ok(Decoupe { traces: rogner(lecteur.traces, largeur, hauteur), largeur, hauteur })
 }
 
 /// Tracés d'un SVG. Sans couleur en Séparation dans ce format, un tracé est « de
@@ -369,6 +370,69 @@ pub fn apercu_svg(d: &Decoupe) -> String {
         svg += &format!(r#"<{balise} points="{}"/>"#, points.join(" "));
     }
     svg + "</g></svg>"
+}
+
+/// Segment `a`–`b` rogné au rectangle [0, l] × [0, h] (Liang–Barsky) ; `None` s'il est dehors.
+fn rogner_segment(a: (f64, f64), b: (f64, f64), l: f64, h: f64) -> Option<((f64, f64), (f64, f64))> {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    for (p, q) in [(-dx, a.0), (dx, l - a.0), (-dy, a.1), (dy, h - a.1)] {
+        if p.abs() < 1e-12 {
+            if q < -1e-9 {
+                return None;
+            }
+            continue;
+        }
+        let r = q / p;
+        if p < 0.0 {
+            t0 = t0.max(r);
+        } else {
+            t1 = t1.min(r);
+        }
+        if t0 > t1 {
+            return None;
+        }
+    }
+    Some(((a.0 + t0 * dx, a.1 + t0 * dy), (a.0 + t1 * dx, a.1 + t1 * dy)))
+}
+
+/// Tracés rognés à la page [0, l] × [0, h] : un tracé qui déborde devient un ou plusieurs
+/// tracés ouverts (la lame ne coupe pas hors du support) ; un tracé fermé coupé raccorde
+/// son dernier morceau au premier.
+pub fn rogner(traces: Vec<Trace>, l: f64, h: f64) -> Vec<Trace> {
+    let pres = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).abs() < 1e-6 && (p.1 - q.1).abs() < 1e-6;
+    let mut sortie = vec![];
+    for t in traces {
+        let mut points = t.points.clone();
+        if t.ferme {
+            points.push(t.points[0]);
+        }
+        let mut morceaux: Vec<Vec<(f64, f64)>> = vec![];
+        let mut coupe = false;
+        for w in points.windows(2) {
+            let Some((a, b)) = rogner_segment(w[0], w[1], l, h) else {
+                coupe = true;
+                continue;
+            };
+            coupe |= !pres(a, w[0]) || !pres(b, w[1]);
+            match morceaux.last_mut() {
+                Some(m) if pres(*m.last().unwrap(), a) => m.push(b),
+                _ => morceaux.push(vec![a, b]),
+            }
+        }
+        if !coupe && t.ferme {
+            sortie.push(t);
+            continue;
+        }
+        // Tracé fermé coupé : le dernier morceau rejoint le premier s'ils se touchent.
+        if t.ferme && morceaux.len() > 1 && pres(*morceaux.last().unwrap().last().unwrap(), morceaux[0][0]) {
+            let mut fin = morceaux.pop().unwrap();
+            fin.extend(morceaux.remove(0).into_iter().skip(1));
+            morceaux.insert(0, fin);
+        }
+        sortie.extend(morceaux.into_iter().filter(|m| m.len() >= 2).map(|points| Trace { ton: t.ton.clone(), points, ferme: false }));
+    }
+    sortie
 }
 
 /// Outil du plotter selon le ton : 1 lame, 2 rainage, 3 perforation, 4 coupe en V.
@@ -529,6 +593,20 @@ mod tests {
         for (x, y) in &cercle.points {
             assert!((((x - cx).powi(2) + (y - cy).powi(2)).sqrt() - r).abs() < 0.1);
         }
+    }
+
+    #[test]
+    fn rognage_a_la_page() {
+        let carre = |x0: f64, x1: f64| Trace { ton: "CutContour".into(), points: vec![(x0, 10.0), (x1, 10.0), (x1, 90.0), (x0, 90.0)], ferme: true };
+        // Dedans : inchangé, reste fermé.
+        assert_eq!(rogner(vec![carre(10.0, 50.0)], 100.0, 100.0), vec![carre(10.0, 50.0)]);
+        // Dehors : disparaît.
+        assert!(rogner(vec![carre(150.0, 190.0)], 100.0, 100.0).is_empty());
+        // À cheval sur le bord droit : un seul tracé ouvert, raccordé, de (100,90) à (100,10).
+        let r = rogner(vec![carre(50.0, 150.0)], 100.0, 100.0);
+        assert_eq!(r.len(), 1, "{r:?}");
+        assert!(!r[0].ferme);
+        assert_eq!(r[0].points, [(100.0, 90.0), (50.0, 90.0), (50.0, 10.0), (100.0, 10.0)]);
     }
 
     #[test]

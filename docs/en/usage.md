@@ -26,6 +26,12 @@ not matter). The job card shows how many and offers **Download the .plt file**
 (HP-GL, 1/40 mm, origin at the page's bottom-left corner). A cut colour at 0% is not
 cut.
 
+## Tiling
+
+**Tiling** block: tick **Split into panels when wider than the roll**, set the roll
+width and the **overlap** (area printed on both neighbouring panels, for gluing or
+welding). Each panel becomes a page of the job, with its own cut clipped to its edge.
+
 ## Sheet (nesting)
 
 On each printable page, tick **Sheet** and set the number of copies. The **Sheet** panel

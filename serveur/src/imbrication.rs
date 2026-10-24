@@ -58,39 +58,45 @@ fn nombres(o: &Object) -> Option<Vec<f64>> {
     Some(o.as_array().ok()?.iter().filter_map(|v| v.as_float().ok()).map(f64::from).collect())
 }
 
+/// Copie la page `page` (à partir de 1) de `pdf` dans `cible` sous forme de formulaire
+/// XObject : rend son identifiant, sa taille et le coin bas gauche de sa MediaBox.
+/// Tous les objets de la source passent dans la cible (numéros décalés) ; les inutiles
+/// sont retirés par `prune_objects` à la fin de la composition.
+pub fn page_en_formulaire(cible: &mut Document, pdf: &[u8], page: usize) -> Result<(ObjectId, Taille, [f64; 2]), String> {
+    let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    doc.renumber_objects_with(cible.max_id + 1);
+    let id_page = *doc.get_pages().get(&(page as u32)).ok_or(format!("pas de page {page}"))?;
+    let dict = doc.get_dictionary(id_page).map_err(|e| e.to_string())?;
+    let boite = dict.get(b"MediaBox").ok().and_then(nombres).filter(|b| b.len() == 4).ok_or("page sans MediaBox")?;
+    if dict.get(b"Rotate").and_then(Object::as_i64).is_ok_and(|r| r % 360 != 0) {
+        return Err("page tournée (/Rotate) non prise en charge".into());
+    }
+    let ressources: Dictionary = match doc.get_page_resources(id_page).map_err(|e| e.to_string())? {
+        (Some(d), _) => d.clone(),
+        (None, ids) => ids.first().and_then(|id| doc.get_dictionary(*id).ok()).cloned().unwrap_or_default(),
+    };
+    let contenu = doc.get_page_content(id_page);
+    cible.max_id = doc.max_id;
+    cible.objects.extend(doc.objects);
+    let form = Stream::new(
+        dictionary! {
+            "Type" => "XObject", "Subtype" => "Form",
+            "BBox" => boite.iter().map(|v| Object::Real(*v as f32)).collect::<Vec<_>>(),
+            "Resources" => ressources,
+        },
+        contenu,
+    );
+    let id = cible.add_object(form);
+    Ok((id, Taille { largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] }, [boite[0], boite[1]]))
+}
+
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
 pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64) -> Result<(Vec<u8>, Vec<Place>), String> {
     let mut cible = Document::with_version("1.6");
     // Formulaires créés, un par source, et leur taille.
     let mut formulaires: Vec<(ObjectId, Taille, [f64; 2])> = vec![];
     for (n, s) in sources.iter().enumerate() {
-        let mut doc = Document::load_mem(s.pdf).map_err(|e| format!("source {} : PDF illisible : {e}", n + 1))?;
-        doc.renumber_objects_with(cible.max_id + 1);
-        let page = *doc.get_pages().get(&(s.page as u32)).ok_or(format!("source {} : pas de page {}", n + 1, s.page))?;
-        let dict = doc.get_dictionary(page).map_err(|e| e.to_string())?;
-        let boite = dict.get(b"MediaBox").ok().and_then(nombres).filter(|b| b.len() == 4).ok_or(format!("source {} : page sans MediaBox", n + 1))?;
-        if dict.get(b"Rotate").and_then(Object::as_i64).is_ok_and(|r| r % 360 != 0) {
-            return Err(format!("source {} : page tournée (/Rotate) non prise en charge", n + 1));
-        }
-        let ressources: Dictionary = match doc.get_page_resources(page).map_err(|e| e.to_string())? {
-            (Some(d), _) => d.clone(),
-            (None, ids) => ids.first().and_then(|id| doc.get_dictionary(*id).ok()).cloned().unwrap_or_default(),
-        };
-        let contenu = doc.get_page_content(page);
-        // Tous les objets de la source passent dans la cible (numéros déjà décalés) ; les
-        // inutiles (arbre des pages, catalogue) sont retirés à la fin par prune_objects.
-        cible.max_id = doc.max_id;
-        cible.objects.extend(doc.objects);
-        let form = Stream::new(
-            dictionary! {
-                "Type" => "XObject", "Subtype" => "Form",
-                "BBox" => boite.iter().map(|v| Object::Real(*v as f32)).collect::<Vec<_>>(),
-                "Resources" => ressources,
-            },
-            contenu,
-        );
-        let id = cible.add_object(form);
-        formulaires.push((id, Taille { largeur: boite[2] - boite[0], hauteur: boite[3] - boite[1] }, [boite[0], boite[1]]));
+        formulaires.push(page_en_formulaire(&mut cible, s.pdf, s.page).map_err(|e| format!("source {} : {e}", n + 1))?);
     }
     // Copies déroulées : élément k → formulaire de sa source.
     let elements: Vec<usize> = sources.iter().enumerate().flat_map(|(n, s)| std::iter::repeat_n(n, s.copies)).collect();

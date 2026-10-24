@@ -4,6 +4,7 @@
 mod couleur;
 mod decoupe;
 mod imbrication;
+mod mosaique;
 mod plotter;
 mod render;
 mod reperage;
@@ -75,6 +76,9 @@ struct Travail {
     /// Profils ICC et intention de rendu (mode Imprimer).
     #[serde(default)]
     couleur: couleur::Couleur,
+    /// Mosaïque appliquée à l'envoi (laize et recouvrement, en mm).
+    #[serde(default)]
+    mosaique: Option<Mosaique>,
     statut: Statut,
     /// Code stable traduit par l'écran (`rendu_echoue`, `interrompu`).
     #[serde(default)]
@@ -89,6 +93,12 @@ struct Travail {
     envoi_decoupe: Option<EnvoiDecoupe>,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct Mosaique {
+    laize_mm: f64,
+    recouvrement_mm: f64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -244,6 +254,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let (mut nom, mut dpi, mut format) = (String::new(), 720u32, None);
     let (mut mode, mut tous_les_traces, mut reperage) = (Mode::Imprimer, false, reperage::Reperage::Aucun);
     let mut couleur = couleur::Couleur::default();
+    let (mut mosaique, mut laize_mm, mut recouvrement_mm) = (false, 1600.0f64, 20.0f64);
 
     loop {
         let champ = match form.next_field().await {
@@ -296,6 +307,14 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                     _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("profil_inadapte", None)).await,
                 };
             }
+            Some(champ_nombre @ ("laize_mm" | "recouvrement_mm")) => {
+                let est_laize = champ_nombre == "laize_mm";
+                let Some(v) = champ.text().await.ok().and_then(|t| t.trim().parse::<f64>().ok()) else {
+                    return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", None)).await;
+                };
+                if est_laize { laize_mm = v } else { recouvrement_mm = v }
+            }
+            Some("mosaique") => mosaique = champ.text().await.is_ok_and(|t| t.trim() == "oui"),
             Some("forcer_profils") => couleur.forcer = champ.text().await.is_ok_and(|t| t.trim() == "oui"),
             Some("fichier") => {
                 nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
@@ -325,9 +344,30 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     if let Err(e) = tokio::fs::rename(&provisoire, rep.join(format.fichier())).await {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
+    // Mosaïque : la source est remplacée par ses lés ; l'original est gardé à côté.
+    let mosaique = (mosaique && mode == Mode::Imprimer && format == Format::Pdf).then_some(Mosaique { laize_mm, recouvrement_mm });
+    if let Some(m) = mosaique {
+        if !(50.0..=5000.0).contains(&m.laize_mm) || !(0.0..=200.0).contains(&m.recouvrement_mm) {
+            return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", Some("laize 50–5000 mm, recouvrement 0–200 mm".into()))).await;
+        }
+        let source = rep.join(Format::Pdf.fichier());
+        let original = rep.join("source-original.pdf");
+        let resultat = match tokio::fs::rename(&source, &original).await.and(tokio::fs::read(&original).await) {
+            Ok(pdf) => tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm)).await.unwrap_or_else(|e| Err(e.to_string())),
+            Err(e) => Err(e.to_string()),
+        };
+        match resultat {
+            Ok(les) => {
+                if let Err(e) = tokio::fs::write(&source, les).await {
+                    return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
+                }
+            }
+            Err(e) => return abandon(&rep, StatusCode::BAD_REQUEST, ("mosaique_invalide", Some(e))).await,
+        }
+    }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, couleur, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
+    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, couleur, mosaique, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
@@ -516,6 +556,7 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
         tous_les_traces: false,
         reperage: d.reperage,
         couleur: couleur::Couleur::default(),
+        mosaique: None,
         statut: Statut::EnAttente,
         code_erreur: None,
         erreur: None,
