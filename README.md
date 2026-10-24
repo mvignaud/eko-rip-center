@@ -1,8 +1,8 @@
 # E-KO RIP Center
 
 RIP d'impression grand format, usage interne. Un serveur Linux reçoit les PDF des
-postes (Mac, Linux, Windows) par le navigateur et pilote les machines qui lui sont
-branchées.
+postes par le client E-KO RIP Center (Mac, Linux, Windows) et pilote les machines qui lui
+sont branchées ; un navigateur ne voit qu'une page d'état.
 
 État : le PDF reçu est rendu en plaques d'encre (CMJN + une plaque par ton direct,
 `White` et `Silver` compris) avec un aperçu dans l'écran, et ses tracés de découpe sont

@@ -1,7 +1,9 @@
 # Client installation
 
-The client is a window on the server screen. Any browser pointed at
-`http://<server>:8640` works too.
+The client is the only place to work: sending files, queue, settings. A browser
+pointed at `http://<server>:8640` only shows a status page (version, machines, address to
+enter in the client); the interface and the API are reserved to the client, recognised by
+its `EKO-RIP-Client/` signature.
 
 Download from the releases page:
 

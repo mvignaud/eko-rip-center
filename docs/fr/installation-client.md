@@ -1,7 +1,9 @@
 # Installer le client
 
-Le client est une fenêtre sur l'écran du serveur. On peut aussi s'en passer et
-ouvrir `http://<serveur>:8640` dans n'importe quel navigateur.
+Le client est le seul endroit où l'on travaille : envoi des fichiers, file d'attente,
+réglages. Un navigateur ouvert sur `http://<serveur>:8640` ne montre qu'une page d'état
+(version, machines, adresse à saisir dans le client) ; l'interface et l'API sont
+réservées au client, reconnu à sa signature `EKO-RIP-Client/`.
 
 Télécharger depuis la page des releases :
 

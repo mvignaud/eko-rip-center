@@ -20,6 +20,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ### Modifié
 - `GET /api/machines/epson/media` devient `GET /api/machines/{id}/media`.
+- **On travaille seulement depuis le client** : un navigateur ouvert sur l'adresse du
+  serveur ne voit qu'une page d'état (version, machines, adresse à saisir dans le
+  client) et l'API lui répond 403 (`client_requis`). Le client s'annonce par son
+  User-Agent (`EKO-RIP-Client/`). `EKO_RIP_ACCES_NAVIGATEUR=1` rouvre le navigateur pour le
+  développement. ⚠️ Mettre à jour les clients avec le serveur.
 
 ## [0.9.0] — 2026-10-24
 

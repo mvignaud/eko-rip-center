@@ -11,3 +11,5 @@
 # Adresse IP de l'Epson (SNMP) : largeur du média chargé, reprise comme laize.
 #EKO_RIP_EPSON_SNMP=192.168.1.50
 #EKO_RIP_EPSON_COMMUNAUTE=public
+# 1 : interface complète aussi dans un navigateur (développement seulement).
+#EKO_RIP_ACCES_NAVIGATEUR=0

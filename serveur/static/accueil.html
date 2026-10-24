@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-KO RIP Center</title>
+<style>
+  :root { --fond: #f3f5f8; --carte: #fff; --texte: #18202a; --doux: #5f6b78; --trait: #dfe3e8; --accent: #0b6bcb; --ok: #1a7f37; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #0f1318; --carte: #171c23; --texte: #e8ebee; --doux: #9aa4ae; --trait: #2a323c; --accent: #5aa7f0; --ok: #4ac26b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--fond); color: var(--texte); }
+  main { max-width: 640px; margin: 48px auto; padding: 0 16px; }
+  .carte { background: var(--carte); border: 1px solid var(--trait); border-radius: 12px; padding: 24px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h1 span { color: var(--accent); }
+  .etat { color: var(--ok); font-weight: 600; }
+  .meta { color: var(--doux); font-size: 13px; }
+  code { background: var(--fond); border: 1px solid var(--trait); border-radius: 6px; padding: 2px 6px; overflow-wrap: anywhere; }
+  ul { padding-left: 20px; }
+  h2 { font-size: 15px; margin: 20px 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="carte">
+    <h1>E-KO <span>RIP</span> Center</h1>
+    <p class="meta">Serveur {version} · <span class="etat">en marche</span> / running</p>
+
+    <h2>Machines</h2>
+    <ul>{machines}</ul>
+
+    <h2>Travailler sur ce RIP</h2>
+    <p>L'envoi des fichiers, la file d'attente et les réglages se font depuis le
+    <strong>client E-KO RIP Center</strong> (Mac, Windows, Linux), pas depuis un navigateur.
+    Au premier lancement du client, saisir l'adresse du serveur :</p>
+    <p><code>http://{hote}</code></p>
+    <p class="meta">Le client s'installe depuis la page des versions du projet (fichiers
+    <code>.dmg</code>, <code>.msi</code>/<code>.exe</code>, <code>.deb</code>/<code>.AppImage</code>).</p>
+
+    <h2>Working on this RIP</h2>
+    <p class="meta">Jobs, queue and settings live in the <strong>E-KO RIP Center client</strong>
+    (Mac, Windows, Linux), not in a browser. On first launch, enter the server address above.</p>
+  </div>
+</main>
+</body>
+</html>

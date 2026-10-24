@@ -126,6 +126,8 @@ struct Config {
     plotter_stty: String,
     /// Adresse de l'Epson pour lire le média chargé par SNMP (aucune : pas de lecture).
     epson_snmp: Option<String>,
+    /// Interface complète aussi dans un navigateur (développement) ; sinon clients seulement.
+    acces_navigateur: bool,
 }
 
 struct Etat {
@@ -165,6 +167,7 @@ async fn main() {
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
         plotter_stty: env_ou("EKO_RIP_PLOTTER_STTY", plotter::STTY_DEFAUT),
         epson_snmp: std::env::var("EKO_RIP_EPSON_SNMP").ok().filter(|v| !v.is_empty()),
+        acces_navigateur: env_ou("EKO_RIP_ACCES_NAVIGATEUR", "0") == "1",
     };
     let adresse = env_ou("EKO_RIP_ADDR", "0.0.0.0:8640");
     std::fs::create_dir_all(config.donnees.join("travaux")).expect("dossier de données");
@@ -198,7 +201,7 @@ async fn main() {
 
 fn routes(etat: Partage) -> Router {
     Router::new()
-        .route("/", get(|| async { Html(include_str!("../static/index.html")) }))
+        .route("/", get(accueil))
         .route("/api/travaux", get(lister).post(envoyer))
         .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/planches", axum::routing::post(creer_planche))
@@ -986,8 +989,42 @@ fn jeton_requete(entetes: &axum::http::HeaderMap) -> Option<String> {
 
 /// Toute l'API demande une session, sauf `/api/session` ; sans utilisateur déclaré,
 /// l'accès reste libre. La page `/` est servie à tous : elle porte l'écran de connexion.
+/// Signature du client de bureau dans son User-Agent (fixée dans `client/tauri.conf.json`).
+pub const SIGNATURE_CLIENT: &str = "EKO-RIP-Client/";
+
+fn est_client(etat: &Etat, entetes: &axum::http::HeaderMap) -> bool {
+    etat.config.acces_navigateur || entetes.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).is_some_and(|ua| ua.contains(SIGNATURE_CLIENT))
+}
+
+/// L'interface et les réglages ne vivent que dans les clients (Mac, PC, Linux) ; un
+/// navigateur qui ouvre l'adresse du serveur voit une page d'état simple.
+// ponytail: la signature se falsifie ; ce n'est pas un contrôle d'accès (les comptes le
+// sont), seulement la règle d'usage : on travaille depuis un client.
+async fn accueil(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Html<String> {
+    if est_client(&etat, &entetes) {
+        return Html(include_str!("../static/index.html").to_string());
+    }
+    let echapper = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let hote = entetes.get(header::HOST).and_then(|v| v.to_str().ok()).unwrap_or("adresse-du-serveur:8640");
+    let file = etat.file.lock().unwrap();
+    let lignes: String = etat
+        .machines
+        .read()
+        .unwrap()
+        .iter()
+        .map(|m| {
+            let n = file.sorties.iter().filter(|s| s.machine == m.id && s.active()).count();
+            format!("<li><strong>{}</strong> — {} en file</li>", echapper(&m.nom), n)
+        })
+        .collect();
+    Html(include_str!("../static/accueil.html").replace("{version}", env!("CARGO_PKG_VERSION")).replace("{hote}", &echapper(hote)).replace("{machines}", &lignes))
+}
+
 async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
     let chemin = requete.uri().path();
+    if chemin.starts_with("/api/") && !est_client(&etat, requete.headers()) {
+        return refus(StatusCode::FORBIDDEN, "client_requis", None);
+    }
     if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::lire(&etat.config.donnees).is_empty() {
         return suite.run(requete).await;
     }
@@ -1696,13 +1733,14 @@ mod tests {
                 plotter: "/dev/null".into(),
                 plotter_stty: String::new(),
                 epson_snmp: None,
+                acces_navigateur: false,
             };
             let machines = std::sync::RwLock::new(machines::catalogue_initial(&config.plotter, &config.plotter_stty, None));
             Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines })
         }
 
         async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
-            let mut r = Request::builder().method(methode).uri(uri);
+            let mut r = Request::builder().method(methode).uri(uri).header(header::USER_AGENT, "Mozilla/5.0 EKO-RIP-Client/0.9");
             if let Some(c) = cookie {
                 r = r.header(header::COOKIE, c);
             }
@@ -1714,6 +1752,23 @@ mod tests {
                 None => Body::empty(),
             };
             routes(e.clone()).oneshot(r.body(corps).unwrap()).await.unwrap()
+        }
+
+        /// Un navigateur ne voit qu'une page d'état ; l'API et l'interface sont aux clients.
+        #[tokio::test]
+        async fn navigateur_page_simple_client_interface() {
+            let e = etat("navigateur");
+            let navigateur = |uri: &str| Request::builder().uri(uri).header(header::USER_AGENT, "Mozilla/5.0 Safari/605").header(header::HOST, "192.168.10.122:8640").body(Body::empty()).unwrap();
+            let r = routes(e.clone()).oneshot(navigateur("/")).await.unwrap();
+            let page = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            assert!(page.contains("http://192.168.10.122:8640") && page.contains("Epson SC-S80600"), "page d'état : adresse et machines");
+            assert!(!page.contains("id=\"envoi\""), "pas d'interface de travail");
+            let r = routes(e.clone()).oneshot(navigateur("/api/travaux")).await.unwrap();
+            assert_eq!(r.status(), StatusCode::FORBIDDEN);
+            let r = appel(&e, "GET", "/", None, None).await;
+            let page = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap().to_vec()).unwrap();
+            assert!(page.contains("id=\"envoi\""), "le client reçoit l'interface");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         #[tokio::test]
