@@ -15,6 +15,36 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.19.0] — 2026-10-25
+
+**Premier tirage par notre propre pilote de l'Epson**, et l'éditeur visuel prend forme.
+Publiée sans la CI ; les clients de bureau de la 0.16.0 restent valables.
+
+### Ajouté
+- **Pilote direct de l'Epson SC-S80600** (connexion « Réseau », port 9100) : rendu, séparation
+  des encres (couples clair/foncé, limite d'encre), tramage 4 tailles de point, flux ESC/P2
+  envoyé au fil des bandes ; état suivi par SNMP pendant l'impression, échec si l'imprimante
+  est en alerte (capot ouvert…). Premier aplat CMJN imprimé le 25/10, couleurs justes. La
+  sortie « Dossier » reste disponible. Tête vide de 20 mm et plafond de 85 % par canal, contre
+  les bandes observées au premier tirage (à confirmer au second).
+- **Éditeur visuel** (fiche du travail) : vignettes des pages, sélection, couches activables
+  (image, découpe en magenta, blanc, argent) ; **recadrage** à poignées et par champs (un cadre
+  hors de la page est refusé) ; **taille** proportionnelle ou libre, largeur ou hauteur
+  imposée ; **rotation et miroir**, image seule ou image et découpe ; badge « Miroir » dans la
+  file.
+- **Lés et tuilage** : lés dessinés, frontières déplaçables (lés inégaux), colonnes × rangées,
+  zone de soudure sans encre, coupe au milieu du recouvrement, tuiles à ne pas imprimer,
+  recouvrement propre à une tuile, ordre d'impression des tuiles.
+
+### Modifié
+- La découpe applique la boîte (BBox) des formulaires du PDF, comme le veut la norme.
+- L'image d'installation n'est plus publiée sur GitHub : un fichier par version sur le nuage
+  d'E-KO (lien dans l'installation du serveur).
+
+*Added: direct Epson SC-S80600 driver (first print on 25/10), visual editor (thumbnails,
+selection, layers, crop, size, rotation/mirror), tiles (unequal, rows × columns, weld zone,
+per-tile overlap, print order). Changed: form BBox applied to cuts; ISO moved to the E-KO cloud.*
+
 ## [0.18.0] — 2026-10-24
 
 Fin de la phase « supports et modes » de la feuille de route. Publiée sans la CI ; les
