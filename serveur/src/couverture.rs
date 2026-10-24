@@ -162,13 +162,11 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 }
 
 pub fn lire(donnees: &Path) -> Tarifs {
-    std::fs::read(fichier(donnees)).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default()
+    crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default()
 }
 
 pub fn ecrire(donnees: &Path, t: &Tarifs) -> std::io::Result<()> {
-    let tmp = fichier(donnees).with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(t).unwrap())?;
-    std::fs::rename(tmp, fichier(donnees))
+    crate::etat::ecrire(&fichier(donnees), t, false)
 }
 
 #[derive(Debug, PartialEq, Serialize)]

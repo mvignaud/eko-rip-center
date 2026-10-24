@@ -33,6 +33,15 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `entrees/<preset>/` | hot folders, one per preset |
 | `travaux/<id>/` | one folder per job: source, `job.json`, plates (`prod/`), previews |
 | `sorties/<machine>/` | plates copied for a machine without a driver (Epson) |
+| `releves/<machine>.jsonl` | SNMP readings (inks, roll) for actual consumption |
+| `*.json.prec` | previous version of each state file, kept on every write |
+| `*.json.illisible` | copy of a state file found damaged (power cut) |
+
+**Power cut**: each state file is written to disk before it is put in place, and its
+previous version is kept (`.prec`). If a file is found damaged, the server restores the
+previous version and reports it in **System** ("State files"). If both are unreadable, the
+damaged file is copied to `.illisible` and System says so: restore a backup. Damaged
+accounts never open access: login is still required.
 
 Jobs older than `EKO_RIP_CONSERVATION_JOURS` days (30 by default) are deleted with their
 outputs; 0 keeps them.

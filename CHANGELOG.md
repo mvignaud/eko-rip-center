@@ -7,6 +7,21 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.13.2] — 2026-10-24
+
+### Sécurité
+- Un fichier des comptes abîmé (coupure de courant) était lu comme « aucun compte » et
+  **ouvrait l'accès sans connexion**. Il garde désormais l'accès fermé.
+
+### Corrigé
+- Résistance aux coupures des fichiers d'état (file, machines, réglages, tarifs, comptes,
+  travaux) : écriture synchronisée sur le disque, version précédente gardée (`.prec`) ; un
+  fichier abîmé n'est plus remplacé en silence par une valeur vide (file vide, catalogue
+  d'usine) : la version précédente est reprise et **Système** l'affiche.
+
+*Security: a damaged accounts file no longer opens access without login. Fixed: state files
+survive power cuts (synced writes, previous version kept and restored, shown in System).*
+
 ## [0.13.1] — 2026-10-24
 
 ### Corrigé

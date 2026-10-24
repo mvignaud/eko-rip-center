@@ -35,6 +35,16 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `entrees/<réglage>/` | dossiers surveillés, un par réglage |
 | `travaux/<id>/` | un dossier par travail : source, `job.json`, plaques (`prod/`), aperçus |
 | `sorties/<machine>/` | plaques copiées pour une machine sans pilote (Epson) |
+| `releves/<machine>.jsonl` | relevés SNMP (encres, rouleau) pour la consommation réelle |
+| `*.json.prec` | version précédente de chaque fichier d'état, gardée à chaque écriture |
+| `*.json.illisible` | copie d'un fichier d'état trouvé abîmé (coupure de courant) |
+
+**Coupure de courant** : chaque fichier d'état est écrit sur le disque avant d'être mis en
+place, et sa version précédente est gardée (`.prec`). Si un fichier est trouvé abîmé, le
+serveur reprend la version précédente et le signale dans **Système** (« Fichiers d'état »).
+Si les deux sont illisibles, le fichier abîmé est copié en `.illisible` et Système le dit :
+restaurer une sauvegarde. Les comptes abîmés n'ouvrent jamais l'accès : la connexion reste
+exigée.
 
 Les travaux de plus de `EKO_RIP_CONSERVATION_JOURS` jours (30 par défaut) sont effacés
 avec leurs sorties ; 0 les garde.

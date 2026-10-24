@@ -233,13 +233,11 @@ pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String
 }
 
 pub fn lire(donnees: &Path) -> Option<Vec<Machine>> {
-    serde_json::from_slice(&std::fs::read(fichier(donnees)).ok()?).ok()
+    crate::etat::lire(&fichier(donnees)).ok().flatten()
 }
 
 pub fn ecrire(donnees: &Path, machines: &[Machine]) -> std::io::Result<()> {
-    let tmp = fichier(donnees).with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(machines).unwrap())?;
-    std::fs::rename(tmp, fichier(donnees))
+    crate::etat::ecrire(&fichier(donnees), machines, false)
 }
 
 pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {

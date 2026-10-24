@@ -81,7 +81,7 @@ pub struct File {
 
 impl File {
     pub fn lire(donnees: &Path) -> File {
-        let mut f: File = std::fs::read(fichier(donnees)).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default();
+        let mut f: File = crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default();
         // Une sortie coupée par un arrêt ne repart pas seule : une découpe à moitié faite ne
         // se reprend pas au milieu.
         for s in f.sorties.iter_mut().filter(|s| s.etat == Etat::EnCours) {
@@ -92,9 +92,7 @@ impl File {
     }
 
     pub fn ecrire(&self, donnees: &Path) -> std::io::Result<()> {
-        let tmp = fichier(donnees).with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self).unwrap())?;
-        std::fs::rename(tmp, fichier(donnees))
+        crate::etat::ecrire(&fichier(donnees), self, false)
     }
 
     /// Prochaine sortie à lancer sur `machine` (aucune si une y tourne déjà).

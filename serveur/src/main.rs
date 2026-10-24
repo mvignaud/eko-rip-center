@@ -9,6 +9,7 @@ mod controle;
 mod couverture;
 mod decoupe;
 mod edition;
+mod etat;
 mod epson;
 mod machines;
 mod media;
@@ -194,7 +195,7 @@ async fn main() {
         machines: std::sync::RwLock::new(catalogue),
     });
     tokio::spawn(repartir(etat.clone()));
-    if acces::lire(&etat.config.donnees).is_empty() {
+    if acces::libre(&etat.config.donnees) {
         eprintln!("ATTENTION : aucun utilisateur déclaré, l'accès est libre. Créer un compte : eko-rip-serveur utilisateur ajouter <nom>");
     }
     tokio::spawn(surveiller(etat.clone()));
@@ -245,17 +246,13 @@ fn dossier(donnees: &std::path::Path, id: Uuid) -> PathBuf {
 }
 
 fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
-    let chemin = dossier(donnees, t.id).join("job.json");
-    let tmp = chemin.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(t).unwrap())?;
-    std::fs::rename(tmp, chemin)
+    etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)
 }
 
 fn lire_tous(donnees: &std::path::Path) -> Vec<Travail> {
     let Ok(entrees) = std::fs::read_dir(donnees.join("travaux")) else { return vec![] };
     let mut v: Vec<Travail> = entrees
-        .filter_map(|e| std::fs::read(e.ok()?.path().join("job.json")).ok())
-        .filter_map(|b| serde_json::from_slice(&b).ok())
+        .filter_map(|e| etat::lire(&e.ok()?.path().join("job.json")).ok().flatten())
         .collect();
     v.sort_by_key(|t| std::cmp::Reverse(t.cree_le));
     v
@@ -1263,7 +1260,7 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
     if chemin.starts_with("/api/") && !est_client(&etat, requete.headers()) {
         return refus(StatusCode::FORBIDDEN, "client_requis", None);
     }
-    if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::lire(&etat.config.donnees).is_empty() {
+    if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::libre(&etat.config.donnees) {
         return suite.run(requete).await;
     }
     let Some(role) = role_session(&etat, requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) };
@@ -1280,7 +1277,7 @@ fn role_session(etat: &Etat, entetes: &axum::http::HeaderMap) -> Option<acces::R
 }
 
 async fn lire_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
-    let ouvert = acces::lire(&etat.config.donnees).is_empty();
+    let ouvert = acces::libre(&etat.config.donnees);
     let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
     // Accès libre : tout est permis, comme un administrateur.
     let role = if ouvert { Some(acces::Role::Admin) } else { role_session(&etat, &entetes) };
@@ -1404,6 +1401,7 @@ async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
         "disque_total": total,
         "disque_libre": libre,
         "conservation_jours": etat.config.conservation_jours,
+        "alertes": etat::alertes(),
     }))
 }
 
@@ -1725,7 +1723,7 @@ async fn refaire(etat: &Partage, mut t: Travail) -> Response {
 }
 
 fn lire_travail(donnees: &std::path::Path, id: Uuid) -> Option<Travail> {
-    serde_json::from_slice(&std::fs::read(dossier(donnees, id).join("job.json")).ok()?).ok()
+    etat::lire(&dossier(donnees, id).join("job.json")).ok().flatten()
 }
 
 /// Travail et page demandés, si la page existe (numérotée à partir de 1).
@@ -2147,6 +2145,26 @@ mod tests {
             // Utilisateur retiré du fichier : sa session ne vaut plus rien.
             acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "autre".into(), hachage: acces::hacher("x-x-x-x-x-x").unwrap() }]).unwrap();
             assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::UNAUTHORIZED);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Comptes abîmés par une coupure : la version précédente est reprise ; tout illisible,
+        /// l'accès reste FERMÉ (avant, une liste illisible valait « aucun compte » = accès libre).
+        #[tokio::test]
+        async fn comptes_illisibles_ne_ouvrent_pas_l_acces() {
+            let e = etat("comptes-abimes");
+            let u = |nom: &str| acces::Utilisateur { role: acces::Role::Admin, nom: nom.into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() };
+            acces::ecrire(&e.config.donnees, &[u("mathieu")]).unwrap();
+            acces::ecrire(&e.config.donnees, &[u("mathieu"), u("atelier")]).unwrap();
+            let f = acces::fichier(&e.config.donnees);
+            std::fs::write(&f, b"[{\"nom\": \"mathi").unwrap();
+            assert_eq!(acces::lire(&e.config.donnees).len(), 1, "N-1 reprise");
+            assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::UNAUTHORIZED);
+            std::fs::write(etat::precedent(&f), b"").unwrap();
+            assert!(!acces::libre(&e.config.donnees));
+            assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::UNAUTHORIZED);
+            let session: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(appel(&e, "GET", "/api/session", None, None).await.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(session["acces_libre"], false, "{session}");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

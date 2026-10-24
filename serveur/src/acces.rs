@@ -44,19 +44,22 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 }
 
 pub fn lire(donnees: &Path) -> Vec<Utilisateur> {
-    std::fs::read(fichier(donnees)).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default()
+    crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default()
+}
+
+/// Accès libre seulement quand aucun compte n'est déclaré : fichier absent ou liste vide.
+/// Un fichier illisible (coupure) ne l'ouvre JAMAIS.
+pub fn libre(donnees: &Path) -> bool {
+    match crate::etat::lire::<Vec<Utilisateur>>(&fichier(donnees)) {
+        Ok(None) => true,
+        Ok(Some(v)) => v.is_empty(),
+        Err(()) => false,
+    }
 }
 
 /// Écrit la liste avec des droits 0600 (fichier temporaire puis renommage).
 pub fn ecrire(donnees: &Path, utilisateurs: &[Utilisateur]) -> std::io::Result<()> {
-    let tmp = fichier(donnees).with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(utilisateurs).unwrap())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
-    }
-    std::fs::rename(tmp, fichier(donnees))
+    crate::etat::ecrire(&fichier(donnees), utilisateurs, true)
 }
 
 pub fn nom_valide(nom: &str) -> bool {

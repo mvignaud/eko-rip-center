@@ -147,7 +147,7 @@ pub fn dossier_entree(donnees: &Path, nom: &str) -> PathBuf {
 }
 
 pub fn lire(donnees: &Path) -> Vec<Reglage> {
-    std::fs::read(fichier(donnees)).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default()
+    crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default()
 }
 
 /// Écrit la liste (fichier temporaire puis renommage) et crée le dossier surveillé de
@@ -156,9 +156,7 @@ pub fn ecrire(donnees: &Path, reglages: &[Reglage]) -> std::io::Result<()> {
     for r in reglages {
         std::fs::create_dir_all(dossier_entree(donnees, &r.nom))?;
     }
-    let tmp = fichier(donnees).with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_vec_pretty(reglages).unwrap())?;
-    std::fs::rename(tmp, fichier(donnees))
+    crate::etat::ecrire(&fichier(donnees), reglages, false)
 }
 
 /// Fichiers prêts : présents avec la même taille qu'au passage précédent (un fichier en
