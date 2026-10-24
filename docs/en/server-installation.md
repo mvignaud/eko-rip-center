@@ -97,5 +97,25 @@ Then `sudo smbpasswd -a eko` and `sudo systemctl restart smbd`. Workstations ope
 
 ## Security
 
-The server has no authentication yet. Keep it reachable from the workshop network
-only: never expose port 8640 to the Internet.
+### Accounts
+
+With no account declared, access stays open and the screen says so in red. To close
+access, create at least one account on the server (the password is asked twice,
+without echo, 10 characters minimum):
+
+```bash
+sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter mathieu
+```
+
+`utilisateur liste` lists accounts; `utilisateur supprimer <name>` removes one (its
+sessions end at once). No restart needed. Passwords are stored hashed with Argon2id in
+`<data>/utilisateurs.json` (mode 0600).
+
+A session lasts 12 hours (`HttpOnly`, `SameSite=Strict` cookie) and is lost when the
+server restarts. After 5 wrong attempts for one name, that name is locked for 5
+minutes. Hot folders need no account: control them through the share (Samba).
+
+### Network
+
+Traffic is not encrypted (HTTP): keep the server reachable from the workshop network
+only. Never expose port 8640 to the Internet.

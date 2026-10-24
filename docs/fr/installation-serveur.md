@@ -97,5 +97,26 @@ Puis `sudo smbpasswd -a eko` et `sudo systemctl restart smbd`. Les postes ouvren
 
 ## Sécurité
 
-Le serveur n'a pas encore d'authentification. Il ne doit être joignable que depuis
-le réseau de l'atelier : ne jamais ouvrir le port 8640 sur Internet.
+### Comptes
+
+Sans compte déclaré, l'accès reste libre et l'écran l'affiche en rouge. Pour fermer
+l'accès, créer au moins un compte sur le serveur (le mot de passe est demandé deux
+fois, sans écho, 10 caractères au moins) :
+
+```bash
+sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter mathieu
+```
+
+`utilisateur liste` liste les comptes ; `utilisateur supprimer <nom>` en retire un (ses
+sessions tombent aussitôt). Aucun redémarrage n'est nécessaire. Les mots de passe sont
+gardés hachés en Argon2id dans `<données>/utilisateurs.json` (droits 0600).
+
+Une fois connecté, la session dure 12 heures (cookie `HttpOnly`, `SameSite=Strict`).
+Elle est perdue au redémarrage du serveur. Après 5 essais faux pour un même nom, ce nom
+est bloqué 5 minutes. Les dossiers surveillés ne demandent pas de compte : leur accès
+se règle par le partage (Samba).
+
+### Réseau
+
+La connexion n'est pas chiffrée (HTTP) : le serveur ne doit être joignable que depuis
+le réseau de l'atelier. Ne jamais ouvrir le port 8640 sur Internet.

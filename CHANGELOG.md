@@ -7,7 +7,13 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.6.0] — 2026-10-24
+
 ### Ajouté
+- **Contrôle d'accès** : comptes créés sur le serveur (`eko-rip-serveur utilisateur
+  ajouter|supprimer|liste`), mots de passe hachés en Argon2id, session de 12 h par cookie
+  `HttpOnly`, blocage 5 min après 5 essais faux. Écran de connexion et bouton « Se
+  déconnecter ». Sans compte déclaré, l'accès reste libre et un bandeau rouge le signale.
 - **Purge automatique** des travaux plus vieux que `EKO_RIP_CONSERVATION_JOURS` jours
   (30 par défaut, 0 = jamais), toutes les heures ; un travail en cours n'est jamais
   purgé. ⚠️ À la mise à jour, les travaux de plus de 30 jours sont effacés au démarrage.
@@ -19,6 +25,12 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ### Modifié
 - Les composites CMJN 32 bits et les TIFF d'aperçu sont effacés après le rendu (≈ 40 % de
   place en moins) ; les plaques de production restent, compressées en LZW.
+
+*English: access control (server-side accounts `eko-rip-serveur utilisateur
+ajouter|supprimer|liste`, Argon2id hashes, 12 h HttpOnly session, 5-minute lock after 5
+wrong attempts, sign-in screen; open access with a red banner while no account exists),
+automatic purge of old jobs, drag and drop, disk space in the footer, smaller job
+folders.*
 
 ## [0.5.0] — 2026-10-24
 

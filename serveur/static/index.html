@@ -39,10 +39,26 @@
   figure { margin: 0; }
   figure img { width: 100%; background: #fff; border: 1px solid var(--trait); border-radius: 4px; }
   figcaption { font-size: 13px; text-align: center; color: var(--doux); }
+  dialog { border: 1px solid var(--trait); border-radius: 8px; background: var(--carte); color: var(--texte); padding: 0; }
+  dialog::backdrop { background: rgb(0 0 0 / .45); }
+  dialog form { border: 0; flex-direction: column; align-items: stretch; min-width: min(320px, 80vw); }
+  .bandeau { margin: 0 auto; max-width: 1100px; padding: 0 16px; }
 </style>
 </head>
 <body>
-<header class="entete"><h1>E-KO RIP Center</h1><button type="button" id="langue" class="discret"></button></header>
+<header class="entete"><h1>E-KO RIP Center</h1>
+  <span><span id="qui" class="meta"></span> <button type="button" id="deconnexion" class="discret" data-t="deconnexion" hidden></button> <button type="button" id="langue" class="discret"></button></span>
+</header>
+<p id="acces-libre" class="bandeau erreur" data-t="acces_libre" hidden></p>
+<dialog id="connexion">
+  <form id="form-connexion">
+    <strong data-t="connexion"></strong>
+    <label><span data-t="nom_utilisateur"></span> <input name="nom" autocomplete="username" required></label>
+    <label><span data-t="mot_de_passe"></span> <input name="mot_de_passe" type="password" autocomplete="current-password" required></label>
+    <p id="erreur-connexion" class="erreur" role="alert"></p>
+    <button data-t="se_connecter"></button>
+  </form>
+</dialog>
 <main>
   <form id="envoi">
     <div class="ligne-reglage">
@@ -97,6 +113,9 @@ const textes = {
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
     systeme: (v, libre, total, jours) => `E-KO RIP Center ${v} · espace libre : ${libre} sur ${total}` + (jours ? ` · travaux gardés ${jours} jours` : ""),
+    connexion: "Connexion à E-KO RIP Center", nom_utilisateur: "Utilisateur", mot_de_passe: "Mot de passe", se_connecter: "Se connecter",
+    deconnexion: "Se déconnecter", connecte: (n) => `Connecté : ${n}`,
+    acces_libre: "Accès libre : aucun utilisateur n'est déclaré sur ce serveur. Créer un compte sur le serveur : eko-rip-serveur utilisateur ajouter <nom>",
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer ces réglages…", supprimer_reglage: "Supprimer le réglage",
     nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
@@ -115,6 +134,8 @@ const textes = {
       aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
       envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
+      connexion_requise: "Connexion requise.", identifiants_invalides: "Utilisateur ou mot de passe incorrect.",
+      trop_d_echecs: "Trop d'essais pour cet utilisateur : réessayer dans 5 minutes.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
       profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
       profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
@@ -128,6 +149,9 @@ const textes = {
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
+    connexion: "Sign in to E-KO RIP Center", nom_utilisateur: "User", mot_de_passe: "Password", se_connecter: "Sign in",
+    deconnexion: "Sign out", connecte: (n) => `Signed in: ${n}`,
+    acces_libre: "Open access: no user is declared on this server. Create an account on the server: eko-rip-serveur utilisateur ajouter <name>",
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
     systeme: (v, libre, total, jours) => `E-KO RIP Center ${v} · free space: ${libre} of ${total}` + (jours ? ` · jobs kept ${jours} days` : ""),
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save these settings…", supprimer_reglage: "Delete preset",
@@ -148,6 +172,8 @@ const textes = {
       aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
       envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
       erreur_interne: "Server error.", introuvable: "Not found.",
+      connexion_requise: "Sign-in required.", identifiants_invalides: "Wrong user name or password.",
+      trop_d_echecs: "Too many attempts for this user: try again in 5 minutes.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
       profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
       profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
@@ -162,6 +188,44 @@ let langue = (() => { try { return localStorage.getItem("langue"); } catch { ret
 const T = () => textes[langue];
 const form = document.getElementById("envoi"), msg = document.getElementById("message"), liste = document.getElementById("travaux");
 const boutonLangue = document.getElementById("langue");
+
+// Session : toute réponse 401 de l'API ouvre la fenêtre de connexion.
+const fetchServeur = window.fetch.bind(window);
+const fenetreConnexion = document.getElementById("connexion"), formConnexion = document.getElementById("form-connexion");
+let session = { acces_libre: true, utilisateur: null };
+window.fetch = async (url, options) => {
+  const r = await fetchServeur(url, options);
+  if (r.status === 401 && !String(url).startsWith("/api/session") && !fenetreConnexion.open) fenetreConnexion.showModal();
+  return r;
+};
+async function chargerSession() {
+  try { session = await (await fetchServeur("/api/session")).json(); } catch { return; }
+  afficherSession();
+}
+function afficherSession() {
+  document.getElementById("acces-libre").hidden = !session.acces_libre;
+  document.getElementById("deconnexion").hidden = !session.utilisateur;
+  document.getElementById("qui").textContent = session.utilisateur ? T().connecte(session.utilisateur) : "";
+}
+formConnexion.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const champs = Object.fromEntries(new FormData(formConnexion)), erreur = document.getElementById("erreur-connexion");
+  try {
+    const r = await fetchServeur("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(champs) });
+    if (!r.ok) { const c = await r.json().catch(() => ({})); erreur.textContent = texteErreur(c.code, c.detail); return; }
+  } catch { erreur.textContent = texteErreur("reseau"); return; }
+  erreur.textContent = "";
+  formConnexion.reset();
+  fenetreConnexion.close();
+  await chargerSession();
+  chargerProfils().then(chargerReglages);
+  chargerSysteme();
+  rafraichir();
+});
+document.getElementById("deconnexion").addEventListener("click", async () => {
+  await fetchServeur("/api/session", { method: "DELETE" }).catch(() => {});
+  location.reload();
+});
 
 let profils = [];
 async function chargerProfils() {
@@ -271,6 +335,7 @@ function appliquerLangue() {
   remplirProfils();
   remplirReglages();
   afficherSysteme();
+  afficherSession();
   majPlanche();
   rafraichir();
 }
@@ -435,6 +500,7 @@ async function decouper(url, bouton) {
 }
 
 appliquerLangue();
+chargerSession();
 chargerProfils().then(chargerReglages);
 chargerSysteme();
 setInterval(rafraichir, 3000);

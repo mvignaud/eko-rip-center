@@ -1,6 +1,7 @@
 //! E-KO RIP Center — serveur local : reçoit les PDF des postes clients, les rend en
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
+mod acces;
 mod couleur;
 mod decoupe;
 mod imbrication;
@@ -130,6 +131,7 @@ struct Etat {
     plotter: Semaphore,
     /// Écritures de `reglages.json` l'une après l'autre.
     reglages: tokio::sync::Mutex<()>,
+    sessions: std::sync::Mutex<acces::Sessions>,
 }
 
 type Partage = Arc<Etat>;
@@ -141,6 +143,10 @@ fn env_ou(nom: &str, defaut: &str) -> String {
 #[tokio::main]
 async fn main() {
     let donnees = PathBuf::from(env_ou("EKO_RIP_DATA", "eko-rip-data"));
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("utilisateur") {
+        std::process::exit(commande_utilisateur(&donnees, &args[1..]));
+    }
     let config = Config {
         profils: donnees.join("profils"),
         donnees,
@@ -157,7 +163,10 @@ async fn main() {
     reprendre_travaux_interrompus(&config.donnees);
 
     let max = config.max_octets;
-    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: tokio::sync::Mutex::new(()) });
+    let etat: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: tokio::sync::Mutex::new(()), sessions: Default::default() });
+    if acces::lire(&etat.config.donnees).is_empty() {
+        eprintln!("ATTENTION : aucun utilisateur déclaré, l'accès est libre. Créer un compte : eko-rip-serveur utilisateur ajouter <nom>");
+    }
     tokio::spawn(surveiller(etat.clone()));
     tokio::spawn(purger(etat.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
@@ -183,6 +192,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
         .route("/api/travaux/{id}/pages/{page}/decouper", axum::routing::post(decouper))
+        .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
+        .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
 }
 
@@ -556,6 +567,118 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
     }
+}
+
+/// `eko-rip-serveur utilisateur ajouter|supprimer|liste [nom]` ; le mot de passe est
+/// demandé sans écho, jamais passé en argument (il resterait dans l'historique).
+fn commande_utilisateur(donnees: &std::path::Path, args: &[String]) -> i32 {
+    let _ = std::fs::create_dir_all(donnees);
+    let mut liste = acces::lire(donnees);
+    let nom = args.get(1).map(String::as_str).unwrap_or("");
+    match args.first().map(String::as_str) {
+        Some("liste") => {
+            for u in &liste {
+                println!("{}", u.nom);
+            }
+            return 0;
+        }
+        Some("ajouter") if acces::nom_valide(nom) => {
+            let Ok(mdp) = rpassword::prompt_password(format!("Mot de passe pour {nom} : ")) else { return 1 };
+            if mdp.chars().count() < 10 {
+                eprintln!("Mot de passe trop court (10 caractères au moins).");
+                return 1;
+            }
+            if rpassword::prompt_password("Confirmer : ").ok().as_deref() != Some(mdp.as_str()) {
+                eprintln!("Les deux saisies diffèrent.");
+                return 1;
+            }
+            let hachage = match acces::hacher(&mdp) {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return 1;
+                }
+            };
+            liste.retain(|u| u.nom != nom);
+            liste.push(acces::Utilisateur { nom: nom.into(), hachage });
+            liste.sort_by(|a, b| a.nom.cmp(&b.nom));
+        }
+        Some("supprimer") if liste.iter().any(|u| u.nom == nom) => liste.retain(|u| u.nom != nom),
+        Some("supprimer") => {
+            eprintln!("Utilisateur inconnu : {nom}");
+            return 1;
+        }
+        _ => {
+            eprintln!("Usage : eko-rip-serveur utilisateur ajouter|supprimer|liste [nom]\\n(nom : lettres, chiffres, . - _ ; 40 caractères au plus)");
+            return 2;
+        }
+    }
+    match acces::ecrire(donnees, &liste) {
+        Ok(()) => {
+            println!("Enregistré dans {} (redémarrer le service n'est pas nécessaire).", acces::fichier(donnees).display());
+            0
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            1
+        }
+    }
+}
+
+fn jeton_requete(entetes: &axum::http::HeaderMap) -> Option<String> {
+    let c = entetes.get(header::COOKIE)?.to_str().ok()?;
+    acces::jeton_du_cookie(c).map(str::to_string)
+}
+
+/// Toute l'API demande une session, sauf `/api/session` ; sans utilisateur déclaré,
+/// l'accès reste libre. La page `/` est servie à tous : elle porte l'écran de connexion.
+async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
+    let chemin = requete.uri().path();
+    if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::lire(&etat.config.donnees).is_empty() {
+        return suite.run(requete).await;
+    }
+    let valide = jeton_requete(requete.headers()).is_some_and(|j| {
+        let sessions = etat.sessions.lock().unwrap();
+        sessions.utilisateur(&j, std::time::Instant::now()).is_some_and(|nom| acces::lire(&etat.config.donnees).iter().any(|u| u.nom == nom))
+    });
+    if valide { suite.run(requete).await } else { refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) }
+}
+
+async fn lire_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
+    let ouvert = acces::lire(&etat.config.donnees).is_empty();
+    let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
+    Json(serde_json::json!({ "acces_libre": ouvert, "utilisateur": utilisateur }))
+}
+
+#[derive(Deserialize)]
+struct Identifiants {
+    nom: String,
+    mot_de_passe: String,
+}
+
+async fn ouvrir_session(State(etat): State<Partage>, Json(i): Json<Identifiants>) -> Response {
+    let utilisateurs = acces::lire(&etat.config.donnees);
+    // Argon2 coûte des dizaines de ms : hors du fil d'exécution asynchrone.
+    let e = etat.clone();
+    let resultat = tokio::task::spawn_blocking(move || e.sessions.lock().unwrap().connecter(&utilisateurs, &i.nom, &i.mot_de_passe, std::time::Instant::now()))
+        .await
+        .unwrap();
+    match resultat {
+        Ok(j) => {
+            let cookie = format!("{}={j}; HttpOnly; SameSite=Strict; Path=/; Max-Age={}", acces::COOKIE, acces::DUREE_SESSION.as_secs());
+            (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+        }
+        Err(acces::Refus::Identifiants) => refus(StatusCode::UNAUTHORIZED, "identifiants_invalides", None),
+        Err(acces::Refus::Bloque) => refus(StatusCode::TOO_MANY_REQUESTS, "trop_d_echecs", None),
+    }
+}
+
+async fn fermer_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Response {
+    if let Some(j) = jeton_requete(&entetes) {
+        etat.sessions.lock().unwrap().deconnecter(&j);
+    }
+    let cookie = format!("{}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0", acces::COOKIE);
+    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
 }
 
 async fn lister_reglages(State(etat): State<Partage>) -> Json<Vec<reglages::Reglage>> {
@@ -970,6 +1093,93 @@ mod tests {
         for code in codes {
             assert!(fr.contains(&format!("{code}:")), "{code} non traduit en français");
             assert!(en.contains(&format!("{code}:")), "{code} non traduit en anglais");
+        }
+    }
+
+    mod controle_d_acces {
+        use super::*;
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        fn etat(nom: &str) -> Partage {
+            let donnees = std::env::temp_dir().join(format!("eko-rip-acces-{nom}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&donnees);
+            std::fs::create_dir_all(donnees.join("travaux")).unwrap();
+            let config = Config {
+                profils: donnees.join("profils"),
+                donnees,
+                gs: "gs".into(),
+                max_octets: 1 << 20,
+                delai: Duration::from_secs(5),
+                conservation_jours: 0,
+                plotter: "/dev/null".into(),
+                plotter_stty: String::new(),
+            };
+            Arc::new(Etat { config, rendu: Semaphore::new(1), plotter: Semaphore::new(1), reglages: Default::default(), sessions: Default::default() })
+        }
+
+        async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
+            let mut r = Request::builder().method(methode).uri(uri);
+            if let Some(c) = cookie {
+                r = r.header(header::COOKIE, c);
+            }
+            let corps = match corps {
+                Some(v) => {
+                    r = r.header(header::CONTENT_TYPE, "application/json");
+                    Body::from(v.to_string())
+                }
+                None => Body::empty(),
+            };
+            routes(e.clone()).oneshot(r.body(corps).unwrap()).await.unwrap()
+        }
+
+        #[tokio::test]
+        async fn sans_utilisateur_l_acces_reste_libre() {
+            let e = etat("libre");
+            assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::OK);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        #[tokio::test]
+        async fn api_fermee_sans_session_ouverte_avec() {
+            let e = etat("ferme");
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(appel(&e, "GET", "/api/travaux", Some("eko_rip_session=invente"), None).await.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(appel(&e, "GET", "/", None, None).await.status(), StatusCode::OK, "la page de connexion reste servie");
+
+            let faux = serde_json::json!({ "nom": "mathieu", "mot_de_passe": "faux" });
+            assert_eq!(appel(&e, "POST", "/api/session", None, Some(faux)).await.status(), StatusCode::UNAUTHORIZED);
+
+            let bon = serde_json::json!({ "nom": "mathieu", "mot_de_passe": "phrase-de-passe-longue" });
+            let r = appel(&e, "POST", "/api/session", None, Some(bon)).await;
+            assert_eq!(r.status(), StatusCode::NO_CONTENT);
+            let cookie = r.headers()[header::SET_COOKIE].to_str().unwrap().to_string();
+            assert!(cookie.contains("HttpOnly") && cookie.contains("SameSite=Strict"), "{cookie}");
+            let cookie = cookie.split(';').next().unwrap().to_string();
+            assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::OK);
+
+            // Utilisateur retiré du fichier : sa session ne vaut plus rien.
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "autre".into(), hachage: acces::hacher("x-x-x-x-x-x").unwrap() }]).unwrap();
+            assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::UNAUTHORIZED);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        #[tokio::test]
+        async fn deconnexion_et_blocage() {
+            let e = etat("blocage");
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { nom: "mathieu".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            let bon = serde_json::json!({ "nom": "mathieu", "mot_de_passe": "phrase-de-passe-longue" });
+            let r = appel(&e, "POST", "/api/session", None, Some(bon.clone())).await;
+            let cookie = r.headers()[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap().to_string();
+            assert_eq!(appel(&e, "DELETE", "/api/session", Some(&cookie), None).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!(appel(&e, "GET", "/api/travaux", Some(&cookie), None).await.status(), StatusCode::UNAUTHORIZED);
+            for _ in 0..5 {
+                appel(&e, "POST", "/api/session", None, Some(serde_json::json!({ "nom": "mathieu", "mot_de_passe": "faux" }))).await;
+            }
+            assert_eq!(appel(&e, "POST", "/api/session", None, Some(bon)).await.status(), StatusCode::TOO_MANY_REQUESTS);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }
 }
