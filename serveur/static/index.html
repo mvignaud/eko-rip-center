@@ -169,7 +169,20 @@
   #vue-zone { position: relative; overflow: hidden; background: var(--creux); cursor: grab; touch-action: none; }
   #vue-zone[data-outil=loupe] { cursor: zoom-in; }
   #vue-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  #vue-scene { position: absolute; left: 0; top: 0; box-shadow: 0 0 0 1px var(--trait), 0 2px 10px rgb(0 0 0 / .25); }
+  /* Pages d'un multipage à gauche, aperçu au centre, couches à droite. */
+  .vue-corps { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; min-height: 0; }
+  #vue-pages { display: flex; flex-direction: column; gap: 8px; width: 104px; padding: 8px; overflow-y: auto; border-right: 1px solid var(--trait); }
+  #vue-pages[hidden] { display: none; }
+  #vue-pages button { display: grid; gap: 2px; padding: 3px; border: 2px solid transparent; border-radius: 4px; background: none; color: var(--texte); font-size: 11px; cursor: pointer; }
+  #vue-pages button[aria-current=page] { border-color: var(--accent); font-weight: 600; }
+  #vue-pages img { width: 100%; display: block; background: #fff; box-shadow: 0 0 0 1px var(--trait); }
+  #vue-couches { display: grid; align-content: start; gap: 6px; width: 170px; padding: 10px; border-left: 1px solid var(--trait); font-size: 13px; overflow-y: auto; }
+  .vue-pastille { display: inline-block; width: 10px; height: 10px; border-radius: 2px; box-shadow: 0 0 0 1px var(--trait); }
+  #vue-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  /* Sélection : cadre et 8 poignées (sans action avant 3.B). */
+  #vue-selection { position: absolute; inset: 0; outline: 1px solid var(--accent); pointer-events: none; }
+  #vue-selection span { position: absolute; width: 8px; height: 8px; background: #fff; border: 1px solid var(--accent); transform: translate(-50%, -50%); }
+  #vue-scene { background: #fff; position: absolute; left: 0; top: 0; box-shadow: 0 0 0 1px var(--trait), 0 2px 10px rgb(0 0 0 / .25); }
   #vue-scene img { position: absolute; inset: 0; width: 100%; height: 100%; background: #fff; user-select: none; pointer-events: none; }
   #vue-scene #vue-decoupe { background: transparent; mix-blend-mode: multiply; }
   #vue-laize { position: absolute; left: 0; top: -100000px; bottom: -100000px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); background: rgb(61 143 224 / .06); pointer-events: none; }
@@ -222,10 +235,11 @@
       <button type="button" class="discret" id="vue-main" data-t="vue_main" aria-pressed="true"></button>
       <button type="button" class="discret" id="vue-loupe" data-t="vue_loupe" aria-pressed="false"></button>
       <span class="sep"></span>
-      <label class="case" id="vue-calque"><input type="checkbox" id="vue-voir-decoupe"> <span data-t="apercu_decoupe"></span></label>
       <label class="case" id="vue-calque-laize"><input type="checkbox" id="vue-voir-laize" checked> <span data-t="vue_laize"></span></label>
       <button class="discret" data-t="fermer" style="margin-left: auto"></button>
     </div>
+    <div class="vue-corps">
+    <nav id="vue-pages" data-t-aria="vue_pages" hidden></nav>
     <div class="vue-cadre">
       <div></div>
       <div class="vue-regle"><canvas id="vue-regle-x" aria-hidden="true"></canvas></div>
@@ -234,11 +248,16 @@
         <div id="vue-scene">
           <img id="image-vue" alt="" draggable="false">
           <img id="vue-decoupe" alt="" draggable="false" hidden>
+          <canvas id="vue-blanc" hidden></canvas>
+          <canvas id="vue-argent" hidden></canvas>
+          <div id="vue-selection" hidden><span style="left: 0%; top: 0%"></span><span style="left: 50%; top: 0%"></span><span style="left: 100%; top: 0%"></span><span style="left: 100%; top: 50%"></span><span style="left: 100%; top: 100%"></span><span style="left: 50%; top: 100%"></span><span style="left: 0%; top: 100%"></span><span style="left: 0%; top: 50%"></span></div>
           <div id="vue-hors" hidden></div>
           <div id="vue-laize" hidden></div>
         </div>
         <div id="vue-rect" hidden></div>
       </div>
+    </div>
+    <aside id="vue-couches" data-t-aria="vue_couches"></aside>
     </div>
     <div class="vue-etat" aria-live="polite"><span id="vue-dims"></span><span id="vue-pos"></span><span id="vue-info-laize"></span><span class="meta" data-t="vue_aide"></span></div>
   </form>
@@ -436,7 +455,9 @@ const textes = {
     bat: "BAT (PDF)", editer: "Éditer", editer_titre: (n) => `Édition rapide — ${n}`, appliquer: "Appliquer et refaire le rendu", fermer: "Fermer",
     fichiers_choisis: (n) => `${n} fichiers choisis`,
     vue_outils: "Outils de l'aperçu", vue_moins: "Zoom arrière (−)", vue_plus: "Zoom avant (+)", vue_zoom: "Zoom", vue_ajuster: "Ajuster", vue_main: "Main", vue_loupe: "Loupe",
-    vue_laize: "Laize", vue_aide: "Molette : zoom · glisser : déplacer · loupe : clic, Maj+clic, rectangle · touches + − 0 1",
+    vue_laize: "Laize", vue_aide: "Molette : zoom · glisser : déplacer · clic : sélectionner la page · loupe : clic, Maj+clic, rectangle · touches + − 0 1 · pages : ← → ou Pg↑ Pg↓ (Maj+← → : déplacer)",
+    vue_pages: "Pages du travail", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Couches", couche_argent: "Argent", couche_reperes: "Repères",
+    vue_reperes_noir: "Imprimés dans la plaque Black : pas de couche séparée.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Laize ${l} mm (${n})`, vue_media_charge: "média chargé",
     vue_hors_laize: (d) => `dépasse la laize de ${d} mm`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
@@ -555,7 +576,9 @@ const textes = {
     bat: "Proof (PDF)", editer: "Edit", editer_titre: (n) => `Quick edit — ${n}`, appliquer: "Apply and render again", fermer: "Close",
     fichiers_choisis: (n) => `${n} files chosen`,
     vue_outils: "Preview tools", vue_moins: "Zoom out (−)", vue_plus: "Zoom in (+)", vue_zoom: "Zoom", vue_ajuster: "Fit", vue_main: "Hand", vue_loupe: "Magnifier",
-    vue_laize: "Roll width", vue_aide: "Wheel: zoom · drag: move · magnifier: click, Shift+click, rectangle · keys + − 0 1",
+    vue_laize: "Roll width", vue_aide: "Wheel: zoom · drag: move · click: select the page · magnifier: click, Shift+click, rectangle · keys + − 0 1 · pages: ← → or PgUp PgDn (Shift+← →: move)",
+    vue_pages: "Pages of the job", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Layers", couche_argent: "Silver", couche_reperes: "Marks",
+    vue_reperes_noir: "Printed in the Black plate: no separate layer.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Roll width ${l} mm (${n})`, vue_media_charge: "loaded media",
     vue_hors_laize: (d) => `${d} mm wider than the roll`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
@@ -1184,30 +1207,109 @@ $("form-edition").addEventListener("submit", async (e) => {
  *  déplacement à la main, loupe (clic, Maj+clic, rectangle), règles en mm, position du curseur,
  *  laize de la machine et calque de découpe superposé. 100 % = taille réelle à l'écran. */
 const PX_MM = 96 / 25.4, ZOOM_MAX = 8, ZOOMS = [0.25, 0.5, 1, 2, 4, 8];
-const vue = { z: 1, zmin: 0.25, tx: 0, ty: 0, l: 0, h: 0, laize: null, curseur: null, geste: null };
+const vue = { z: 1, zmin: 0.25, tx: 0, ty: 0, l: 0, h: 0, laize: null, curseur: null, geste: null, travail: null, suffixe: null, n: 0, jeton: 0, selection: false };
 const zoneVue = $("vue-zone");
 
 async function voir(src, legende, contexte = {}) {
-  const { t, page, n } = contexte, img = $("image-vue"), calque = $("vue-decoupe");
-  $("legende-vue").textContent = legende;
-  // Découpe superposable : seulement s'il y a des tracés et qu'on ne regarde pas déjà la découpe.
-  const decoupe = t && page?.traces_decoupe && !src.endsWith(".svg") ? `/api/travaux/${t.id}/pages/${n}/decoupe.svg` : null;
-  $("vue-calque").hidden = !decoupe;
-  if (decoupe) calque.src = decoupe; else calque.removeAttribute("src");
-  calque.hidden = !decoupe || !$("vue-voir-decoupe").checked;
+  const { t, n } = contexte;
+  vue.travail = t || null;
+  // Ce qu'on regarde (composite, découpe, une plaque) : gardé quand on change de page.
+  vue.suffixe = t ? src.slice(`/api/travaux/${t.id}/pages/${n}/`.length) : null;
+  const pages = t?.pages.length > 1 ? t.pages.map((_, i) => {
+    const k = i + 1, b = el("button", { type: "button", title: T().vue_page_n(k, t.pages.length) },
+      el("img", { src: `/api/travaux/${t.id}/pages/${k}/${principalVue(t)}`, alt: "", loading: "lazy", draggable: false }), String(k));
+    b.addEventListener("click", () => pageVue(k));
+    return b;
+  }) : [];
+  $("vue-pages").replaceChildren(...pages);
+  $("vue-pages").hidden = !pages.length;
+  $("visionneuse").showModal();
+  zoneVue.focus();
+  await afficherPageVue(src, legende, contexte);
+}
+const principalVue = (t) => (t.mode === "decouper" ? "decoupe.svg" : "apercu.png");
+/** Page `k` du travail ouvert, dans la même vue (la plaque, si la page l'a ; sinon l'aperçu). */
+function pageVue(k) {
+  const t = vue.travail, page = t?.pages[k - 1];
+  if (!page || k === vue.n) return;
+  const plaque = vue.suffixe.startsWith("plaques/") ? decodeURIComponent(vue.suffixe.slice(8)) : null;
+  const suffixe = (plaque && !page.plaques.includes(plaque)) || (vue.suffixe === "decoupe.svg" && !page.traces_decoupe) ? principalVue(t) : vue.suffixe;
+  const legende = suffixe.startsWith("plaques/") ? plaque : suffixe === "decoupe.svg" ? T().apercu_decoupe : T().composite;
+  afficherPageVue(`/api/travaux/${t.id}/pages/${k}/${suffixe}`, legende, { t, page, n: k });
+}
+async function afficherPageVue(src, legende, { t, page, n } = {}) {
+  const jeton = ++vue.jeton, img = $("image-vue");
+  vue.n = n; vue.selection = false; vue.curseur = null;
+  $("legende-vue").textContent = t?.pages.length > 1 ? `${legende} · ${T().vue_page_n(n, t.pages.length)}` : legende;
+  for (const b of $("vue-pages").children) {
+    const courant = b.textContent === String(n);
+    if (courant) { b.setAttribute("aria-current", "page"); b.scrollIntoView({ block: "nearest" }); } else b.removeAttribute("aria-current");
+  }
+  couchesDeLaPage(src, legende, t, page, n);
   // Laize : le média lu sur l'Epson s'il y en a un, sinon celle de la machine qui fera le travail.
   const machine = catalogue.find((m) => (t?.mode === "decouper" ? m.modele_decoupe : m.modele_imprime));
   vue.laize = t?.mode !== "decouper" && media?.largeur_mm ? { mm: media.largeur_mm, nom: T().vue_media_charge }
     : machine ? { mm: machine.laize_mm, nom: machine.nom } : null;
   $("vue-calque-laize").hidden = !vue.laize;
-  vue.curseur = null;
   const charge = new Promise((ok) => { img.onload = img.onerror = ok; });
   img.src = src;
-  $("visionneuse").showModal();
-  zoneVue.focus();
   await charge;
-  [vue.l, vue.h] = await dimensionsMm(src, img, page);
+  const dims = await dimensionsMm(src, img, page);
+  if (jeton !== vue.jeton) return; // une autre page a été demandée entretemps
+  [vue.l, vue.h] = dims;
   ajusterVue();
+}
+/** Couches activables une à une ; leur état (`couchesVue`) dure le temps de la page,
+ *  d'une page et d'une ouverture de la visionneuse à l'autre. Blanc et argent : les plaques
+ *  aux noms que reconnaît l'Epson (`epson.rs`), teintées sur l'image. Les repères de
+ *  repérage Kona sont dessinés dans la plaque Black (`reperage.rs`) : pas d'image à part,
+ *  on le dit plutôt que d'en inventer une. */
+const couchesVue = { image: true, decoupe: true, blanc: true, argent: true };
+const NOMS_COUCHE = { blanc: ["white", "blanc", "wh"], argent: ["metallic", "silver", "ms", "argent"] };
+const TEINTE_COUCHE = { blanc: [0, 150, 255], argent: [120, 120, 135] };
+function couchesDeLaPage(src, legende, t, page, n) {
+  const base = t ? `/api/travaux/${t.id}/pages/${n}` : "";
+  const calque = { image: $("image-vue"), decoupe: $("vue-decoupe"), blanc: $("vue-blanc"), argent: $("vue-argent") };
+  const sources = {
+    // Découpe superposable : seulement s'il y a des tracés et qu'on ne regarde pas déjà la découpe.
+    decoupe: t && page?.traces_decoupe && !src.endsWith(".svg") ? `${base}/decoupe.svg` : null,
+  };
+  for (const cle of ["blanc", "argent"]) {
+    const nom = page?.plaques.find((p) => NOMS_COUCHE[cle].includes(p.toLowerCase()));
+    sources[cle] = nom && !src.endsWith(`/plaques/${encodeURIComponent(nom)}`) ? `${base}/plaques/${encodeURIComponent(nom)}` : null;
+  }
+  const ligne = (cle, texte, couleur) => {
+    const caseC = el("input", { type: "checkbox", checked: couchesVue[cle] });
+    caseC.addEventListener("change", () => { couchesVue[cle] = caseC.checked; calque[cle].hidden = !caseC.checked; });
+    return el("label", { className: "case" }, caseC, " ", couleur ? el("span", { className: "vue-pastille", style: `background: ${couleur}` }) : null, " ", texte);
+  };
+  const lignes = [el("strong", {}, T().vue_couches), ligne("image", legende)];
+  calque.image.hidden = !couchesVue.image;
+  if (sources.decoupe) { calque.decoupe.src = sources.decoupe; lignes.push(ligne("decoupe", T().apercu_decoupe, "#ff00ff")); } else calque.decoupe.removeAttribute("src");
+  calque.decoupe.hidden = !sources.decoupe || !couchesVue.decoupe;
+  for (const cle of ["blanc", "argent"]) {
+    calque[cle].hidden = !sources[cle] || !couchesVue[cle];
+    if (!sources[cle]) { calque[cle].width = 0; calque[cle].dataset.src = ""; continue; }
+    teinter(calque[cle], sources[cle], TEINTE_COUCHE[cle]);
+    lignes.push(ligne(cle, cle === "blanc" ? T().blanc : T().couche_argent, `rgb(${TEINTE_COUCHE[cle]})`));
+  }
+  if (t?.reperage && t.reperage !== "aucun") lignes.push(el("div", {}, el("label", { className: "case" }, el("input", { type: "checkbox", disabled: true }), " ", T().couche_reperes), el("div", { className: "meta" }, T().vue_reperes_noir)));
+  $("vue-couches").replaceChildren(...lignes);
+}
+/** Plaque (niveaux de gris, 0 = pleine encre) peinte dans la teinte de sa couche. */
+function teinter(toile, src, [r, g, b]) {
+  const img = new Image();
+  toile.dataset.src = src;
+  img.onload = () => {
+    if (toile.dataset.src !== src) return;
+    toile.width = img.naturalWidth; toile.height = img.naturalHeight;
+    const c = toile.getContext("2d");
+    c.drawImage(img, 0, 0);
+    const d = c.getImageData(0, 0, toile.width, toile.height), p = d.data;
+    for (let i = 0; i < p.length; i += 4) { const a = 255 - p[i]; p[i] = r; p[i + 1] = g; p[i + 2] = b; p[i + 3] = a * 0.85; }
+    c.putImageData(d, 0, 0);
+  };
+  img.src = src;
 }
 /** Format de la page en mm : mesuré au rendu, sinon la viewBox du SVG (points), sinon l'aperçu à 50 dpi. */
 async function dimensionsMm(src, img, page) {
@@ -1237,16 +1339,20 @@ function cadrerVue(x0, y0, x1, y1, marge = 24) {
 }
 function ajusterVue() {
   const ajuste = Math.min((zoneVue.clientWidth - 48) / (vue.l * PX_MM), (zoneVue.clientHeight - 48) / (vue.h * PX_MM));
+  // Zone sans taille (visionneuse fermée avant la fin du chargement) : un zoom négatif ferait
+  // tourner sans fin la graduation des règles.
+  if (!(ajuste > 0)) return;
   vue.zmin = Math.min(0.25, ajuste / 2);
   cadrerVue(0, 0, vue.l, vue.h);
 }
 function dessinerVue() {
-  if (!vue.l) return;
+  if (!vue.l || !(vue.z > 0)) return;
   const k = vue.z * PX_MM, scene = $("vue-scene");
   Object.assign(scene.style, { width: `${vue.l * k}px`, height: `${vue.h * k}px`, transform: `translate(${vue.tx}px, ${vue.ty}px)` });
   const laize = $("vue-voir-laize").checked && vue.laize, hors = laize && vue.l > laize.mm + 0.05;
   $("vue-laize").hidden = !laize;
   $("vue-hors").hidden = !hors;
+  $("vue-selection").hidden = !vue.selection;
   if (laize) $("vue-laize").style.width = `${laize.mm * k}px`;
   if (hors) Object.assign($("vue-hors").style, { left: `${laize.mm * k}px`, width: `${(vue.l - laize.mm) * k}px` });
   const pc = Math.round(vue.z * 100), choix = $("vue-zoom");
@@ -1319,7 +1425,12 @@ zoneVue.addEventListener("pointerup", (e) => {
   const p = pointVue(e), g = vue.geste;
   vue.geste = null;
   $("vue-rect").hidden = true;
-  if (!g || zoneVue.dataset.outil !== "loupe") return;
+  if (!g) return;
+  if (zoneVue.dataset.outil === "main") {
+    // Clic sans glisser : la page est sélectionnée si on clique dessus, sinon désélectionnée.
+    if (!g.bouge) { const m = mmVers(p.x, p.y); vue.selection = m.x >= 0 && m.y >= 0 && m.x <= vue.l && m.y <= vue.h; dessinerVue(); }
+    return;
+  }
   if (!g.bouge) { zoomerVue(vue.z * (e.shiftKey ? 0.5 : 2), p.x, p.y); return; }
   const a = mmVers(Math.min(p.x, g.x), Math.min(p.y, g.y)), b = mmVers(Math.max(p.x, g.x), Math.max(p.y, g.y));
   cadrerVue(a.x, a.y, b.x, b.y, 0);
@@ -1328,7 +1439,11 @@ zoneVue.addEventListener("pointerleave", () => { if (!vue.geste) { vue.curseur =
 $("visionneuse").addEventListener("keydown", (e) => {
   if (e.target.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
   const pan = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key];
-  if (e.key === "+" || e.key === "=") zoomerVue(vue.z * 1.25);
+  // Multipage : ← → et Pg↑ Pg↓ changent de page ; Maj+← → déplace toujours.
+  const multi = vue.travail?.pages.length > 1;
+  const sens = multi && ({ PageUp: -1, PageDown: 1, ...(e.shiftKey ? {} : { ArrowLeft: -1, ArrowRight: 1 }) })[e.key];
+  if (sens) pageVue(Math.min(vue.travail.pages.length, Math.max(1, vue.n + sens)));
+  else if (e.key === "+" || e.key === "=") zoomerVue(vue.z * 1.25);
   else if (e.key === "-" || e.key === "_") zoomerVue(vue.z / 1.25);
   else if (e.key === "0") ajusterVue();
   else if (e.key === "1") zoomerVue(1);
@@ -1343,7 +1458,6 @@ $("vue-reel").addEventListener("click", () => zoomerVue(1));
 $("vue-zoom").addEventListener("change", (e) => zoomerVue(+e.target.value / 100));
 $("vue-main").addEventListener("click", () => outilVue("main"));
 $("vue-loupe").addEventListener("click", () => outilVue("loupe"));
-$("vue-voir-decoupe").addEventListener("change", (e) => { $("vue-decoupe").hidden = !e.target.checked; });
 $("vue-voir-laize").addEventListener("change", dessinerVue);
 new ResizeObserver(() => dessinerVue()).observe(zoneVue);
 

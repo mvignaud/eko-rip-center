@@ -400,10 +400,11 @@ fn parcourir_svg(groupe: &usvg::Group, ton_parent: Option<&str>, tous: bool, ver
     }
 }
 
-/// Aperçu des tracés à découper, à la taille de la page (1 unité = 1 point).
+/// Aperçu des tracés à découper, à la taille de la page (1 unité = 1 point), en magenta pur :
+/// la couleur d'usage d'un tracé de coupe, distincte de toute encre de l'image.
 pub fn apercu_svg(d: &Decoupe) -> String {
     let mut svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {l:.1} {h:.1}"><rect width="100%" height="100%" fill="#fff"/><g fill="none" stroke="#d62020" stroke-width="{e:.2}" stroke-linejoin="round">"##,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {l:.1} {h:.1}"><rect width="100%" height="100%" fill="#fff"/><g fill="none" stroke="#ff00ff" stroke-width="{e:.2}" stroke-linejoin="round">"##,
         l = d.largeur,
         h = d.hauteur,
         e = (d.largeur.max(d.hauteur) / 400.0).max(0.5)
@@ -572,6 +573,14 @@ pub fn hpgl(traces: &[Trace]) -> String {
 mod tests {
     use super::*;
     use lopdf::{Stream, dictionary};
+
+    #[test]
+    fn apercu_de_decoupe_en_magenta_pur() {
+        let d = Decoupe { traces: vec![Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (10.0, 10.0)], ferme: false }], largeur: 20.0, hauteur: 20.0 };
+        let svg = apercu_svg(&d);
+        assert!(svg.contains(r##"stroke="#ff00ff""##), "{svg}");
+        assert!(svg.contains(r#"<polyline points="0.0,20.0 10.0,10.0"/>"#), "{svg}");
+    }
 
     fn separation(ton: &str) -> Object {
         Object::Array(vec![
