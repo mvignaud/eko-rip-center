@@ -7,6 +7,22 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.16.0] — 2026-10-24
+
+### Ajouté
+- **Pont ERP, lot R1** — contrat `eko-rip-erp/1`, décrit dans `docs/fr/pont-erp.md` :
+  - identifiants immuables (`uuid`) des machines, couches de découpe et réglages
+    enregistrés, attribués par le serveur ; un identifiant inventé est refusé ;
+  - accès machine à machine : jeton de l'ERP créé par `eko-rip-serveur erp jeton`, gardé
+    en empreinte seulement, valable sur les seules routes `/api/erp/` (fermées sans lui,
+    même en accès libre) ;
+  - secret HMAC (`eko-rip-serveur erp secret`) et format de signature des événements
+    (`X-EKO-RIP-Signature: t=…,v1=…`) ;
+  - modèle d'états publié, lisible par programme : `GET /api/erp/contrat`.
+
+*Added: ERP bridge lot R1 (contract `eko-rip-erp/1`): immutable identifiers, ERP token
+limited to `/api/erp/`, HMAC event signature format, published state model.*
+
 ## [0.15.0] — 2026-10-24
 
 ### Ajouté

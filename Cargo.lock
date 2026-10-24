@@ -981,7 +981,7 @@ checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "eko-rip-client"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "tauri",
  "tauri-build",
@@ -989,17 +989,19 @@ dependencies = [
 
 [[package]]
 name = "eko-rip-serveur"
-version = "0.15.0"
+version = "0.16.0"
 dependencies = [
  "argon2",
  "axum",
  "getrandom 0.4.3",
+ "hmac",
  "image",
  "libc",
  "lopdf",
  "rpassword",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "tiff",
  "tokio",
  "tower",
@@ -1572,6 +1574,15 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hmac"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6303bc9732ae41b04cb554b844a762b4115a61bfaa81e3e83050991eeb56863f"
+dependencies = [
+ "digest 0.11.3",
+]
 
 [[package]]
 name = "html5ever"

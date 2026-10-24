@@ -27,6 +27,7 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `machines.json` | machine catalogue |
 | `tarifs.json` | ink and media prices, excl. or incl. VAT |
 | `reglages.json` | saved presets |
+| `erp.json` | ERP bridge: ERP token hash and HMAC secret (mode 0600) — see [erp-bridge.md](erp-bridge.md) |
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
 | `utilisateurs.json` | accounts (hashed passwords, mode 0600) |
 | `file.json` | output queue and history |

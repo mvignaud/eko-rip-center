@@ -9,6 +9,7 @@ mod controle;
 mod couverture;
 mod decoupe;
 mod edition;
+mod erp;
 mod etat;
 mod epson;
 // Branché sur la file par l'item 2.4 (envoi TCP 9100).
@@ -169,6 +170,9 @@ async fn main() {
     if args.first().map(String::as_str) == Some("utilisateur") {
         std::process::exit(commande_utilisateur(&donnees, &args[1..]));
     }
+    if args.first().map(String::as_str) == Some("erp") {
+        std::process::exit(commande_erp(&donnees, args.get(1).map(String::as_str)));
+    }
     let config = Config {
         profils: donnees.join("profils"),
         donnees,
@@ -252,6 +256,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/file", get(lister_file).post(mettre_en_file))
         .route("/api/file/{id}", axum::routing::delete(retirer_de_la_file))
         .route("/api/file/{id}/{action}", axum::routing::post(agir_sur_la_file))
+        .route("/api/erp/contrat", get(contrat_erp))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -1337,6 +1342,15 @@ async fn accueil(State(etat): State<Partage>, entetes: axum::http::HeaderMap) ->
 
 async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
     let chemin = requete.uri().path();
+    // Pont ERP (exception accordée par le gérant le 24/10) : le jeton de l'ERP ouvre ses
+    // seules routes ; elles restent fermées sans lui, même quand l'accès humain est libre.
+    let bearer = requete.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "));
+    if chemin.starts_with(erp::PREFIXE) {
+        return if bearer.is_some_and(|j| erp::jeton_valide(&erp::lire(&etat.config.donnees), j)) { suite.run(requete).await } else { refus(StatusCode::UNAUTHORIZED, "jeton_erp_requis", None) };
+    }
+    if bearer.is_some() {
+        return refus(StatusCode::FORBIDDEN, "jeton_erp_hors_pont", None);
+    }
     if chemin.starts_with("/api/") && !est_client(&etat, requete.headers()) {
         return refus(StatusCode::FORBIDDEN, "client_requis", None);
     }
@@ -1348,6 +1362,38 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
         return refus(StatusCode::FORBIDDEN, "admin_requis", None);
     }
     suite.run(requete).await
+}
+
+/// Contrat du pont ERP : nom et version, version du serveur, modèle d'états (lot R1).
+async fn contrat_erp() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "contrat": erp::CONTRAT, "serveur": env!("CARGO_PKG_VERSION"), "signature": "X-EKO-RIP-Signature: t=<secondes Unix>,v1=<hex HMAC-SHA256(secret, \"<t>.<corps>\")>", "etats": erp::modele_etats() }))
+}
+
+/// `eko-rip-serveur erp jeton|secret|etat` : crée le jeton de l'ERP ou le secret HMAC
+/// (affiché une seule fois ; le précédent cesse de valoir), ou dit ce qui est configuré.
+fn commande_erp(donnees: &std::path::Path, action: Option<&str>) -> i32 {
+    let mut c = erp::lire(donnees);
+    let nouveau = erp::aleatoire();
+    match action {
+        Some("jeton") => c.jeton_sha256 = Some(erp::empreinte(&nouveau)),
+        Some("secret") => c.secret_hmac = Some(nouveau.clone()),
+        Some("etat") => {
+            println!("jeton de l'ERP : {}", if c.jeton_sha256.is_some() { "déclaré" } else { "aucun" });
+            println!("secret HMAC : {}", if c.secret_hmac.is_some() { "déclaré" } else { "aucun" });
+            return 0;
+        }
+        _ => {
+            eprintln!("usage : eko-rip-serveur erp jeton|secret|etat");
+            return 2;
+        }
+    }
+    if let Err(e) = std::fs::create_dir_all(donnees).and_then(|_| erp::ecrire(donnees, &c)) {
+        eprintln!("erp.json : {e}");
+        return 1;
+    }
+    println!("{nouveau}");
+    eprintln!("À recopier maintenant dans l'ERP : il ne sera plus affiché. Le précédent ne vaut plus.");
+    0
 }
 
 /// Rôle de l'utilisateur de la session, s'il existe encore.
@@ -2304,6 +2350,31 @@ mod tests {
             for e in [a, b] {
                 std::fs::remove_dir_all(&e.config.donnees).unwrap();
             }
+        }
+
+        /// Jeton de l'ERP : n'ouvre que /api/erp/, qui reste fermé sans lui même en accès libre.
+        #[tokio::test]
+        async fn jeton_erp_limite_au_pont() {
+            let e = etat("jeton-erp");
+            let avec = |jeton: &str, uri: &str| {
+                let r = Request::builder().method("GET").uri(uri).header(header::AUTHORIZATION, format!("Bearer {jeton}")).body(Body::empty()).unwrap();
+                routes(e.clone()).oneshot(r)
+            };
+            assert!(acces::libre(&e.config.donnees), "accès humain libre (aucun compte)");
+            assert_eq!(appel(&e, "GET", "/api/erp/contrat", None, None).await.status(), StatusCode::UNAUTHORIZED, "fermé sans jeton");
+            assert_eq!(avec("x", "/api/erp/contrat").await.unwrap().status(), StatusCode::UNAUTHORIZED, "aucun jeton déclaré");
+            let jeton = erp::aleatoire();
+            erp::ecrire(&e.config.donnees, &erp::Config { jeton_sha256: Some(erp::empreinte(&jeton)), secret_hmac: None }).unwrap();
+            let r = avec(&jeton, "/api/erp/contrat").await.unwrap();
+            assert_eq!(r.status(), StatusCode::OK);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();
+            assert_eq!(v["contrat"], "eko-rip-erp/1");
+            assert!(v["etats"]["sortie"]["etats"]["terminee"].is_string(), "{v}");
+            assert_eq!(avec("faux", "/api/erp/contrat").await.unwrap().status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(avec(&jeton, "/api/tarifs").await.unwrap().status(), StatusCode::FORBIDDEN, "le jeton n'ouvre pas le reste");
+            let empreinte = std::fs::read_to_string(e.config.donnees.join("erp.json")).unwrap();
+            assert!(!empreinte.contains(&jeton), "le jeton n'est jamais gardé en clair");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         /// Identifiants immuables des machines, couches et réglages (pont ERP, lot R1).
