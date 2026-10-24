@@ -158,6 +158,25 @@
   dialog { border: 1px solid var(--trait); border-radius: 10px; background: var(--carte); color: var(--texte); padding: 0; box-shadow: var(--ombre); }
   dialog::backdrop { background: rgb(0 0 0 / .45); }
   dialog form { display: grid; gap: 12px; padding: 20px; min-width: min(340px, 84vw); }
+  /* Visionneuse façon éditeur : outils en haut, règles en mm, page au centre, état en bas. */
+  dialog#visionneuse { width: 96vw; height: 92vh; max-width: none; max-height: none; }
+  #visionneuse form { height: 100%; padding: 0; gap: 0; grid-template-rows: auto minmax(0, 1fr) auto; min-width: 0; }
+  .vue-outils { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--trait); }
+  .vue-cadre { display: grid; grid-template-columns: 24px minmax(0, 1fr); grid-template-rows: 24px minmax(0, 1fr); min-height: 0; overflow: hidden; }
+  /* Hors du flux : la taille en pixels de la toile ne doit pas agrandir la grille. */
+  .vue-cadre > div:first-child, .vue-regle { position: relative; }
+  .vue-regle canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #vue-zone { position: relative; overflow: hidden; background: var(--creux); cursor: grab; touch-action: none; }
+  #vue-zone[data-outil=loupe] { cursor: zoom-in; }
+  #vue-zone:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #vue-scene { position: absolute; left: 0; top: 0; box-shadow: 0 0 0 1px var(--trait), 0 2px 10px rgb(0 0 0 / .25); }
+  #vue-scene img { position: absolute; inset: 0; width: 100%; height: 100%; background: #fff; user-select: none; pointer-events: none; }
+  #vue-scene #vue-decoupe { background: transparent; mix-blend-mode: multiply; }
+  #vue-laize { position: absolute; left: 0; top: -100000px; bottom: -100000px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); background: rgb(61 143 224 / .06); pointer-events: none; }
+  #vue-hors { position: absolute; top: 0; bottom: 0; background: rgb(249 112 102 / .3); pointer-events: none; }
+  #vue-rect { position: absolute; border: 1px dashed var(--accent); background: rgb(61 143 224 / .15); pointer-events: none; }
+  .vue-etat { display: flex; gap: 18px; flex-wrap: wrap; padding: 6px 10px; border-top: 1px solid var(--trait); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .vue-etat .hors { color: var(--echec); }
 </style>
 </head>
 <body>
@@ -190,9 +209,38 @@
   </form>
 </dialog>
 <dialog id="visionneuse">
-  <form method="dialog" style="padding: 12px; display: grid; gap: 8px; max-width: 92vw">
-    <img id="image-vue" alt="" style="max-width: 88vw; max-height: 78vh; background: #fff; border: 1px solid var(--trait); border-radius: 6px">
-    <div class="ligne" style="justify-content: space-between"><span id="legende-vue" class="meta"></span><button class="discret" data-t="fermer"></button></div>
+  <form method="dialog">
+    <div class="vue-outils" role="toolbar" data-t-aria="vue_outils">
+      <strong id="legende-vue"></strong>
+      <span class="sep"></span>
+      <button type="button" class="discret" id="vue-moins" data-t-aria="vue_moins">−</button>
+      <select id="vue-zoom" data-t-aria="vue_zoom"></select>
+      <button type="button" class="discret" id="vue-plus" data-t-aria="vue_plus">+</button>
+      <button type="button" class="discret" id="vue-ajuster" data-t="vue_ajuster"></button>
+      <button type="button" class="discret" id="vue-reel">100 %</button>
+      <span class="sep"></span>
+      <button type="button" class="discret" id="vue-main" data-t="vue_main" aria-pressed="true"></button>
+      <button type="button" class="discret" id="vue-loupe" data-t="vue_loupe" aria-pressed="false"></button>
+      <span class="sep"></span>
+      <label class="case" id="vue-calque"><input type="checkbox" id="vue-voir-decoupe"> <span data-t="apercu_decoupe"></span></label>
+      <label class="case" id="vue-calque-laize"><input type="checkbox" id="vue-voir-laize" checked> <span data-t="vue_laize"></span></label>
+      <button class="discret" data-t="fermer" style="margin-left: auto"></button>
+    </div>
+    <div class="vue-cadre">
+      <div></div>
+      <div class="vue-regle"><canvas id="vue-regle-x" aria-hidden="true"></canvas></div>
+      <div class="vue-regle"><canvas id="vue-regle-y" aria-hidden="true"></canvas></div>
+      <div id="vue-zone" tabindex="0" data-t-aria="vue_aide" data-outil="main">
+        <div id="vue-scene">
+          <img id="image-vue" alt="" draggable="false">
+          <img id="vue-decoupe" alt="" draggable="false" hidden>
+          <div id="vue-hors" hidden></div>
+          <div id="vue-laize" hidden></div>
+        </div>
+        <div id="vue-rect" hidden></div>
+      </div>
+    </div>
+    <div class="vue-etat" aria-live="polite"><span id="vue-dims"></span><span id="vue-pos"></span><span id="vue-info-laize"></span><span class="meta" data-t="vue_aide"></span></div>
   </form>
 </dialog>
 <dialog id="connexion">
@@ -380,7 +428,11 @@ const textes = {
     auto: "Mise en file automatique", auto_imprimer: "Imprimer sur l'Epson une fois rendu", auto_decouper: "Découper sur le Kona",
     auto_suspendre: "Ajouter en suspendu (à libérer depuis la file)", note_auto: "Une découpe qui suit une impression est toujours ajoutée suspendue : le support doit d'abord passer au Kona.",
     bat: "BAT (PDF)", editer: "Éditer", editer_titre: (n) => `Édition rapide — ${n}`, appliquer: "Appliquer et refaire le rendu", fermer: "Fermer",
-    taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} fichiers choisis`,
+    fichiers_choisis: (n) => `${n} fichiers choisis`,
+    vue_outils: "Outils de l'aperçu", vue_moins: "Zoom arrière (−)", vue_plus: "Zoom avant (+)", vue_zoom: "Zoom", vue_ajuster: "Ajuster", vue_main: "Main", vue_loupe: "Loupe",
+    vue_laize: "Laize", vue_aide: "Molette : zoom · glisser : déplacer · loupe : clic, Maj+clic, rectangle · touches + − 0 1",
+    vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Laize ${l} mm (${n})`, vue_media_charge: "média chargé",
+    vue_hors_laize: (d) => `dépasse la laize de ${d} mm`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
     blanc_aplat: "Aplat sur toute la page", retraction: "Rétraction (mm)", seuil: "Encre minimale (%)",
     note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre. Tons reconnus par l'Epson : White, Blanc, WH (blanc) et Metallic, Silver, Argent, MS (argent).",
@@ -484,7 +536,11 @@ const textes = {
     auto: "Automatic queueing", auto_imprimer: "Print on the Epson once rendered", auto_decouper: "Cut on the Kona",
     auto_suspendre: "Add on hold (release from the queue)", note_auto: "A cut that follows a print is always added on hold: the media must first move to the Kona.",
     bat: "Proof (PDF)", editer: "Edit", editer_titre: (n) => `Quick edit — ${n}`, appliquer: "Apply and render again", fermer: "Close",
-    taille_mm: (l, h) => `≈ ${l} × ${h} mm`, fichiers_choisis: (n) => `${n} files chosen`,
+    fichiers_choisis: (n) => `${n} files chosen`,
+    vue_outils: "Preview tools", vue_moins: "Zoom out (−)", vue_plus: "Zoom in (+)", vue_zoom: "Zoom", vue_ajuster: "Fit", vue_main: "Hand", vue_loupe: "Magnifier",
+    vue_laize: "Roll width", vue_aide: "Wheel: zoom · drag: move · magnifier: click, Shift+click, rectangle · keys + − 0 1",
+    vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Roll width ${l} mm (${n})`, vue_media_charge: "loaded media",
+    vue_hors_laize: (d) => `${d} mm wider than the roll`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
     blanc_aplat: "Flood over the whole page", retraction: "Choke (mm)", seuil: "Minimum ink (%)",
     note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge. Tones the Epson recognises: White, Blanc, WH (white) and Metallic, Silver, Argent, MS (silver).",
@@ -903,6 +959,7 @@ function appliquerLangue() {
   document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
   document.querySelectorAll("[data-t-placeholder]").forEach((n) => { n.placeholder = T()[n.dataset.tPlaceholder]; });
   document.querySelectorAll("[data-t-title]").forEach((n) => { n.title = T()[n.dataset.tTitle]; });
+  document.querySelectorAll("[data-t-aria]").forEach((n) => { n.setAttribute("aria-label", T()[n.dataset.tAria]); });
   boutonLangue.textContent = T().autre;
   remplirProfils();
   remplirReglages();
@@ -1003,16 +1060,172 @@ $("form-edition").addEventListener("submit", async (e) => {
   rafraichir();
 });
 
-/** Visionneuse : aperçu en grand ; pour un aperçu à 50 dpi, ses dimensions en mm. */
-function voir(src, legende, mesurable) {
-  const img = $("image-vue");
+/** Visionneuse façon éditeur : la page en grand, zoom (molette, boutons, liste, ajuster, 100 %),
+ *  déplacement à la main, loupe (clic, Maj+clic, rectangle), règles en mm, position du curseur,
+ *  laize de la machine et calque de découpe superposé. 100 % = taille réelle à l'écran. */
+const PX_MM = 96 / 25.4, ZOOM_MAX = 8, ZOOMS = [0.25, 0.5, 1, 2, 4, 8];
+const vue = { z: 1, zmin: 0.25, tx: 0, ty: 0, l: 0, h: 0, laize: null, curseur: null, geste: null };
+const zoneVue = $("vue-zone");
+
+async function voir(src, legende, contexte = {}) {
+  const { t, page, n } = contexte, img = $("image-vue"), calque = $("vue-decoupe");
   $("legende-vue").textContent = legende;
-  img.onload = () => {
-    if (mesurable) $("legende-vue").textContent = `${legende} · ${T().taille_mm(Math.round(img.naturalWidth / 50 * 25.4), Math.round(img.naturalHeight / 50 * 25.4))}`;
-  };
+  // Découpe superposable : seulement s'il y a des tracés et qu'on ne regarde pas déjà la découpe.
+  const decoupe = t && page?.traces_decoupe && !src.endsWith(".svg") ? `/api/travaux/${t.id}/pages/${n}/decoupe.svg` : null;
+  $("vue-calque").hidden = !decoupe;
+  if (decoupe) calque.src = decoupe; else calque.removeAttribute("src");
+  calque.hidden = !decoupe || !$("vue-voir-decoupe").checked;
+  // Laize : le média lu sur l'Epson s'il y en a un, sinon celle de la machine qui fera le travail.
+  const machine = catalogue.find((m) => (t?.mode === "decouper" ? m.modele_decoupe : m.modele_imprime));
+  vue.laize = t?.mode !== "decouper" && media?.largeur_mm ? { mm: media.largeur_mm, nom: T().vue_media_charge }
+    : machine ? { mm: machine.laize_mm, nom: machine.nom } : null;
+  $("vue-calque-laize").hidden = !vue.laize;
+  vue.curseur = null;
+  const charge = new Promise((ok) => { img.onload = img.onerror = ok; });
   img.src = src;
   $("visionneuse").showModal();
+  zoneVue.focus();
+  await charge;
+  [vue.l, vue.h] = await dimensionsMm(src, img, page);
+  ajusterVue();
 }
+/** Format de la page en mm : mesuré au rendu, sinon la viewBox du SVG (points), sinon l'aperçu à 50 dpi. */
+async function dimensionsMm(src, img, page) {
+  if (page?.largeur_mm > 0) return [page.largeur_mm, page.hauteur_mm];
+  if (src.endsWith(".svg")) {
+    const m = (await fetch(src).then((r) => r.text()).catch(() => "")).match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+    if (m) return [+m[1] * 25.4 / 72, +m[2] * 25.4 / 72];
+  }
+  return [img.naturalWidth / 50 * 25.4 || 100, img.naturalHeight / 50 * 25.4 || 100];
+}
+const mmVers = (sx, sy) => ({ x: (sx - vue.tx) / (vue.z * PX_MM), y: (sy - vue.ty) / (vue.z * PX_MM) });
+function zoomerVue(z, sx = zoneVue.clientWidth / 2, sy = zoneVue.clientHeight / 2) {
+  // Le point (sx, sy) de la zone reste sous le curseur : on ne perd pas son repère.
+  const m = mmVers(sx, sy);
+  vue.z = Math.min(ZOOM_MAX, Math.max(vue.zmin, z));
+  vue.tx = sx - m.x * vue.z * PX_MM; vue.ty = sy - m.y * vue.z * PX_MM;
+  dessinerVue();
+}
+/** Montre le rectangle (en mm) en entier, centré. */
+function cadrerVue(x0, y0, x1, y1, marge = 24) {
+  const w = zoneVue.clientWidth, h = zoneVue.clientHeight;
+  const z = Math.min((w - 2 * marge) / ((x1 - x0) * PX_MM), (h - 2 * marge) / ((y1 - y0) * PX_MM));
+  vue.z = Math.min(ZOOM_MAX, Math.max(vue.zmin, z));
+  const k = vue.z * PX_MM;
+  vue.tx = (w - (x0 + x1) * k) / 2; vue.ty = (h - (y0 + y1) * k) / 2;
+  dessinerVue();
+}
+function ajusterVue() {
+  const ajuste = Math.min((zoneVue.clientWidth - 48) / (vue.l * PX_MM), (zoneVue.clientHeight - 48) / (vue.h * PX_MM));
+  vue.zmin = Math.min(0.25, ajuste / 2);
+  cadrerVue(0, 0, vue.l, vue.h);
+}
+function dessinerVue() {
+  if (!vue.l) return;
+  const k = vue.z * PX_MM, scene = $("vue-scene");
+  Object.assign(scene.style, { width: `${vue.l * k}px`, height: `${vue.h * k}px`, transform: `translate(${vue.tx}px, ${vue.ty}px)` });
+  const laize = $("vue-voir-laize").checked && vue.laize, hors = laize && vue.l > laize.mm + 0.05;
+  $("vue-laize").hidden = !laize;
+  $("vue-hors").hidden = !hors;
+  if (laize) $("vue-laize").style.width = `${laize.mm * k}px`;
+  if (hors) Object.assign($("vue-hors").style, { left: `${laize.mm * k}px`, width: `${(vue.l - laize.mm) * k}px` });
+  const pc = Math.round(vue.z * 100), choix = $("vue-zoom");
+  choix.replaceChildren(...[...new Set([pc, ...ZOOMS.map((z) => z * 100)])].sort((a, b) => a - b).map((p) => el("option", { value: p, selected: p === pc }, `${p} %`)));
+  $("vue-dims").textContent = T().vue_dims(nombre(vue.l, 1), nombre(vue.h, 1));
+  $("vue-pos").textContent = vue.curseur ? T().vue_pos(nombre(vue.curseur.x, 1), nombre(vue.curseur.y, 1)) : "";
+  const info = $("vue-info-laize");
+  info.className = hors ? "hors" : "";
+  info.textContent = vue.laize ? T().vue_laize_de(nombre(vue.laize.mm, 1), vue.laize.nom) + (vue.l > vue.laize.mm + 0.05 ? ` · ${T().vue_hors_laize(nombre(vue.l - vue.laize.mm, 1))}` : "") : "";
+  regleVue($("vue-regle-x"), true);
+  regleVue($("vue-regle-y"), false);
+}
+/** Règle en mm, graduée selon le zoom ; l'étendue de la page et le curseur y sont marqués. */
+function regleVue(toile, horizontale) {
+  const r = toile.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (!r.width || !r.height) return;
+  toile.width = Math.round(r.width * dpr); toile.height = Math.round(r.height * dpr);
+  const c = toile.getContext("2d"), s = getComputedStyle(document.documentElement), coul = (v) => s.getPropertyValue(v).trim();
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const k = vue.z * PX_MM, o = horizontale ? vue.tx : vue.ty, long = horizontale ? r.width : r.height, ep = horizontale ? r.height : r.width;
+  const trait = (p, l) => (horizontale ? (c.moveTo(p, ep), c.lineTo(p, ep - l)) : (c.moveTo(ep, p), c.lineTo(ep - l, p)));
+  const bande = (a, b) => (horizontale ? c.fillRect(a, 0, b - a, ep) : c.fillRect(0, a, ep, b - a));
+  c.fillStyle = coul("--lateral"); bande(0, long);
+  c.fillStyle = coul("--accent-doux"); bande(o, o + (horizontale ? vue.l : vue.h) * k);
+  const pas = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find((p) => p * k >= 60) || 10000;
+  const fin = pas / (String(pas)[0] === "2" ? 4 : 5), parPas = Math.round(pas / fin);
+  c.strokeStyle = coul("--doux"); c.fillStyle = coul("--texte"); c.font = "10px system-ui, sans-serif"; c.lineWidth = 1;
+  c.beginPath();
+  for (let i = Math.floor(-o / k / fin); o + i * fin * k <= long; i++) {
+    const p = Math.round(o + i * fin * k) + 0.5, majeur = i % parPas === 0;
+    trait(p, majeur ? ep : ep * 0.3);
+    if (!majeur) continue;
+    const texte = String(Math.round(i * fin));
+    if (horizontale) c.fillText(texte, p + 3, 10);
+    else { c.save(); c.translate(10, p + 3); c.rotate(-Math.PI / 2); c.textAlign = "right"; c.fillText(texte, 0, 0); c.restore(); }
+  }
+  c.stroke();
+  if (vue.curseur) {
+    c.strokeStyle = coul("--accent"); c.lineWidth = 2; c.beginPath();
+    trait(o + (horizontale ? vue.curseur.x : vue.curseur.y) * k, ep); c.stroke();
+  }
+}
+const pointVue = (e) => { const r = zoneVue.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+function outilVue(outil) {
+  zoneVue.dataset.outil = outil;
+  $("vue-main").setAttribute("aria-pressed", String(outil === "main"));
+  $("vue-loupe").setAttribute("aria-pressed", String(outil === "loupe"));
+}
+zoneVue.addEventListener("wheel", (e) => { e.preventDefault(); const p = pointVue(e); zoomerVue(vue.z * Math.exp(-e.deltaY * 0.0015), p.x, p.y); }, { passive: false });
+zoneVue.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  zoneVue.setPointerCapture(e.pointerId);
+  const p = pointVue(e);
+  vue.geste = { ...p, tx: vue.tx, ty: vue.ty, bouge: false };
+});
+zoneVue.addEventListener("pointermove", (e) => {
+  const p = pointVue(e), g = vue.geste;
+  vue.curseur = mmVers(p.x, p.y);
+  if (g) {
+    g.bouge ||= Math.hypot(p.x - g.x, p.y - g.y) > 3;
+    if (zoneVue.dataset.outil === "main") { vue.tx = g.tx + p.x - g.x; vue.ty = g.ty + p.y - g.y; }
+    else if (g.bouge) {
+      Object.assign($("vue-rect").style, { left: `${Math.min(p.x, g.x)}px`, top: `${Math.min(p.y, g.y)}px`, width: `${Math.abs(p.x - g.x)}px`, height: `${Math.abs(p.y - g.y)}px` });
+      $("vue-rect").hidden = false;
+    }
+  }
+  dessinerVue();
+});
+zoneVue.addEventListener("pointerup", (e) => {
+  const p = pointVue(e), g = vue.geste;
+  vue.geste = null;
+  $("vue-rect").hidden = true;
+  if (!g || zoneVue.dataset.outil !== "loupe") return;
+  if (!g.bouge) { zoomerVue(vue.z * (e.shiftKey ? 0.5 : 2), p.x, p.y); return; }
+  const a = mmVers(Math.min(p.x, g.x), Math.min(p.y, g.y)), b = mmVers(Math.max(p.x, g.x), Math.max(p.y, g.y));
+  cadrerVue(a.x, a.y, b.x, b.y, 0);
+});
+zoneVue.addEventListener("pointerleave", () => { if (!vue.geste) { vue.curseur = null; dessinerVue(); } });
+$("visionneuse").addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const pan = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key];
+  if (e.key === "+" || e.key === "=") zoomerVue(vue.z * 1.25);
+  else if (e.key === "-" || e.key === "_") zoomerVue(vue.z / 1.25);
+  else if (e.key === "0") ajusterVue();
+  else if (e.key === "1") zoomerVue(1);
+  else if (pan) { vue.tx += pan[0]; vue.ty += pan[1]; dessinerVue(); }
+  else return;
+  e.preventDefault();
+});
+$("vue-moins").addEventListener("click", () => zoomerVue(vue.z / 1.25));
+$("vue-plus").addEventListener("click", () => zoomerVue(vue.z * 1.25));
+$("vue-ajuster").addEventListener("click", ajusterVue);
+$("vue-reel").addEventListener("click", () => zoomerVue(1));
+$("vue-zoom").addEventListener("change", (e) => zoomerVue(+e.target.value / 100));
+$("vue-main").addEventListener("click", () => outilVue("main"));
+$("vue-loupe").addEventListener("click", () => outilVue("loupe"));
+$("vue-voir-decoupe").addEventListener("change", (e) => { $("vue-decoupe").hidden = !e.target.checked; });
+$("vue-voir-laize").addEventListener("change", dessinerVue);
+new ResizeObserver(() => dessinerVue()).observe(zoneVue);
 
 // --- Travaux ---
 let travaux = [], sorties = [], filtre = "";
@@ -1170,8 +1383,10 @@ const derniereSortie = (t, n, machine) => sorties.filter((s) => s.travail === t.
 function vuePage(t, page, n) {
   const base = `/api/travaux/${t.id}/pages/${n}`;
   const vignette = (src, legende) => {
-    const img = el("img", { src, alt: legende, loading: "lazy", style: "cursor: zoom-in" });
-    img.addEventListener("click", () => voir(src, legende, !src.endsWith(".svg")));
+    const img = el("img", { src, alt: legende, loading: "lazy", tabIndex: 0, style: "cursor: zoom-in" });
+    img.setAttribute("role", "button");
+    img.addEventListener("click", () => voir(src, legende, { t, page, n }));
+    img.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); voir(src, legende, { t, page, n }); } });
     return el("figure", {}, img, el("figcaption", {}, legende));
   };
   // Seul l'aperçu (composite, sinon la découpe) est montré d'office ; les couches (découpe,
