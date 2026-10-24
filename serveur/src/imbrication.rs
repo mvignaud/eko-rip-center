@@ -14,37 +14,63 @@ pub struct Taille {
     pub hauteur: f64,
 }
 
-/// Position (coin bas gauche) de l'élément `indice`, en points.
+/// Position (coin bas gauche) de l'élément `indice`, en points ; `tourne` : posé à 90°
+/// (sa largeur devient sa hauteur).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Place {
     pub indice: usize,
     pub x: f64,
     pub y: f64,
+    pub tourne: bool,
 }
 
 /// Placement en rangées : éléments par hauteur décroissante, de gauche à droite, nouvelle
-/// rangée quand la laize est pleine. Rend les places et la taille de la planche.
-// ponytail: rangées simples, sans rotation ; un placement en « skyline » ou la rotation
-// de 90° gagneraient du support sur des formats très mélangés.
-pub fn placer(tailles: &[Taille], laize: f64, espace: f64) -> Result<(Vec<Place>, Taille), String> {
-    if let Some(i) = tailles.iter().position(|t| t.largeur > laize + 1e-6) {
-        return Err(format!("l'élément {} ({:.0} mm) est plus large que la laize ({:.0} mm)", i + 1, tailles[i].largeur / PT_PAR_MM, laize / PT_PAR_MM));
+/// rangée quand la laize est pleine. Avec `rotation`, quatre orientations sont essayées —
+/// tel quel, tout tourné, tout couché, tout debout — et la plus courte en longueur de
+/// rouleau est gardée ; un élément trop large n'y passe que tourné. Rend les places et la
+/// taille de la planche.
+// ponytail: rangées simples ; un placement en « skyline » ou sur la forme du contour
+// gagnerait du support sur des formats très mélangés.
+pub fn placer(tailles: &[Taille], laize: f64, espace: f64, rotation: bool) -> Result<(Vec<Place>, Taille), String> {
+    let tient = |l: f64| l <= laize + 1e-6;
+    if let Some(i) = tailles.iter().position(|t| !tient(t.largeur) && !(rotation && tient(t.hauteur))) {
+        let t = tailles[i];
+        return Err(format!("l'élément {} ({:.0} × {:.0} mm) est plus large que la laize ({:.0} mm)", i + 1, t.largeur / PT_PAR_MM, t.hauteur / PT_PAR_MM, laize / PT_PAR_MM));
     }
+    // Orientation de chaque élément selon une règle ; un élément trop large est toujours tourné.
+    let selon = |regle: &dyn Fn(&Taille) -> bool| -> Vec<bool> { tailles.iter().map(|t| !tient(t.largeur) || (tient(t.hauteur) && regle(t))).collect() };
+    let tel_quel = selon(&|_| false);
+    let mut meilleur = rangees(tailles, &tel_quel, laize, espace);
+    if !rotation {
+        return Ok(meilleur);
+    }
+    // Tout tourné, côté long en travers (couché), côté long dans le sens du rouleau (debout).
+    for tourne in [selon(&|_| true), selon(&|t| t.hauteur > t.largeur), selon(&|t| t.largeur > t.hauteur)] {
+        let essai = rangees(tailles, &tourne, laize, espace);
+        if essai.1.hauteur < meilleur.1.hauteur - 1e-6 {
+            meilleur = essai;
+        }
+    }
+    Ok(meilleur)
+}
+
+fn rangees(tailles: &[Taille], tourne: &[bool], laize: f64, espace: f64) -> (Vec<Place>, Taille) {
+    let pose = |i: usize| if tourne[i] { Taille { largeur: tailles[i].hauteur, hauteur: tailles[i].largeur } } else { tailles[i] };
     let mut ordre: Vec<usize> = (0..tailles.len()).collect();
-    ordre.sort_by(|&a, &b| tailles[b].hauteur.total_cmp(&tailles[a].hauteur));
+    ordre.sort_by(|&a, &b| pose(b).hauteur.total_cmp(&pose(a).hauteur));
     let (mut places, mut x, mut y, mut haut_rangee, mut large_max) = (vec![], 0.0f64, 0.0f64, 0.0f64, 0.0f64);
     for i in ordre {
-        let t = tailles[i];
+        let t = pose(i);
         if x > 0.0 && x + t.largeur > laize + 1e-6 {
             y += haut_rangee + espace;
             (x, haut_rangee) = (0.0, 0.0);
         }
-        places.push(Place { indice: i, x, y });
+        places.push(Place { indice: i, x, y, tourne: tourne[i] });
         large_max = large_max.max(x + t.largeur);
         haut_rangee = haut_rangee.max(t.hauteur);
         x += t.largeur + espace;
     }
-    Ok((places, Taille { largeur: large_max, hauteur: y + haut_rangee }))
+    (places, Taille { largeur: large_max, hauteur: y + haut_rangee })
 }
 
 /// Une page à imbriquer : PDF source, numéro de page (à partir de 1), nombre de copies.
@@ -91,7 +117,7 @@ pub fn page_en_formulaire(cible: &mut Document, pdf: &[u8], page: usize) -> Resu
 }
 
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
-pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64) -> Result<(Vec<u8>, Vec<Place>), String> {
+pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool) -> Result<(Vec<u8>, Vec<Place>), String> {
     let mut cible = Document::with_version("1.6");
     // Formulaires créés, un par source, et leur taille.
     let mut formulaires: Vec<(ObjectId, Taille, [f64; 2])> = vec![];
@@ -104,7 +130,7 @@ pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64) -> Result<(Ve
         return Err("rien à imbriquer".into());
     }
     let tailles: Vec<Taille> = elements.iter().map(|&n| formulaires[n].1).collect();
-    let (places, planche) = placer(&tailles, laize_mm * PT_PAR_MM, espace_mm * PT_PAR_MM)?;
+    let (places, planche) = placer(&tailles, laize_mm * PT_PAR_MM, espace_mm * PT_PAR_MM, rotation)?;
 
     let mut xobjets = Dictionary::new();
     let mut contenu = String::new();
@@ -113,8 +139,13 @@ pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64) -> Result<(Ve
     }
     for p in &places {
         let n = elements[p.indice];
-        let [llx, lly] = formulaires[n].2;
-        contenu += &format!("q 1 0 0 1 {:.4} {:.4} cm /F{n} Do Q\n", p.x - llx, p.y - lly);
+        let ([llx, lly], h) = (formulaires[n].2, formulaires[n].1.hauteur);
+        contenu += &if p.tourne {
+            // Quart de tour à gauche, (x, y) → (−y, x) : le bas de la page se pose à droite.
+            format!("q 0 1 -1 0 {:.4} {:.4} cm /F{n} Do Q\n", p.x + lly + h, p.y - llx)
+        } else {
+            format!("q 1 0 0 1 {:.4} {:.4} cm /F{n} Do Q\n", p.x - llx, p.y - lly)
+        };
     }
     let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
     let pages = cible.new_object_id();
@@ -145,7 +176,7 @@ pub(crate) mod tests {
     #[test]
     fn placement_dans_la_laize_sans_chevauchement() {
         let tailles = [t(300.0, 200.0), t(500.0, 100.0), t(400.0, 300.0), t(300.0, 200.0), t(600.0, 150.0)];
-        let (places, planche) = placer(&tailles, 1000.0 * MM, 5.0 * MM).unwrap();
+        let (places, planche) = placer(&tailles, 1000.0 * MM, 5.0 * MM, false).unwrap();
         assert_eq!(places.len(), tailles.len());
         assert!(planche.largeur <= 1000.0 * MM + 1e-6);
         for (i, a) in places.iter().enumerate() {
@@ -163,8 +194,57 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn rotation_quand_elle_raccourcit_la_planche() {
+        // 3 copies de 200 × 100 mm sur 320 mm : tel quel une par rangée (310 mm de long),
+        // couchées (100 × 200) trois côte à côte (200 mm).
+        let tailles = [t(200.0, 100.0); 3];
+        let (_, sans) = placer(&tailles, 320.0 * MM, 5.0 * MM, false).unwrap();
+        let (places, avec) = placer(&tailles, 320.0 * MM, 5.0 * MM, true).unwrap();
+        assert!((sans.hauteur / MM - 310.0).abs() < 1e-6 && (avec.hauteur / MM - 200.0).abs() < 1e-6);
+        assert!(places.iter().all(|p| p.tourne));
+        // Un format plus large que la laize n'y passe que tourné ; sans rotation, refus.
+        let (places, _) = placer(&[t(400.0, 100.0)], 320.0 * MM, 5.0 * MM, true).unwrap();
+        assert!(places[0].tourne);
+        assert!(placer(&[t(400.0, 100.0)], 320.0 * MM, 5.0 * MM, false).is_err());
+        // Rien à gagner : pas de rotation.
+        let (places, _) = placer(&[t(100.0, 50.0); 2], 320.0 * MM, 5.0 * MM, true).unwrap();
+        assert!(places.iter().all(|p| !p.tourne));
+    }
+
+    /// Un élément tourné est rendu et découpé dans sa case : une page magenta de 60 × 40 pt
+    /// (MediaBox décalée) couchée en 40 × 60 sur une laize de 50 pt.
+    #[test]
+    fn element_tourne_rendu_et_decoupe_en_place() {
+        let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
+        let sources = [Source { pdf: &magenta, page: 1, copies: 1 }];
+        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true).unwrap();
+        assert!(places[0].tourne);
+        let d = crate::decoupe::extraire(&planche, false).unwrap();
+        assert!((d[0].largeur - 40.0).abs() < 1e-3 && (d[0].hauteur - 60.0).abs() < 1e-3, "{} × {}", d[0].largeur, d[0].hauteur);
+        let (xs, ys): (Vec<f64>, Vec<f64>) = d[0].traces[0].points.iter().copied().unzip();
+        let borne = |v: &[f64]| (v.iter().copied().fold(f64::MAX, f64::min), v.iter().copied().fold(f64::MIN, f64::max));
+        // Contour à 5 pt du bord de la page source : 5..35 en x, 5..55 en y une fois couché.
+        let ((x0, x1), (y0, y1)) = (borne(&xs), borne(&ys));
+        assert!((x0 - 5.0).abs() < 1e-3 && (x1 - 35.0).abs() < 1e-3 && (y0 - 5.0).abs() < 1e-3 && (y1 - 55.0).abs() < 1e-3, "{x0} {x1} {y0} {y1}");
+        let dossier = std::env::temp_dir().join(format!("eko-rip-rotation-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+        std::fs::write(dossier.join("p.pdf"), &planche).unwrap();
+        let st = std::process::Command::new("gs")
+            .args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=tiffsep", "-r72"])
+            .arg(format!("-sOutputFile={}", dossier.join("r.tif").display()))
+            .arg(dossier.join("p.pdf"))
+            .status()
+            .unwrap();
+        assert!(st.success());
+        let m = image::open(dossier.join("r(Magenta).tif")).unwrap().to_luma8();
+        assert_eq!(m.dimensions(), (40, 60));
+        assert_eq!((m.get_pixel(20, 30)[0], m.get_pixel(2, 2)[0], m.get_pixel(37, 57)[0]), (0, 0, 0), "toute la case est magenta");
+        std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    #[test]
     fn trop_large_refuse() {
-        let e = placer(&[t(1200.0, 100.0)], 1000.0 * MM, 5.0 * MM).unwrap_err();
+        let e = placer(&[t(1200.0, 100.0)], 1000.0 * MM, 5.0 * MM, false).unwrap_err();
         assert!(e.contains("plus large que la laize"), "{e}");
     }
 
@@ -197,7 +277,7 @@ pub(crate) mod tests {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &cyan, page: 1, copies: 1 }, Source { pdf: &magenta, page: 1, copies: 2 }];
         // Laize 80 mm ≈ 226,8 pt : cyan (100) + magenta (60) + espace tiennent en rangée 1 ; le 2e magenta passe en rangée 2.
-        let (planche, places) = composer(&sources, 80.0, 5.0).unwrap();
+        let (planche, places) = composer(&sources, 80.0, 5.0, false).unwrap();
         assert_eq!(places.len(), 3);
 
         // Découpe : trois contours, chacun dans son élément placé.

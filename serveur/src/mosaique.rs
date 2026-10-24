@@ -23,23 +23,56 @@ pub fn les(largeur: f64, laize: f64, recouvrement: f64) -> Result<Vec<(f64, f64)
     }).collect())
 }
 
-/// Réécrit le PDF : chaque page plus large que la laize est remplacée par ses lés.
-pub fn composer(pdf: &[u8], laize_mm: f64, recouvrement_mm: f64) -> Result<Vec<u8>, String> {
+/// Hauteur de la bande de repères, en mm.
+pub const BANDE_MM: f64 = 10.0;
+
+/// Bande de pied d'un lé (en noir) : son numéro et un trait vertical à chaque bord de
+/// recouvrement, là où le lé voisin s'arrête ou commence, pour aligner à la pose.
+fn reperes(i: usize, n: usize, largeur: f64, r: f64) -> String {
+    let b = BANDE_MM * PT_PAR_MM;
+    let mut s = String::from("q 0 0 0 1 K 0 0 0 1 k 0.5 w ");
+    let mut traits = vec![];
+    if i > 0 {
+        traits.push(r);
+    }
+    if i + 1 < n {
+        traits.push(largeur - r);
+    }
+    for x in traits {
+        s += &format!("{x:.4} 0 m {x:.4} {:.4} l S ", b);
+    }
+    // « Lé » en WinAnsi : é = \351.
+    s += &format!("BT /H 8 Tf {:.4} {:.4} Td (L\\351 {}/{n}) Tj ET Q\n", (r + 4.0).min(largeur / 2.0), b / 2.0 - 3.0, i + 1);
+    s
+}
+
+/// Réécrit le PDF : chaque page plus large que la laize est remplacée par ses lés. Avec
+/// `avec_reperes`, chaque lé reçoit en pied une bande de `BANDE_MM` (numéro, traits).
+pub fn composer(pdf: &[u8], laize_mm: f64, recouvrement_mm: f64, avec_reperes: bool) -> Result<Vec<u8>, String> {
     let nb_pages = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?.get_pages().len();
     let mut cible = Document::with_version("1.6");
     let pages_id = cible.new_object_id();
+    let police = cible.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding" });
+    let bande = if avec_reperes { BANDE_MM * PT_PAR_MM } else { 0.0 };
     let mut enfants = vec![];
     for n in 1..=nb_pages {
         let (form, taille, [llx, lly]) = page_en_formulaire(&mut cible, pdf, n).map_err(|e| format!("page {n} : {e}"))?;
-        for (x0, x1) in les(taille.largeur, laize_mm * PT_PAR_MM, recouvrement_mm * PT_PAR_MM)? {
-            let contenu = format!("q 1 0 0 1 {:.4} {:.4} cm /F Do Q\n", -x0 - llx, -lly);
+        let r = recouvrement_mm * PT_PAR_MM;
+        let decoupe = les(taille.largeur, laize_mm * PT_PAR_MM, r)?;
+        // Une page qui tient dans la laize n'est pas un lé : pas de bande.
+        let bande = if decoupe.len() > 1 { bande } else { 0.0 };
+        for (i, &(x0, x1)) in decoupe.iter().enumerate() {
+            let mut contenu = format!("q 1 0 0 1 {:.4} {:.4} cm /F Do Q\n", -x0 - llx, bande - lly);
+            if bande > 0.0 {
+                contenu += &reperes(i, decoupe.len(), x1 - x0, r);
+            }
             let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
             let mut xobjets = Dictionary::new();
             xobjets.set("F", form);
             enfants.push(Object::Reference(cible.add_object(dictionary! {
                 "Type" => "Page", "Parent" => pages_id,
-                "MediaBox" => vec![0.into(), 0.into(), Object::Real((x1 - x0) as f32), Object::Real(taille.hauteur as f32)],
-                "Contents" => flux, "Resources" => dictionary! { "XObject" => xobjets },
+                "MediaBox" => vec![0.into(), 0.into(), Object::Real((x1 - x0) as f32), Object::Real((taille.hauteur + bande) as f32)],
+                "Contents" => flux, "Resources" => dictionary! { "XObject" => xobjets, "Font" => dictionary! { "H" => police } },
             })));
         }
     }
@@ -102,7 +135,7 @@ mod tests {
 
     #[test]
     fn banniere_en_deux_les_rendus_et_decoupes() {
-        let pdf = composer(&banniere(), 1600.0, 20.0).unwrap();
+        let pdf = composer(&banniere(), 1600.0, 20.0, false).unwrap();
         // Découpe : chaque lé garde sa part du contour, rognée à son bord.
         let pages = crate::decoupe::extraire(&pdf, false).unwrap();
         assert_eq!(pages.len(), 2);
@@ -139,6 +172,40 @@ mod tests {
         // en x = 1500 − 1490 = 10 mm dans le lé 2.
         assert_eq!(lire(1, "Magenta", 1505.0), 0, "recouvrement présent en fin de lé 1");
         assert_eq!(lire(2, "Magenta", 15.0), 0, "recouvrement présent en début de lé 2");
+        std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    /// Repères : page de 310 mm (bande de 10 mm), contenu et découpe remontés de 10 mm,
+    /// trait noir dans la bande au bord du recouvrement (lé 1 : 1490 mm ; lé 2 : 20 mm).
+    #[test]
+    fn bande_de_reperes_des_les() {
+        let pdf = composer(&banniere(), 1600.0, 20.0, true).unwrap();
+        let pages = crate::decoupe::extraire(&pdf, false).unwrap();
+        assert!((pages[0].hauteur / MM - 310.0).abs() < 1e-3);
+        let y_min = pages[0].traces[0].points.iter().map(|p| p.1).fold(f64::MAX, f64::min);
+        assert!((y_min / MM - 20.0).abs() < 1e-3, "contour à 10 mm du bas de l'image, plus la bande : {} mm", y_min / MM);
+        assert!(composer(&banniere(), 4000.0, 20.0, true).map(|p| crate::decoupe::extraire(&p, false).unwrap()[0].hauteur / MM).unwrap() < 300.1, "pas de lé : pas de bande");
+
+        let dossier = std::env::temp_dir().join(format!("eko-rip-reperes-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+        std::fs::write(dossier.join("m.pdf"), &pdf).unwrap();
+        let dpi = 18.0;
+        let st = std::process::Command::new("gs")
+            .args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=tiffsep", "-r18"])
+            .arg(format!("-sOutputFile={}", dossier.join("r-%d.tif").display()))
+            .arg(dossier.join("m.pdf"))
+            .status()
+            .unwrap();
+        assert!(st.success());
+        let px = |mm: f64| (mm * MM * dpi / 72.0) as i64;
+        for (page, x_mm) in [(1, 1490.0), (2, 20.0)] {
+            let noir = image::open(dossier.join(format!("r-{page}(Black).tif"))).unwrap().to_luma8();
+            let ligne = noir.height() as i64 - px(5.0) - 1;
+            let present = (px(x_mm) - 2..=px(x_mm) + 2).any(|x| noir.get_pixel(x as u32, ligne as u32)[0] < 128);
+            assert!(present, "lé {page} : trait d'assemblage à {x_mm} mm");
+            let cyan = image::open(dossier.join(format!("r-{page}(Cyan).tif"))).unwrap().to_luma8();
+            assert!((0..cyan.width()).all(|x| cyan.get_pixel(x, ligne as u32)[0] == 255), "lé {page} : pas d'image dans la bande");
+        }
         std::fs::remove_dir_all(&dossier).unwrap();
     }
 }

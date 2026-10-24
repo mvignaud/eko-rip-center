@@ -92,6 +92,11 @@ espaces et tirets indifférents). Un ton de découpe à 0 % n'est pas découpé.
 **Tous les tracés**, chaque tracé du fichier est découpé (fichiers de découpe seule).
 Les tracés sont rognés à la page : la lame ne sort jamais du support.
 
+Ordre de coupe : rainage (`Creasing`, `Score`), perforation et V-cut d'abord, la coupe
+en dernier, quand la matière tient encore. Un contour contenu dans un autre (le trou d'un
+« O », une fenêtre) est découpé avant lui, pour que la pièce ne bouge pas ; à profondeur
+égale, la lame va au contour le plus proche.
+
 ## Repérage pour le Kona
 
 En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
@@ -119,14 +124,19 @@ que sa copie est terminée (taille stable pendant 5 s). Un fichier refusé est r
 Bloc **Mosaïque** : cocher **Couper en lés si plus large que la laize**, régler la laize
 et le **recouvrement** (zone imprimée sur les deux lés voisins, pour coller ou souder).
 Les lés ont tous la même largeur. Chaque lé devient une page du travail, avec sa propre
-découpe rognée à son bord.
+découpe rognée à son bord. **Numéro et traits d'assemblage** ajoute en pied de chaque lé
+une bande de 10 mm : « Lé 2/3 » et un trait vertical là où le lé voisin s'arrête ou
+commence, pour aligner les lés à la pose.
 
 ## Planche (imbrication)
 
 Sur chaque page imprimable, cocher **Ajouter à la planche** et indiquer le nombre de
 copies. Le panneau **Planche** apparaît au-dessus de la liste : régler la **laize**
 (largeur utile du rouleau, 1600 mm par défaut) et l'**espacement**, puis **Créer la
-planche**. La résolution et le repérage du panneau Nouveau travail s'appliquent. Les
+planche**. Avec **Tourner de 90° si la planche est plus courte**, quatre orientations
+sont essayées (telle quelle, tout tourné, tout couché, tout debout) et la plus courte en
+rouleau est gardée ; un élément plus large que la laize n'y passe que tourné. La
+résolution et le repérage du panneau Nouveau travail s'appliquent. Les
 éléments sont rangés du plus haut au plus bas, de gauche à droite ; la planche est un
 nouveau travail, avec la découpe de tous les contours.
 

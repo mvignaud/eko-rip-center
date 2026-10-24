@@ -7,6 +7,14 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- **Ordre de découpe** : rainage, perforation et V-cut avant la coupe ; contours
+  intérieurs avant ceux qui les contiennent ; à profondeur égale, le plus proche de la lame.
+- **Planche : rotation de 90°** (option) quand elle raccourcit la planche ; un élément plus
+  large que la laize passe tourné au lieu d'être refusé.
+- **Mosaïque : numéro et traits d'assemblage** (option) dans une bande de 10 mm en pied
+  de chaque lé.
+
 ## [0.7.0] — 2026-10-24
 
 ### Ajouté

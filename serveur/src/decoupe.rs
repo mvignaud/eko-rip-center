@@ -489,16 +489,71 @@ fn outil(ton: &str) -> u8 {
     }
 }
 
+/// Ordre de passage des outils : rainage, perforation et V-cut d'abord, la coupe en
+/// dernier, quand la matière tient encore.
+const ORDRE_OUTILS: [u8; 4] = [2, 3, 4, 1];
+
+fn dans_polygone((x, y): (f64, f64), poly: &[(f64, f64)]) -> bool {
+    let mut dedans = false;
+    let mut j = poly.len() - 1;
+    for i in 0..poly.len() {
+        let ((xi, yi), (xj, yj)) = (poly[i], poly[j]);
+        if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
+            dedans = !dedans;
+        }
+        j = i;
+    }
+    dedans
+}
+
+/// Ordre de coupe : un contour contenu dans un autre passe avant lui (la pièce ne bouge
+/// pas pendant qu'on découpe ses trous) ; à profondeur égale, le plus proche de la lame
+/// d'abord, pour limiter les déplacements à vide.
+// ponytail: O(n²) en contours ; suffisant pour quelques milliers d'étiquettes par planche.
+pub fn ordonner<'t>(traces: &[&'t Trace]) -> Vec<&'t Trace> {
+    let boite = |t: &Trace| t.points.iter().fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |(a, b, c, d), &(x, y)| (a.min(x), b.min(y), c.max(x), d.max(y)));
+    let boites: Vec<_> = traces.iter().map(|t| boite(t)).collect();
+    let profondeur = |i: usize| {
+        let (bi, p) = (boites[i], traces[i].points[0]);
+        (0..traces.len())
+            .filter(|&j| j != i && traces[j].ferme && traces[j].points.len() >= 3)
+            .filter(|&j| {
+                let bj = boites[j];
+                bj.0 <= bi.0 && bj.1 <= bi.1 && bj.2 >= bi.2 && bj.3 >= bi.3 && bj != bi && dans_polygone(p, &traces[j].points)
+            })
+            .count()
+    };
+    let profondeurs: Vec<usize> = (0..traces.len()).map(profondeur).collect();
+    let mut restants: Vec<usize> = (0..traces.len()).collect();
+    let mut ordre = Vec::with_capacity(traces.len());
+    let mut lame = (0.0, 0.0);
+    while !restants.is_empty() {
+        let plus_profond = restants.iter().map(|&i| profondeurs[i]).max().unwrap();
+        let (k, &i) = restants
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| profondeurs[**i] == plus_profond)
+            .min_by(|(_, a), (_, b)| {
+                let d = |i: usize| (traces[i].points[0].0 - lame.0).powi(2) + (traces[i].points[0].1 - lame.1).powi(2);
+                d(**a).total_cmp(&d(**b))
+            })
+            .unwrap();
+        restants.swap_remove(k);
+        let t = traces[i];
+        lame = if t.ferme { t.points[0] } else { *t.points.last().unwrap() };
+        ordre.push(t);
+    }
+    ordre
+}
+
 /// Fichier HP-GL : un `SP` par outil, chaque tracé en `PU` puis `PD`, unités 1/100 mm.
 pub fn hpgl(traces: &[Trace]) -> String {
     let u = |(x, y): (f64, f64)| ((x * UNITES_PAR_PT).round() as i64, (y * UNITES_PAR_PT).round() as i64);
     let mut sortie = String::from("IN;");
-    let mut outils: Vec<u8> = traces.iter().map(|t| outil(&t.ton)).collect();
-    outils.sort();
-    outils.dedup();
-    for o in outils {
+    for o in ORDRE_OUTILS.into_iter().filter(|o| traces.iter().any(|t| outil(&t.ton) == *o)) {
         sortie += &format!("SP{o};");
-        for t in traces.iter().filter(|t| outil(&t.ton) == o) {
+        let du_outil: Vec<&Trace> = traces.iter().filter(|t| outil(&t.ton) == o).collect();
+        for t in ordonner(&du_outil) {
             let (x0, y0) = u(t.points[0]);
             sortie += &format!("PU{x0},{y0};PD");
             let mut suite: Vec<String> = t.points[1..].iter().map(|p| u(*p)).map(|(x, y)| format!("{x},{y}")).collect();
@@ -660,7 +715,22 @@ mod tests {
             Trace { ton: "Creasing".into(), points: vec![(0.0, 0.0), (0.0, 72.0)], ferme: false },
         ];
         // 72 pt = 25,4 mm = 2540 unités.
-        assert_eq!(hpgl(&traces), "IN;SP1;PU0,0;PD2540,0,2540,2540,0,0;SP2;PU0,0;PD0,2540;PU;SP0;");
+        assert_eq!(hpgl(&traces), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;", "rainage avant la coupe");
+    }
+
+    #[test]
+    fn interieurs_d_abord_puis_le_plus_proche() {
+        let carre = |nom: &str, x: f64, y: f64, c: f64| Trace { ton: nom.into(), points: vec![(x, y), (x + c, y), (x + c, y + c), (x, y + c)], ferme: true };
+        let loin = carre("loin", 300.0, 0.0, 50.0);
+        let exterieur = carre("exterieur", 0.0, 0.0, 100.0);
+        let trou = carre("trou", 20.0, 20.0, 20.0);
+        let lettre = carre("lettre", 120.0, 0.0, 30.0);
+        let dans_le_trou = carre("dans_le_trou", 25.0, 25.0, 5.0);
+        let traces = [&loin, &exterieur, &trou, &lettre, &dans_le_trou];
+        let noms: Vec<&str> = ordonner(&traces).iter().map(|t| t.ton.as_str()).collect();
+        // Profondeurs : dans_le_trou 2, trou 1, les autres 0 ; puis plus proche voisin depuis
+        // le départ du trou (20, 20) : extérieur (0, 0), lettre (120, 0), loin (300, 0).
+        assert_eq!(noms, ["dans_le_trou", "trou", "exterieur", "lettre", "loin"]);
     }
 
     /// Page cyan pleine, filet `CutContour` (1 pt) à 5 pt du bord, sans surimpression. À

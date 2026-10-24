@@ -322,7 +322,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let provisoire = rep.join("source.tmp");
     let (mut nom, mut format) = (String::new(), None);
     let mut d = Demande::default();
-    let (mut mosaique, mut laize_mm, mut recouvrement_mm) = (false, 1600.0f64, 20.0f64);
+    let (mut mosaique, mut laize_mm, mut recouvrement_mm, mut reperes_les) = (false, 1600.0f64, 20.0f64, false);
 
     loop {
         let champ = match form.next_field().await {
@@ -402,6 +402,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                     Ok(())
                 }
             "laize_mm" => valeur.parse().map(|v| laize_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            "reperes_les" => {
+                reperes_les = valeur == "oui";
+                Ok(())
+            }
             "recouvrement_mm" => valeur.parse().map(|v| recouvrement_mm = v).map_err(|_| erreur("mosaique_invalide")),
             "blanc" => serde_json::from_value(serde_json::Value::String(valeur)).map(|m| d.blanc.mode = m).map_err(|_| erreur("blanc_invalide")),
             "blanc_retraction_mm" => valeur.parse().map(|v| d.blanc.retraction_mm = v).map_err(|_| erreur("blanc_invalide")),
@@ -415,7 +419,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let Some(format) = format else {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     };
-    d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm });
+    d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les });
     match creer_travail(&etat, id, nom, format, d).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
@@ -443,7 +447,7 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         let original = rep.join("source-original.pdf");
         tokio::fs::rename(&source, &original).await.map_err(|e| interne(e.to_string()))?;
         let pdf = tokio::fs::read(&original).await.map_err(|e| interne(e.to_string()))?;
-        let les = tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm))
+        let les = tokio::task::spawn_blocking(move || mosaique::composer(&pdf, m.laize_mm, m.recouvrement_mm, m.reperes))
             .await
             .unwrap_or_else(|e| Err(e.to_string()))
             .map_err(|e| mauvais("mosaique_invalide", Some(e)))?;
@@ -592,6 +596,9 @@ struct DemandePlanche {
     dpi: u32,
     #[serde(default)]
     reperage: reperage::Reperage,
+    /// Autorise le quart de tour quand il raccourcit la planche.
+    #[serde(default)]
+    rotation: bool,
     elements: Vec<ElementPlanche>,
 }
 
@@ -631,11 +638,11 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
         }
     }
-    let (laize, espace) = (d.laize_mm, d.espacement_mm);
+    let (laize, espace, rotation) = (d.laize_mm, d.espacement_mm, d.rotation);
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::composer(&sources, laize, espace)
+        imbrication::composer(&sources, laize, espace, rotation)
     })
     .await;
     let planche = match compose {

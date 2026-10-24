@@ -207,6 +207,7 @@
             <label><span data-t="laize"></span> <input type="number" name="laize_mm" value="1600" min="50" max="5000" step="1"></label>
             <label><span data-t="recouvrement"></span> <input type="number" name="recouvrement_mm" value="20" min="0" max="200" step="1"></label>
           </div>
+          <label class="case"><input type="checkbox" name="reperes_les" value="oui"> <span data-t="reperes_les"></span></label>
         </div></details>
         <button type="submit" data-t="envoyer"></button>
       </form>
@@ -218,6 +219,7 @@
         <div class="corps">
           <label><span data-t="laize"></span> <input type="number" id="laize" value="1600" min="50" max="5000" step="1"></label>
           <label><span data-t="espacement"></span> <input type="number" id="espacement" value="5" min="0" max="100" step="0.5"></label>
+          <label class="case"><input type="checkbox" id="rotation"> <span data-t="rotation"></span></label>
           <button type="button" id="creer-planche"></button>
         </div>
       </section>
@@ -260,9 +262,10 @@ const textes = {
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
     blanc_aplat: "Aplat sur toute la page", retraction: "Rétraction (mm)", seuil: "Encre minimale (%)",
     note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre.",
+    reperes_les: "Numéro et traits d'assemblage en pied de chaque lé (+10 mm)",
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
-    ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
+    rotation: "Tourner de 90° si la planche est plus courte", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
@@ -319,9 +322,10 @@ const textes = {
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
     blanc_aplat: "Flood over the whole page", retraction: "Choke (mm)", seuil: "Minimum ink (%)",
     note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge.",
+    reperes_les: "Panel number and joining marks at the foot of each panel (+10 mm)",
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
-    ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
+    rotation: "Rotate 90° when the sheet gets shorter", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
@@ -556,7 +560,7 @@ function demandeDuFormulaire() {
   return {
     mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
-    mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value } : null,
+    mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value, reperes: f.reperes_les.checked } : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
   };
 }
@@ -568,7 +572,7 @@ function appliquerDemande(d) {
   f.profil_cmjn.value = d.couleur.entree_cmjn || ""; f.profil_rvb.value = d.couleur.entree_rvb || ""; f.profil_sortie.value = d.couleur.sortie || "";
   f.intention.value = String(d.couleur.intention); f.forcer_profils.checked = d.couleur.forcer;
   f.mosaique.checked = !!d.mosaique;
-  if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; }
+  if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; f.reperes_les.checked = !!d.mosaique.reperes; }
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
 }
@@ -774,7 +778,7 @@ function majPlanche() {
 }
 $("creer-planche").addEventListener("click", async () => {
   const elements = [...selection].map(([cle, copies]) => { const [id, page] = cle.split(":"); return { id, page: +page, copies }; });
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, elements };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, elements };
   if (await api("/api/planches", json("POST", corps))) { selection.clear(); majPlanche(); dire(T().planche_creee); rafraichir(); }
 });
 

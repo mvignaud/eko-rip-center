@@ -90,6 +90,11 @@ ignored). A cut spot colour at 0 % is not cut. With **All paths**, every path in
 file is cut (cut-only files). Paths are clipped to the page: the blade never leaves the
 media.
 
+Cutting order: creasing (`Creasing`, `Score`), perforation and V-cut first, the cut last,
+while the material still holds. A contour inside another (the hole of an “O”, a window)
+is cut before it, so the piece does not move; at equal depth, the blade goes to the
+nearest contour.
+
 ## Kona registration
 
 In **Print** mode, **Kona registration** adds around the image:
@@ -117,13 +122,17 @@ complete (size stable for 5 s). A rejected file is moved to `refuses/`, with a
 **Tiling** block: tick **Split into panels when wider than the roll**, set the roll
 width and the **overlap** (area printed on both neighbouring panels, for gluing or
 welding). All panels have the same width. Each panel becomes a page of the job, with
-its own cut clipped to its edge.
+its own cut clipped to its edge. **Panel number and joining marks** adds a 10 mm band at
+the foot of each panel: “Lé 2/3” and a vertical mark where the neighbouring panel stops
+or starts, to line panels up when installing.
 
 ## Sheet (nesting)
 
 On each printable page, tick **Add to sheet** and enter the number of copies. The
 **Sheet** panel appears above the list: set the **roll width** (usable width, 1600 mm
-by default) and the **spacing**, then **Build the sheet**. The resolution and
+by default) and the **spacing**, then **Build the sheet**. With **Rotate 90° when the sheet gets shorter**, four
+orientations are tried (as is, all rotated, all lying, all standing) and the shortest on
+the roll is kept; an item wider than the roll only fits rotated. The resolution and
 registration of the New job panel apply. Items are placed tallest first, left to right;
 the sheet is a new job, with all contours cut.
 

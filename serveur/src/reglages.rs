@@ -18,6 +18,9 @@ pub enum Mode {
 pub struct Mosaique {
     pub laize_mm: f64,
     pub recouvrement_mm: f64,
+    /// Bande de pied avec le numéro du lé et les traits d'assemblage.
+    #[serde(default)]
+    pub reperes: bool,
 }
 
 /// Tout ce qui décide du traitement d'un fichier reçu.
@@ -142,7 +145,7 @@ mod tests {
         std::fs::create_dir_all(&d).unwrap();
         let r = Reglage {
             nom: "Vinyle + cadre".into(),
-            demande: Demande { reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0 }), ..Default::default() },
+            demande: Demande { reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() },
         };
         ecrire(&d, std::slice::from_ref(&r)).unwrap();
         assert_eq!(lire(&d), [r]);
@@ -152,9 +155,9 @@ mod tests {
 
     #[test]
     fn decoupe_seule_sans_impression() {
-        let d = Demande { mode: Mode::Decouper, reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0 }), ..Default::default() }.normaliser();
+        let d = Demande { mode: Mode::Decouper, reperage: reperage::Reperage::Cadre, mosaique: Some(Mosaique { laize_mm: 1600.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() }.normaliser();
         assert_eq!((d.reperage, d.mosaique), (reperage::Reperage::Aucun, None));
-        let mauvaise = Demande { mosaique: Some(Mosaique { laize_mm: 100.0, recouvrement_mm: 150.0 }), ..Default::default() };
+        let mauvaise = Demande { mosaique: Some(Mosaique { laize_mm: 100.0, recouvrement_mm: 150.0, reperes: false }), ..Default::default() };
         assert_eq!(mauvaise.verifier(&[]), Err("mosaique_invalide"));
         assert_eq!(Demande { dpi: 10, ..Default::default() }.verifier(&[]), Err("dpi_invalide"));
     }
