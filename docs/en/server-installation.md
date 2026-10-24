@@ -17,8 +17,11 @@ Download every part and the `.sha256` into one folder, then join them in order:
 - Linux or macOS: `cat <name>.iso.part* > <name>.iso`, then `shasum -a 256 -c <name>.iso.sha256`;
 - Windows: `copy /b <name>.iso.part0 + <name>.iso.part1 + <name>.iso.part2 <name>.iso` (as many
   parts as published), then `certutil -hashfile <name>.iso SHA256` to compare with the `.sha256`.
+  In **PowerShell**, `copy` is another command: use `cmd /c "copy /b …"`, and check with
+  `(Get-FileHash <name>.iso -Algorithm SHA256).Hash`.
 
-Write the image to a USB stick (balenaEtcher, or `dd`), connect the PC to the workshop
+Write the image to a USB stick (balenaEtcher, Rufus in **DD Image mode** — not ISO mode,
+which rebuilds the boot and loses the profile menu —, or `dd`), connect the PC to the workshop
 network (cable advised: the Ubuntu desktop is downloaded during installation) and boot
 from the stick. The menu offers three profiles:
 

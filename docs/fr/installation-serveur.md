@@ -17,10 +17,13 @@ dossier, puis les réunir dans l'ordre :
 
 - Linux ou macOS : `cat eko-rip-center-<version>-ubuntu-24.04-amd64.iso.part* > eko-rip-center-<version>-ubuntu-24.04-amd64.iso`
   puis `shasum -a 256 -c eko-rip-center-<version>-ubuntu-24.04-amd64.iso.sha256` ;
-- Windows : `copy /b fichier.iso.part0 + fichier.iso.part1 + fichier.iso.part2 fichier.iso`
+- Windows, invite de commandes : `copy /b fichier.iso.part0 + fichier.iso.part1 + fichier.iso.part2 fichier.iso`
   (autant de morceaux que publiés), puis `certutil -hashfile fichier.iso SHA256` à comparer au `.sha256`.
+  Dans **PowerShell**, `copy` est une autre commande : passer par `cmd /c "copy /b …"`, et
+  vérifier par `(Get-FileHash fichier.iso -Algorithm SHA256).Hash`.
 
-Écrire l'image sur une clé USB (balenaEtcher, ou `dd`), brancher le PC au réseau de
+Écrire l'image sur une clé USB (balenaEtcher, Rufus en **mode Image DD** — pas le mode ISO,
+qui refait le démarrage et perd le menu des profils —, ou `dd`), brancher le PC au réseau de
 l'atelier (câble conseillé : le bureau Ubuntu se télécharge pendant l'installation) et
 démarrer sur la clé. Le menu propose trois profils :
 
