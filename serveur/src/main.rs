@@ -511,6 +511,16 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     }
     d.verifier(&couleur::lister(&etat.config.profils)).map_err(|code| mauvais(code, None))?;
     tokio::fs::rename(rep.join("source.tmp"), rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
+    // CropBox et /Rotate ramenés à la MediaBox, une fois pour toutes : le rendu et la découpe
+    // voient alors la même page. Un PDF que lopdf ne lit pas reste tel quel ; la découpe
+    // (qui le lit aussi) le signalera.
+    if format == Format::Pdf {
+        let chemin = rep.join(format.fichier());
+        let pdf = tokio::fs::read(&chemin).await.map_err(|e| interne(e.to_string()))?;
+        if let Ok(Ok(Some(normalise))) = tokio::task::spawn_blocking(move || imbrication::normaliser_pages(&pdf)).await {
+            tokio::fs::write(&chemin, normalise).await.map_err(|e| interne(e.to_string()))?;
+        }
+    }
     let alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
         let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
         tokio::task::spawn_blocking(move || controle::verifier(&pdf)).await.unwrap_or_default()
@@ -2064,7 +2074,7 @@ mod tests {
         use axum::http::Request;
         use tower::ServiceExt;
 
-        fn etat(nom: &str) -> Partage {
+        pub(super) fn etat(nom: &str) -> Partage {
             let donnees = std::env::temp_dir().join(format!("eko-rip-acces-{nom}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&donnees);
             std::fs::create_dir_all(donnees.join("travaux")).unwrap();
@@ -2084,7 +2094,7 @@ mod tests {
             Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines })
         }
 
-        async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
+        pub(super) async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
             let mut r = Request::builder().method(methode).uri(uri).header(header::USER_AGENT, "Mozilla/5.0 EKO-RIP-Client/0.9");
             if let Some(c) = cookie {
                 r = r.header(header::COOKIE, c);
@@ -2624,6 +2634,271 @@ mod tests {
             assert!(lignes[0].contains("\"Cyan_ml\"") && !lignes[0].contains("CutContour"), "{}", lignes[0]);
             assert!(lignes[1].contains("\"cyan;\"\"2x1\"\".pdf\""), "nom protégé : {}", lignes[1]);
             std::fs::remove_dir_all(&donnees).unwrap();
+        }
+    }
+
+    /// Non-régression géométrie (roadmap 0.3), d'après des bogues corrigés chez un autre RIP.
+    /// Chaque test passe par le vrai circuit (création du travail, rendu Ghostscript,
+    /// découpe) et mesure la plaque produite et le HP-GL, pas seulement un statut.
+    mod regression_geometrie {
+        use super::controle_d_acces::etat;
+        use super::*;
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        const MM: f64 = imbrication::PT_PAR_MM;
+        /// Contour `CutContour` des PDF d'essai : 5 pt à l'intérieur de l'image, en mm.
+        const RETRAIT: f64 = 5.0 / MM;
+
+        /// Crée le travail depuis `pdf`, comme un envoi, et attend la fin du rendu.
+        async fn rendre(e: &Partage, pdf: Vec<u8>, d: Demande) -> Travail {
+            let id = Uuid::new_v4();
+            let rep = dossier(&e.config.donnees, id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.tmp"), pdf).unwrap();
+            creer_travail(e, id, "essai.pdf".into(), Format::Pdf, d).await.unwrap_or_else(|(s, r)| panic!("refusé : {s} {r:?}"));
+            for _ in 0..600 {
+                let t = lire_travail(&e.config.donnees, id).unwrap();
+                if !actif(&t.statut) {
+                    assert!(matches!(t.statut, Statut::Termine), "{:?}", t.erreur);
+                    return t;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            panic!("rendu trop long");
+        }
+
+        /// Boîte [x0, y0, x1, y1] en mm des points d'un fichier HP-GL (unités de 0,01 mm).
+        fn boite_hpgl(chemin: &std::path::Path) -> [f64; 4] {
+            let texte = std::fs::read_to_string(chemin).unwrap_or_else(|e| panic!("{} : {e}", chemin.display()));
+            let v: Vec<f64> = texte.split(';').filter_map(|c| c.strip_prefix("PU").or(c.strip_prefix("PD"))).flat_map(|c| c.split(',')).filter_map(|n| n.parse().ok()).collect();
+            assert!(!v.is_empty() && v.len().is_multiple_of(2), "{texte}");
+            let (xs, ys): (Vec<f64>, Vec<f64>) = v.chunks(2).map(|p| (p[0] / 100.0, p[1] / 100.0)).unzip();
+            let min = |v: &[f64]| v.iter().copied().fold(f64::MAX, f64::min);
+            let max = |v: &[f64]| v.iter().copied().fold(f64::MIN, f64::max);
+            [min(&xs), min(&ys), max(&xs), max(&ys)]
+        }
+
+        /// Format (mm) d'une plaque de production, et boîte [x0, y0, x1, y1] (mm, origine en
+        /// bas à gauche comme le HP-GL) de ses pixels encrés.
+        fn encre(rep: &std::path::Path, page: usize, plaque: &str, dpi: u32) -> ((f64, f64), [f64; 4]) {
+            let img = image::open(render::chemin_plaque(rep, page, plaque)).unwrap().to_luma8();
+            let (l, h) = img.dimensions();
+            let mm = |px: u32| px as f64 * 25.4 / dpi as f64;
+            let encres: Vec<(u32, u32)> = img.enumerate_pixels().filter(|p| p.2[0] < 128).map(|p| (p.0, p.1)).collect();
+            assert!(!encres.is_empty(), "plaque {plaque} de la page {page} vide");
+            let (c0, c1) = (encres.iter().map(|p| p.0).min().unwrap(), encres.iter().map(|p| p.0).max().unwrap());
+            let (r0, r1) = (encres.iter().map(|p| p.1).min().unwrap(), encres.iter().map(|p| p.1).max().unwrap());
+            ((mm(l), mm(h)), [mm(c0), mm(h - 1 - r1), mm(c1 + 1), mm(h - r0)])
+        }
+
+        fn proches(a: [f64; 4], b: [f64; 4], tolerance: f64) -> bool {
+            a.iter().zip(b).all(|(x, y)| (x - y).abs() <= tolerance)
+        }
+
+        /// La coupe est dans le repère de la plaque : 5 pt à l'intérieur de l'encre.
+        fn coupe_sur_l_encre(coupe: [f64; 4], cyan: [f64; 4], px: f64) {
+            let attendu = [cyan[0] + RETRAIT, cyan[1] + RETRAIT, cyan[2] - RETRAIT, cyan[3] - RETRAIT];
+            assert!(proches(coupe, attendu, 1.5 * px), "coupe {coupe:?}, encre {cyan:?}");
+        }
+
+        /// Une page du PDF d'essai : MediaBox, CropBox éventuelle, /Rotate éventuel.
+        struct PageEssai {
+            media: [f64; 4],
+            crop: Option<[f64; 4]>,
+            rotate: i64,
+        }
+
+        /// PDF de plusieurs pages, chacune remplie de cyan sur toute sa MediaBox, avec un
+        /// contour `CutContour` à 5 pt du bord.
+        fn pdf_pages(pages: &[PageEssai]) -> Vec<u8> {
+            let mut doc = Document::with_version("1.4");
+            let sep = doc.add_object(Object::Array(vec![
+                "Separation".into(),
+                "CutContour".into(),
+                "DeviceCMYK".into(),
+                Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
+            ]));
+            let parent = doc.new_object_id();
+            let boite = |b: [f64; 4]| b.iter().map(|v| Object::Real(*v as f32)).collect::<Vec<_>>();
+            let mut enfants: Vec<Object> = vec![];
+            for p in pages {
+                let [x0, y0, x1, y1] = p.media;
+                let contenu = format!("1 0 0 0 k {x0} {y0} {} {} re f /CS0 CS 1 SCN {} {} {} {} re S", x1 - x0, y1 - y0, x0 + 5.0, y0 + 5.0, x1 - x0 - 10.0, y1 - y0 - 10.0);
+                let c = doc.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
+                let mut d = dictionary! { "Type" => "Page", "Parent" => parent, "MediaBox" => boite(p.media), "Contents" => c, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } };
+                if let Some(b) = p.crop {
+                    d.set("CropBox", boite(b));
+                }
+                if p.rotate != 0 {
+                    d.set("Rotate", p.rotate);
+                }
+                enfants.push(doc.add_object(d).into());
+            }
+            let n = enfants.len() as i64;
+            doc.objects.insert(parent, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => enfants, "Count" => n }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => parent });
+            doc.trailer.set("Root", cat);
+            let mut o = vec![];
+            doc.save_to(&mut o).unwrap();
+            o
+        }
+
+        /// Cas 1 — rotation automatique + résolution non carrée + fond perdu + étiquette.
+        /// La résolution est ici toujours carrée (un seul `dpi`, `-r{dpi}`) : le cas se réduit
+        /// à la rotation automatique décidée avec ce qui agrandit la page — la marge ajoutée
+        /// (notre bord autour de l'image) et les repères imprimés à côté (croix). Page de
+        /// 220 × 100 mm, laize 300 : elle tient seule (290 mm avec les croix), plus avec 10 mm
+        /// de marge (310 mm) ; elle doit tourner, et la coupe rester sur l'encre.
+        #[tokio::test]
+        async fn regression_rotation_auto_avec_marge_et_reperage() {
+            let e = etat("reg-rotation");
+            e.machines.write().unwrap()[0].laize_mm = 300.0;
+            let dpi = 72;
+            let px = 25.4 / dpi as f64;
+            let d = Demande { dpi, reperage: reperage::Reperage::Manuel, edition: edition::Edition { marge_mm: 10.0, ..Default::default() }, ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(220.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
+            assert!(t.alertes.iter().any(|a| a.code == "rotation_auto"), "{:?}", t.alertes);
+            let rep = dossier(&e.config.donnees, t.id);
+            let ((l, h), cyan) = encre(&rep, 1, "Cyan", dpi);
+            // Tournée : image et marge 120 × 240 mm, plus 2 × 35 mm de croix et de blanc.
+            assert!((l - 190.0).abs() <= px && (h - 310.0).abs() <= px, "page {l} × {h} mm");
+            assert!(l <= 300.0, "la page tournée tient dans la laize");
+            // Image de 100 × 220 mm à 35 + 10 mm du coin, dans les deux sens (pixels carrés).
+            assert!(proches(cyan, [45.0, 45.0, 145.0, 265.0], 1.5 * px), "encre {cyan:?}");
+            coupe_sur_l_encre(boite_hpgl(&fichier_plt(&rep, 1)), cyan, px);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Cas 2 — un fichier de coupe par feuille d'un travail de plusieurs feuilles. Chez
+        /// nous, c'est la mosaïque : bannière de 700 × 100 mm, lés de 300 mm au plus avec
+        /// 20 mm de recouvrement → 3 lés de 246,67 mm, chacun avec SON fichier de coupe, rogné
+        /// à son bord et dans le repère de sa plaque.
+        #[tokio::test]
+        async fn regression_un_fichier_de_coupe_par_le() {
+            let e = etat("reg-les");
+            let dpi = 36;
+            let px = 25.4 / dpi as f64;
+            let d = Demande { dpi, mosaique: Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, reperes: false }), ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(700.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert_eq!(t.pages.len(), 3, "trois lés");
+            let le = (700.0 + 2.0 * 20.0) / 3.0;
+            for i in 1..=3 {
+                assert!(t.pages[i - 1].traces_decoupe >= 1, "lé {i} sans tracé");
+                let ((l, h), cyan) = encre(&rep, i, "Cyan", dpi);
+                assert!((l - le).abs() <= px && (h - 100.0).abs() <= px, "lé {i} : {l} × {h} mm");
+                // Contour de la bannière (x de 5 pt à 700 mm − 5 pt), vu depuis le début du lé.
+                let debut = (i - 1) as f64 * (le - 20.0);
+                let attendu = [(RETRAIT - debut).max(0.0), RETRAIT, (700.0 - RETRAIT - debut).min(le), 100.0 - RETRAIT];
+                let coupe = boite_hpgl(&fichier_plt(&rep, i));
+                assert!(proches(coupe, attendu, 0.02), "lé {i} : coupe {coupe:?}, attendu {attendu:?}");
+                assert!(coupe[0] >= cyan[0] - px && coupe[2] <= cyan[2] + px, "lé {i} : coupe hors de la plaque");
+                let r = super::controle_d_acces::appel(&e, "GET", &format!("/api/travaux/{}/pages/{i}/decoupe.plt", t.id), None, None).await;
+                assert_eq!(r.status(), StatusCode::OK, "lé {i} : fichier servi");
+            }
+            assert!(!fichier_plt(&rep, 4).exists());
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Cas 3 — PDF de plusieurs pages, boîte de rognage, une page par travail : une coupe
+        /// par page, chacune à sa taille. Nous ne séparons pas les pages en travaux : un travail
+        /// garde toutes ses pages, chacune avec son fichier de coupe. Trois formats : page
+        /// simple, CropBox 1 mm à l'intérieur (Ghostscript n'imprime qu'elle : la page et la
+        /// coupe doivent la suivre), MediaBox décalée.
+        #[tokio::test]
+        async fn regression_pdf_multipage_une_coupe_par_page() {
+            let e = etat("reg-pages");
+            let dpi = 36;
+            let px = 25.4 / dpi as f64;
+            let pages = [
+                PageEssai { media: [0.0, 0.0, 100.0 * MM, 50.0 * MM], crop: None, rotate: 0 },
+                PageEssai { media: [0.0, 0.0, 60.0 * MM, 120.0 * MM], crop: Some([1.0 * MM, 1.0 * MM, 59.0 * MM, 119.0 * MM]), rotate: 0 },
+                PageEssai { media: [30.0, 40.0, 30.0 + 80.0 * MM, 40.0 + 80.0 * MM], crop: None, rotate: 0 },
+            ];
+            let t = rendre(&e, pdf_pages(&pages), Demande { dpi, ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert_eq!(t.pages.len(), 3);
+            // Format imprimé (mm) et retrait du contour par rapport à son bord.
+            for (i, (l_mm, h_mm, r)) in [(100.0, 50.0, RETRAIT), (58.0, 118.0, RETRAIT - 1.0), (80.0, 80.0, RETRAIT)].into_iter().enumerate() {
+                let n = i + 1;
+                assert_eq!(t.pages[i].traces_decoupe, 1, "page {n}");
+                let ((l, h), cyan) = encre(&rep, n, "Cyan", dpi);
+                assert!((l - l_mm).abs() <= px && (h - h_mm).abs() <= px, "page {n} : {l} × {h} mm au lieu de {l_mm} × {h_mm}");
+                assert!(proches(cyan, [0.0, 0.0, l_mm, h_mm], 1.5 * px), "page {n} : encre {cyan:?}");
+                let coupe = boite_hpgl(&fichier_plt(&rep, n));
+                assert!(proches(coupe, [r, r, l_mm - r, h_mm - r], 0.02), "page {n} : coupe {coupe:?}");
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Cas 4 — échelle d'un travail tourné, sur la bonne dimension. Page de 250 × 100 mm à
+        /// 150 % : 375 × 150 mm, trop large pour 300 mm → tournée : 150 × 375 mm (l'échelle
+        /// suit chaque côté, la rotation se décide après l'échelle). Puis une page tournée
+        /// par le PDF lui-même (/Rotate 90) : la coupe suit le sens imprimé.
+        #[tokio::test]
+        async fn regression_echelle_d_un_travail_tourne() {
+            let e = etat("reg-echelle");
+            e.machines.write().unwrap()[0].laize_mm = 300.0;
+            let dpi = 36;
+            let px = 25.4 / dpi as f64;
+            let d = Demande { dpi, edition: edition::Edition { echelle: 150.0, ..Default::default() }, ..Default::default() };
+            let t = rendre(&e, imbrication::tests::pdf(250.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
+            assert!(t.alertes.iter().any(|a| a.code == "rotation_auto"), "{:?}", t.alertes);
+            let rep = dossier(&e.config.donnees, t.id);
+            let ((l, h), cyan) = encre(&rep, 1, "Cyan", dpi);
+            assert!((l - 150.0).abs() <= px && (h - 375.0).abs() <= px, "page {l} × {h} mm");
+            assert!(proches(cyan, [0.0, 0.0, 150.0, 375.0], 1.5 * px), "l'image remplit la page tournée : {cyan:?}");
+            // Contour à 5 pt du bord, × 1,5.
+            let b = 1.5 * RETRAIT;
+            assert!(proches(boite_hpgl(&fichier_plt(&rep, 1)), [b, b, 150.0 - b, 375.0 - b], 0.02));
+
+            // /Rotate 90 du PDF : MediaBox 200 × 100 mm, imprimée 100 × 200 mm.
+            let tourne = PageEssai { media: [0.0, 0.0, 200.0 * MM, 100.0 * MM], crop: None, rotate: 90 };
+            let t = rendre(&e, pdf_pages(&[tourne]), Demande { dpi, rotation_auto: false, ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let ((l, h), cyan) = encre(&rep, 1, "Cyan", dpi);
+            assert!((l - 100.0).abs() <= px && (h - 200.0).abs() <= px, "/Rotate rendu : {l} × {h} mm");
+            coupe_sur_l_encre(boite_hpgl(&fichier_plt(&rep, 1)), cyan, px);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Cas 6 — rotation automatique refusée en résolution non carrée. Sans résolution non
+        /// carrée chez nous, l'équivalent : la rotation automatique s'abstient là où elle
+        /// fausserait la géométrie — pages qui ne tiennent pas toutes tournées (elle vaut pour
+        /// tout le document), mosaïque (les lés règlent déjà la largeur), découpe seule (la
+        /// laize de l'imprimante n'a rien à y voir).
+        #[tokio::test]
+        async fn regression_rotation_auto_refusee_hors_de_son_cas() {
+            let e = etat("reg-refus");
+            e.machines.write().unwrap()[0].laize_mm = 300.0;
+            let d = Demande { dpi: 36, ..Default::default() };
+            let taille = |rep: &std::path::Path, p: usize| {
+                let t = imbrication::taille_page(&std::fs::read(rep.join("source.pdf")).unwrap(), p).unwrap();
+                (t.largeur / MM, t.hauteur / MM)
+            };
+            let proche = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() < 0.01 && (a.1 - b.1).abs() < 0.01;
+
+            // 400 × 100 mm (tiendrait tournée) puis 100 × 400 mm (ne tiendrait plus).
+            let pages = [PageEssai { media: [0.0, 0.0, 400.0 * MM, 100.0 * MM], crop: None, rotate: 0 }, PageEssai { media: [0.0, 0.0, 100.0 * MM, 400.0 * MM], crop: None, rotate: 0 }];
+            let t = rendre(&e, pdf_pages(&pages), d.clone()).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"), "{:?}", t.alertes);
+            assert!(proche(taille(&rep, 1), (400.0, 100.0)) && proche(taille(&rep, 2), (100.0, 400.0)), "{:?} {:?}", taille(&rep, 1), taille(&rep, 2));
+
+            // Mosaïque : deux lés de 210 × 100 mm, pas une page tournée.
+            let mosaique = Some(Mosaique { laize_mm: 300.0, recouvrement_mm: 20.0, reperes: false });
+            let t = rendre(&e, imbrication::tests::pdf(400.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { mosaique, ..d.clone() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"));
+            assert_eq!(t.pages.len(), 2);
+            assert!(proche(taille(&rep, 1), (210.0, 100.0)) && proche(taille(&rep, 2), (210.0, 100.0)), "{:?}", taille(&rep, 1));
+
+            // Découpe seule : le tracé garde le sens du fichier.
+            let t = rendre(&e, imbrication::tests::pdf(400.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { mode: Mode::Decouper, ..d }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            assert!(!t.alertes.iter().any(|a| a.code == "rotation_auto"));
+            assert!(proches(boite_hpgl(&fichier_plt(&rep, 1)), [RETRAIT, RETRAIT, 400.0 - RETRAIT, 100.0 - RETRAIT], 0.02));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }
 }

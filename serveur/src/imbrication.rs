@@ -101,6 +101,84 @@ pub fn taille_page(pdf: &[u8], page: usize) -> Result<Taille, String> {
     Ok(Taille { largeur: b[2] - b[0], hauteur: b[3] - b[1] })
 }
 
+/// Ramène chaque page à la seule géométrie que lisent l'édition, le repérage, l'imbrication
+/// et la découpe : sa MediaBox, sans /Rotate. Ghostscript, lui, rogne l'impression à la
+/// CropBox et tourne la page selon /Rotate : sans cela, la coupe tombait à côté de l'encre.
+/// La MediaBox devient son intersection avec la CropBox ; /Rotate passe dans le contenu ;
+/// ces attributs, héritables, sont écrits sur chaque page et retirés de l'arbre des pages.
+/// `None` : rien à changer.
+pub fn normaliser_pages(pdf: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    let herite = |doc: &Document, id: ObjectId, cle: &[u8]| -> Option<Object> {
+        let mut d = doc.get_dictionary(id).ok()?;
+        loop {
+            if let Ok(v) = d.get(cle) {
+                return doc.dereference(v).ok().map(|(_, o)| o.clone());
+            }
+            d = doc.get_dictionary(d.get(b"Parent").and_then(Object::as_reference).ok()?).ok()?;
+        }
+    };
+    let rectangle = |o: Option<Object>| o.as_ref().and_then(nombres).filter(|b| b.len() == 4).map(|b| [b[0].min(b[2]), b[1].min(b[3]), b[0].max(b[2]), b[1].max(b[3])]);
+    let mut change = false;
+    for (n, id) in doc.get_pages() {
+        let media = rectangle(herite(&doc, id, b"MediaBox")).ok_or(format!("page {n} sans MediaBox"))?;
+        let crop = rectangle(herite(&doc, id, b"CropBox"));
+        let rotate = herite(&doc, id, b"Rotate").and_then(|o| o.as_i64().ok()).unwrap_or(0).rem_euclid(360);
+        let [x0, y0, x1, y1] = crop.map_or(media, |c| [media[0].max(c[0]), media[1].max(c[1]), media[2].min(c[2]), media[3].min(c[3])]);
+        if x1 <= x0 || y1 <= y0 {
+            return Err(format!("page {n} : CropBox hors de la MediaBox"));
+        }
+        let propre = doc.get_dictionary(id).is_ok_and(|d| d.get(b"MediaBox").is_ok()) && [x0, y0, x1, y1] == media && rotate == 0;
+        if propre {
+            continue;
+        }
+        change = true;
+        let (w, h) = (x1 - x0, y1 - y0);
+        // Matrice qui pose la page vue (tournée de `rotate` dans le sens horaire) sur [0, l] × [0, h].
+        let (matrice, boite) = match rotate {
+            90 => ([0.0, -1.0, 1.0, 0.0, -y0, w + x0], [0.0, 0.0, h, w]),
+            180 => ([-1.0, 0.0, 0.0, -1.0, w + x0, h + y0], [0.0, 0.0, w, h]),
+            270 => ([0.0, 1.0, -1.0, 0.0, h + y0, -x0], [0.0, 0.0, h, w]),
+            _ => ([1.0, 0.0, 0.0, 1.0, 0.0, 0.0], [x0, y0, x1, y1]),
+        };
+        if rotate != 0 {
+            let anciens: Vec<Object> = match doc.get_dictionary(id).map_err(|e| e.to_string())?.get(b"Contents") {
+                Ok(Object::Array(a)) => a.clone(),
+                Ok(o) => vec![o.clone()],
+                Err(_) => vec![],
+            };
+            let [a, b, c, d, e, f] = matrice;
+            let debut = doc.add_object(Stream::new(dictionary! {}, format!("q {a} {b} {c} {d} {e:.4} {f:.4} cm\n").into_bytes()));
+            let fin = doc.add_object(Stream::new(dictionary! {}, b"\nQ\n".to_vec()));
+            let mut contenus = vec![Object::Reference(debut)];
+            contenus.extend(anciens);
+            contenus.push(Object::Reference(fin));
+            doc.get_dictionary_mut(id).map_err(|e| e.to_string())?.set("Contents", Object::Array(contenus));
+        }
+        let dict = doc.get_dictionary_mut(id).map_err(|e| e.to_string())?;
+        dict.set("MediaBox", boite.iter().map(|v| Object::Real(*v as f32)).collect::<Vec<_>>());
+        for cle in [b"CropBox".as_slice(), b"BleedBox", b"TrimBox", b"ArtBox", b"Rotate"] {
+            dict.remove(cle);
+        }
+    }
+    if !change {
+        return Ok(None);
+    }
+    // Les nœuds de l'arbre ne doivent plus rien transmettre : chaque page porte sa boîte.
+    for o in doc.objects.values_mut() {
+        if let Object::Dictionary(d) = o
+            && d.get(b"Type").and_then(Object::as_name).is_ok_and(|t| t == b"Pages")
+        {
+            for cle in [b"MediaBox".as_slice(), b"CropBox", b"Rotate"] {
+                d.remove(cle);
+            }
+        }
+    }
+    let mut sortie = vec![];
+    doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
+    Ok(Some(sortie))
+}
+
 /// Une page à imbriquer : PDF source, numéro de page (à partir de 1), nombre de copies.
 pub struct Source<'a> {
     pub pdf: &'a [u8],
@@ -420,6 +498,34 @@ pub(crate) mod tests {
         let mut o = vec![];
         doc.save_to(&mut o).unwrap();
         o
+    }
+
+    /// MediaBox, CropBox et /Rotate 270 hérités du nœud `Pages` : la page devient
+    /// 40 × 80 pt (la CropBox, couchée), sans /Rotate, et la découpe suit.
+    #[test]
+    fn boites_et_rotation_heritees_normalisees() {
+        let mut doc = Document::with_version("1.4");
+        let sep = Object::Array(vec!["Separation".into(), "CutContour".into(), "DeviceCMYK".into(), Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 })]);
+        let c = doc.add_object(Stream::new(dictionary! {}, b"/CS0 CS 1 SCN 20 20 10 10 re S".to_vec()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "Contents" => c, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } });
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1, "MediaBox" => vec![0.into(), 0.into(), 200.into(), 100.into()], "CropBox" => vec![10.into(), 10.into(), 90.into(), 50.into()], "Rotate" => 270 }));
+        let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", cat);
+        let mut pdf = vec![];
+        doc.save_to(&mut pdf).unwrap();
+
+        let n = normaliser_pages(&pdf).unwrap().expect("à normaliser");
+        assert_eq!(taille_page(&n, 1).unwrap(), Taille { largeur: 40.0, hauteur: 80.0 });
+        assert!(normaliser_pages(&n).unwrap().is_none(), "déjà propre");
+        // Carré (20, 20)–(30, 30) : à 10 pt du bas gauche de la CropBox ; 270° horaire :
+        // x' = 40 − (y − 10), y' = x − 10 → (20, 10)–(30, 20).
+        let d = &crate::decoupe::extraire(&n, false).unwrap()[0];
+        let xs: Vec<f64> = d.traces[0].points.iter().map(|p| p.0).collect();
+        let ys: Vec<f64> = d.traces[0].points.iter().map(|p| p.1).collect();
+        let borne = |v: &[f64]| (v.iter().copied().fold(f64::MAX, f64::min), v.iter().copied().fold(f64::MIN, f64::max));
+        let ((x0, x1), (y0, y1)) = (borne(&xs), borne(&ys));
+        assert!([x0 - 20.0, x1 - 30.0, y0 - 10.0, y1 - 20.0].iter().all(|e| e.abs() < 1e-3), "{x0} {x1} {y0} {y1}");
     }
 
     #[test]

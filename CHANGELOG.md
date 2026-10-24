@@ -7,6 +7,24 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.13.3] — 2026-10-24
+
+### Corrigé
+- Découpe à côté de l'encre sur un PDF avec **CropBox** ou **/Rotate** : l'impression suivait
+  la zone visible et le sens de la page, la coupe, l'édition, le repérage, l'imbrication et la
+  rotation automatique lisaient la page brute. Chaque PDF est désormais ramené à sa zone
+  visible et à son sens dès l'arrivée : une page rognée sort au format de sa zone visible, et
+  la coupe tombe sur l'encre.
+
+### Ajouté
+- Tests de non-régression de la géométrie (rotation automatique avec marge et repérage, une
+  coupe par lé, PDF multipage à formats et boîtes différents, échelle d'un travail tourné,
+  cas où la rotation automatique doit s'abstenir) ; chacun échoue si la correction qu'il garde
+  est retirée.
+
+*Fixed: cut path off the ink on PDFs with a CropBox or /Rotate (pages are now normalised on
+arrival). Added: geometry regression tests.*
+
 ## [0.13.2] — 2026-10-24
 
 ### Sécurité
