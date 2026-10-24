@@ -65,7 +65,10 @@ jobs:
         with: { name: paquet-client-iso, path: dist/* }
 
   iso:
-    needs: [serveur, client-iso]
+    # Après la release : l'image (4 Go) est déposée directement sur la release, sans passer
+    # par un artefact de 4 Go entre jobs (son téléchargement a échoué deux fois, v0.12.0).
+    # En cas d'échec, relancer ce seul job : --clobber réécrit les morceaux.
+    needs: [serveur, client-iso, release]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -96,8 +99,9 @@ jobs:
           split -b 1900m -d -a 1 "$NOM" "iso-dist/$NOM.part"
           rm -f "$NOM"
           ls -la iso-dist
-      - uses: actions/upload-artifact@v7
-        with: { name: iso, path: iso-dist/*, compression-level: 0 }
+      - name: Dépôt sur la release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release upload "$GITHUB_REF_NAME" iso-dist/* --clobber
 
   image:
     needs: tests
@@ -164,13 +168,13 @@ jobs:
         with: { name: "client-${{ matrix.os }}", path: dist/* }
 
   release:
-    needs: [serveur, iso, image, client]
+    needs: [serveur, image, client]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         # Seulement nos paquets : build-push-action dépose aussi un artefact *.dockerbuild.
-        with: { path: dist, merge-multiple: true, pattern: "{serveur,iso,client-*}" }
+        with: { path: dist, merge-multiple: true, pattern: "{serveur,client-*}" }
       - name: Notes tirées du changelog
         run: |
           VERSION=${GITHUB_REF_NAME#v}

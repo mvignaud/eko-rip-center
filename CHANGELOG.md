@@ -7,6 +7,11 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+## [0.12.1] — 2026-10-24
+
+La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la CI) : la
+0.12.1 la contient en entier, plus les corrections ci-dessous.
+
 ### Corrigé
 - Mutoh Kona : `/dev/kona` n'était jamais créé (la règle udev mêlait des attributs de
   l'appareil USB et de l'interface dans une même condition, ce qu'udev refuse) ; constaté
@@ -23,6 +28,15 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
   impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
   dossier (pas imprimée)**.
+
+### Modifié (publication)
+- L'image d'installation est déposée directement sur la release par son job, sans
+  artefact de 4 Go entre jobs.
+
+*English: 0.12.0 was not published (4 GB image transfer failed in CI); 0.12.1 contains it
+plus: Kona `/dev/kona` udev rule fixed, in-page confirmations (the desktop client shows no
+confirm()/prompt(), so Delete did nothing), client menus in French, larger job preview with
+layers behind a button, clearer states (Ready; left in the folder, not printed).*
 
 ## [0.12.0] — 2026-10-24
 
