@@ -29,6 +29,16 @@ démarrer sur la clé. Le menu propose trois profils :
 | **Serveur + bureau Ubuntu** | PC d'usage qui fait aussi serveur, clients sur d'autres postes | bureau Ubuntu, serveur RIP |
 | **Serveur seul (sans bureau)** | PC dédié au RIP | serveur RIP, administration par SSH |
 
+Les deux profils avec bureau ajoutent :
+- **CUPS**, pour imprimer sur les imprimantes de bureau et du réseau (réglage dans
+  *Paramètres > Imprimantes*) ;
+- la suite **ArtCraft** (applications libres d'édition : PhotoCraft, VectorCraft,
+  PdfCraft, DesignCraft…, treize en tout), téléchargée pendant l'installation (≈ 1 Go)
+  depuis ses releases officielles `github.com/storytold/<application>`, empreinte SHA-256
+  de chaque paquet vérifiée. Si le téléchargement échoue, l'installation du PC continue ;
+  le détail est dans `/var/log/eko-artcraft.log`. Pour installer ou mettre à jour plus
+  tard : `sudo eko-artcraft` (toute la suite) ou `sudo eko-artcraft vectorcraft pdfcraft`.
+
 L'installateur demande seulement l'identité (votre nom, le nom du PC — `eko-rip`
 conseillé —, le nom du compte — `eko` conseillé — et son mot de passe), puis confirme
 l'effacement du disque (« Continue with autoinstall? » : répondre

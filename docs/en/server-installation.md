@@ -27,6 +27,14 @@ from the stick. The menu offers three profiles:
 | **Server + Ubuntu desktop** | everyday PC that is also the server, clients elsewhere | Ubuntu desktop, RIP server |
 | **Server only (no desktop)** | PC dedicated to the RIP | RIP server, SSH administration |
 
+Both desktop profiles add:
+- **CUPS**, to print on office and network printers (*Settings > Printers*);
+- the **ArtCraft** suite (free editing apps: PhotoCraft, VectorCraft, PdfCraft,
+  DesignCraft…, thirteen in all), downloaded during installation (≈ 1 GB) from its official
+  releases `github.com/storytold/<app>`, each package's SHA-256 checked. If the download
+  fails, the PC installation goes on; details in `/var/log/eko-artcraft.log`. To install or
+  update later: `sudo eko-artcraft` (whole suite) or `sudo eko-artcraft vectorcraft pdfcraft`.
+
 The installer only asks for the identity (your name, the PC name — `eko-rip` advised —,
 the account name — `eko` advised — and its password), then confirms wiping the disk (“Continue with autoinstall?”: answer **yes**). Remove the stick
 on reboot.

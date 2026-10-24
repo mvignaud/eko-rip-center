@@ -8,6 +8,7 @@
 #   - serveur + client : bureau Ubuntu, serveur RIP, client ouvert au démarrage sur ce PC
 #     (petit atelier : un seul PC) ;
 #   - serveur + bureau : bureau Ubuntu et serveur RIP (PC d'usage, clients ailleurs) ;
+#   les deux profils de bureau ajoutent CUPS et la suite ArtCraft (téléchargée) ;
 #   - serveur seul : sans bureau.
 # L'installateur ne demande que le nom et le mot de passe, puis confirme l'effacement du
 # disque (« Continue with autoinstall? »). Le bureau se télécharge pendant l'installation.
@@ -51,7 +52,8 @@ autoinstall:
       name: direct
 EOF
         if [ "$bureau" = oui ]; then
-            printf '  packages:\n    - ubuntu-desktop-minimal\n'
+            # Bureau, et CUPS pour imprimer sur les imprimantes de bureau et du réseau.
+            printf '  packages:\n    - ubuntu-desktop-minimal\n    - cups\n    - cups-browsed\n    - printer-driver-gutenprint\n    - system-config-printer\n'
         fi
         cat <<'EOF'
   late-commands:
@@ -67,6 +69,11 @@ EOF
         fi
         if [ "$bureau" = oui ]; then
             cat <<'EOF'
+    # Suite ArtCraft (édition des fichiers) téléchargée depuis ses releases officielles,
+    # empreintes vérifiées ; un échec n'arrête pas l'installation (journal, à relancer
+    # plus tard par « sudo eko-artcraft »).
+    - install -m 755 /cdrom/eko/eko-artcraft /target/usr/local/sbin/eko-artcraft
+    - curtin in-target -- sh -c '/usr/local/sbin/eko-artcraft > /var/log/eko-artcraft.log 2>&1 || true'
     # Le bureau gère le réseau par NetworkManager (fichier copié : un « clé: valeur »
     # écrit ici serait lu comme du YAML).
     - rm -f /target/etc/netplan/50-cloud-init.yaml /target/etc/netplan/00-installer-config.yaml
@@ -85,6 +92,7 @@ profil serveur-client oui oui
 profil serveur-bureau oui non
 profil serveur non non
 printf 'network:\n  version: 2\n  renderer: NetworkManager\n' > "$travail/eko/01-network-manager-all.yaml"
+cp "$(dirname "$0")/eko-artcraft" "$travail/eko/eko-artcraft"
 cp "$serveur" "$travail/eko/eko-rip-serveur.deb"
 cp "$client" "$travail/eko/eko-rip-client.deb"
 

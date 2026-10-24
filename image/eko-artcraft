@@ -1,0 +1,51 @@
+#!/bin/sh
+# Installe ou met à jour la suite ArtCraft (applications libres, Apache-2.0) : dernière
+# version de chaque application depuis ses releases GitHub officielles
+# (github.com/storytold/<application>), paquet .deb x86_64, empreinte vérifiée contre le
+# SHA256SUMS.txt de la même release.
+#
+#   sudo eko-artcraft                      toute la suite
+#   sudo eko-artcraft vectorcraft pdfcraft certaines applications
+#
+# EKO_ARTCRAFT_DOSSIER=<dossier> : télécharge et vérifie seulement, sans installer (essai).
+# Code de sortie 1 si une application n'a pas pu être installée ; les autres le sont.
+set -u
+
+SUITE="photocraft vectorcraft filmcraft lightcraft pdfcraft effectcraft designcraft figcraft wordcraft soundcraft deckcraft cadcraft gridcraft"
+applications=${*:-$SUITE}
+dossier=${EKO_ARTCRAFT_DOSSIER:-}
+travail=$(mktemp -d)
+trap 'rm -rf "$travail"' EXIT
+echec=0
+
+empreinte() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
+
+for a in $applications; do
+    case " $SUITE " in *" $a "*) ;; *) echo "$a : application inconnue de la suite"; echec=1; continue ;; esac
+    if ! curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/storytold/$a/releases/latest" -o "$travail/$a.json"; then
+        echo "$a : releases injoignables"; echec=1; continue
+    fi
+    url_deb=$(grep -o '"browser_download_url": *"[^"]*-linux-x86_64\.deb"' "$travail/$a.json" | head -1 | sed 's/.*"\(https[^"]*\)"$/\1/')
+    url_sommes=$(grep -o '"browser_download_url": *"[^"]*/SHA256SUMS\.txt"' "$travail/$a.json" | head -1 | sed 's/.*"\(https[^"]*\)"$/\1/')
+    case "$url_deb $url_sommes" in
+        "https://github.com/storytold/$a/releases/download/"*" https://github.com/storytold/$a/releases/download/"*) ;;
+        *) echo "$a : pas de paquet .deb x86_64 ou de SHA256SUMS.txt dans la dernière release"; echec=1; continue ;;
+    esac
+    nom=$(basename "$url_deb")
+    if ! curl -fsSL -o "$travail/$nom" "$url_deb" || ! curl -fsSL -o "$travail/$a.sommes" "$url_sommes"; then
+        echo "$a : téléchargement interrompu"; echec=1; continue
+    fi
+    attendu=$(grep -E "[ *]$nom\$" "$travail/$a.sommes" | head -1 | cut -d' ' -f1)
+    if [ -z "$attendu" ] || [ "$attendu" != "$(empreinte "$travail/$nom")" ]; then
+        echo "$a : empreinte absente ou fausse, paquet écarté"; echec=1; continue
+    fi
+    if [ -n "$dossier" ]; then
+        mkdir -p "$dossier" && cp "$travail/$nom" "$dossier/" && echo "$a : $nom vérifié"
+    elif DEBIAN_FRONTEND=noninteractive apt-get install -y "$travail/$nom" < /dev/null > "$travail/apt.log" 2>&1; then
+        echo "$a : $nom installé"
+    else
+        echo "$a : installation refusée par apt :"; tail -5 "$travail/apt.log"; echec=1
+    fi
+    rm -f "$travail/$nom"
+done
+exit $echec

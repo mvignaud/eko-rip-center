@@ -12,6 +12,22 @@ on:
     paths: ["image/**", ".github/workflows/essai-iso.yml"]
 
 jobs:
+  artcraft:
+    # La suite ArtCraft s'installe-t-elle sur Ubuntu 24.04 (le runner) comme sur le PC ?
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update
+      - name: Installation réelle de toute la suite
+        run: sudo image/eko-artcraft
+      - name: Applications installées
+        run: |
+          for a in photocraft vectorcraft filmcraft lightcraft pdfcraft effectcraft designcraft figcraft wordcraft soundcraft deckcraft cadcraft gridcraft; do
+            dpkg -s "$a" > /dev/null 2>&1 && echo "$a : $(dpkg-query -W -f='${Version}' "$a")" || { echo "$a : ABSENT"; exit 1; }
+          done
+          ls /usr/share/applications | grep -i craft
+
   demarrage:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

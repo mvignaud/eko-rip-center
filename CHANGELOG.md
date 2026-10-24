@@ -7,6 +7,12 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 
 ## [Non publié]
 
+### Ajouté
+- Image d'installation, profils avec bureau : **CUPS** (cups, cups-browsed, pilotes
+  Gutenprint, réglage des imprimantes) et la suite **ArtCraft** (13 applications d'édition)
+  téléchargée pendant l'installation, empreintes vérifiées ; `sudo eko-artcraft` pour
+  l'installer ou la mettre à jour ensuite.
+
 ## [0.10.0] — 2026-10-24
 
 ### Ajouté
