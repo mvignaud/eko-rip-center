@@ -4394,7 +4394,7 @@ mod tests {
             let edition = edition::Edition { marques: Some(edition::Marques::default()), ..Default::default() };
             let d = Demande { dpi: 36, rotation_auto: false, reperage: reperage::Reperage::Cadre, edition: edition.clone(), ..Default::default() };
             let t = rendre(&e, imbrication::tests::pdf(200.0 * MM, 150.0 * MM, "1 0 0 0", (0.0, 0.0)), d.clone()).await;
-            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite", "reperes_blanc"], "{:?}", t.alertes);
+            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite"], "{:?}", t.alertes);
             assert_eq!(t.alertes[1].detail, "200 × 150 mm");
             assert_eq!(t.pages[0].geometrie.unwrap().bords_mm, [0.0; 4], "ni traits ni marge pour eux");
             let source = std::fs::read(dossier(&e.config.donnees, t.id).join("source.pdf")).unwrap();
@@ -4403,9 +4403,9 @@ mod tests {
             let r = appel(&e, "POST", &format!("/api/travaux/{}/reglages", t.id), None, Some(serde_json::to_value(&d).unwrap())).await;
             assert!(r.status().is_success(), "{}", r.status());
             let t = lire_travail(&e.config.donnees, t.id).unwrap();
-            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite", "reperes_blanc"]);
+            assert_eq!(codes(&t), ["marques_neutralisees", "reperes_image_petite"]);
             let t2 = rendre(&e, imbrication::tests::pdf(300.0 * MM, 260.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { reperage: reperage::Reperage::Manuel, edition: edition::Edition::default(), ..d }).await;
-            assert_eq!(codes(&t2), ["reperes_blanc"]);
+            assert!(codes(&t2).is_empty(), "{:?}", codes(&t2));
             // Sans repérage, les traits restent et la marge s'agrandit pour eux.
             let t3 = rendre(&e, imbrication::tests::pdf(200.0 * MM, 150.0 * MM, "1 0 0 0", (0.0, 0.0)), Demande { dpi: 36, rotation_auto: false, edition, ..Default::default() }).await;
             assert!(t3.alertes.is_empty() && (t3.pages[0].geometrie.unwrap().bords_mm[0] - 8.25).abs() < 1e-9);
@@ -4422,7 +4422,7 @@ mod tests {
             assert_eq!(v["rectangles_mm"].as_array().unwrap().len(), 8);
             assert!((v["decalage_mm"][0].as_f64().unwrap() - 35.0).abs() < 1e-9, "{v}");
             let alertes: Vec<&str> = v["alertes"].as_array().unwrap().iter().map(|a| a["code"].as_str().unwrap()).collect();
-            assert_eq!(alertes, ["reperes_image_petite", "reperes_blanc"]);
+            assert_eq!(alertes, ["reperes_image_petite"]);
             let r = appel(&e, "POST", "/api/reperage/apercu", None, Some(serde_json::json!({ "reperage": "cadre", "largeur_mm": 0.0, "hauteur_mm": 150.0 }))).await;
             assert_eq!(r.status(), StatusCode::BAD_REQUEST);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
