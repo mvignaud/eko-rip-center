@@ -66,6 +66,19 @@ the PDF. For the Epson SC-S80600:
 On a plate preview, black is ink and white is no ink. A cut plate is marked “cut, not
 printed”.
 
+## Automatic white
+
+**White** block (Print mode): the `White` plate is generated after rendering.
+- **Underlay under the ink**: white wherever an ink exceeds the **minimum ink** (5 % by
+  default) — for printing on clear or coloured media.
+- **Flood over the whole page**: white over the whole page.
+- **Choke** (0.2 mm by default, up to 5 mm): the white is pulled back by that much from
+  the ink edge (and the page edge), so it never shows past the colour.
+
+White already drawn in the file (`White` spot colour) is kept: the final white is the
+union of both. The generated plate shows in the previews, counts in the cost and goes to
+the Epson with the other plates. A saved preset keeps the white choice.
+
 ## Cutting
 
 Paths painted in a cut spot colour are detected: `CutContour`, `Thrucut`, `Kisscut`,

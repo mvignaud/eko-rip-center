@@ -2,6 +2,7 @@
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
 mod acces;
+mod blanc;
 mod couleur;
 mod couverture;
 mod decoupe;
@@ -402,6 +403,9 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 }
             "laize_mm" => valeur.parse().map(|v| laize_mm = v).map_err(|_| erreur("mosaique_invalide")),
             "recouvrement_mm" => valeur.parse().map(|v| recouvrement_mm = v).map_err(|_| erreur("mosaique_invalide")),
+            "blanc" => serde_json::from_value(serde_json::Value::String(valeur)).map(|m| d.blanc.mode = m).map_err(|_| erreur("blanc_invalide")),
+            "blanc_retraction_mm" => valeur.parse().map(|v| d.blanc.retraction_mm = v).map_err(|_| erreur("blanc_invalide")),
+            "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
             _ => Ok(()),
         };
         if let Err(r) = r {
@@ -525,7 +529,10 @@ async fn traiter(etat: Partage, mut t: Travail) {
         Mode::Imprimer => match preparer_impression(&rep, t.demande.reperage).await {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
-                render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await.map(|r| (Some(r.pages), mises))
+                match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await {
+                    Ok(r) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises)),
+                    Err(e) => Err(e),
+                }
             }
             Err(e) => Err(e),
         },
@@ -935,6 +942,36 @@ fn png(octets: Vec<u8>) -> Response {
 
 /// PDF à rendre : la source telle quelle, ou `imprime.pdf` agrandi avec ses repères
 /// (une mise en page par page).
+/// Génère la plaque `White` de chaque page (production et aperçu) selon le réglage de
+/// blanc ; rend les listes de plaques, `White` comprise.
+async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: blanc::Blanc, dpi: u32) -> Result<Vec<Vec<String>>, String> {
+    if b.mode == blanc::Mode::Aucun {
+        return Ok(pages);
+    }
+    for (i, plaques) in pages.iter_mut().enumerate() {
+        let n = i + 1;
+        let sources: Vec<&String> = plaques.iter().filter(|p| p.as_str() != blanc::PLAQUE && !decoupe::est_ton_de_decoupe(p)).collect();
+        let existe = plaques.iter().any(|p| p == blanc::PLAQUE);
+        let chemins = |f: &dyn Fn(&std::path::Path, usize, &str) -> PathBuf| -> (Vec<PathBuf>, Option<PathBuf>, PathBuf) {
+            (sources.iter().map(|p| f(rep, n, p)).collect(), existe.then(|| f(rep, n, blanc::PLAQUE)), f(rep, n, blanc::PLAQUE))
+        };
+        let prod = chemins(&render::chemin_plaque);
+        let apercu = chemins(&render::chemin_apercu_plaque);
+        tokio::task::spawn_blocking(move || -> Result<(), String> {
+            blanc::generer_tiff(&prod.0, prod.1.as_deref(), &prod.2, &b, dpi as f64)?;
+            blanc::generer_apercu(&apercu.0, apercu.1.as_deref(), &apercu.2, &b, render::DPI_APERCU as f64)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("blanc de la page {n} : {e}"))?;
+        if !existe {
+            plaques.push(blanc::PLAQUE.to_string());
+            plaques.sort();
+        }
+    }
+    Ok(pages)
+}
+
 async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
     let source = rep.join(Format::Pdf.fichier());
     if choix == reperage::Reperage::Aucun {
@@ -1251,7 +1288,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -1423,6 +1460,42 @@ mod tests {
             assert_eq!(appel(&e, "DELETE", &format!("/api/travaux/{}", t.id), None, None).await.status(), StatusCode::NO_CONTENT);
             assert!(e.file.lock().unwrap().sorties.is_empty());
             assert!(!sortie.exists(), "les plaques sorties partent avec le travail");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Rendu réel avec sous-couche : la plaque `White` rejoint la page (production,
+        /// aperçu, couverture), ses pixels suivent l'encre, et elle part à l'Epson.
+        #[tokio::test]
+        async fn sous_couche_blanche_de_bout_en_bout() {
+            let e = etat("blanc");
+            let donnees = e.config.donnees.clone();
+            let blanc = blanc::Blanc { mode: blanc::Mode::SousCouche, retraction_mm: 0.0, seuil: 5.0 };
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "blanc.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { dpi: 72, blanc, ..Default::default() },
+                statut: Statut::EnAttente,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![],
+                cree_le: maintenant(),
+            };
+            let rep = dossier(&donnees, t.id);
+            std::fs::create_dir_all(&rep).unwrap();
+            // Page cyan pleine de 2 × 1 pouce, contour CutContour à 5 pt du bord.
+            std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            traiter(e.clone(), t.clone()).await;
+            let t = lire_travail(&donnees, t.id).unwrap();
+            assert!(matches!(t.statut, Statut::Termine), "{:?}", t.erreur);
+            let p = &t.pages[0];
+            assert!(p.plaques.contains(&"White".to_string()), "{:?}", p.plaques);
+            let (blanc, cyan) = (p.couverture["White"], p.couverture["Cyan"]);
+            assert!((blanc - cyan).abs() < 0.02, "sans rétraction, le blanc suit le cyan : {blanc} / {cyan}");
+            let w = image::open(render::chemin_plaque(&rep, 1, "White")).unwrap().to_luma8();
+            assert_eq!((w.width(), w.height()), (144, 72));
+            assert!(render::chemin_apercu_plaque(&rep, 1, "White").exists());
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 

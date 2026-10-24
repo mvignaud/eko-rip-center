@@ -1,7 +1,7 @@
 //! Réglages d'un travail (`Demande`) et réglages enregistrés sous un nom, avec leur
 //! dossier surveillé `<données>/entrees/<nom>/`.
 
-use crate::{couleur, reperage};
+use crate::{blanc, couleur, reperage};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -36,6 +36,9 @@ pub struct Demande {
     /// Couper en lés si la page dépasse la laize.
     #[serde(default)]
     pub mosaique: Option<Mosaique>,
+    /// Blanc généré après le rendu (sous-couche ou aplat).
+    #[serde(default)]
+    pub blanc: blanc::Blanc,
 }
 
 pub fn dpi_defaut() -> u32 {
@@ -44,7 +47,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default() }
     }
 }
 
@@ -59,6 +62,7 @@ impl Demande {
         {
             return Err("mosaique_invalide");
         }
+        self.blanc.verifier()?;
         couleur::verifier(&self.couleur, profils)
     }
 
@@ -68,6 +72,7 @@ impl Demande {
             self.reperage = reperage::Reperage::Aucun;
             self.couleur = couleur::Couleur::default();
             self.mosaique = None;
+            self.blanc = blanc::Blanc::default();
         }
         self
     }

@@ -68,6 +68,19 @@ du PDF. Pour l'Epson SC-S80600 :
 Sur l'aperçu d'une plaque, le noir est l'encre et le blanc l'absence d'encre. Une
 plaque de découpe est marquée « découpe, non imprimée ».
 
+## Blanc automatique
+
+Bloc **Blanc** (mode Imprimer) : la plaque `White` est générée après le rendu.
+- **Sous-couche sous l'encre** : blanc partout où une encre dépasse l'**encre minimale**
+  (5 % par défaut) — pour imprimer sur support transparent ou coloré.
+- **Aplat sur toute la page** : blanc sur toute la page.
+- **Rétraction** (0,2 mm par défaut, jusqu'à 5 mm) : le blanc recule d'autant depuis le
+  bord de l'encre (et du bord de la page), pour ne pas dépasser de la couleur.
+
+Le blanc déjà dessiné dans le fichier (ton direct `White`) est gardé : le blanc final
+réunit les deux. La plaque générée apparaît dans les aperçus, compte dans le coût et part
+à l'Epson avec les autres plaques. Un réglage enregistré garde le choix de blanc.
+
 ## Découpe
 
 Les tracés peints dans un ton de découpe sont repérés : `CutContour`, `Thrucut`,

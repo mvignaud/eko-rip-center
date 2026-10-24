@@ -191,6 +191,16 @@
           <label class="case"><input type="checkbox" name="forcer_profils" value="oui"> <span data-t="forcer"></span></label>
           <label class="lien"><span data-t="deposer"></span><input type="file" id="profil" accept=".icc,.icm" hidden></label>
         </div></details>
+        <details class="section"><summary data-t="blanc"></summary><div>
+          <label><span data-t="blanc_mode"></span>
+            <select name="blanc"><option value="aucun" data-t="blanc_aucun"></option><option value="sous_couche" data-t="blanc_sous_couche"></option><option value="aplat" data-t="blanc_aplat"></option></select>
+          </label>
+          <div class="deux">
+            <label><span data-t="retraction"></span> <input type="number" name="blanc_retraction_mm" value="0.2" min="0" max="5" step="0.05"></label>
+            <label><span data-t="seuil"></span> <input type="number" name="blanc_seuil" value="5" min="1" max="100" step="1"></label>
+          </div>
+          <p class="meta" style="margin: 0" data-t="note_blanc"></p>
+        </div></details>
         <details class="section"><summary data-t="mosaique"></summary><div>
           <label class="case"><input type="checkbox" name="mosaique" value="oui"> <span data-t="mosaique_activer"></span></label>
           <div class="deux">
@@ -247,6 +257,9 @@ const textes = {
     acces_libre: "Accès libre : aucun utilisateur n'est déclaré sur ce serveur. Créer un compte sur le serveur : eko-rip-serveur utilisateur ajouter <nom>",
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer…", supprimer_reglage: "Supprimer",
     nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
+    blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
+    blanc_aplat: "Aplat sur toute la page", retraction: "Rétraction (mm)", seuil: "Encre minimale (%)",
+    note_blanc: "Plaque White générée après le rendu ; le blanc déjà dessiné dans le fichier est gardé. La rétraction fait reculer le blanc du bord de l'encre.",
     mosaique: "Mosaïque", mosaique_activer: "Couper en lés si plus large que la laize", recouvrement: "Recouvrement (mm)",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
@@ -282,6 +295,7 @@ const textes = {
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
+      blanc_invalide: "Blanc : rétraction de 0 à 5 mm, encre minimale de 1 à 100 %.",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
@@ -302,6 +316,9 @@ const textes = {
     acces_libre: "Open access: no user is declared on this server. Create an account on the server: eko-rip-serveur utilisateur ajouter <name>",
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save…", supprimer_reglage: "Delete",
     nom_reglage: "Preset name (its hot folder will have this name):", reglage_enregistre: (n) => `Preset “${n}” saved; hot folder: entrees/${n}/`,
+    blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
+    blanc_aplat: "Flood over the whole page", retraction: "Choke (mm)", seuil: "Minimum ink (%)",
+    note_blanc: "White plate generated after rendering; white already drawn in the file is kept. The choke pulls the white back from the ink edge.",
     mosaique: "Tiling", mosaique_activer: "Split into panels when wider than the roll", recouvrement: "Overlap (mm)",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
@@ -337,6 +354,7 @@ const textes = {
       rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
+      blanc_invalide: "White: choke from 0 to 5 mm, minimum ink from 1 to 100 %.",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
@@ -539,6 +557,7 @@ function demandeDuFormulaire() {
     mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
     mosaique: f.mosaique.checked ? { laize_mm: +f.laize_mm.value, recouvrement_mm: +f.recouvrement_mm.value } : null,
+    blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
   };
 }
 function appliquerDemande(d) {
@@ -550,6 +569,8 @@ function appliquerDemande(d) {
   f.intention.value = String(d.couleur.intention); f.forcer_profils.checked = d.couleur.forcer;
   f.mosaique.checked = !!d.mosaique;
   if (d.mosaique) { f.laize_mm.value = d.mosaique.laize_mm; f.recouvrement_mm.value = d.mosaique.recouvrement_mm; }
+  const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
+  f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
 }
 choixReglage.addEventListener("change", () => {
   const r = reglages.find((x) => x.nom === choixReglage.value);
@@ -674,7 +695,8 @@ function carteTravail(t) {
     el("span", { className: `badge ${t.statut}` }, T()[t.statut]),
     el("span", { className: "badge" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`),
     t.pages.length ? el("span", { className: "badge" }, T().pages(t.pages.length)) : null,
-    t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null);
+    t.reperage && t.reperage !== "aucun" ? el("span", { className: "badge" }, T()[t.reperage]) : null,
+    t.blanc && t.blanc.mode !== "aucun" ? el("span", { className: "badge" }, T()[`blanc_${t.blanc.mode}`]) : null);
   const actions = el("div", { className: "ligne" });
   if (t.statut === "echec") actions.append(bouton(T().relancer, () => agir(`/api/travaux/${t.id}/relancer`, "POST")));
   if (t.statut === "termine" || t.statut === "echec") actions.append(bouton(T().supprimer, () => confirm(T().confirmer(t.nom)) && agir(`/api/travaux/${t.id}`, "DELETE"), "discret danger"));

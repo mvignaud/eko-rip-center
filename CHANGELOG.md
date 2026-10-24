@@ -15,6 +15,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   sortie coupée par un arrêt passe en échec au lieu de repartir au milieu.
 - Epson, en attendant son pilote : les plaques à imprimer (jamais les tons de découpe)
   sont copiées dans `sorties/epson/`.
+- **Blanc automatique** : plaque `White` générée après le rendu, en sous-couche sous
+  l'encre (seuil réglable) ou en aplat, avec rétraction en mm ; union avec le blanc du
+  fichier. Plaques lues et écrites en flux (bâches de plusieurs Go), TIFF LZW.
 - **Encre et coût** : taux d'encre de chaque plaque (mesuré sur l'aperçu), surface,
   encre et coût estimés par page ; tarifs par encre (ml/m² à 100 %, €/l) et support
   (€/m²) dans Système (`tarifs.json`) ; export CSV de la consommation

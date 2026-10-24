@@ -1000,10 +1000,12 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "tiff",
  "tokio",
  "tower",
  "usvg",
  "uuid",
+ "weezl 0.1.12",
 ]
 
 [[package]]
