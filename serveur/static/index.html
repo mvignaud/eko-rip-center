@@ -394,7 +394,7 @@ const textes = {
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", cadre_code: "Cadre Mutoh + code-barres (CutServer SF, type 2)", cadre_multi: "Cadre Mutoh multi-segments + code-barres (CutServer MF, type 3)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
-    en_attente: "En attente", en_cours: "En cours", termine: "Terminé", echec: "Échec",
+    en_attente: "En attente", en_cours: "En cours", termine: "Prêt", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
@@ -406,7 +406,7 @@ const textes = {
     vers_kona: "Découper (Kona)", vers_epson: "Imprimer (Epson)", mis_en_file: "Ajouté à la file d'attente.",
     machines: { kona: "Mutoh Kona 1650 — découpe", epson: "Epson SC-S80600 — impression" },
     note_epson: "Pilote à venir : les plaques sont copiées dans sorties/epson/ sur le serveur.",
-    etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" },
+    etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `Reste ${m} m de rouleau`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
@@ -497,7 +497,7 @@ const textes = {
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", cadre_code: "Mutoh frame + barcode (CutServer SF, type 2)", cadre_multi: "Mutoh multi-segment frame + barcode (CutServer MF, type 3)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
-    en_attente: "Queued", en_cours: "In progress", termine: "Done", echec: "Failed",
+    en_attente: "Queued", en_cours: "In progress", termine: "Ready", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
@@ -509,7 +509,7 @@ const textes = {
     vers_kona: "Cut (Kona)", vers_epson: "Print (Epson)", mis_en_file: "Added to the queue.",
     machines: { kona: "Mutoh Kona 1650 — cutting", epson: "Epson SC-S80600 — printing" },
     note_epson: "Driver to come: plates are copied to sorties/epson/ on the server.",
-    etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" },
+    etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `${m} m of roll left`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
@@ -1188,7 +1188,7 @@ function vuePage(t, page, n) {
       if (await api("/api/file", json("POST", { travail: t.id, page: n, machine: m.id, operation }))) dire(T().mis_en_file);
       rafraichir();
     }));
-    if (s) sortiesPage.append(el("span", { className: `badge ${s.etat}` }, T().etats[s.etat]));
+    if (s) sortiesPage.append(el("span", { className: `badge ${s.etat}` }, etatSortie(s)));
   };
   const imprimables = page.plaques.filter((p) => !(page.plaques_decoupe || []).includes(p));
   if (t.mode === "imprimer" && imprimables.length) catalogue.filter((m) => m.modele_imprime).forEach((m) => versMachine(m, "impression", T().imprimer_sur(m.nom)));
@@ -1224,6 +1224,13 @@ function vuePage(t, page, n) {
 /** Couches (découpe, plaques) montrées ou non, gardé d'une page et d'un rafraîchissement à l'autre. */
 let couchesOuvertes = false;
 
+/** État d'une sortie : une impression « finie » vers une machine sans pilote (dossier) n'a
+ *  fait que déposer les plaques, on le dit. */
+function etatSortie(s) {
+  const m = catalogue.find((x) => x.id === s.machine);
+  const dossier = m?.connexion?.type === "dossier" && (s.operation || "impression") === "impression";
+  return s.etat === "terminee" && dossier ? T().deposee : T().etats[s.etat];
+}
 /** Pages choisies pour la planche : « id:page » → copies. */
 const selection = new Map();
 function majPlanche() {
@@ -1300,7 +1307,7 @@ function afficherFile() {
     const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
     const ligne = (s) => el("div", { className: "sortie" },
       el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}`)),
-        el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, T().etats[s.etat]),
+        el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, etatSortie(s)),
           el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
           s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),

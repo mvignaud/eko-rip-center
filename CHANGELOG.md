@@ -20,6 +20,9 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 ### Modifié
 - Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
   **Couches**, comme dans ONYX.
+- État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
+  impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
+  dossier (pas imprimée)**.
 
 ## [0.12.0] — 2026-10-24
 
