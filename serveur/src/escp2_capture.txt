@@ -1,5 +1,5 @@
 # Structure du flux reçu par notre Epson SC-S80600 sur le port 9100 (capture réseau faite
-# à l'atelier le 24/10/2026 : travail Stickers_Lions_club_10cm, 720 × 720, 8 passes HQ).
+# à l'atelier le 24/10/2026 : un travail d'autocollants, 720 × 720, 8 passes HQ).
 # Écrite à la main : noms de commandes et paramètres de réglage seulement, aucune donnée
 # raster, aucun nom ni texte du logiciel émetteur. Les lignes BANDES résument les 545
 # bandes de la capture ; (C, (c et (S dépendent de la page (marge 71 = 5 mm à 1/360).
