@@ -298,6 +298,7 @@
 
   <section id="vue-systeme" class="vue-systeme" hidden>
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
+    <section class="panneau"><h2 data-t="machines_titre"></h2><form class="corps" id="editeur-machines"></form></section>
     <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
     <section class="panneau"><h2 data-t="couts"></h2><form class="corps" id="tarifs"></form></section>
   </section>
@@ -307,6 +308,13 @@
 <script>
 const textes = {
   fr: {
+    identifiant: "Identifiant", nom_machine: "Nom", modele: "Modèle", connexion_machine: "Connexion", port: "Port série", hote: "Adresse IP", port_tcp: "Port TCP",
+    chemin: "Périphérique", snmp: "SNMP (largeur du média)", pas: "Pas de découpe (mm)", pas_defaut: "par défaut",
+    connexion_dossier: "Sortie en dossier (pas de pilote)", ajouter_machine: "Ajouter une machine", retirer_machine: "Retirer",
+    machines_enregistrees: "Machines enregistrées.",
+    note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture.",
+    modeles: { epson_sc_s80600: "Epson SC-S80600 (impression)", mutoh_kona: "Mutoh Kona (découpe)", graphtec_fc7000: "Graphtec FC7000 (découpe)", roland_versacamm: "Roland VersaCAMM VP (impression + découpe)" },
+    connexions: { serie: "Série / USB-série", reseau: "Réseau (TCP)", fichier: "Périphérique (USB…)", dossier: "Dossier" },
     importer: "Importer", o_imprimer: "Imprimer", o_decouper: "Découper", o_bat: "BAT", vues: "Vues", machines_titre: "Machines",
     reglages_titre: "Réglages enregistrés", aucun_reglage_enregistre: "Aucun pour l'instant.", aucune_selection: "Sélectionner un travail dans la liste.",
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
@@ -397,6 +405,13 @@ const textes = {
     },
   },
   en: {
+    identifiant: "Id", nom_machine: "Name", modele: "Model", connexion_machine: "Connection", port: "Serial port", hote: "IP address", port_tcp: "TCP port",
+    chemin: "Device", snmp: "SNMP (media width)", pas: "Cut step (mm)", pas_defaut: "default",
+    connexion_dossier: "Output to a folder (no driver)", ajouter_machine: "Add a machine", retirer_machine: "Remove",
+    machines_enregistrees: "Machines saved.",
+    note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture.",
+    modeles: { epson_sc_s80600: "Epson SC-S80600 (print)", mutoh_kona: "Mutoh Kona (cut)", graphtec_fc7000: "Graphtec FC7000 (cut)", roland_versacamm: "Roland VersaCAMM VP (print + cut)" },
+    connexions: { serie: "Serial / USB-serial", reseau: "Network (TCP)", fichier: "Device (USB…)", dossier: "Folder" },
     importer: "Import", o_imprimer: "Print", o_decouper: "Cut", o_bat: "Proof", vues: "Views", machines_titre: "Machines",
     reglages_titre: "Saved presets", aucun_reglage_enregistre: "None yet.", aucune_selection: "Select a job in the list.",
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
@@ -801,6 +816,7 @@ function appliquerLangue() {
   remplirReglages();
   champsEdition($("edition-envoi"), lireEdition($("edition-envoi")));
   afficherSysteme();
+  afficherEditeurMachines();
   if (media || erreurMedia) afficherMedia();
   afficherTarifs();
   remplirSupports();
@@ -1184,6 +1200,7 @@ async function chargerMachines() {
   if (!c) return;
   catalogue = c.map((m) => ({ ...m, modele_imprime: ["epson_sc_s80600", "roland_versacamm"].includes(m.modele), modele_decoupe: m.modele !== "epson_sc_s80600" }));
   afficherLateral();
+  afficherEditeurMachines();
   derniereEmpreinte = "";
   rafraichir();
 }
@@ -1203,6 +1220,57 @@ function afficherLateral() {
     return b;
   }) : [el("p", { className: "meta", style: "margin: 0 14px" }, T().aucun_reglage_enregistre)]));
 }
+
+/** Éditeur du catalogue (Système > Machines). */
+const MODELES = ["epson_sc_s80600", "mutoh_kona", "graphtec_fc7000", "roland_versacamm"];
+const CONNEXIONS = ["serie", "reseau", "fichier", "dossier"];
+function afficherEditeurMachines() {
+  const f = $("editeur-machines");
+  if (f.contains(document.activeElement)) return;
+  const lignes = el("div", { id: "lignes-machines", style: "display: grid; gap: 10px" });
+  const ligne = (m = { id: "", nom: "", modele: "graphtec_fc7000", laize_mm: 750, connexion: { type: "serie", port: "/dev/ttyUSB0", stty: "9600 cs8 -cstopb -parenb crtscts raw -echo" } }) => {
+    const c = m.connexion || { type: "dossier" };
+    const champ = (n, v, attrs = {}) => el("input", { name: n, value: v ?? "", ...attrs });
+    const choix = (n, valeurs, v, textes) => el("select", { name: n }, ...valeurs.map((x) => el("option", { value: x, selected: x === v }, textes[x] || x)));
+    const details = el("div", { className: "ligne bas" });
+    const majConnexion = (type) => {
+      details.replaceChildren(...({
+        serie: [el("label", {}, T().port, champ("port", c.port || "/dev/ttyUSB0")), el("label", {}, "stty", champ("stty", c.stty || "9600 cs8 -cstopb -parenb crtscts raw -echo"))],
+        reseau: [el("label", {}, T().hote, champ("hote", c.hote || "")), el("label", {}, T().port_tcp, champ("port_tcp", typeof c.port === "number" ? c.port : 9100, { type: "number", min: 1, max: 65535 }))],
+        fichier: [el("label", {}, T().chemin, champ("chemin", c.chemin || "/dev/usb/lp0"))],
+        dossier: [el("span", { className: "meta" }, T().connexion_dossier)],
+      })[type]);
+    };
+    const typeConnexion = choix("type", CONNEXIONS, c.type, T().connexions);
+    typeConnexion.addEventListener("change", () => majConnexion(typeConnexion.value));
+    majConnexion(c.type);
+    const bloc = el("div", { className: "page ligne-machine" },
+      el("div", { className: "ligne bas" },
+        el("label", {}, T().identifiant, champ("id", m.id, { placeholder: "fc7000", style: "width: 9em" })),
+        el("label", { style: "flex: 2" }, T().nom_machine, champ("nom", m.nom)),
+        el("label", {}, T().modele, choix("modele", MODELES, m.modele, T().modeles)),
+        el("label", {}, T().laize, champ("laize", m.laize_mm, { type: "number", min: 100, max: 5000, style: "width: 7em" }))),
+      el("div", { className: "ligne bas" },
+        el("label", {}, T().connexion_machine, typeConnexion), details,
+        el("label", {}, T().snmp, champ("snmp", m.snmp || "", { placeholder: "192.168.1.50" })),
+        el("label", {}, T().pas, choix("pas", ["", "0.01", "0.025", "0.05", "0.1"], m.pas_mm == null ? "" : String(m.pas_mm), { "": T().pas_defaut }))));
+    bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
+    lignes.append(bloc);
+  };
+  catalogue.forEach((m) => ligne(m));
+  f.replaceChildren(el("p", { className: "meta", style: "margin: 0" }, T().note_machines), lignes,
+    el("div", { className: "ligne" }, bouton(T().ajouter_machine, () => ligne()), el("button", { type: "submit" }, T().enregistrer)));
+}
+$("editeur-machines").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const liste = [...$("lignes-machines").querySelectorAll(".ligne-machine")].map((b) => {
+    const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
+    const type = q("type");
+    const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
+    return { id: q("id"), nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null };
+  });
+  if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
+});
 
 // Thème sombre (par défaut) ou clair, gardé sur le poste.
 const appliquerTheme = (t) => { document.documentElement.dataset.theme = t; try { localStorage.setItem("theme", t); } catch {} };

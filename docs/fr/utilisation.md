@@ -213,6 +213,22 @@ Vue **Système** : version du serveur, durée de conservation des travaux (30 jo
 défaut, réglée par `EKO_RIP_CONSERVATION_JOURS`) et espace libre du disque des données,
 en rouge sous 10 %.
 
+## Machines
+
+**Système > Machines** : le catalogue des machines de l'atelier. Pour chacune : un
+identifiant (minuscules, chiffres, `-`), un nom, le modèle (Epson SC-S80600, Mutoh Kona,
+Graphtec FC7000, Roland VersaCAMM VP), la laize, la connexion (série ou USB-série,
+réseau TCP, périphérique comme `/dev/usb/lp0`, ou dossier), l'adresse SNMP pour lire le
+média chargé, et le pas de découpe (0,01 mm pour le Kona, 0,025 mm par défaut ailleurs).
+**Enregistrer** applique tout de suite : les boutons d'impression et de découpe, la file
+et la barre latérale suivent. Une machine qui a encore une sortie à passer ne peut pas
+être retirée.
+
+- **Graphtec FC7000-75** : régler la machine en HP-GL (Menu > Interface > Command), pas de
+  0,025 mm ; le repérage ARMS se règle au panneau de la machine.
+- **Roland VersaCAMM VP-300 / VP-540** (762 / 1371 mm) : la découpe part par le réseau ;
+  à éprouver à l'atelier. L'impression Roland viendra après une capture réseau.
+
 ## Média chargé dans l'Epson
 
 **Système > Média chargé dans l'Epson** : la largeur du rouleau chargé, que l'imprimante

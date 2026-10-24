@@ -204,6 +204,20 @@ Spot colours (`White`, `Silver`…) are never converted.
 **System** view: server version, job retention (30 days by default, set with
 `EKO_RIP_CONSERVATION_JOURS`) and free space on the data disk, in red under 10 %.
 
+## Machines
+
+**System > Machines**: the workshop's machine catalogue. For each: an id (lowercase,
+digits, `-`), a name, the model (Epson SC-S80600, Mutoh Kona, Graphtec FC7000, Roland
+VersaCAMM VP), the roll width, the connection (serial or USB-serial, TCP network, device
+such as `/dev/usb/lp0`, or folder), the SNMP address to read the loaded media, and the cut
+step (0.01 mm for the Kona, 0.025 mm by default elsewhere). **Save** applies at once. A
+machine with an output still to run cannot be removed.
+
+- **Graphtec FC7000-75**: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm
+  step; ARMS registration is set on the machine's panel.
+- **Roland VersaCAMM VP-300 / VP-540** (762 / 1371 mm): cutting goes over the network; to
+  be tried at the workshop. Roland printing will follow a network capture.
+
 ## Media loaded in the Epson
 
 **System > Media loaded in the Epson**: the width of the loaded roll, which the printer

@@ -15,6 +15,7 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 - Découpe vers n'importe quelle découpeuse du catalogue : HP-GL converti au pas de la
   machine (0,01 mm Kona, 0,025 mm par défaut ailleurs), envoi série, réseau ou fichier.
   Graphtec FC7000 et Roland VP : à éprouver à l'atelier (protocoles non publiés en détail).
+- Éditeur du catalogue dans Système > Machines (ajouter une Graphtec, une Roland…).
 - Répartiteur unique de la file pour toutes les machines ; une imprimante-découpeuse
   (Roland) reçoit l'impression puis la découpe suspendue.
 
