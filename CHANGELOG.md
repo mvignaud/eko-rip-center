@@ -43,6 +43,8 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
   Y = −largeur), réglages de coupe par machine (vitesse, force, accélération) et par
   travail, option « découpe retournée », `.plt` prêt pour une machine (`?machine=kona`).
 - **Flèche d'insertion ▲** dans les cadres Mutoh.
+- Réglages de coupe comme CutServer : **valeurs du massicot**, **outil**, **motif de
+  découpe** (jusqu'à 10 paires bas/haut) avec **diffusion** aux angles vifs.
 - Documentation **Administrer le serveur** (FR/EN) : données, sauvegardes, mises à jour,
   comptes, machines et questions fréquentes.
 

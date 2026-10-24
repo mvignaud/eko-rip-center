@@ -88,12 +88,109 @@ pub struct ParametreDecoupe {
     pub vitesse_cm_s: f64,
     pub force_g: f64,
     pub acceleration_g: f64,
+    /// « Utiliser les valeurs par défaut du massicot » : ni vitesse, ni force, ni accélération.
+    #[serde(default)]
+    pub valeurs_machine: bool,
+    /// Outil (`SPn`, 1 à 4) ; sinon celui du ton de découpe.
+    #[serde(default)]
+    pub outil: Option<u8>,
+    /// Motif de découpe (comme CutServer) : jusqu'à 10 paires (coupé, relevé) en mm.
+    #[serde(default)]
+    pub motif_mm: Vec<[f64; 2]>,
+    /// Diffusion du motif : un nombre entier de motifs par tronçon droit, coupé aux angles.
+    #[serde(default)]
+    pub diffusion: bool,
 }
 
 impl ParametreDecoupe {
     fn valide(&self) -> bool {
-        !self.nom.trim().is_empty() && self.nom.chars().count() <= 40 && (1.0..=100.0).contains(&self.vitesse_cm_s) && (1.0..=600.0).contains(&self.force_g) && (0.1..=10.0).contains(&self.acceleration_g)
+        !self.nom.trim().is_empty()
+            && self.nom.chars().count() <= 40
+            && (1.0..=100.0).contains(&self.vitesse_cm_s)
+            && (1.0..=600.0).contains(&self.force_g)
+            && (0.1..=10.0).contains(&self.acceleration_g)
+            && self.outil.is_none_or(|o| (1..=4).contains(&o))
+            && self.motif_mm.len() <= 10
+            && self.motif_mm.iter().flatten().all(|v| (0.0..=500.0).contains(v))
+            && (self.motif_mm.is_empty() || self.motif_mm.iter().any(|[b, _]| *b > 0.0))
     }
+}
+
+/// Motif de découpe sur le HP-GL : chaque tracé (un `PU` puis ses `PD`) est coupé par
+/// tronçons, outil bas puis haut, selon `motif` (paires coupé/relevé, unités du HP-GL).
+/// `diffusion` : le tracé est coupé en tronçons aux angles vifs (> 30°), et le motif de
+/// chaque tronçon est étiré pour en faire un nombre entier : la coupe tombe aux angles.
+pub fn pointiller(hpgl: &str, motif: &[[f64; 2]], diffusion: bool) -> String {
+    let pas: Vec<f64> = motif.iter().flatten().copied().collect();
+    let periode: f64 = pas.iter().sum();
+    if periode <= 0.0 {
+        return hpgl.to_string();
+    }
+    let mut sortie = String::new();
+    let mut trace: Vec<(f64, f64)> = vec![];
+    let vider = |trace: &mut Vec<(f64, f64)>, sortie: &mut String| {
+        for troncon in troncons(trace, diffusion) {
+            let l: f64 = troncon.windows(2).map(|w| (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1)).sum();
+            let echelle = if diffusion { l / ((l / periode).round().max(1.0) * periode) } else { 1.0 };
+            // Position dans le motif : à zéro au début de chaque tronçon (outil bas).
+            let (mut k, mut dans) = (0usize, 0.0f64);
+            for w in troncon.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                let lg = (b.0 - a.0).hypot(b.1 - a.1);
+                let mut fait = 0.0;
+                while fait < lg - 1e-9 {
+                    let reste = pas[k] * echelle - dans;
+                    let avance = reste.min(lg - fait);
+                    fait += avance;
+                    dans += avance;
+                    let q = (a.0 + (b.0 - a.0) * fait / lg, a.1 + (b.1 - a.1) * fait / lg);
+                    *sortie += &format!("{}{},{};", if k % 2 == 0 { "PD" } else { "PU" }, q.0.round() as i64, q.1.round() as i64);
+                    if dans >= pas[k] * echelle - 1e-9 {
+                        (k, dans) = ((k + 1) % pas.len(), 0.0);
+                    }
+                }
+            }
+        }
+        trace.clear();
+    };
+    for cmd in hpgl.split(';').map(str::trim).filter(|c| !c.is_empty()) {
+        let points: Vec<(f64, f64)> = match cmd.get(..2) {
+            Some("PU" | "PD") if cmd.len() > 2 => cmd[2..].split(',').filter_map(|n| n.trim().parse().ok()).collect::<Vec<f64>>().as_chunks::<2>().0.iter().map(|&[x, y]| (x, y)).collect(),
+            _ => vec![],
+        };
+        if cmd.starts_with("PD") && !points.is_empty() {
+            trace.extend(points);
+            continue;
+        }
+        vider(&mut trace, &mut sortie);
+        sortie += cmd;
+        sortie += ";";
+        if let Some(&p) = points.last() {
+            trace.push(p);
+        }
+    }
+    vider(&mut trace, &mut sortie);
+    sortie
+}
+
+/// Tronçons d'un tracé : entier, ou coupé aux angles vifs (> 30°) avec la diffusion.
+fn troncons(trace: &[(f64, f64)], diffusion: bool) -> Vec<Vec<(f64, f64)>> {
+    if trace.len() < 2 {
+        return vec![];
+    }
+    let mut sortie = vec![vec![trace[0]]];
+    for i in 1..trace.len() {
+        sortie.last_mut().unwrap().push(trace[i]);
+        if diffusion && i + 1 < trace.len() {
+            let (a, b, c) = (trace[i - 1], trace[i], trace[i + 1]);
+            let (u, v) = ((b.0 - a.0, b.1 - a.1), (c.0 - b.0, c.1 - b.1));
+            let cos = (u.0 * v.0 + u.1 * v.1) / (u.0.hypot(u.1) * v.0.hypot(v.1)).max(1e-12);
+            if cos < 30f64.to_radians().cos() {
+                sortie.push(vec![trace[i]]);
+            }
+        }
+    }
+    sortie
 }
 
 impl Machine {
@@ -190,8 +287,9 @@ pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoup
     let s = if retourne { -1 } else { 1 };
     let axes = |x: i64, y: i64| (s * y, -s * x);
     let mut corps = String::new();
-    // Écrit comme CutServer : « AS 1.0;ZF 145;VS 15; ».
-    let reglages = p.map(|p| format!("AS {:.1};ZF {};VS {};LT;\r\n", p.acceleration_g, p.force_g, p.vitesse_cm_s)).unwrap_or_default();
+    // Écrit comme CutServer : « AS 1.0;ZF 145;VS 15; » ; rien avec les valeurs du massicot.
+    let reglages = p.filter(|p| !p.valeurs_machine).map(|p| format!("AS {:.1};ZF {};VS {};LT;\r\n", p.acceleration_g, p.force_g, p.vitesse_cm_s)).unwrap_or_default();
+    let outil = p.and_then(|p| p.outil);
     for cmd in hpgl.split(';').map(str::trim).filter(|c| !c.is_empty()) {
         match cmd.get(..2) {
             Some(op @ ("PU" | "PD")) if cmd.len() > 2 => {
@@ -202,7 +300,7 @@ pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoup
                     corps += &format!("{op}{x},{y};\r\n");
                 }
             }
-            Some("SP") if cmd != "SP0" => corps += &format!("{cmd};\r\n{reglages}"),
+            Some("SP") if cmd != "SP0" => corps += &format!("{};\r\n{reglages}", outil.map_or(cmd.to_string(), |o| format!("SP{o}"))),
             _ => {}
         }
     }
@@ -259,15 +357,34 @@ mod tests {
     }
 
     #[test]
+    fn pointilles_de_perforation() {
+        // Trait de 100 unités, 30 coupées / 20 relevées : bas 0–30, haut –50, bas –80, haut –100.
+        let p = pointiller("IN;SP1;PU0,0;PD100,0;PU;SP0;", &[[30.0, 20.0]], false);
+        assert_eq!(p, "IN;SP1;PU0,0;PD30,0;PU50,0;PD80,0;PU100,0;PU;SP0;");
+        // Le motif continue d'un segment au suivant d'un même tracé ; paires enchaînées.
+        assert_eq!(pointiller("PU0,0;PD20,0,40,0;", &[[30.0, 20.0]], false), "PU0,0;PD20,0;PD30,0;PU40,0;");
+        assert_eq!(pointiller("PU0,0;PD60,0;", &[[10.0, 5.0], [20.0, 5.0]], false), "PU0,0;PD10,0;PU15,0;PD35,0;PU40,0;PD50,0;PU55,0;PD60,0;");
+        // Diffusion : côtés de 90, motif 30/20 → 1,8 motif arrondi à 2, ramené à 27/18 ;
+        // chaque côté recommence outil bas à son angle et finit relevé sur l'angle suivant.
+        let d = pointiller("PU0,0;PD90,0,90,90;", &[[30.0, 20.0]], true);
+        assert_eq!(d, "PU0,0;PD27,0;PU45,0;PD72,0;PU90,0;PD90,27;PU90,45;PD90,72;PU90,90;");
+        assert!(pointiller("PU0,0;PD90,0,90,90;", &[[30.0, 20.0]], false).contains("PU90,10;PD90,40;"), "sans diffusion, le motif continue après l'angle");
+    }
+
+    #[test]
     fn conversion_de_pas() {
         let rip = "IN;SP1;PU0,0;PD2540,0,2540,2540;PU;SP0;";
         // 25,4 mm : 2540 pas de 0,01 mm, 1016 pas de 0,025 mm (HP-GL standard).
         assert_eq!(changer_de_pas(rip, 0.025, [0.0; 2]), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
         // Kona avec cadre : axes tournés (X = y, Y = −x), coins min/max, une commande par ligne.
-        let p = ParametreDecoupe { nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0 };
+        let p = ParametreDecoupe { nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
         let k = pour_kona(rip, Some([-500, -500, 3000, 3000]), Some(&p), false);
         assert!(k.starts_with("AL5,0;IN;\r\nPA;PROGSTEP10;\r\n@SEGMENTEDFILESTART1;\r\n@SEGMENTSTART1;\r\n\r\nAL5,0,0,1,-500,-3000,3000,500;\r\nSP1;\r\nAS 1.0;ZF 145;VS 15;LT;\r\nPU0,0;\r\nPD0,-2540;\r\nPD2540,-2540;\r\n"), "{k}");
         assert!(k.ends_with("PU-500,-3000;\r\nAL5,2;\r\n\r\n@SEGMENTEND1;\r\n\r\nSP0;@SEGMENTEDFILEEND1;\r\n"), "{k}");
+        // Valeurs du massicot : aucun réglage envoyé ; outil imposé.
+        let q = ParametreDecoupe { valeurs_machine: true, outil: Some(3), ..p.clone() };
+        let k = pour_kona(rip, None, Some(&q), false);
+        assert!(!k.contains("ZF") && k.contains("SP3;\r\n") && !k.contains("SP1;"), "{k}");
         // Sans cadre : outil 1 obligatoire (sans lui, le Kona ne coupe rien : essai du 24/10).
         assert!(pour_kona(rip, None, None, false).contains("SP1;\r\n"));
         assert_eq!(changer_de_pas(rip, 0.01, [0.0; 2]), rip);

@@ -199,7 +199,11 @@ l'arrière).
 déclare les deux coins opposés du cadre (milieux des traits), le Kona le balaie, lit le
 code, puis coupe. Les **réglages de coupe** (vitesse en cm/s, force en g, accélération en
 G) se déclarent par machine dans Système > Machines, comme les « couches de découpe » de
-CutServer ; le premier sert par défaut. **Fichier .plt** avec `?machine=kona` donne le
+CutServer ; le premier sert par défaut. Comme dans CutServer, chacun peut aussi garder les
+**valeurs du massicot** (rien n'est envoyé), imposer un **outil** (1 à 4), et suivre un
+**motif** de découpe : jusqu'à 10 paires « bas/haut » en mm (`8/2 8/2` = couper 8 mm,
+lever 2 mm), avec la **diffusion** (un nombre entier de motifs par ligne droite, la coupe
+commence et finit aux angles vifs). **Fichier .plt** avec `?machine=kona` donne le
 fichier tel que le Kona le reçoit, à envoyer à la main (port série 9600, 8N1, RTS/CTS).
 Si la coupe sort tournée de 180°, cocher **découpe retournée** sur la machine.
 

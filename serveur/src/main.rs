@@ -1806,11 +1806,15 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
 /// HP-GL du rendu (0,01 mm) tel que la machine le reçoit : au pas de la machine, décalé ;
 /// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
 fn pour_la_machine(hpgl: &str, t: &Travail, p: &Page, m: &machines::Machine) -> String {
-    let texte = machines::changer_de_pas(hpgl, m.pas_mm(), m.decalage_mm);
+    let reglage = t.demande.parametre_decoupe.as_ref().and_then(|n| m.parametres_decoupe.iter().find(|x| &x.nom == n)).or(m.parametres_decoupe.first());
+    let mut texte = machines::changer_de_pas(hpgl, m.pas_mm(), m.decalage_mm);
+    if let Some(r) = reglage.filter(|r| !r.motif_mm.is_empty()) {
+        let motif: Vec<[f64; 2]> = r.motif_mm.iter().map(|p| p.map(|v| v / m.pas_mm())).collect();
+        texte = machines::pointiller(&texte, &motif, r.diffusion);
+    }
     if m.modele != machines::Modele::MutohKona {
         return texte;
     }
-    let reglage = t.demande.parametre_decoupe.as_ref().and_then(|n| m.parametres_decoupe.iter().find(|x| &x.nom == n)).or(m.parametres_decoupe.first());
     let u = |v: f64| (v * 100.0 * 25.4 / 72.0).round() as i64;
     machines::pour_kona(&texte, p.cadre_pt.map(|c| c.map(u)), reglage, m.decoupe_retournee)
 }

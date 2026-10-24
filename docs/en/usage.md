@@ -189,7 +189,10 @@ edge that leaves the Epson first, the one fed first into the Kona (from the rear
 declares two opposite frame corners (line centres), the Kona scans it, reads the code,
 then cuts. **Cut settings** (speed in cm/s, force in g, acceleration in G) are declared
 per machine in System > Machines, like CutServer's "cut layers"; the first is the
-default. **.plt file** with `?machine=kona` gives the file as the Kona receives it, to
+default. As in CutServer, each can also keep the **cutter defaults** (nothing sent),
+force a **tool** (1 to 4), and follow a cut **pattern**: up to 10 "down/up" pairs in mm
+(`8/2 8/2` = cut 8 mm, lift 2 mm), with **spread** (a whole number of patterns per
+straight line, the cut starting and ending at sharp corners). **.plt file** with `?machine=kona` gives the file as the Kona receives it, to
 send by hand (serial port 9600, 8N1, RTS/CTS). If the cut comes out turned 180°, tick
 **cut turned** on the machine.
 
