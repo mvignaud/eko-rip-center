@@ -26,6 +26,18 @@ not matter). The job card shows how many and offers **Download the .plt file**
 (HP-GL, 1/40 mm, origin at the page's bottom-left corner). A cut colour at 0% is not
 cut.
 
+## Colour
+
+**Colour** block (Print mode):
+- **Add an ICC profile…** uploads an `.icc` or `.icm` profile to the server (media
+  profiles, Epson Wide Gamut input profile…).
+- **CMYK input / RGB input**: profile applied to untagged data (or to all data, with
+  **Ignore the PDF's profiles**).
+- **Media (output)**: profile of the printed media; the preview simulates it.
+- **Intent**: perceptual, relative colorimetric, saturation, absolute.
+
+Spot colours (`White`, `Metallic`…) are never converted.
+
 ## Kona registration
 
 In **Print** mode, **Kona registration** adds around the image:

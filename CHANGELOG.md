@@ -5,6 +5,16 @@ Toutes les évolutions notables d'E-KO RIP Center. Format inspiré de
 [SemVer](https://semver.org/lang/fr/).
 *All notable changes. English summary under each version.*
 
+## [Non publié]
+
+### Ajouté
+- **Gestion des couleurs** : profils ICC déposés depuis l'écran (en-tête vérifié, rangés
+  dans `<données>/profils/`, jamais livrés avec le logiciel) ; par travail, profil
+  d'entrée CMJN (par exemple Epson Wide Gamut), profil d'entrée RVB, profil du support
+  en sortie, intention de rendu, option « ignorer les profils du PDF ». L'aperçu
+  composite simule le support (épreuve écran). Les tons directs ne sont pas convertis.
+- Le CI vérifie la syntaxe JavaScript des pages.
+
 ## [0.3.0] — 2026-10-24
 
 ### Ajouté

@@ -1,6 +1,7 @@
 //! E-KO RIP Center — serveur local : reçoit les PDF des postes clients, les rend en
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
+mod couleur;
 mod decoupe;
 mod plotter;
 mod render;
@@ -70,6 +71,9 @@ struct Travail {
     /// Repères imprimés pour la découpe sur le Kona (mode Imprimer).
     #[serde(default)]
     reperage: reperage::Reperage,
+    /// Profils ICC et intention de rendu (mode Imprimer).
+    #[serde(default)]
+    couleur: couleur::Couleur,
     statut: Statut,
     /// Code stable traduit par l'écran (`rendu_echoue`, `interrompu`).
     #[serde(default)]
@@ -119,6 +123,8 @@ struct Config {
     gs: String,
     max_octets: usize,
     delai: Duration,
+    /// Profils ICC déposés depuis l'écran.
+    profils: PathBuf,
     /// Port du plotter (le Kona : `/dev/kona`, créé par la règle udev du paquet).
     plotter: PathBuf,
     plotter_stty: String,
@@ -141,8 +147,10 @@ fn env_ou(nom: &str, defaut: &str) -> String {
 
 #[tokio::main]
 async fn main() {
+    let donnees = PathBuf::from(env_ou("EKO_RIP_DATA", "eko-rip-data"));
     let config = Config {
-        donnees: env_ou("EKO_RIP_DATA", "eko-rip-data").into(),
+        profils: donnees.join("profils"),
+        donnees,
         gs: env_ou("EKO_RIP_GS", if cfg!(windows) { "gswin64c" } else { "gs" }),
         max_octets: env_ou("EKO_RIP_MAX_MO", "2048").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
         delai: Duration::from_secs(env_ou("EKO_RIP_DELAI_S", "1800").parse().expect("EKO_RIP_DELAI_S")),
@@ -151,6 +159,7 @@ async fn main() {
     };
     let adresse = env_ou("EKO_RIP_ADDR", "0.0.0.0:8640");
     std::fs::create_dir_all(config.donnees.join("travaux")).expect("dossier de données");
+    std::fs::create_dir_all(&config.profils).expect("dossier des profils");
     reprendre_travaux_interrompus(&config.donnees);
 
     let max = config.max_octets;
@@ -166,6 +175,7 @@ fn routes(etat: Partage) -> Router {
     Router::new()
         .route("/", get(|| async { Html(include_str!("../static/index.html")) }))
         .route("/api/travaux", get(lister).post(envoyer))
+        .route("/api/profils", get(lister_profils).post(deposer_profil))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -228,6 +238,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let provisoire = rep.join("source.tmp");
     let (mut nom, mut dpi, mut format) = (String::new(), 720u32, None);
     let (mut mode, mut tous_les_traces, mut reperage) = (Mode::Imprimer, false, reperage::Reperage::Aucun);
+    let mut couleur = couleur::Couleur::default();
 
     loop {
         let champ = match form.next_field().await {
@@ -264,6 +275,23 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                     _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("mode_invalide", None)).await,
                 };
             }
+            Some(champ_profil @ ("profil_cmjn" | "profil_rvb" | "profil_sortie")) => {
+                let champ_profil = champ_profil.to_string();
+                let choix = champ.text().await.unwrap_or_default().trim().to_string();
+                let choix = (!choix.is_empty()).then_some(choix);
+                match champ_profil.as_str() {
+                    "profil_cmjn" => couleur.entree_cmjn = choix,
+                    "profil_rvb" => couleur.entree_rvb = choix,
+                    _ => couleur.sortie = choix,
+                }
+            }
+            Some("intention") => {
+                couleur.intention = match champ.text().await.ok().and_then(|t| t.trim().parse().ok()) {
+                    Some(i @ 0..=3) => i,
+                    _ => return abandon(&rep, StatusCode::BAD_REQUEST, ("profil_inadapte", None)).await,
+                };
+            }
+            Some("forcer_profils") => couleur.forcer = champ.text().await.is_ok_and(|t| t.trim() == "oui"),
             Some("fichier") => {
                 nom = champ.file_name().unwrap_or("sans nom").chars().take(200).collect();
                 match enregistrer(champ, &provisoire).await {
@@ -281,16 +309,20 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     if format == Format::Svg && mode == Mode::Imprimer {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("svg_decoupe_seulement", None)).await;
     }
-    // Rien n'est imprimé en découpe seule : pas de repères à poser.
+    // Rien n'est imprimé en découpe seule : ni repères ni couleur.
     if mode == Mode::Decouper {
         reperage = reperage::Reperage::Aucun;
+        couleur = couleur::Couleur::default();
+    }
+    if let Err(code) = couleur::verifier(&couleur, &couleur::lister(&etat.config.profils)) {
+        return abandon(&rep, StatusCode::BAD_REQUEST, (code, None)).await;
     }
     if let Err(e) = tokio::fs::rename(&provisoire, rep.join(format.fichier())).await {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
 
     let cree_le = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
+    let travail = Travail { id, nom, dpi, mode, format, tous_les_traces, reperage, couleur, statut: Statut::EnAttente, code_erreur: None, erreur: None, pages: vec![], envoi_decoupe: None, cree_le };
     if let Err(e) = ecrire(&etat.config.donnees, &travail) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
@@ -360,7 +392,10 @@ async fn traiter(etat: Partage, mut t: Travail) {
     let rep = dossier(donnees, t.id);
     let rendu = match t.mode {
         Mode::Imprimer => match preparer_impression(&rep, t.reperage).await {
-            Ok((pdf, mises)) => render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, etat.config.delai).await.map(|r| (Some(r.pages), mises)),
+            Ok((pdf, mises)) => {
+                let options = couleur::options_ghostscript(&t.couleur, &etat.config.profils);
+                render::rendre(&etat.config.gs, &pdf, &rep, t.dpi, &options, etat.config.delai).await.map(|r| (Some(r.pages), mises))
+            }
             Err(e) => Err(e),
         },
         Mode::Decouper => Ok((None, vec![])),
@@ -393,6 +428,29 @@ async fn traiter(etat: Partage, mut t: Travail) {
     }
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
+    }
+}
+
+async fn lister_profils(State(etat): State<Partage>) -> Json<Vec<couleur::Profil>> {
+    Json(couleur::lister(&etat.config.profils))
+}
+
+/// Dépose un profil ICC : nom contrôlé, en-tête ICC vérifié, 50 Mo au plus.
+async fn deposer_profil(State(etat): State<Partage>, mut form: Multipart) -> Response {
+    let Ok(Some(champ)) = form.next_field().await else { return refus(StatusCode::BAD_REQUEST, "aucun_fichier", None) };
+    let nom = champ.file_name().unwrap_or_default().to_string();
+    if !couleur::nom_valide(&nom) {
+        return refus(StatusCode::BAD_REQUEST, "profil_invalide", Some(nom));
+    }
+    let octets = match champ.bytes().await {
+        Ok(o) if o.len() <= 50 * 1024 * 1024 => o,
+        Ok(_) => return refus(StatusCode::BAD_REQUEST, "profil_invalide", Some("plus de 50 Mo".into())),
+        Err(e) => return refus(StatusCode::BAD_REQUEST, "envoi_interrompu", Some(e.to_string())),
+    };
+    let Some(profil) = couleur::lire_entete(&octets, &nom) else { return refus(StatusCode::BAD_REQUEST, "profil_invalide", None) };
+    match tokio::fs::write(etat.config.profils.join(&nom), &octets).await {
+        Ok(()) => (StatusCode::CREATED, Json(profil)).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
 }
 

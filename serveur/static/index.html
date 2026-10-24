@@ -20,6 +20,10 @@
   button.discret { background: none; color: var(--accent); border: 1px solid var(--trait); padding: 4px 10px; }
   button:disabled { opacity: .5; cursor: wait; }
   #message { width: 100%; margin: 0; min-height: 1.4em; }
+  fieldset { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; border: 1px solid var(--trait); border-radius: 6px; margin: 0; width: 100%; }
+  legend { font-size: 13px; color: var(--doux); padding: 0 4px; }
+  label.case { display: flex; align-items: center; gap: 6px; }
+  label.discret { color: var(--accent); cursor: pointer; }
   .erreur { color: var(--echec); }
   .travail { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; padding: 16px; margin-top: 16px; }
   .entete { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
@@ -44,6 +48,14 @@
     <label><span data-t="reperage"></span>
       <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option></select>
     </label>
+    <fieldset id="couleur"><legend data-t="couleur"></legend>
+      <label><span data-t="profil_cmjn"></span><select name="profil_cmjn" data-espace="CMYK"></select></label>
+      <label><span data-t="profil_rvb"></span><select name="profil_rvb" data-espace="RGB"></select></label>
+      <label><span data-t="profil_sortie"></span><select name="profil_sortie" data-espace="CMYK"></select></label>
+      <label><span data-t="intention"></span><select name="intention"></select></label>
+      <label class="case"><input type="checkbox" name="forcer_profils" value="oui"> <span data-t="forcer"></span></label>
+      <label class="discret"><span data-t="deposer"></span><input type="file" id="profil" accept=".icc,.icm" hidden></label>
+    </fieldset>
     <label><span data-t="fichier"></span> <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" required></label>
     <label><span data-t="resolution"></span>
       <select name="dpi"><option>360</option><option selected>720</option><option>1440</option></select>
@@ -58,6 +70,9 @@ const textes = {
   fr: {
     fichier: "Fichier PDF, AI ou SVG", resolution: "Résolution", mode: "Mode", imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
     traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
+    couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
+    intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
+    forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
     page: (n) => `Page ${n}`, supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", envoyer: "Envoyer au RIP", autre: "English",
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", plaque: (p) => `Plaque ${p}`,
@@ -72,6 +87,8 @@ const textes = {
       envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
+      profil_inconnu: "Profil ICC introuvable sur le serveur.", profil_inadapte: "Profil ICC inadapté (CMJN attendu en entrée CMJN et en sortie, RVB en entrée RVB).",
+      profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", travail_occupe: "Ce travail est en cours de rendu ou d'envoi.", envoi_en_cours: "Un envoi au plotter est déjà en cours.",
       envoi_decoupe_echoue: "L'envoi au plotter a échoué.", interrompu: "Rendu interrompu par un arrêt du serveur : renvoyer le fichier.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
@@ -80,6 +97,9 @@ const textes = {
   en: {
     fichier: "PDF, AI or SVG file", resolution: "Resolution", mode: "Mode", imprimer: "Print (and cut)", decouper: "Cut only",
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
+    couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
+    intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
+    forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
     page: (n) => `Page ${n}`, supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", envoyer: "Send to RIP", autre: "Français",
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", plaque: (p) => `${p} plate`,
@@ -94,6 +114,8 @@ const textes = {
       envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
       erreur_interne: "Server error.", introuvable: "Not found.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
+      profil_inconnu: "ICC profile not found on the server.", profil_inadapte: "Unsuitable ICC profile (CMYK expected for CMYK input and output, RGB for RGB input).",
+      profil_invalide: "This file is not an ICC profile (.icc or .icm).",
       rien_a_decouper: "This job has no cut path.", travail_occupe: "This job is being rendered or sent.", envoi_en_cours: "A cutter job is already being sent.",
       envoi_decoupe_echoue: "Sending to the cutter failed.", interrompu: "Rendering stopped by a server shutdown: send the file again.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
@@ -106,10 +128,44 @@ const T = () => textes[langue];
 const form = document.getElementById("envoi"), msg = document.getElementById("message"), liste = document.getElementById("travaux");
 const boutonLangue = document.getElementById("langue");
 
+let profils = [];
+async function chargerProfils() {
+  try { profils = await (await fetch("/api/profils")).json(); } catch { profils = []; }
+  remplirProfils();
+}
+
+/** Listes de profils filtrées par espace ; le choix courant est gardé au changement de langue. */
+function remplirProfils() {
+  document.querySelectorAll("#couleur select[data-espace]").forEach((s) => {
+    const garde = s.value;
+    s.replaceChildren(el("option", { value: "" }, T().defaut),
+      ...profils.filter((p) => p.espace === s.dataset.espace).map((p) => el("option", { value: p.fichier, title: p.description }, p.description || p.fichier)));
+    s.value = garde;
+  });
+  const i = form.intention, garde = i.value || "0";
+  i.replaceChildren(...T().intentions.map((n, k) => el("option", { value: String(k) }, n)));
+  i.value = garde;
+}
+
+document.getElementById("profil").addEventListener("change", async (e) => {
+  const fichier = e.target.files[0];
+  if (!fichier) return;
+  const corps = new FormData(); corps.append("fichier", fichier);
+  try {
+    const r = await fetch("/api/profils", { method: "POST", body: corps });
+    const c = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(texteErreur(c.code, c.detail));
+    msg.className = ""; msg.textContent = T().depose(c.fichier);
+    await chargerProfils();
+  } catch (err) { msg.className = "erreur"; msg.textContent = err.message; }
+  e.target.value = "";
+});
+
 function appliquerLangue() {
   document.documentElement.lang = langue;
   document.querySelectorAll("[data-t]").forEach((n) => { n.textContent = T()[n.dataset.t]; });
   boutonLangue.textContent = T().autre;
+  remplirProfils();
   rafraichir();
 }
 boutonLangue.addEventListener("click", () => {
@@ -216,6 +272,7 @@ async function decouper(url, bouton) {
 }
 
 appliquerLangue();
+chargerProfils();
 setInterval(rafraichir, 3000);
 </script>
 </body>

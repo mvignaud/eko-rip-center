@@ -16,6 +16,12 @@ jobs:
         with: { components: clippy }
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y ghostscript
+      - name: Syntaxe JavaScript des pages (le test de traduction ne voit pas une chaîne cassée)
+        run: |
+          for f in serveur/static/index.html client/ui/index.html; do
+            python3 -c "import re,sys; print(re.search(r'<script>(.*)</script>', open(sys.argv[1]).read(), re.S).group(1))" "$f" > /tmp/page.js
+            node --check /tmp/page.js || { echo "erreur de syntaxe dans $f"; exit 1; }
+          done
       - run: cargo clippy -p eko-rip-serveur --all-targets --locked -- -D warnings
       - run: cargo test -p eko-rip-serveur --locked
       - run: cargo install cargo-deb --locked

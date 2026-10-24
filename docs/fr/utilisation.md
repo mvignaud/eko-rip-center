@@ -26,6 +26,18 @@ espaces et tirets indifférents). La fiche du travail indique leur nombre et pro
 **Télécharger le fichier .plt** (HP-GL, 1/40 mm, origine au coin bas gauche de la
 page). Un ton de découpe à 0 % n'est pas découpé.
 
+## Couleur
+
+Bloc **Couleur** (mode Imprimer) :
+- **Ajouter un profil ICC…** dépose un profil `.icc` ou `.icm` sur le serveur (profils de
+  support, profil d'entrée Epson Wide Gamut…).
+- **Entrée CMJN / Entrée RVB** : profil appliqué aux données sans profil (ou à toutes,
+  avec **Ignorer les profils du PDF**).
+- **Support (sortie)** : profil du support imprimé ; l'aperçu simule son rendu.
+- **Intention** : perceptuelle, colorimétrique relative, saturation, absolue.
+
+Les tons directs (`White`, `Metallic`…) ne sont jamais convertis.
+
 ## Repérage pour le Kona
 
 En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :

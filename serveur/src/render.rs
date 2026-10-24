@@ -22,17 +22,20 @@ fn prefixe(page: usize) -> String {
 }
 
 /// Rend `pdf` dans `dossier` : plaques pleine définition (`prod/`), plaques et
-/// composites basse définition pour l'aperçu (`apercu/`).
-pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, delai: Duration) -> Result<Rendu, String> {
+/// composites basse définition pour l'aperçu (`apercu/`). `options` : réglages de
+/// couleur (profils ICC, intention), appliqués aussi aux aperçus.
+pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[String], delai: Duration) -> Result<Rendu, String> {
     let prod = dossier.join("prod");
     let apercu = dossier.join("apercu");
     for d in [&prod, &apercu] {
         tokio::fs::create_dir_all(d).await.map_err(|e| e.to_string())?;
     }
 
-    ghostscript(gs, pdf, "tiffsep", dpi, &prod.join("plaque-%03d.tif"), delai).await?;
-    ghostscript(gs, pdf, "tiffsep", 50, &apercu.join("plaque-%03d.tif"), delai).await?;
-    ghostscript(gs, pdf, "png16m", 50, &apercu.join("composite-%03d.png"), delai).await?;
+    ghostscript(gs, pdf, "tiffsep", dpi, options, &prod.join("plaque-%03d.tif"), delai).await?;
+    ghostscript(gs, pdf, "tiffsep", 50, options, &apercu.join("plaque-%03d.tif"), delai).await?;
+    // L'aperçu est en RVB : le profil du support (CMJN) y sert d'épreuve écran.
+    let epreuve: Vec<String> = options.iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
+    ghostscript(gs, pdf, "png16m", 50, &epreuve, &apercu.join("composite-%03d.png"), delai).await?;
 
     let pages = plaques_par_page(&prod)?;
     for (i, plaques) in pages.iter().enumerate() {
@@ -46,11 +49,12 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, delai: Durat
     Ok(Rendu { pages })
 }
 
-async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, sortie: &Path, delai: Duration) -> Result<(), String> {
+async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, options: &[String], sortie: &Path, delai: Duration) -> Result<(), String> {
     let mut cmd = Command::new(gs);
     cmd.args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE"])
         .arg(format!("-sDEVICE={device}"))
         .arg(format!("-r{dpi}"))
+        .args(options)
         .arg(format!("-sOutputFile={}", sortie.display()))
         .arg(pdf)
         .kill_on_drop(true);
@@ -156,7 +160,7 @@ mod tests {
         std::fs::write(&pdf, pdf_deux_pages()).unwrap();
 
         let dpi = 72;
-        let r = rendre("gs", &pdf, &dossier, dpi, Duration::from_secs(60)).await.unwrap();
+        let r = rendre("gs", &pdf, &dossier, dpi, &[], Duration::from_secs(60)).await.unwrap();
 
         assert_eq!(r.pages.len(), 2);
         assert_eq!(r.pages[0], ["Black", "Cyan", "Magenta", "Silver", "White", "Yellow"]);
@@ -172,6 +176,22 @@ mod tests {
         assert!(chemin_apercu_plaque(&dossier, 1, "White").exists());
         assert!(chemin_composite(&dossier, 2).exists());
 
+        std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    /// Un profil de sortie convertit les couleurs : le cyan à 20 % ne reste pas tel quel.
+    #[tokio::test]
+    async fn le_profil_de_sortie_convertit() {
+        let dossier = std::env::temp_dir().join(format!("eko-rip-icc-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+        let pdf = dossier.join("source.pdf");
+        std::fs::write(&pdf, pdf_deux_pages()).unwrap();
+        let profil = crate::couleur::tests::profils_ghostscript().join("ps_cmyk.icc");
+        let options = [format!("-sOutputICCProfile={}", profil.display())];
+        rendre("gs", &pdf, &dossier, 72, &options, Duration::from_secs(60)).await.unwrap();
+        let (c, m) = (pixel(&dossier, 1, "Cyan", 50.0, 72), pixel(&dossier, 1, "Magenta", 50.0, 72));
+        assert_ne!((c, m), (204, 102), "valeurs inchangées : le profil n'a pas été appliqué");
+        assert_eq!(pixel(&dossier, 1, "White", 140.0, 72), 0, "un ton direct n'est pas converti");
         std::fs::remove_dir_all(&dossier).unwrap();
     }
 }
