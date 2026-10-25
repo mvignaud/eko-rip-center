@@ -29,11 +29,18 @@ pub struct Reglages {
     /// Couper aussi les tracés des calques non imprimables (ignorés par défaut, avec alerte).
     #[serde(default)]
     pub calques_non_imprimables: bool,
+    /// Tracés ouverts tolérés (roadmap 4.11, actif par défaut : évents d'une bâche) ; sinon
+    /// ils ne sont pas coupés, avec alerte.
+    #[serde(default = "vrai")]
+    pub traces_ouverts: bool,
+    /// Tri des tracés (intérieurs d'abord, plus proche voisin) ; sinon l'ordre de création.
+    #[serde(default = "vrai")]
+    pub trier: bool,
 }
 
 impl Default for Reglages {
     fn default() -> Self {
-        Reglages { prefixes: PREFIXES_DEFAUT.map(String::from).to_vec(), calques_non_imprimables: false }
+        Reglages { prefixes: PREFIXES_DEFAUT.map(String::from).to_vec(), calques_non_imprimables: false, traces_ouverts: true, trier: true }
     }
 }
 
@@ -860,8 +867,10 @@ pub fn reprendre_ancien_reglage(couches: &mut [Couche], reglage: &str) -> bool {
 }
 
 /// HP-GL de chaque couche active qui a des tracés, dans l'ordre des couches : `SPn;` puis
-/// ses tracés (intérieurs d'abord, plus proche voisin), unités 1/100 mm, sans `IN;` ni fin.
-pub fn blocs(traces: &[Trace], couches: &[Couche]) -> Vec<(Couche, String)> {
+/// ses tracés (intérieurs d'abord, plus proche voisin, sauf tri désactivé : ordre de
+/// création ; les tracés ouverts seulement s'ils sont tolérés), unités 1/100 mm, sans `IN;`
+/// ni fin.
+pub fn blocs(traces: &[Trace], couches: &[Couche], r: &Reglages) -> Vec<(Couche, String)> {
     let u = |(x, y): (f64, f64)| ((x * UNITES_PAR_PT).round() as i64, (y * UNITES_PAR_PT).round() as i64);
     let mut toutes = couches.to_vec();
     accorder(&mut toutes, &tons(traces));
@@ -869,12 +878,12 @@ pub fn blocs(traces: &[Trace], couches: &[Couche]) -> Vec<(Couche, String)> {
         .into_iter()
         .filter(|c| c.active)
         .filter_map(|c| {
-            let de: Vec<&Trace> = traces.iter().filter(|t| meme_couche(&t.ton, &c.nom)).collect();
+            let de: Vec<&Trace> = traces.iter().filter(|t| meme_couche(&t.ton, &c.nom) && (t.ferme || r.traces_ouverts)).collect();
             if de.is_empty() {
                 return None;
             }
             let mut sortie = format!("SP{};", outil(&c.nom));
-            for t in ordonner(&de) {
+            for t in if r.trier { ordonner(&de) } else { de } {
                 let (x0, y0) = u(t.points[0]);
                 sortie += &format!("PU{x0},{y0};PD");
                 let mut suite: Vec<String> = t.points[1..].iter().map(|p| u(*p)).map(|(x, y)| format!("{x},{y}")).collect();
@@ -933,8 +942,8 @@ pub fn depuis_hpgl(texte: &str) -> Vec<Trace> {
 }
 
 /// Fichier HP-GL : les couches actives dans leur ordre, un `SP` par couche.
-pub fn hpgl(traces: &[Trace], couches: &[Couche]) -> String {
-    let corps: String = blocs(traces, couches).into_iter().map(|(_, b)| b).collect();
+pub fn hpgl(traces: &[Trace], couches: &[Couche], r: &Reglages) -> String {
+    let corps: String = blocs(traces, couches, r).into_iter().map(|(_, b)| b).collect();
     format!("IN;{corps}PU;SP0;")
 }
 
@@ -1146,7 +1155,7 @@ mod tests {
             Trace { ton: "Creasing".into(), points: vec![(0.0, 0.0), (0.0, 72.0)], ferme: false },
         ];
         // 72 pt = 25,4 mm = 2540 unités.
-        assert_eq!(hpgl(&traces, &[]), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;", "rainage avant la coupe");
+        assert_eq!(hpgl(&traces, &[], &Reglages::default()), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;", "rainage avant la coupe");
     }
 
     #[test]
@@ -1227,18 +1236,18 @@ mod tests {
         assert_eq!(noms, ["Kisscut", "CutContour", "Thrucut"], "mi-chair avant contour, coupe à travers en dernier ; « kiss cut » = Kisscut");
         // 72 pt = 2540 unités : chaque bloc commence par son outil, puis ses tracés.
         let depart = |h: &str, x: i64| h.find(&format!("PU{x},0;")).unwrap_or_else(|| panic!("{x} absent de {h}"));
-        let h = hpgl(&traces, &couches);
+        let h = hpgl(&traces, &couches, &Reglages::default());
         assert!(h.starts_with("IN;SP1;") && h.ends_with("PU;SP0;"));
         assert_eq!(h.matches("SP1;").count(), 3, "un bloc par couche : {h}");
         assert!(depart(&h, 7056) < depart(&h, 3528) && depart(&h, 3528) < depart(&h, 0), "Kisscut, CutContour, Thrucut : {h}");
         assert!(depart(&h, 7056) < depart(&h, 10583), "les deux Kisscut ensemble");
         // Ordre inversé : HP-GL inversé.
         couches.reverse();
-        let inverse = hpgl(&traces, &couches);
+        let inverse = hpgl(&traces, &couches, &Reglages::default());
         assert!(depart(&inverse, 0) < depart(&inverse, 3528) && depart(&inverse, 3528) < depart(&inverse, 7056), "{inverse}");
         // Couche décochée : absente.
         couches[0].active = false;
-        assert!(!hpgl(&traces, &couches).contains("PU0,0;"));
+        assert!(!hpgl(&traces, &couches, &Reglages::default()).contains("PU0,0;"));
         // Un nouveau ton au rendu suivant prend son rang sans déranger l'ordre choisi.
         accorder(&mut couches, &["Creasing"]);
         assert_eq!(couches[0].nom, "Creasing");
@@ -1317,12 +1326,36 @@ mod tests {
         assert!(extraire_avec(&pdf_controle(cas[1].1, false), true, &r).unwrap()[0].signaux.is_empty());
     }
 
+    /// 4.11 : tracés ouverts tolérés par défaut, sinon absents du HP-GL ; tri désactivé :
+    /// l'ordre de création, même pour un trou créé après son contour.
+    #[test]
+    fn traces_ouverts_et_tri_desactivable() {
+        let carre = |x: f64, c: f64| Trace { ton: "CutContour".into(), points: vec![(x, x), (x + c, x), (x + c, x + c), (x, x + c)], ferme: true };
+        let event = Trace { ton: "CutContour".into(), points: vec![(500.0, 0.0), (500.0, 72.0)], ferme: false };
+        let traces = [carre(0.0, 288.0), carre(72.0, 72.0), event];
+        let r = Reglages::default();
+        assert!(r.traces_ouverts && r.trier, "actifs par défaut");
+        let ouvert = "PU17639,0;PD17639,2540;";
+        let h = hpgl(&traces, &[], &r);
+        assert!(h.contains(ouvert), "tracé ouvert coupé : {h}");
+        // Trié : le trou (en 72 pt = 2540) avant le contour qui le contient (en 0).
+        assert!(h.find("PU2540,2540;").unwrap() < h.find("PU0,0;").unwrap(), "{h}");
+        let h = hpgl(&traces, &[], &Reglages { traces_ouverts: false, ..r.clone() });
+        assert!(!h.contains("PU17639"), "tracé ouvert non toléré : {h}");
+        assert_eq!(h.matches("PU").count(), 3, "deux contours fermés et le PU de fin : {h}");
+        let h = hpgl(&traces, &[], &Reglages { trier: false, ..r.clone() });
+        assert!(h.find("PU0,0;").unwrap() < h.find("PU2540,2540;").unwrap() && h.find("PU2540,2540;").unwrap() < h.find(ouvert).unwrap(), "ordre de création : {h}");
+        // decoupe.json d'avant ces options : les deux restent actives.
+        let ancien: Reglages = serde_json::from_str(r#"{"prefixes": ["CutContour"]}"#).unwrap();
+        assert!(ancien.traces_ouverts && ancien.trier && !ancien.calques_non_imprimables);
+    }
+
     #[test]
     fn hpgl_d_avant_les_couches_relu_a_l_identique() {
         let ancien = "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU5000,0;PD6000,0;PU;SP0;";
         let traces = depuis_hpgl(ancien);
         assert_eq!(traces.iter().map(|t| (t.ton.as_str(), t.ferme)).collect::<Vec<_>>(), [("Creasing", false), ("CutContour", true), ("CutContour", false)]);
-        assert_eq!(hpgl(&traces, &[]), ancien, "mêmes coordonnées, même ordre");
+        assert_eq!(hpgl(&traces, &[], &Reglages::default()), ancien, "mêmes coordonnées, même ordre");
     }
 
     #[test]

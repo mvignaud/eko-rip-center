@@ -582,7 +582,8 @@ const textes = {
     mono_couche: "Une couche à la fois", note_mono_couche: "Machine sans changement d'outil ni de réglage en cours de coupe : une sortie par couche, la suivante retenue jusqu'à « Reprendre ».", couche_de_sortie: (n) => `couche ${n}`,
     systeme_decoupe: "Découpe", prefixes_decoupe: "Préfixes de découpe (séparés par ;)", note_prefixes: "Un ton est de découpe si son nom commence par un préfixe (CutContour reconnaît CutContour1 et CutContourKissCut, pas 1CutContour ; sans casse, espaces ni tirets). Pris aux rendus suivants : relancer un travail déjà rendu.",
     ancien_reglage_coupe: (n) => `Ancien réglage de coupe du travail entier : « ${n} ». Il va à la couche du même nom, ou à la seule couche ; sinon, le choisir couche par couche puis enregistrer.`,
-    calques_non_imprimables: "Couper aussi les tracés des calques non imprimables", decoupe_enregistree: "Réglages de découpe enregistrés.",
+    calques_non_imprimables: "Couper aussi les tracés des calques non imprimables",
+    traces_ouverts: "Autoriser les tracés ouverts (évents de bâche)", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
@@ -593,6 +594,7 @@ const textes = {
       decoupe_ton_rvb: (d, p) => `Page ${p} : le ton de découpe ${d} est défini en RVB ; le définir en CMJN (ton direct).`,
       decoupe_avec_fond: (d, p) => `Page ${p} : le tracé ${d} a un fond ; un tracé de découpe est un filet seul, sans remplissage.`,
       decoupe_touche_bord: (d, p) => `Page ${p} : un tracé ${d} touche le bord de la page (boîte englobante) ; l'en écarter.`,
+      decoupe_traces_ouverts: (d, p) => `Page ${p} : ${d} tracé(s) ouvert(s) non coupé(s) — les tracés ouverts ne sont pas tolérés (Système, Découpe).`,
       decoupe_pas_au_premier_plan: (d, p) => `Page ${p} : un tracé ${d} est recouvert par l'image ; le mettre sur le calque du dessus.`,
       decoupe_contour_vectorise: (d, p) => `Page ${p} : le tracé ${d} est un contour vectorisé (filet devenu surface) : il serait coupé deux fois. Garder le filet.`,
       decoupe_sans_prefixe: (d) => `Une découpeuse est choisie, mais aucun ton de découpe n'est reconnu (tons du fichier : ${d}). Le nom doit commencer par un préfixe de découpe (Système > Découpe).`,
@@ -778,7 +780,8 @@ const textes = {
     mono_couche: "One layer at a time", note_mono_couche: "Machine that cannot change tool or setting during a cut: one output per layer, the next one held until \"Resume\".", couche_de_sortie: (n) => `layer ${n}`,
     systeme_decoupe: "Cutting", prefixes_decoupe: "Cut prefixes (separated by ;)", note_prefixes: "A spot colour is a cut one if its name starts with a prefix (CutContour matches CutContour1 and CutContourKissCut, not 1CutContour; case, spaces and dashes ignored). Used by the next renderings: restart a job already rendered.",
     ancien_reglage_coupe: (n) => `Former cut setting of the whole job: “${n}”. It goes to the layer of the same name, or to the only layer; otherwise choose it layer by layer, then save.`,
-    calques_non_imprimables: "Also cut the paths of non-printing layers", decoupe_enregistree: "Cutting settings saved.",
+    calques_non_imprimables: "Also cut the paths of non-printing layers",
+    traces_ouverts: "Allow open paths (banner vents)", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
@@ -789,6 +792,7 @@ const textes = {
       decoupe_ton_rvb: (d, p) => `Page ${p}: the cut spot colour ${d} is defined in RGB; define it in CMYK (spot colour).`,
       decoupe_avec_fond: (d, p) => `Page ${p}: the ${d} path has a fill; a cut path is a stroke only, without fill.`,
       decoupe_touche_bord: (d, p) => `Page ${p}: a ${d} path touches the page edge (bounding box); move it away.`,
+      decoupe_traces_ouverts: (d, p) => `Page ${p}: ${d} open path(s) not cut — open paths are not allowed (System, Cutting).`,
       decoupe_pas_au_premier_plan: (d, p) => `Page ${p}: a ${d} path is covered by the artwork; put it on the top layer.`,
       decoupe_contour_vectorise: (d, p) => `Page ${p}: the ${d} path is an outlined stroke (a stroke turned into a shape): it would be cut twice. Keep the stroke.`,
       decoupe_sans_prefixe: (d) => `A cutter is chosen, but no cut spot colour is recognised (colours in the file: ${d}). The name must start with a cut prefix (System > Cutting).`,
@@ -1201,13 +1205,17 @@ function formulaireDecoupe() {
   if (!r) return null;
   const prefixes = el("input", { name: "prefixes", value: r.prefixes.join(" ; "), style: "width: 100%" });
   const calques = el("input", { type: "checkbox", name: "calques_non_imprimables", checked: !!r.calques_non_imprimables });
+  const ouverts = el("input", { type: "checkbox", name: "traces_ouverts", checked: r.traces_ouverts !== false });
+  const trier = el("input", { type: "checkbox", name: "trier", checked: r.trier !== false });
   const f = el("form", { className: "admin", id: "reglages-decoupe" }, el("h3", {}, T().systeme_decoupe),
     el("label", {}, T().prefixes_decoupe, prefixes), el("p", { className: "meta", style: "margin: 0" }, T().note_prefixes),
     el("label", { className: "case" }, calques, " ", T().calques_non_imprimables),
+    el("label", { className: "case" }, ouverts, " ", T().traces_ouverts),
+    el("label", { className: "case" }, trier, " ", T().trier_traces),
     el("div", { className: "ligne" }, el("button", { type: "submit" }, T().enregistrer)));
   f.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const lu = await api("/api/decoupe", json("POST", { prefixes: prefixes.value.split(";").map((x) => x.trim()).filter(Boolean), calques_non_imprimables: calques.checked }));
+    const lu = await api("/api/decoupe", json("POST", { prefixes: prefixes.value.split(";").map((x) => x.trim()).filter(Boolean), calques_non_imprimables: calques.checked, traces_ouverts: ouverts.checked, trier: trier.checked }));
     if (lu) { reglagesDecoupe = lu; dire(T().decoupe_enregistree); afficherSysteme(); }
   });
   return f;

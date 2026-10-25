@@ -942,6 +942,15 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 let par_couche: Vec<std::collections::BTreeMap<String, usize>> = decoupes.iter().map(|d| t.couches_decoupe.iter().map(|c| (c.nom.clone(), d.traces.iter().filter(|x| decoupe::meme_couche(&x.ton, &c.nom)).count())).filter(|(_, n)| *n > 0).collect()).collect();
                 t.alertes.retain(|a| !a.code.starts_with("decoupe_"));
                 t.alertes.extend(alertes_decoupe(&rep, &t, traces.iter().sum()).await);
+                // Tracés ouverts non tolérés (roadmap 4.11) : ils ne seront pas coupés, on le dit.
+                if !decoupe::reglages().traces_ouverts {
+                    for (i, d) in decoupes.iter().enumerate() {
+                        let ouverts = d.traces.iter().filter(|x| !x.ferme).count();
+                        if ouverts > 0 {
+                            t.alertes.push(controle::Alerte { code: "decoupe_traces_ouverts".into(), page: Some(i + 1), detail: ouverts.to_string() });
+                        }
+                    }
+                }
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
                 let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
                 let geometrie = geometries(&rep, &t, &mises);
@@ -2315,7 +2324,7 @@ fn ecrire_coupes(rep: &std::path::Path, t: &Travail) -> std::io::Result<()> {
     for (i, p) in t.pages.iter().enumerate() {
         let Some(traces) = lire_traces(rep, i + 1) else { continue };
         let pose = posee(t, p, &traces);
-        machines::ecrire_atomique(&fichier_plt(rep, i + 1), decoupe::hpgl(&pose.traces, &t.couches_decoupe).as_bytes()).map_err(std::io::Error::other)?;
+        machines::ecrire_atomique(&fichier_plt(rep, i + 1), decoupe::hpgl(&pose.traces, &t.couches_decoupe, &decoupe::reglages()).as_bytes()).map_err(std::io::Error::other)?;
         std::fs::create_dir_all(rep.join("apercu"))?;
         let d = decoupe::Decoupe { traces: pose.traces, largeur: pose.taille.0, hauteur: pose.taille.1, signaux: vec![] };
         machines::ecrire_atomique(&fichier_svg(rep, i + 1), decoupe::apercu_svg(&d).as_bytes()).map_err(std::io::Error::other)?;
@@ -2979,7 +2988,7 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
 fn pour_la_machine(traces: &[decoupe::Trace], t: &Travail, p: &Page, m: &machines::Machine, seule: Option<&str>) -> Result<String, String> {
     let pose = posee(t, p, traces);
     let mut parties = vec![];
-    for (c, bloc) in decoupe::blocs(&pose.traces, &t.couches_decoupe).into_iter().filter(|(c, _)| seule.is_none_or(|n| decoupe::meme_couche(n, &c.nom))) {
+    for (c, bloc) in decoupe::blocs(&pose.traces, &t.couches_decoupe, &decoupe::reglages()).into_iter().filter(|(c, _)| seule.is_none_or(|n| decoupe::meme_couche(n, &c.nom))) {
         let reglage = m.reglage_couche(&c).map_err(|n| format!("couche « {} » : réglage « {n} » absent de {}", c.nom, m.nom))?;
         let mut texte = machines::changer_de_pas(&bloc, m.pas_mm(), m.decalage_mm);
         if let Some(r) = reglage.filter(|r| !r.motif_mm.is_empty()) {

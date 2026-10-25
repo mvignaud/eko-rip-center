@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(p.taille, (300.0, 600.0));
         assert_eq!(p.traces[0].points, [(250.0, 50.0), (250.0, 150.0), (150.0, 150.0), (150.0, 50.0)]);
         // 1 pt = 35,28 unités de 0,01 mm : 250 pt → 8819, 150 → 5292, 50 → 1764.
-        let h = crate::decoupe::hpgl(&p.traces, &[]);
+        let h = crate::decoupe::hpgl(&p.traces, &[], &Default::default());
         assert_eq!(h, "IN;SP1;PU8819,1764;PD8819,5292,5292,5292,5292,1764,8819,1764;PU;SP0;");
         for (r, attendu) in [(0, (50.0, 50.0)), (180, (450.0, 150.0)), (270, (50.0, 450.0))] {
             let p = Mise { rotation: r, ..Default::default() }.appliquer(&[carre(50.0, 50.0, 100.0)], (600.0, 300.0), None);
