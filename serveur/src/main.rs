@@ -9,6 +9,7 @@ mod controle;
 mod coupe;
 mod couverture;
 mod decoupe;
+mod detourage;
 mod edition;
 mod erp;
 mod etat;
@@ -139,6 +140,9 @@ struct Page {
     /// travaux d'avant la mise en coupe (`taille_coupe`).
     #[serde(default)]
     taille_coupe_pt: Option<[f64; 2]>,
+    /// Contours ajoutés par le détourage automatique (roadmap 4.14), comptés dans les tracés.
+    #[serde(default)]
+    detourage: usize,
     /// Où l'image éditée se trouve sur la page rendue, pour les outils de la visionneuse.
     #[serde(default)]
     geometrie: Option<Geometrie>,
@@ -330,6 +334,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/reglages", axum::routing::post(modifier_reglages))
         .route("/api/travaux/{id}/couches", axum::routing::post(enregistrer_couches))
         .route("/api/travaux/{id}/coupe", axum::routing::post(enregistrer_mise))
+        .route("/api/travaux/{id}/pages/{page}/detourage", axum::routing::post(detourer_page).delete(retirer_detourage))
         .route("/api/decoupe", get(lire_decoupe).post(enregistrer_decoupe))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -984,6 +989,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             hauteur_mm: mesure.hauteur_mm,
                             cadre_pt: mises.get(i).and_then(|m| m.coins),
                             taille_coupe_pt: decoupes.get(i).map(|d| [d.largeur, d.hauteur]),
+                            detourage: 0,
                             reperage: mises.get(i).map(|m| m.reperage),
                             geometrie: geometrie.get(i).copied().flatten(),
                             tuile: tuiles.get(i).cloned().flatten().map(|t| mosaique::Tuile { decalage_mm: mises.get(i).map_or([0.0; 2], |m| [m.decalage.0 / imbrication::PT_PAR_MM, m.decalage.1 / imbrication::PT_PAR_MM]), ..t }),
@@ -2213,9 +2219,32 @@ fn fichier_traces(rep: &std::path::Path, page: usize) -> PathBuf {
     rep.join("prod").join(format!("decoupe-{page:03}.json"))
 }
 
+/// Contours acceptés du détourage automatique (`prod/detourage-NNN.json`, roadmap 4.14) ;
+/// effacés avec `prod/` par un nouveau rendu (l'image a pu changer).
+fn fichier_detourage(rep: &std::path::Path, page: usize) -> PathBuf {
+    rep.join("prod").join(format!("detourage-{page:03}.json"))
+}
+
+/// Tracés de la page : ceux du fichier, puis ceux du détourage accepté.
 fn lire_traces(rep: &std::path::Path, page: usize) -> Option<Vec<decoupe::Trace>> {
+    let detoures: Vec<decoupe::Trace> = std::fs::read(fichier_detourage(rep, page)).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or_default();
+    // Le `.plt` porte déjà le détourage : on ne le relit pas s'il y en a un.
+    match (lire_traces_du_fichier(rep, page, detoures.is_empty()), detoures.is_empty()) {
+        (Some(mut t), _) => {
+            t.extend(detoures);
+            Some(t)
+        }
+        (None, false) => Some(detoures),
+        (None, true) => None,
+    }
+}
+
+fn lire_traces_du_fichier(rep: &std::path::Path, page: usize, relire_plt: bool) -> Option<Vec<decoupe::Trace>> {
     if let Ok(o) = std::fs::read(fichier_traces(rep, page)) {
         return serde_json::from_slice(&o).ok();
+    }
+    if !relire_plt {
+        return None;
     }
     // Travail rendu avant les couches (sans ce JSON) : son `.plt` est exactement ce que
     // l'ancienne version envoyait ; relu en tracés (une couche par outil), il redonne les
@@ -2519,6 +2548,117 @@ fn enregistrer_coupe(donnees: &std::path::Path, t: Travail) -> Response {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
     Json(t).into_response()
+}
+
+#[derive(Deserialize)]
+struct DemandeDetourage {
+    #[serde(flatten)]
+    reglage: detourage::Detourage,
+    /// Faux : aperçu seulement ; vrai : les contours deviennent des tracés de la page.
+    #[serde(default)]
+    accepter: bool,
+}
+
+/// Compte des tracés de la page `n` (et des couches) refait après un détourage.
+fn recompter(t: &mut Travail, rep: &std::path::Path, n: usize) {
+    let traces = lire_traces(rep, n).unwrap_or_default();
+    decoupe::accorder(&mut t.couches_decoupe, &decoupe::tons(&traces));
+    let par_couche = t.couches_decoupe.iter().map(|c| (c.nom.clone(), traces.iter().filter(|x| decoupe::meme_couche(&x.ton, &c.nom)).count())).filter(|(_, k)| *k > 0).collect();
+    let detoures = std::fs::read(fichier_detourage(rep, n)).ok().and_then(|o| serde_json::from_slice::<Vec<decoupe::Trace>>(&o).ok()).map_or(0, |v| v.len());
+    if let Some(p) = t.pages.get_mut(n - 1) {
+        (p.traces_decoupe, p.traces_par_couche, p.detourage) = (traces.len(), par_couche, detoures);
+    }
+}
+
+/// Détourage automatique d'une page imprimée (roadmap 4.14) : la page du PDF rendu (tons de
+/// découpe neutralisés) seuillée sur le blanc, à l'endroit où elle est posée (repérage).
+/// Aperçu (`accepter` faux) : le nombre de contours et leur aperçu SVG ; accepté : ils
+/// deviennent des tracés `CutContour` de la page, fichiers de coupe refaits.
+async fn detourer_page(State(etat): State<Partage>, Chemin((id, n)): Chemin<(Uuid, usize)>, Json(d): Json<DemandeDetourage>) -> Response {
+    if let Err(code) = d.reglage.verifier() {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    let donnees = &etat.config.donnees;
+    let Some((mut t, p)) = lire_page(donnees, id, n) else { return introuvable() };
+    if t.format != Format::Pdf || t.demande.mode != Mode::Imprimer || !matches!(t.statut, Statut::Termine) {
+        return refus(StatusCode::CONFLICT, "detourage_impossible", None);
+    }
+    if d.accepter && let Err(r) = coupe_modifiable(&etat, id) {
+        return *r;
+    }
+    let rep = dossier(donnees, id);
+    let (gs, delai) = (etat.config.gs.clone(), etat.config.delai);
+    let interne = |e: String| refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e));
+    let Ok(pdf) = tokio::fs::read(rep.join(Format::Pdf.fichier())).await else { return introuvable() };
+    let prepare = tokio::task::spawn_blocking(move || -> Result<(Vec<u8>, imbrication::Taille), String> { Ok((decoupe::neutraliser(&pdf)?.0, imbrication::taille_page(&pdf, n)?)) }).await;
+    let (neutre, taille) = match prepare {
+        Ok(Ok(x)) => x,
+        Ok(Err(e)) => return interne(e),
+        Err(e) => return interne(e.to_string()),
+    };
+    // Posée comme au rendu : décalée par le repérage de la page.
+    let origine = p.reperage.filter(|r| *r != reperage::Reperage::Aucun).map_or((0.0, 0.0), |r| reperage::mise_en_page(r, taille.largeur, taille.hauteur, 0).decalage);
+    let dpi = detourage::dpi_pour(taille.largeur, taille.hauteur);
+    let (source, image) = (rep.join("detourage.pdf"), rep.join("detourage.png"));
+    let rendu = async {
+        tokio::fs::write(&source, &neutre).await.map_err(|e| e.to_string())?;
+        let pages = [format!("-dFirstPage={n}"), format!("-dLastPage={n}")];
+        render::ghostscript(&gs, &source, "png16m", dpi.round() as u32, &pages, &image, delai).await?;
+        let reglage = d.reglage;
+        let image = image.clone();
+        tokio::task::spawn_blocking(move || -> Result<Vec<decoupe::Trace>, String> {
+            let img = image::open(&image).map_err(|e| e.to_string())?.to_rgb8();
+            let (l, h) = (img.width() as usize, img.height() as usize);
+            // Résolution vraie de l'image (Ghostscript arrondit le format en pixels).
+            Ok(detourage::detourer(img.as_raw(), l, h, l as f64 * 72.0 / taille.largeur, &reglage, origine))
+        })
+        .await
+        .map_err(|e| e.to_string())?
+    }
+    .await;
+    let _ = tokio::fs::remove_file(&source).await;
+    let _ = tokio::fs::remove_file(&image).await;
+    let traces = match rendu {
+        Ok(t) => t,
+        Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "rendu_echoue", Some(e)),
+    };
+    if !d.accepter {
+        let base = lire_traces(&rep, n).unwrap_or_default();
+        let (l, h) = taille_coupe(&p, &base);
+        let (l, h) = if l > 0.0 { (l, h) } else { (taille.largeur, taille.hauteur) };
+        let apercu = decoupe::apercu_svg(&decoupe::Decoupe { traces: traces.clone(), largeur: l, hauteur: h, signaux: vec![] });
+        return Json(serde_json::json!({ "contours": traces.len(), "apercu_svg": apercu })).into_response();
+    }
+    // Travail d'avant les couches : ses tracés passent du `.plt` au JSON avant que le
+    // détourage n'existe (ensuite, le `.plt` n'est plus relu).
+    let _ = lire_traces(&rep, n);
+    if let Err(e) = tokio::fs::create_dir_all(rep.join("prod")).await.map_err(|e| e.to_string()).and_then(|()| serde_json::to_vec(&traces).map_err(|e| e.to_string())).and_then(|o| machines::ecrire_atomique(&fichier_detourage(&rep, n), &o)) {
+        return interne(e);
+    }
+    recompter(&mut t, &rep, n);
+    enregistrer_coupe(donnees, t)
+}
+
+/// Détourage retiré (« Remove Path ») : la page retrouve ses seuls tracés du fichier.
+async fn retirer_detourage(State(etat): State<Partage>, Chemin((id, n)): Chemin<(Uuid, usize)>) -> Response {
+    let donnees = &etat.config.donnees;
+    let mut t = match coupe_modifiable(&etat, id) {
+        Ok(t) => t,
+        Err(r) => return *r,
+    };
+    if t.pages.get(n.wrapping_sub(1)).is_none() {
+        return introuvable();
+    }
+    let rep = dossier(donnees, id);
+    let _ = std::fs::remove_file(fichier_detourage(&rep, n));
+    // Page sans tracé du fichier : son `.plt` ne portait que le détourage, il ne doit pas être
+    // relu comme tracés d'avant les couches.
+    if !fichier_traces(&rep, n).exists() {
+        let _ = std::fs::remove_file(fichier_plt(&rep, n));
+        let _ = std::fs::remove_file(fichier_svg(&rep, n));
+    }
+    recompter(&mut t, &rep, n);
+    enregistrer_coupe(donnees, t)
 }
 
 /// Mise en coupe d'un travail rendu (roadmap 4.8, 4.9) : rotation ; en découpe seule,
@@ -3128,7 +3268,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -5435,6 +5575,57 @@ mod tests {
             assert_eq!(contour, [[a - 1.0, a - 1.0, b + 1.0, b + 1.0].map(|v| (v * 100.0).round() / 100.0)], "coupe décalée de 1 mm");
             let mauvais = Demande { etendre_coupe: Some(coupe::Etendre { largeur_mm: 20.0, seuil_mm: 0.5 }), ..Default::default() };
             assert_eq!(mauvais.verifier(&[]), Err("etendre_invalide"));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 4.14 : page imprimée avec repérage manuel, disque cyan de 50 pt de rayon sans aucun
+        /// ton de découpe. Aperçu : un contour ; accepté : une couche CutContour, un tracé
+        /// fermé autour de l'encre de la plaque, écarté de 2 mm (± 0,3) ; retiré : plus rien.
+        #[tokio::test]
+        async fn detourage_d_une_page_rendue() {
+            use lopdf::{Document, Object, Stream, dictionary};
+            let e = etat("detourage");
+            let k = 0.552_284_75 * 50.0;
+            let disque = format!("1 0 0 0 k 150 100 m 150 {a} {b} 150 100 150 c {c} 150 50 {a} 50 100 c 50 {d} {c} 50 100 50 c {b} 50 150 {d} 150 100 c f", a = 100.0 + k, b = 100.0 + k, c = 100.0 - k, d = 100.0 - k);
+            let mut doc = Document::with_version("1.4");
+            let c = doc.add_object(Stream::new(dictionary! {}, disque.into_bytes()));
+            let parent = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), 200.into(), 200.into()], "Contents" => c });
+            doc.objects.insert(parent, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => parent });
+            doc.trailer.set("Root", cat);
+            let mut pdf = vec![];
+            doc.save_to(&mut pdf).unwrap();
+            let t = rendre(&e, pdf, Demande { dpi: 144, reperage: reperage::Reperage::Manuel, ..Default::default() }).await;
+            assert_eq!(t.pages[0].traces_decoupe, 0);
+            let url = format!("/api/travaux/{}/pages/1/detourage", t.id);
+            let reglage = serde_json::json!({ "seuil": 250, "sans_interieurs": true, "aire_min_mm2": 1.0, "lissage": 1, "decalage_mm": 2.0 });
+            let apercu = json(appel(&e, "POST", &url, None, Some(reglage.clone())).await).await;
+            assert_eq!(apercu["contours"], 1, "{apercu}");
+            assert!(apercu["apercu_svg"].as_str().unwrap().contains("<polygon points"));
+            assert_eq!(lire_travail(&e.config.donnees, t.id).unwrap().pages[0].traces_decoupe, 0, "un aperçu ne change rien");
+            let mut accepte = reglage.clone();
+            accepte["accepter"] = true.into();
+            let r = appel(&e, "POST", &url, None, Some(accepte)).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let lu = lire_travail(&e.config.donnees, t.id).unwrap();
+            assert_eq!((lu.pages[0].traces_decoupe, lu.pages[0].detourage, lu.couches_decoupe[0].nom.as_str()), (1, 1, "CutContour"));
+            let rep = dossier(&e.config.donnees, t.id);
+            let coupe = boites_hpgl(&std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap());
+            let (_, cyan) = super::regression_geometrie::encre(&rep, 1, "Cyan", 144);
+            assert_eq!(coupe.len(), 1);
+            for (c, attendu) in coupe[0].iter().zip([cyan[0] - 2.0, cyan[1] - 2.0, cyan[2] + 2.0, cyan[3] + 2.0]) {
+                assert!((c - attendu).abs() <= 0.3, "contour {:?}, encre {cyan:?}", coupe[0]);
+            }
+            let r = appel(&e, "DELETE", &url, None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let lu = lire_travail(&e.config.donnees, t.id).unwrap();
+            assert_eq!((lu.pages[0].traces_decoupe, lu.pages[0].detourage), (0, 0));
+            assert!(!fichier_plt(&rep, 1).exists(), "plus de fichier de coupe");
+            // Découpe seule : pas d'image à détourer.
+            let seule = rendre(&e, pdf_tons(&["CutContour"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/pages/1/detourage", seule.id), None, Some(reglage)).await;
+            assert_eq!(json(r).await["code"], "detourage_impossible");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

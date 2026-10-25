@@ -575,6 +575,9 @@ const textes = {
     mise_copies_x: "Copies X", mise_copies_y: "Copies Y", mise_ecart_x: "Écart X (mm)", mise_ecart_y: "Écart Y (mm)", mise_origine: "Départ depuis l'origine de la machine",
     note_mise_coupe: "Tourne le travail pour la découpeuse, pas le fichier : tourner le support d'autant. La flèche grise de l'aperçu de coupe montre le sens d'avance (le haut de la page entre le premier).",
     note_mise_seule: "Découpe seule : miroir, échelle, copies et départ à l'origine (sans impression, la coupe n'a pas d'encre à suivre).",
+    detourage: "Détourage automatique", note_detourage: "Analyse l'image rendue, retire le blanc autour et propose un contour de découpe (CutContour). Aperçu d'abord, puis « Accepter ». Un nouveau rendu l'efface.",
+    det_seuil: "Seuil du blanc (1–255)", det_interieurs: "Supprimer les contours intérieurs", det_aire: "Supprimer les plus petits que (mm²)", det_lissage: "Lissage (0–5)", det_decalage: "Décalage vers l'extérieur (mm)",
+    det_apercu: "Aperçu", det_accepter: "Accepter", det_retirer: "Retirer le détourage", det_contours: (n) => `${n} contour${n > 1 ? "s" : ""} proposé${n > 1 ? "s" : ""}`, det_present: (n) => `Détourage accepté : ${n} contour${n > 1 ? "s" : ""}.`, det_accepte: "Détourage accepté : fichiers de coupe refaits.", det_retire: "Détourage retiré.",
     mise_enregistrer: "Enregistrer la mise en coupe", mise_enregistree: "Mise en coupe enregistrée : fichiers de coupe refaits.",
     couche_monter: "Monter", couche_descendre: "Descendre", couches_enregistrer: "Enregistrer les couches", couches_annuler: "Annuler", couches_modifiees: "Modifications non enregistrées.", couches_enregistrees: "Couches enregistrées : fichiers de coupe refaits.",
     note_couches_decoupe: "Une couche par nom de ton. L'ordre est l'ordre de coupe (mi-chair avant coupe à travers) ; le réglage qui porte le nom de la couche s'applique seul, sinon le premier de la découpeuse. Rien n'est gardé sans « Enregistrer ».",
@@ -670,6 +673,8 @@ const textes = {
       mise_coupe_invalide: "Mise en coupe invalide : rotation 0, 90, 180 ou 270 ; échelle de 1 à 1000 % ; 1 à 100 copies par sens (1000 en tout) ; écart de 0 à 1000 mm ; décalage de 0 à 5 mm.",
       mise_decoupe_seule: "Miroir, échelle, copies et départ à l'origine : en découpe seule uniquement (la coupe ne suivrait plus l'impression).",
       etendre_invalide: "Étendre l'image près des tracés : largeur de 0,1 à 10 mm, seuil de 0 à 10 mm.",
+      detourage_invalide: "Détourage invalide : seuil de 1 à 255, aire minimale de 0 à 10 000 mm², lissage de 0 à 5, décalage de 0 à 20 mm.",
+      detourage_impossible: "Détourage : seulement sur une page imprimée d'un PDF rendu (il faut une image à détourer).",
       prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
       decoupeuse_invalide: "Découpeuse invalide.",
       decoupeuse_indisponible: "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
@@ -774,6 +779,9 @@ const textes = {
     mise_copies_x: "Copies X", mise_copies_y: "Copies Y", mise_ecart_x: "Gap X (mm)", mise_ecart_y: "Gap Y (mm)", mise_origine: "Start from the machine origin",
     note_mise_coupe: "Turns the job for the cutter, not the file: turn the media by as much. The grey arrow of the cut preview shows the feed direction (the top of the page goes in first).",
     note_mise_seule: "Cut only: mirror, scale, copies and start from the origin (without printing, the cut has no ink to follow).",
+    detourage: "Auto contour", note_detourage: "Analyses the rendered image, removes the white around it and proposes a cut contour (CutContour). Preview first, then \"Accept\". A new rendering erases it.",
+    det_seuil: "White threshold (1–255)", det_interieurs: "Remove inner contours", det_aire: "Remove those smaller than (mm²)", det_lissage: "Smoothing (0–5)", det_decalage: "Outward offset (mm)",
+    det_apercu: "Preview", det_accepter: "Accept", det_retirer: "Remove the auto contour", det_contours: (n) => `${n} contour${n > 1 ? "s" : ""} proposed`, det_present: (n) => `Auto contour accepted: ${n} contour${n > 1 ? "s" : ""}.`, det_accepte: "Auto contour accepted: cut files rebuilt.", det_retire: "Auto contour removed.",
     mise_enregistrer: "Save cut placement", mise_enregistree: "Cut placement saved: cut files rebuilt.",
     couche_monter: "Up", couche_descendre: "Down", couches_enregistrer: "Save layers", couches_annuler: "Cancel", couches_modifiees: "Unsaved changes.", couches_enregistrees: "Layers saved: cut files rebuilt.",
     note_couches_decoupe: "One layer per spot colour name. The order is the cutting order (kiss cut before through cut); the setting named like the layer applies by itself, else the cutter's first one. Nothing is kept without \"Save\".",
@@ -869,6 +877,8 @@ const textes = {
       mise_coupe_invalide: "Invalid cut placement: rotation 0, 90, 180 or 270; scale from 1 to 1000 %; 1 to 100 copies each way (1000 in all); gap from 0 to 1000 mm; offset from 0 to 5 mm.",
       mise_decoupe_seule: "Mirror, scale, copies and start from the origin: for cut only jobs (the cut would no longer follow the print).",
       etendre_invalide: "Add bleed near cuts: width from 0.1 to 10 mm, threshold from 0 to 10 mm.",
+      detourage_invalide: "Invalid auto contour: threshold from 1 to 255, minimum area from 0 to 10,000 mm², smoothing from 0 to 5, offset from 0 to 20 mm.",
+      detourage_impossible: "Auto contour: only on a printed page of a rendered PDF (it needs an image to trace).",
       prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
       decoupeuse_invalide: "Invalid cutter.",
       decoupeuse_indisponible: "Cutter unavailable: a layer setting does not exist on this machine.",
@@ -2747,6 +2757,7 @@ function vuePage(t, page, n) {
     caseP.addEventListener("change", maj); copies.addEventListener("change", maj);
     bloc.append(el("label", { className: "case" }, caseP, T().ajouter, " ", copies, " ", T().copies));
   }
+  if (t.mode === "imprimer" && t.format === "pdf") bloc.append(panneauDetourage(t, page, n));
   const couches = el("div", { className: "plaques", hidden: !couchesOuvertes });
   couches.append(...vignettes);
   const basculer = bouton(T().couches_bouton(vignettes.length), () => { couchesOuvertes = !couchesOuvertes; couches.hidden = !couchesOuvertes; basculer.setAttribute("aria-expanded", couchesOuvertes); });
@@ -2754,6 +2765,41 @@ function vuePage(t, page, n) {
   // `append` ne filtre pas null : sans vignette, pas de bouton (sinon « null » s'affiche).
   bloc.append(el("div", { className: "apercu-principal" }, principal), ...(vignettes.length ? [basculer] : []), couches);
   return bloc;
+}
+/** Réglages et aperçu du détourage de chaque page (« id:page »), gardés d'un rafraîchissement à l'autre. */
+const detourages = new Map();
+/** Détourage automatique d'une page imprimée (roadmap 4.14) : aperçu, puis Accepter ; Retirer. */
+function panneauDetourage(t, page, n) {
+  const cle = `${t.id}:${n}`, etat = detourages.get(cle) || { r: { seuil: 250, sans_interieurs: true, aire_min_mm2: 1, lissage: 2, decalage_mm: 0 }, apercu: null };
+  detourages.set(cle, etat);
+  const champ = (texte, nom, attrs) => {
+    const i = el("input", { type: "number", value: etat.r[nom], style: "width: 6em", ...attrs });
+    i.addEventListener("change", () => { etat.r[nom] = +i.value; etat.apercu = null; });
+    return el("label", {}, texte, " ", i);
+  };
+  const interieurs = el("input", { type: "checkbox", checked: etat.r.sans_interieurs });
+  interieurs.addEventListener("change", () => { etat.r.sans_interieurs = interieurs.checked; etat.apercu = null; });
+  const url = `/api/travaux/${t.id}/pages/${n}/detourage`;
+  const zone = el("div", {});
+  const montrer = () => zone.replaceChildren(...(etat.apercu ? [el("p", { className: "meta", style: "margin: 0" }, T().det_contours(etat.apercu.contours)),
+    el("img", { src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(etat.apercu.apercu_svg)}`, alt: T().detourage, style: "max-width: 100%; max-height: 240px; border: 1px solid var(--bord, #ccc)" })] : []));
+  montrer();
+  const actions = el("div", { className: "ligne" },
+    bouton(T().det_apercu, async (b) => { b.disabled = true; etat.apercu = await api(url, json("POST", { ...etat.r, accepter: false })); b.disabled = false; montrer(); afficherInspecteur(); }),
+    etat.apercu ? bouton(T().det_accepter, async (b) => {
+      b.disabled = true;
+      if (await api(url, json("POST", { ...etat.r, accepter: true }))) { etat.apercu = null; ED.versions[t.id] = Date.now(); dire(T().det_accepte); }
+      rafraichir();
+    }, "") : null,
+    page.detourage ? bouton(T().det_retirer, async (b) => { b.disabled = true; if (await api(url, { method: "DELETE" })) { ED.versions[t.id] = Date.now(); dire(T().det_retire); } rafraichir(); }, "discret danger") : null);
+  const panneau = el("details", { className: "section detourage", open: !!etat.apercu || !!etat.ouvert }, el("summary", {}, T().detourage),
+    el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_detourage),
+      page.detourage ? el("p", { className: "meta", style: "margin: 0" }, T().det_present(page.detourage)) : null,
+      el("div", { className: "ligne" }, champ(T().det_seuil, "seuil", { min: 1, max: 255 }), champ(T().det_aire, "aire_min_mm2", { min: 0, max: 10000, step: "any" })),
+      el("div", { className: "ligne" }, champ(T().det_lissage, "lissage", { min: 0, max: 5 }), champ(T().det_decalage, "decalage_mm", { min: 0, max: 20, step: "any" })),
+      el("label", { className: "case" }, interieurs, " ", T().det_interieurs), actions, zone));
+  panneau.addEventListener("toggle", () => { etat.ouvert = panneau.open; });
+  return panneau;
 }
 /** Couches (découpe, plaques) montrées ou non, gardé d'une page et d'un rafraîchissement à l'autre. */
 let couchesOuvertes = false;
