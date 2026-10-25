@@ -31,8 +31,13 @@ dans l'installation du serveur).
    **Tolérance de découpe** et **Mosaïque** s'ouvrent d'un clic.
 4. **Envoyer au RIP**.
 
-Formats acceptés : PDF, AI (enregistré avec « Créer un fichier compatible PDF ») et SVG
-(découpe seulement).
+Formats acceptés : PDF, AI (enregistré avec « Créer un fichier compatible PDF »), SVG
+(découpe seulement) et images **TIFF, PNG, JPEG**. Une image est posée à sa taille réelle,
+d'après la résolution enregistrée dans le fichier (sans résolution : 72 ppi, et le travail le
+signale), en CMJN, RVB ou niveaux de gris, 8 ou 16 bits, avec son profil ICC ; la
+transparence ne pose pas d'encre. Taille maximale d'un fichier : 8 Go (`EKO_RIP_MAX_MO`).
+Pas encore pris en charge : TIFF à palette, YCbCr, Lab ou à plans séparés, PNG entrelacé
+(refusés avec un message) ; les canaux de tons directs d'un TIFF sont ignorés et signalés.
 
 ## Rotation automatique et réglages après l'import
 
@@ -589,7 +594,7 @@ Le Kona doit être réglé sur une résolution de **0,010 mm**.
 `_`, `+`). Le choisir dans **Réglage** remplit le panneau ; **Supprimer** le retire.
 
 Chaque réglage a un **dossier surveillé** : `/var/lib/eko-rip/entrees/<nom du réglage>/`
-sur le serveur. Un PDF, AI ou SVG déposé dedans devient un travail avec ce réglage, dès
+sur le serveur. Un PDF, AI, SVG, TIFF, PNG ou JPEG déposé dedans devient un travail avec ce réglage, dès
 que sa copie est terminée (taille stable pendant 5 s). Un fichier refusé est rangé dans
 `refuses/`, avec un fichier `.refus.txt` qui donne la raison.
 
@@ -983,8 +988,8 @@ le facteur de chacune. Rétention et facteurs sont dans la sauvegarde de la conf
 - Le blanc et l'argent par le pilote direct de l'Epson : ils sortent en dossier.
 - L'impression par la Roland.
 - Le cadre Kona type 3 (multi-segments) n'a pas encore été essayé sur la machine.
-- L'import d'images (PNG, JPEG…) : seuls PDF, AI et SVG sont reçus ; le détourage se fait
-  sur le rendu d'un PDF.
+- Les canaux de tons directs d'un TIFF (blanc, vernis) : ignorés pour l'instant ; la
+  transparence comme plaque de blanc viendra avec la roadmap 9.12.
 - Les couleurs métallisées `MT-*` du nuancier Epson ne sont pas encore converties.
 
 ## Glossaire

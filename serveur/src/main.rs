@@ -22,6 +22,7 @@ mod machines;
 mod media;
 mod file;
 mod forme;
+mod images;
 mod imbrication;
 mod mosaique;
 mod nid;
@@ -78,13 +79,27 @@ enum Format {
     #[default]
     Pdf,
     Svg,
+    /// Images (roadmap 9.2) : converties en PDF à la création du travail, jamais gardées
+    /// comme format d'un travail.
+    Tiff,
+    Png,
+    Jpeg,
 }
 
 impl Format {
     fn fichier(self) -> &'static str {
         match self {
-            Format::Pdf => "source.pdf",
+            Format::Pdf | Format::Tiff | Format::Png | Format::Jpeg => "source.pdf",
             Format::Svg => "source.svg",
+        }
+    }
+
+    fn image(self) -> Option<images::Genre> {
+        match self {
+            Format::Tiff => Some(images::Genre::Tiff),
+            Format::Png => Some(images::Genre::Png),
+            Format::Jpeg => Some(images::Genre::Jpeg),
+            _ => None,
         }
     }
 }
@@ -315,7 +330,7 @@ async fn main() {
         profils: donnees.join("profils"),
         donnees,
         gs: env_ou("EKO_RIP_GS", if cfg!(windows) { "gswin64c" } else { "gs" }),
-        max_octets: env_ou("EKO_RIP_MAX_MO", "2048").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
+        max_octets: env_ou("EKO_RIP_MAX_MO", "8192").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
         delai: Duration::from_secs(env_ou("EKO_RIP_DELAI_S", "1800").parse().expect("EKO_RIP_DELAI_S")),
         conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
         seuil_libre: env_ou("EKO_RIP_SEUIL_LIBRE_MO", "5120").parse::<u64>().expect("EKO_RIP_SEUIL_LIBRE_MO") * 1024 * 1024,
@@ -853,6 +868,18 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     let mauvais = |code: &'static str, detail: Option<String>| (StatusCode::BAD_REQUEST, (code, detail));
     let interne = |e: String| (StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e)));
     let d = d.normaliser();
+    // Image : un PDF d'une page à sa taille réelle, écrit en flux, qui remplace le fichier
+    // reçu ; le travail est ensuite celui d'un PDF.
+    let (format, remarques_image) = match format.image() {
+        Some(g) => {
+            let (src, dst) = (rep.join("source.tmp"), rep.join("source-image.pdf"));
+            let r = tokio::task::spawn_blocking(move || images::vers_pdf(&src, &dst, g)).await.map_err(|e| interne(e.to_string()))?;
+            let r = r.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+            tokio::fs::rename(rep.join("source-image.pdf"), rep.join("source.tmp")).await.map_err(|e| interne(e.to_string()))?;
+            (Format::Pdf, Some(r))
+        }
+        None => (format, None),
+    };
     // Le rendu en plaques passe par Ghostscript, qui ne lit pas le SVG.
     if format == Format::Svg && d.mode == Mode::Imprimer {
         return Err(mauvais("svg_decoupe_seulement", None));
@@ -890,6 +917,14 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     };
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     let mut alertes = alertes;
+    if let Some(r) = &remarques_image {
+        if r.sans_resolution {
+            alertes.push(controle::Alerte { code: "image_sans_resolution".into(), page: None, detail: format!("{} ppi · {:.0} × {:.0} mm", images::PPI_PAR_DEFAUT, r.largeur_mm, r.hauteur_mm) });
+        }
+        if r.canaux_ignores > 0 {
+            alertes.push(controle::Alerte { code: "image_canaux_ignores".into(), page: None, detail: r.canaux_ignores.to_string() });
+        }
+    }
     if !fiche.valide() {
         return Err(mauvais("fiche_invalide", None));
     }
@@ -1076,10 +1111,17 @@ fn laize_imprimante(etat: &Etat) -> Option<f64> {
 /// Octets lus avant de reconnaître le format.
 const EN_TETE: usize = 1024;
 
-/// PDF (un fichier Illustrator « compatible PDF » en est un), SVG, ou refus.
+/// PDF (un fichier Illustrator « compatible PDF » en est un), SVG, image TIFF, PNG ou JPEG,
+/// ou refus.
 fn reconnaitre(debut: &[u8]) -> Result<Format, Refus> {
     if debut.starts_with(b"%PDF-") {
         return Ok(Format::Pdf);
+    }
+    match images::genre(debut) {
+        Some(images::Genre::Tiff) => return Ok(Format::Tiff),
+        Some(images::Genre::Png) => return Ok(Format::Png),
+        Some(images::Genre::Jpeg) => return Ok(Format::Jpeg),
+        None => {}
     }
     if debut.starts_with(b"%!PS-Adobe") {
         return Err(("ai_sans_pdf", None));
@@ -2673,7 +2715,8 @@ fn lire_traces_du_fichier(rep: &std::path::Path, page: usize, relire_plt: bool) 
 async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mises: &[reperage::Mise]) -> Result<Vec<decoupe::Decoupe>, String> {
     let source = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| e.to_string())?;
     let mut pages = tokio::task::spawn_blocking(move || match format {
-        Format::Pdf => decoupe::extraire(&source, tous),
+        // Une image est déjà devenue un PDF à la création du travail.
+        Format::Pdf | Format::Tiff | Format::Png | Format::Jpeg => decoupe::extraire(&source, tous),
         Format::Svg => decoupe::extraire_svg(&source, tous).map(|d| vec![d]),
     })
     .await
@@ -4295,7 +4338,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs"), include_str!("pont.rs"), include_str!("tons.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs"), include_str!("pont.rs"), include_str!("tons.rs"), include_str!("images.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `

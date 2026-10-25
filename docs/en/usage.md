@@ -30,7 +30,12 @@ selected job.
    tolerance** and **Tiling** blocks open with a click.
 4. **Send to RIP**.
 
-Accepted formats: PDF, AI (saved with “Create PDF Compatible File”) and SVG (cut only).
+Accepted formats: PDF, AI (saved with “Create PDF Compatible File”), SVG (cut only) and
+**TIFF, PNG, JPEG** images. An image is placed at its real size, from the resolution saved
+in the file (none: 72 ppi, and the job says so), in CMYK, RGB or greyscale, 8 or 16 bits,
+with its ICC profile; transparency lays no ink. Maximum file size: 8 GB
+(`EKO_RIP_MAX_MO`). Not supported yet: palette, YCbCr, Lab or planar TIFF, interlaced PNG
+(refused with a message); a TIFF's spot colour channels are ignored and flagged.
 
 ## Automatic rotation and settings after import
 
@@ -559,7 +564,7 @@ must be set to a resolution of **0.010 mm**.
 Picking it in **Preset** fills the panel; **Delete** removes it.
 
 Each preset has a **hot folder**: `/var/lib/eko-rip/entrees/<preset name>/` on the
-server. A PDF, AI or SVG dropped there becomes a job with that preset once its copy is
+server. A PDF, AI, SVG, TIFF, PNG or JPEG dropped there becomes a job with that preset once its copy is
 complete (size stable for 5 s). A rejected file is moved to `refuses/`, with a
 `.refus.txt` file giving the reason.
 
@@ -929,8 +934,8 @@ factors are in the configuration backup.
 - White and silver through the direct Epson driver: they go out to a folder.
 - Printing on the Roland.
 - The Kona type 3 frame (multi-segment) has not been tried on the machine yet.
-- Importing images (PNG, JPEG…): only PDF, AI and SVG are accepted; auto contour works on
-  the rendering of a PDF.
+- A TIFF's spot colour channels (white, varnish): ignored for now; transparency as a white
+  plate will come with roadmap 9.12.
 - The Epson swatch book's `MT-*` metallic colours are not converted yet.
 
 ## Glossary

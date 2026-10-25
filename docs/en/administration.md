@@ -132,7 +132,7 @@ causes: protected or damaged PDF, `EKO_RIP_DELAI_S` exceeded on a very large fil
 disk (System). Missing fonts and low-resolution images are flagged on upload by the
 preflight.
 
-**File too large.** Above `EKO_RIP_MAX_MO` (2048 MB by default). Raise it in
+**File too large.** Above `EKO_RIP_MAX_MO` (8192 MB by default). Raise it in
 `/etc/default/eko-rip-serveur`, then restart.
 
 **An output to a machine failed.** The reason is under the output, in the queue:

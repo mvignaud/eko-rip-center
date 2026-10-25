@@ -998,6 +998,7 @@ dependencies = [
  "image",
  "libc",
  "lopdf",
+ "png",
  "qrcodegen",
  "rpassword",
  "serde",
@@ -1861,6 +1862,8 @@ dependencies = [
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]

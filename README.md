@@ -43,7 +43,7 @@ Puis ouvrir `http://<serveur>:8640` depuis un poste.
 | `EKO_RIP_ADDR` | `0.0.0.0:8640` | adresse d'écoute |
 | `EKO_RIP_DATA` | `eko-rip-data` | dossier des travaux |
 | `EKO_RIP_GS` | `gs` | commande Ghostscript |
-| `EKO_RIP_MAX_MO` | `2048` | taille maximale d'un PDF reçu |
+| `EKO_RIP_MAX_MO` | `8192` | taille maximale d'un fichier reçu |
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu |
 
 Le serveur n'a pas d'authentification : il ne doit être joignable que depuis le

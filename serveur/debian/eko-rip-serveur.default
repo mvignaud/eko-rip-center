@@ -1,7 +1,7 @@
 # Réglages du serveur E-KO RIP Center. Redémarrer après modification :
 #   systemctl restart eko-rip-serveur
 #EKO_RIP_ADDR=0.0.0.0:8640
-#EKO_RIP_MAX_MO=2048
+#EKO_RIP_MAX_MO=8192
 #EKO_RIP_DELAI_S=1800
 # Travaux effacés après ce nombre de jours (0 : jamais).
 #EKO_RIP_CONSERVATION_JOURS=30

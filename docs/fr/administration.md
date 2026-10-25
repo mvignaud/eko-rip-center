@@ -136,7 +136,7 @@ journal. Causes courantes : PDF protégé ou abîmé, délai `EKO_RIP_DELAI_S` d
 très grand fichier, disque plein (Système). Les polices non incorporées et les images
 trop peu définies sont signalées dès l'envoi par la pré-vérification.
 
-**« Fichier trop volumineux pour le serveur. »** Au-delà de `EKO_RIP_MAX_MO` (2048 Mo par
+**« Fichier trop volumineux pour le serveur. »** Au-delà de `EKO_RIP_MAX_MO` (8192 Mo par
 défaut). Le monter dans `/etc/default/eko-rip-serveur`, puis redémarrer.
 
 **« La sortie vers la machine a échoué. »** La raison est sous la sortie, dans la file :

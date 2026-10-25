@@ -356,7 +356,7 @@
         <div class="entete-fenetre"><strong id="titre-importer" data-t="nouveau_travail"></strong><button type="button" class="discret" id="fermer-importer" data-t="fermer"></button></div>
         <label class="depot" id="zone-depot">
           <strong data-t="deposer_ici"></strong><span data-t="fichier"></span>
-          <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg" multiple hidden>
+          <input type="file" name="fichier" accept="application/pdf,.pdf,.ai,image/svg+xml,.svg,image/tiff,.tif,.tiff,image/png,.png,image/jpeg,.jpg,.jpeg" multiple hidden>
           <span id="nom-fichier" class="meta"></span>
         </label>
         <div class="ligne bas">
@@ -671,6 +671,8 @@ const textes = {
     note_fond_reperes: "Les repères noirs sont imprimés dessus en surimpression : le fond reste aussi sous eux.",
     coupe_auto: "Couper dès l'arrivée", note_coupe_auto: "Décoché : chaque découpe arrive suspendue dans la file de la machine et part quand l'opérateur la reprend (« Reprendre »).", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
+      image_sans_resolution: (d) => `L'image ne donne pas sa résolution : posée à ${d}. Vérifier la taille, ou la régler dans Réglages (échelle).`,
+      image_canaux_ignores: (d) => `${d} canal(aux) en plus dans le TIFF (tons directs) ignoré(s) pour l'instant : seules les couleurs sont imprimées.`,
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
       rotation_auto: (d) => `Tourné de 90° pour tenir dans la laize de l'imprimante (${d}).`,
@@ -729,7 +731,9 @@ const textes = {
     releve_sortie: (e, l) => `Relevé : encre ${e}${l ? `, support ${l}` : ""}`,
     aucune_sortie: "Rien en file.", historique: "Historique", archive: (n) => `Archive (${n})`, ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
-      format_inconnu: "Format non reconnu : envoyer un PDF, un AI ou un SVG.",
+      format_inconnu: "Format non reconnu : envoyer un PDF, un AI, un SVG ou une image TIFF, PNG ou JPEG.",
+      image_illisible: "Image illisible",
+      image_non_prise_en_charge: "Image non prise en charge",
       ai_sans_pdf: "Fichier Illustrator sans compatibilité PDF : l'enregistrer avec « Créer un fichier compatible PDF ».",
       svg_decoupe_seulement: "Un SVG ne peut qu'être découpé : choisir « Découper seulement ».", mode_invalide: "Mode inconnu.", fichier_vide: "Le fichier est vide.",
       aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
@@ -946,6 +950,8 @@ const textes = {
     note_fond_reperes: "The black marks are printed over it with overprint: the background stays under them too.",
     coupe_auto: "Cut on arrival", note_coupe_auto: "Unticked: each cut arrives on hold in the machine's queue and goes when the operator resumes it (\"Resume\").", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
+      image_sans_resolution: (d) => `The image does not give its resolution: placed at ${d}. Check the size, or set it in Settings (scale).`,
+      image_canaux_ignores: (d) => `${d} extra channel(s) in the TIFF (spot colours) ignored for now: only the colours are printed.`,
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
       rotation_auto: (d) => `Turned 90° to fit the printer's roll width (${d}).`,
@@ -1004,7 +1010,9 @@ const textes = {
     releve_sortie: (e, l) => `Measured: ink ${e}${l ? `, media ${l}` : ""}`,
     aucune_sortie: "Nothing queued.", historique: "History", archive: (n) => `Archive (${n})`, ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
-      format_inconnu: "Unknown format: send a PDF, AI or SVG file.",
+      format_inconnu: "Unknown format: send a PDF, AI, SVG file or a TIFF, PNG or JPEG image.",
+      image_illisible: "Unreadable image",
+      image_non_prise_en_charge: "Image not supported",
       ai_sans_pdf: "Illustrator file without PDF compatibility: save it with “Create PDF Compatible File”.",
       svg_decoupe_seulement: "An SVG can only be cut: choose “Cut only”.", mode_invalide: "Unknown mode.", fichier_vide: "The file is empty.",
       aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
