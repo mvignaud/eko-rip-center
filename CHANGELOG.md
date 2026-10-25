@@ -15,6 +15,24 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.24.0] — 2026-10-25
+
+Images en entrée. Publiée sans la CI.
+
+### Ajouté
+- **Images TIFF, PNG et JPEG** acceptées (envoi, dossiers surveillés) : converties en PDF
+  d'une page à leur taille réelle (résolution du fichier ; sans résolution : 72 ppi, signalé),
+  écrit en flux sans charger l'image entière ; CMJN, RVB ou gris, 8 ou 16 bits, profil ICC
+  repris, transparence en masque (pas d'encre), JPEG repris tel quel. Refus avec un message :
+  TIFF à palette, YCbCr, Lab ou à plans séparés, PNG entrelacé. Canaux de tons directs d'un
+  TIFF ignorés et signalés pour l'instant.
+
+### Modifié
+- Taille maximale d'un fichier reçu : 8 Go par défaut (`EKO_RIP_MAX_MO=8192`).
+
+*Added: TIFF, PNG and JPEG input, streamed into a one-page PDF at real size (CMYK/RGB/grey,
+8/16 bits, ICC kept, transparency masked, JPEG passed through). Changed: 8 GB upload limit.*
+
 ## [0.23.0] — 2026-10-25
 
 Vue Production : clic droit, colonnes, glisser-déposer. Publiée sans la CI.
