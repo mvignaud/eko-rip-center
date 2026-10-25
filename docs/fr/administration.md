@@ -32,7 +32,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `erp.json` | pont ERP : empreinte du jeton de l'ERP et secret HMAC (droits 0600) — voir [pont-erp.md](pont-erp.md) |
 | `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
 | `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |
-| `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; ni dans la sauvegarde de la configuration, ni dans la copie avant mise à jour : le noter à part |
+| `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; compris dans la sauvegarde de la configuration et dans la copie avant mise à jour |
 | `utilisateurs.json` | comptes (mots de passe hachés, droits 0600) |
 | `file.json` | file des sorties et historique |
 | `profils/` | profils ICC déposés |

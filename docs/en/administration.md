@@ -30,7 +30,7 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `erp.json` | ERP bridge: ERP token hash and HMAC secret (mode 0600) — see [erp-bridge.md](erp-bridge.md) |
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
 | `charges.json` | media loaded in each machine, set by the operator or read from the Epson |
-| `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); neither in the configuration backup nor in the copy made before an update: note them separately |
+| `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); included in the configuration backup and in the copy made before an update |
 | `utilisateurs.json` | accounts (hashed passwords, mode 0600) |
 | `file.json` | output queue and history |
 | `profils/` | uploaded ICC profiles |

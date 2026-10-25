@@ -1241,6 +1241,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         reglages: reglages::lire(&etat.config.donnees),
         profils,
         supports: Some(supports::lire(&etat.config.donnees, "epson")),
+        decoupe: Some(decoupe::lire(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1310,6 +1311,10 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         couverture::ecrire(&etat.config.donnees, &s.tarifs)?;
         if let Some(c) = &s.supports {
             supports::ecrire(&etat.config.donnees, c)?;
+        }
+        if let Some(r) = &s.decoupe {
+            decoupe::ecrire(&etat.config.donnees, r)?;
+            decoupe::installer(r.clone());
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -3505,6 +3510,10 @@ mod tests {
             assert_eq!(reglages::lire(&b.config.donnees)[0].demande.dpi, 360);
             assert_eq!(b.machines.read().unwrap()[0].nom, "Epson de l'atelier", "catalogue rechargé");
             assert_eq!(supports::lire(&b.config.donnees, "epson"), supports::lire(&a.config.donnees, "epson"), "supports et identifiants repris");
+            // Préfixes de découpe : repris par la sauvegarde (réglages d'origine ici, pour ne pas
+            // changer les réglages globaux des autres tests).
+            assert!(decoupe::fichier(&b.config.donnees).exists(), "decoupe.json restauré");
+            assert_eq!(decoupe::lire(&b.config.donnees), decoupe::lire(&a.config.donnees));
             for e in [a, b] {
                 std::fs::remove_dir_all(&e.config.donnees).unwrap();
             }

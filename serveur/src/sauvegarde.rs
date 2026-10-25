@@ -22,6 +22,9 @@ pub struct Sauvegarde {
     /// Absent des sauvegardes d'avant la 0.14 : les supports en place sont alors gardés.
     #[serde(default)]
     pub supports: Option<supports::Catalogue>,
+    /// Préfixes et options de découpe (`decoupe.json`) ; absent des sauvegardes d'avant.
+    #[serde(default)]
+    pub decoupe: Option<crate::decoupe::Reglages>,
 }
 
 pub fn hex(octets: &[u8]) -> String {
