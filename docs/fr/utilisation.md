@@ -226,6 +226,12 @@ clic ouvre l'import avec lui) et **Journal** (les messages de l'écran, le plus 
 d'abord). Sur un écran de moins de 1100 px, l'inspecteur passe sous les tableaux ; sous
 1360 px, les outils de la barre gardent leur symbole et leur nom passe en bulle.
 
+**Clic droit** : sur une ligne, les actions de file de la sortie puis celles de la barre
+d'outils ; sur une machine, n'afficher qu'elle, voir son état, relire l'Epson, la configurer ;
+sur l'en-tête d'un tableau, les colonnes à montrer ou à masquer (nom, état et vignette
+restent ; le choix est gardé par le poste). **Glisser-déposer** : dans **À imprimer**, une
+sortie en attente ou suspendue se pose à la place d'une autre de la même machine.
+
 Un clic sur une ligne ouvre son travail dans l'inspecteur :
 
 - une partie par page, avec le nombre de tracés de découpe ;

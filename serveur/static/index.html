@@ -155,6 +155,13 @@
   .actions-file { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
   .actions-file button { width: 34px; height: 30px; padding: 0; font-size: 15px; }
   .zone-imprimes { margin-top: 14px; }
+  .menu-contexte { position: fixed; z-index: 50; background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; box-shadow: var(--ombre); padding: 4px; min-width: 210px; display: grid; }
+  .menu-contexte button { background: none; color: var(--texte); text-align: left; border-radius: 4px; padding: 6px 10px; font-weight: 400; }
+  .menu-contexte button:hover:not(:disabled) { background: var(--accent-doux); }
+  .menu-contexte button.danger { color: var(--echec); }
+  .menu-contexte hr { border: 0; border-top: 1px solid var(--trait); margin: 4px 0; }
+  .tableau tr.cible-depot { box-shadow: inset 0 2px 0 var(--accent); }
+  .tableau tr[draggable=true] { cursor: grab; }
   .zone-imprimes > summary { padding: 10px 16px; cursor: pointer; font-weight: 600; }
   .sortie { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 10px 16px; border-top: 1px solid var(--trait); }
   .sortie:first-child { border-top: 0; }
@@ -270,6 +277,7 @@
   </div>
 </header>
 <p id="acces-libre" class="bandeau" data-t="acces_libre" hidden></p>
+<div id="menu-contexte" class="menu-contexte" role="menu" hidden></div>
 <dialog id="fenetre-edition">
   <form id="form-edition">
     <strong id="titre-edition"></strong>
@@ -530,7 +538,7 @@ const textes = {
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
     laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, decouper_sur: (n) => `Découper sur ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} en file sur ${m}.`,
-    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
+    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", afficher_seulement: (n) => `N'afficher que ${n}`, voir_machine: "État de la machine", configurer_machine: "Configurer (Système)", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
     deposer_ici: "Déposer un fichier ici", fichier: "PDF, AI ou SVG — ou cliquer pour choisir", resolution: "Résolution", mode: "Mode",
     imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
     traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
@@ -805,7 +813,7 @@ const textes = {
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
     laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, decouper_sur: (n) => `Cut on ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} queued on ${m}.`,
-    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
+    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", afficher_seulement: (n) => `Show only ${n}`, voir_machine: "Machine state", configurer_machine: "Configure (System)", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
     deposer_ici: "Drop a file here", fichier: "PDF, AI or SVG — or click to choose", resolution: "Resolution", mode: "Mode",
     imprimer: "Print (and cut)", decouper: "Cut only",
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
@@ -2830,13 +2838,20 @@ function afficherTravaux() {
   $("nids").replaceChildren(...imbrications.filter((g) => !filtreMachine || g.machine === filtreMachine).map((g) =>
     el("section", { className: "panneau", style: "margin-bottom: 14px" }, el("header", {}, el("strong", {}, catalogue.find((m) => m.id === g.machine)?.nom || g.machine)), panneauNid(g))));
   const { aImprimer, imprimes } = lignesProduction();
-  const tete = (cols) => el("thead", {}, el("tr", {}, ...cols.map(([x, num]) => el("th", { className: num ? "num" : "" }, x))));
+  const colsA = [["mini", "", 0], ["nom", T().col_nom, 0], ["etat", T().col_etat, 0], ["machine", T().col_machine, 0], ["format", T().col_format, 1], ["echeance", T().col_echeance, 1], ["duree", T().col_duree, 1], ["date", T().col_date, 1]];
+  const colsI = [["mini", "", 0], ["nom", T().col_nom, 0], ["etat", T().col_etat, 0], ["machine", T().col_machine, 0], ["fin", T().col_fin, 1], ["releve", T().col_releve, 0]];
+  const visibles = (cols, zone) => cols.filter(([k]) => COLONNES_FIXES.includes(k) || !colonnesMasquees.has(`${zone}:${k}`));
+  const tete = (cols, zone) => {
+    const tr = el("tr", {}, ...visibles(cols, zone).map(([, x, num]) => el("th", { className: num ? "num" : "" }, x)));
+    tr.addEventListener("contextmenu", (e) => menuColonnes(e, cols, zone));
+    return el("thead", {}, tr);
+  };
   liste.replaceChildren(aImprimer.length
-    ? el("table", { className: "tableau" }, tete([["", 0], [T().col_nom, 0], [T().col_etat, 0], [T().col_machine, 0], [T().col_format, 1], [T().col_echeance, 1], [T().col_duree, 1], [T().col_date, 1]]), el("tbody", {}, ...aImprimer.map((x) => lignePro(x, false))))
+    ? el("table", { className: "tableau" }, tete(colsA, "a"), el("tbody", {}, ...aImprimer.map((x) => lignePro(x, false, visibles(colsA, "a").map(([k]) => k)))))
     : el("p", { className: "vide-liste" }, T().rien_a_imprimer));
   $("titre-imprimes").textContent = T().imprimes(imprimes.length);
   $("imprimes").replaceChildren(imprimes.length
-    ? el("table", { className: "tableau" }, tete([["", 0], [T().col_nom, 0], [T().col_etat, 0], [T().col_machine, 0], [T().col_fin, 1], [T().col_releve, 0]]), el("tbody", {}, ...imprimes.slice(0, 200).map((x) => lignePro(x, true))))
+    ? el("table", { className: "tableau" }, tete(colsI, "i"), el("tbody", {}, ...imprimes.slice(0, 200).map((x) => lignePro(x, true, visibles(colsI, "i").map(([k]) => k)))))
     : el("p", { className: "vide-liste" }, T().aucun_imprime));
   afficherActionsFile();
   afficherInspecteur();
@@ -2899,7 +2914,7 @@ function afficherOngletJournal() {
 }
 
 /** Une ligne : une sortie (avec son travail), ou un travail pas encore envoyé. */
-function lignePro({ t, s }, fini) {
+function lignePro({ t, s }, fini, cles) {
   const n = s?.page || 1, base = t ? `/api/travaux/${t.id}/pages/${n}` : null, pret = t && t.statut === "termine" && t.pages.length >= n;
   const image = pret ? (t.mode === "decouper" || s?.operation === "decoupe" ? `${base}/decoupe.svg` : `${base}/apercu.png`) : null;
   const mini = el("div", { className: image ? "mini" : "mini vide" });
@@ -2917,17 +2932,105 @@ function lignePro({ t, s }, fini) {
   const nom = el("td", {}, el("div", { className: "nom" }, s?.nom || t.nom),
     el("div", { className: "meta" }, t ? (t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`) : "", s && (t?.pages.length || 1) > 1 ? ` · ${T().page(n)}` : "", s?.couche ? ` · ${T().couche_de_sortie(s.couche)}` : "", s?.planche_nom ? ` · ${T().sur_planche(s.planche_nom)}` : "", ...ficheEnBref(fiche).map((x) => ` · ${x}`)));
   const machine = el("td", {}, m ? m.nom : "—", m?.modele_imprime && m?.modele_decoupe ? el("span", { className: "meta" }, ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}`) : null);
-  const cellules = fini
-    ? [el("td", {}, mini), nom, etat, machine, el("td", { className: "num" }, s.fin ? date(s.fin) : "—"), el("td", { className: "meta" }, s.consommation ? releveDeSortie(s.consommation) : s.code_erreur ? texteErreur(s.code_erreur, s.erreur) : "")]
-    : [el("td", {}, mini), nom, etat, machine, el("td", { className: "num" }, format),
-      el("td", { className: "num" + (echue(fiche) ? " erreur" : "") }, fiche?.echeance ? jour(fiche.echeance) : "—"),
-      el("td", { className: "num" }, s?.duree_min > 0 ? duree(s.duree_min) : t?.duree_impression_min > 0 ? duree(t.duree_impression_min) : "—"),
-      el("td", { className: "num" }, date(s?.cree_le || t.cree_le))];
-  const ligne = el("tr", {}, ...cellules);
+  const c = fini
+    ? { mini: el("td", {}, mini), nom, etat, machine, fin: el("td", { className: "num" }, s.fin ? date(s.fin) : "—"), releve: el("td", { className: "meta" }, s.consommation ? releveDeSortie(s.consommation) : s.code_erreur ? texteErreur(s.code_erreur, s.erreur) : "") }
+    : { mini: el("td", {}, mini), nom, etat, machine, format: el("td", { className: "num" }, format),
+      echeance: el("td", { className: "num" + (echue(fiche) ? " erreur" : "") }, fiche?.echeance ? jour(fiche.echeance) : "—"),
+      duree: el("td", { className: "num" }, s?.duree_min > 0 ? duree(s.duree_min) : t?.duree_impression_min > 0 ? duree(t.duree_impression_min) : "—"),
+      date: el("td", { className: "num" }, date(s?.cree_le || t.cree_le)) };
+  const ligne = el("tr", {}, ...cles.map((k) => c[k]));
   ligne.setAttribute("aria-selected", String(s ? s.id === sortieChoisie : !sortieChoisie && t.id === selectionne));
-  ligne.addEventListener("click", () => { selectionne = t?.id ?? null; sortieChoisie = s?.id ?? null; afficherTravaux(); });
+  const choisir = () => { selectionne = t?.id ?? null; sortieChoisie = s?.id ?? null; afficherTravaux(); };
+  ligne.addEventListener("click", choisir);
+  ligne.addEventListener("contextmenu", (e) => { choisir(); menuLigne(e, s); });
   if (t) ligne.addEventListener("dblclick", () => { selectionne = t.id; if (t.format === "pdf" && t.statut !== "en_cours") ouvrirEdition(t); });
+  // Glisser-déposer dans la file : une sortie en attente se pose à la place d'une autre de
+  // la même machine (le serveur la monte ou la descend d'autant).
+  if (s && ["en_attente", "suspendue"].includes(s.etat)) {
+    ligne.draggable = true;
+    ligne.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/x-eko-sortie", s.id); e.dataTransfer.effectAllowed = "move"; });
+    ligne.addEventListener("dragover", (e) => { if (e.dataTransfer.types.includes("text/x-eko-sortie")) { e.preventDefault(); ligne.classList.add("cible-depot"); } });
+    ligne.addEventListener("dragleave", () => ligne.classList.remove("cible-depot"));
+    ligne.addEventListener("drop", (e) => {
+      const id = e.dataTransfer.getData("text/x-eko-sortie");
+      if (!id) return;
+      e.preventDefault(); e.stopPropagation();
+      ligne.classList.remove("cible-depot");
+      deplacerSortie(id, s.id);
+    });
+  }
   return ligne;
+}
+
+/** Pose la sortie `id` à la place de `cible` dans la file de sa machine. */
+async function deplacerSortie(id, cible) {
+  const src = sorties.find((x) => x.id === id);
+  const file = sorties.filter((x) => x.machine === src?.machine && ["en_attente", "suspendue"].includes(x.etat)).map((x) => x.id);
+  const [i, j] = [file.indexOf(id), file.indexOf(cible)];
+  if (i < 0 || j < 0 || i === j) return;
+  for (let k = 0; k < Math.abs(i - j); k++) {
+    if (!(await api(`/api/file/${id}/${i > j ? "monter" : "descendre"}`, { method: "POST" }))) break;
+  }
+  rafraichir();
+}
+
+/** Colonnes masquées (« zone:colonne »), gardées sur ce poste ; nom, état et vignette restent. */
+const COLONNES_FIXES = ["mini", "nom", "etat"];
+const colonnesMasquees = new Set((() => { try { return JSON.parse(localStorage.getItem("eko-rip-colonnes") || "[]"); } catch { return []; } })());
+
+/** Menu au clic droit : `items` = { texte, action, desactive, danger } ou « - » (trait). */
+function menuContexte(e, items) {
+  e.preventDefault();
+  const m = $("menu-contexte");
+  m.replaceChildren(...items.filter(Boolean).map((it) => {
+    if (it === "-") return el("hr");
+    const b = el("button", { type: "button", className: it.danger ? "danger" : "", role: "menuitem" }, it.texte);
+    b.disabled = !!it.desactive;
+    b.addEventListener("click", () => { m.hidden = true; it.action(); });
+    return b;
+  }));
+  m.hidden = false;
+  const r = m.getBoundingClientRect();
+  m.style.left = `${Math.max(4, Math.min(e.clientX, innerWidth - r.width - 4))}px`;
+  m.style.top = `${Math.max(4, Math.min(e.clientY, innerHeight - r.height - 4))}px`;
+  m.querySelector("button:not(:disabled)")?.focus();
+}
+const fermerMenu = () => { $("menu-contexte").hidden = true; };
+document.addEventListener("click", (e) => { if (!$("menu-contexte").contains(e.target)) fermerMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fermerMenu(); });
+window.addEventListener("blur", fermerMenu);
+
+/** Clic droit sur une ligne : actions de file de la sortie, puis celles de la barre d'outils. */
+function menuLigne(e, s) {
+  const possibles = s ? (s.archivee ? actionsArchive : actionsPossibles[s.etat] || []) : [];
+  const outils = ["o-imprimer", "o-decouper", "o-editer", "o-reglages", "o-bat", "o-relancer", "o-supprimer"].map((id) => $(id));
+  menuContexte(e, [
+    ...possibles.map((a) => ({ texte: T().actions[a], danger: a === "annuler" || a === "retirer", action: () => (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")) })),
+    possibles.length ? "-" : null,
+    ...outils.map((b) => ({ texte: b.title || b.textContent.trim(), desactive: b.disabled, danger: b.id === "o-supprimer", action: () => b.click() })),
+  ]);
+}
+/** Clic droit sur une machine du bandeau. */
+function menuMachine(e, m) {
+  menuContexte(e, [
+    { texte: filtreMachine === m.id ? T().toutes_machines : T().afficher_seulement(m.nom), action: () => { filtreMachine = filtreMachine === m.id ? "" : m.id; afficherTravaux(); } },
+    { texte: T().voir_machine, action: () => { filtreMachine = m.id; ongletInspecteur = "machine"; afficherTravaux(); } },
+    m.id === "epson" ? { texte: T().relire, action: async () => { await chargerMedia(); afficherTravaux(); } } : null,
+    "-",
+    { texte: T().configurer_machine, action: () => montrer("systeme") },
+  ]);
+}
+/** Clic droit sur un en-tête : colonnes à montrer ou masquer. */
+function menuColonnes(e, cols, zone) {
+  menuContexte(e, cols.filter(([k]) => !COLONNES_FIXES.includes(k)).map(([k, x]) => ({
+    texte: `${colonnesMasquees.has(`${zone}:${k}`) ? "☐" : "☑"} ${x}`,
+    action: () => {
+      const cle = `${zone}:${k}`;
+      colonnesMasquees.has(cle) ? colonnesMasquees.delete(cle) : colonnesMasquees.add(cle);
+      try { localStorage.setItem("eko-rip-colonnes", JSON.stringify([...colonnesMasquees])); } catch {}
+      afficherTravaux();
+    },
+  })));
 }
 
 /** Colonne d'actions de la file (à gauche du tableau) : agit sur la sortie choisie. */
@@ -2962,6 +3065,7 @@ function afficherBandeau() {
       el("td", { className: "num" }, String(actives.length)), el("td", { className: "num" }, reste > 0 ? duree(reste) : "—"));
     ligne.setAttribute("aria-current", String(filtreMachine === m.id));
     ligne.addEventListener("click", () => { filtreMachine = filtreMachine === m.id ? "" : m.id; afficherTravaux(); });
+    ligne.addEventListener("contextmenu", (e) => menuMachine(e, m));
     return ligne;
   });
   $("bandeau-machines").replaceChildren(el("table", { className: "tableau" },

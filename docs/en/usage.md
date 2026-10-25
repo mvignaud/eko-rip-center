@@ -215,6 +215,12 @@ it) and **Log** (the screen's messages, latest first). Below 1100 px, the inspec
 under the tables; below 1360 px, the bar's tools keep their symbol and their name goes to
 a tooltip.
 
+**Right click**: on a row, the output's queue actions then the toolbar's; on a machine,
+show only it, see its state, re-read the Epson, configure it; on a table header, the
+columns to show or hide (name, state and thumbnail stay; the choice is kept on this
+computer). **Drag and drop**: in **To print**, a queued or held output takes the place of
+another one of the same machine.
+
 Click a row to open its job in the inspector:
 
 - one part per page, with its number of cut paths;
