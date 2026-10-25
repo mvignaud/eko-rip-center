@@ -3298,7 +3298,7 @@ async fn lancer_imbrication(etat: &Partage, m: &machines::Machine, g: Groupe) ->
         rendre();
         return Err((StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))));
     }
-    let nom = format!("Imbrication {} — {} travail(x)", m.nom, plan.retenus.len());
+    let nom = format!("Imbrication {} — {} page(s)", m.nom, plan.retenus.len());
     let imbriquee = Imbriquee { machine: m.id.clone(), sorties: prises.iter().map(|(i, _)| *i).collect() };
     match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Some(imbriquee)).await {
         Ok(t) => Ok(t),
@@ -3361,7 +3361,7 @@ async fn lister_imbrications(State(etat): State<Partage>) -> Json<Vec<serde_json
             let d = &g.sorties[0].1.demande;
             liste.push(serde_json::json!({
                 "machine": m.id, "code": g.code, "strategie": m.imbrication.strategie,
-                "travaux": g.plan.as_ref().map_or(0, |p| p.retenus.len()), "laize_mm": g.laize_mm, "longueur_mm": longueur,
+                "pages": g.plan.as_ref().map_or(0, |p| p.retenus.len()), "laize_mm": g.laize_mm, "longueur_mm": longueur,
                 "remplissage": remplissage, "pret": pret, "contour": f.contour, "places": places, "elements": elements,
                 "support": d.support, "decoupeuse": g.decoupeuse, "miroir": d.edition.miroir,
             }));
@@ -6355,8 +6355,8 @@ mod tests {
             let p = planches(&e).await;
             assert_eq!(p.len(), 2, "sans découpeuse et Kona : deux planches");
             let (libre, kona) = (&p[0], &p[1]);
-            assert_eq!((libre["travaux"].as_u64(), libre["decoupeuse"].as_str()), (Some(2), None));
-            assert_eq!((kona["travaux"].as_u64(), kona["decoupeuse"].as_str()), (Some(1), Some("kona")));
+            assert_eq!((libre["pages"].as_u64(), libre["decoupeuse"].as_str()), (Some(2), None));
+            assert_eq!((kona["pages"].as_u64(), kona["decoupeuse"].as_str()), (Some(1), Some("kona")));
             // Économie sur 1626 mm : les deux étiquettes côte à côte, 100 mm de long.
             let longueur = libre["longueur_mm"].as_f64().unwrap();
             assert!((longueur - 100.0).abs() < 1e-3, "{libre}");
