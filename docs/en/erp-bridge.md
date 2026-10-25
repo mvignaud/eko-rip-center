@@ -184,7 +184,7 @@ layers, media, modes, saved settings, ICC profiles) and when the ERP asks. Keys:
 (printers), `decoupeuses`, `couches_decoupe`, `supports`, `modes`, `prereglages`,
 `profils`, and `serveur` (version). Each object carries its `uuid` (except profiles,
 identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uuid`,
-`decoupeuse_uuid` link them. No price.
+`decoupeuse_uuid` link them. An unknown field is left out, never `null`. No price.
 
 `travail.etat` — on each job state change:
 

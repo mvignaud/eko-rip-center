@@ -451,6 +451,18 @@ pub fn catalogue(donnees: &Path) -> Value {
         .into_iter()
         .map(|p| json!({ "fichier": p.fichier, "nom": if p.description.is_empty() { p.fichier.clone() } else { p.description.clone() }, "classe": p.classe, "espace": p.espace }))
         .collect();
+    // Champs inconnus omis plutôt que `null` : l'ERP valide un `machine_uuid` présent.
+    let sans_nuls = |v: Vec<Value>| -> Vec<Value> {
+        v.into_iter()
+            .map(|mut o| {
+                if let Some(m) = o.as_object_mut() {
+                    m.retain(|_, x| !x.is_null());
+                }
+                o
+            })
+            .collect()
+    };
+    let (l_machines, l_supports, profils, l_modes, prereglages, l_decoupeuses, l_couches) = (sans_nuls(l_machines), sans_nuls(l_supports), sans_nuls(profils), sans_nuls(l_modes), sans_nuls(prereglages), sans_nuls(l_decoupeuses), sans_nuls(l_couches));
     json!({
         "serveur": env!("CARGO_PKG_VERSION"),
         "machines": l_machines,
@@ -1040,6 +1052,7 @@ mod tests {
         assert_eq!(v["modes"][0]["support_uuid"], json!(c.supports[0].id));
         assert_eq!(v["prereglages"][0]["decoupeuse_uuid"], v["decoupeuses"][0]["uuid"]);
         assert!(v["profils"].is_array());
+        assert!(v["prereglages"][0].get("profil").is_none(), "inconnu : omis, jamais null");
         let texte = v.to_string();
         assert!(!texte.contains("prix") && !texte.contains("cout") && !texte.contains("tarif"), "aucun montant");
         // Machine renommée : nouveau catalogue, même uuid.

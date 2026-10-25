@@ -214,7 +214,8 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
 l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_decoupe`,
 `supports`, `modes`, `prereglages`, `profils`, et `serveur` (version). Chaque objet porte son
 `uuid` (sauf les profils, identifiés par `fichier`) et son `nom` ; `machine_uuid`,
-`support_uuid`, `mode_uuid`, `decoupeuse_uuid` les relient. Aucun prix.
+`support_uuid`, `mode_uuid`, `decoupeuse_uuid` les relient. Un champ inconnu est omis, jamais
+`null`. Aucun prix.
 
 `travail.etat` — à chaque changement d'état d'un travail :
 
