@@ -809,7 +809,13 @@ media).
 (20 % by default) and the basis of the **cost price shown** (excl. VAT by default); the
 card, each page's estimate and the CSV (`base` column) follow.
 
-**Export consumption (CSV)** downloads the print log report (see below).
+Two reports: **Export consumption (CSV)** gives the **real** figures, one row per print
+in the log (see below); **Export estimates (CSV)** gives the **estimate**, one row per page
+of each rendered job, printed or not: UTC date, job, page, media, area, media area,
+estimated ml per ink (`BK_ml`, `C_ml`, `M_ml`, `Y_ml`, `WH_ml`, `MS_ml`, spot colours in
+`autres_ml`), ink and media costs, total and VAT basis. Same conventions: `;` separator,
+comma decimals, fixed columns, a `total` row equal to the sum, period through
+`/api/rapports/estimations.csv?depuis=&jusqua=` (job creation date, Unix seconds).
 
 Known limit: without a known roll width, the media counted is the page area, not the
 roll length used across the whole roll width.

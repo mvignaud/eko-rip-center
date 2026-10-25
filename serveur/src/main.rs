@@ -400,6 +400,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
         .route("/api/tarifs", get(lire_tarifs).post(enregistrer_tarifs))
         .route("/api/rapports/consommation.csv", get(rapport_consommation))
+        .route("/api/rapports/estimations.csv", get(rapport_estimations))
         .route("/api/consommation/journal", get(journal_des_impressions))
         .route("/api/consommation/journal/purger", axum::routing::post(purger_le_journal))
         .route("/api/consommation/reglages", get(lire_reglages_consommation).post(enregistrer_reglages_consommation))
@@ -519,6 +520,28 @@ async fn rapport_consommation(State(etat): State<Partage>, axum::extract::Query(
     let lignes = lignes_du_journal(&etat.config.donnees, q.depuis, q.jusqua);
     let csv = consommation::csv(&lignes, q.par.as_deref() == Some("jour"), date_utc);
     ([(header::CONTENT_TYPE, "text/csv; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"consommation.csv\"")], csv).into_response()
+}
+
+/// Coût estimé de chaque page de chaque travail rendu, imprimé ou non (couverture de
+/// l'aperçu × tarifs du moment), comme le rapport d'avant le journal ; `depuis`/`jusqua`
+/// portent sur la date de création du travail.
+async fn rapport_estimations(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<Rapport>) -> Response {
+    let tarifs = couverture::lire(&etat.config.donnees);
+    let pages: Vec<consommation::PageEstimee> = lire_tous(&etat.config.donnees)
+        .iter()
+        .filter(|t| matches!(t.statut, Statut::Termine) && t.demande.mode == Mode::Imprimer)
+        .filter(|t| q.depuis.is_none_or(|d| t.cree_le >= d) && q.jusqua.is_none_or(|j| t.cree_le <= j))
+        .flat_map(|t| {
+            t.pages.iter().enumerate().map(|(i, p)| consommation::PageEstimee {
+                date: date_utc(t.cree_le),
+                nom: t.nom.clone(),
+                id: t.id,
+                page: i + 1,
+                estimation: couverture::estimer(p.surface_m2, p.hauteur_mm, &p.couverture, &p.plaques_decoupe, &tarifs, t.demande.support.as_deref()),
+            })
+        })
+        .collect();
+    ([(header::CONTENT_TYPE, "text/csv; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"estimations.csv\"")], consommation::csv_estimations(&pages)).into_response()
 }
 
 /// Journal pour l'écran : les 200 dernières impressions de la période, les plus récentes d'abord.
@@ -5105,6 +5128,20 @@ mod tests {
             let lignes: Vec<&str> = csv.lines().collect();
             assert_eq!(lignes.len(), 1, "{csv}");
             assert!(lignes[0].contains("\"C_estime_ml\";\"C_reel_ml\"") && !lignes[0].contains("CutContour"), "{}", lignes[0]);
+            // Le rapport des estimations, lui, a la page : coût estimé, total = somme.
+            let r = appel(&e, "GET", "/api/rapports/estimations.csv", None, None).await;
+            assert_eq!(r.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
+            let est = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            let l: Vec<&str> = est.lines().collect();
+            assert_eq!(l.len(), 3, "en-tête, la page, le total : {est}");
+            assert_eq!(l[0], consommation::colonnes_estimations().iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(";"), "colonnes fixes");
+            assert!(l[1].contains("\"cyan;\"\"2x1\"\".pdf\""), "nom protégé : {}", l[1]);
+            let cyan = (attendu * 100.0).round() / 100.0;
+            assert!(l[1].contains(&format!(";{};", format!("{cyan:.2}").replace('.', ","))), "C_ml = {cyan} : {}", l[1]);
+            assert!(l[2].starts_with("\"total\";"));
+            // Hors période : en-tête seul.
+            let r = appel(&e, "GET", "/api/rapports/estimations.csv?jusqua=1", None, None).await;
+            assert_eq!(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().split(|b| *b == b'\n').filter(|x| !x.is_empty()).count(), 1);
             std::fs::remove_dir_all(&donnees).unwrap();
         }
     }

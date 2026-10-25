@@ -447,7 +447,7 @@ fn cellules(l: &Ligne, date: &str) -> Vec<Cellule> {
 /// Une ligne qui résume `lignes` : sommes des colonnes qui s'additionnent (des valeurs
 /// arrondies, pour que le total soit la somme de ce qu'on lit), texte gardé s'il est le
 /// même partout, écart recalculé.
-fn agreger(lignes: &[Vec<Cellule>]) -> Vec<Cellule> {
+fn agreger(lignes: &[Vec<Cellule>], avec_ecart: bool) -> Vec<Cellule> {
     let mut r: Vec<Cellule> = (0..lignes[0].len())
         .map(|k| match &lignes[0][k] {
             Cellule::Texte(s) => Cellule::Texte(if lignes.iter().all(|l| l[k] == lignes[0][k]) { s.clone() } else { String::new() }),
@@ -458,7 +458,9 @@ fn agreger(lignes: &[Vec<Cellule>]) -> Vec<Cellule> {
             Cellule::Nombre(v, d, false) => nombre(v.filter(|_| lignes.iter().all(|l| l[k] == lignes[0][k])), *d, false),
         })
         .collect();
-    r[ECART] = calculer_ecart(&r);
+    if avec_ecart {
+        r[ECART] = calculer_ecart(&r);
+    }
     r
 }
 
@@ -482,8 +484,13 @@ pub fn csv(lignes: &[Ligne], par_jour: bool, date: impl Fn(u64) -> String) -> St
             c[0] = Cellule::Texte(jour.clone());
             jours.entry((jour, l.impression.machine.clone())).or_default().push(c);
         }
-        rangs = jours.values().map(|v| agreger(v)).collect();
+        rangs = jours.values().map(|v| agreger(v, true)).collect();
     }
+    ecrire_csv(&colonnes(), &rangs, true)
+}
+
+/// En-tête, lignes, puis la ligne `total` (somme des lignes affichées).
+fn ecrire_csv(colonnes: &[String], rangs: &[Vec<Cellule>], avec_ecart: bool) -> String {
     let texte = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
     let ecrire = |c: &[Cellule]| -> String {
         c.iter()
@@ -495,16 +502,68 @@ pub fn csv(lignes: &[Ligne], par_jour: bool, date: impl Fn(u64) -> String) -> St
             .collect::<Vec<_>>()
             .join(";")
     };
-    let mut csv = colonnes().iter().map(|c| texte(c)).collect::<Vec<_>>().join(";") + "\n";
-    for r in &rangs {
+    let mut csv = colonnes.iter().map(|c| texte(c)).collect::<Vec<_>>().join(";") + "\n";
+    for r in rangs {
         csv += &(ecrire(r) + "\n");
     }
     if !rangs.is_empty() {
-        let mut total = agreger(&rangs);
+        let mut total = agreger(rangs, avec_ecart);
         total[0] = Cellule::Texte(String::from("total"));
         csv += &(ecrire(&total) + "\n");
     }
     csv
+}
+
+/// Encres du rapport des estimations, plaque du rendu → colonne (les tons directs sans
+/// encre de l'imprimante vont dans `autres_ml`).
+const ENCRES_ESTIMEES: [&str; 6] = ["BK", "C", "M", "Y", "WH", "MS"];
+
+/// Colonnes du rapport des estimations, toujours les mêmes et dans cet ordre.
+pub fn colonnes_estimations() -> Vec<String> {
+    let mut c: Vec<String> = ["date", "travail", "id", "page", "support", "surface_m2", "surface_support_m2"].map(String::from).into();
+    c.extend(ENCRES_ESTIMEES.map(|e| format!("{e}_ml")));
+    c.extend(["autres_ml", "encre_ml", "cout_encres", "cout_support", "total", "base"].map(String::from));
+    c
+}
+
+/// Une page rendue et son estimation (couverture de l'aperçu × tarifs) : `date` mise en
+/// forme, nom et id du travail, n° de page.
+pub struct PageEstimee {
+    pub date: String,
+    pub nom: String,
+    pub id: Uuid,
+    pub page: usize,
+    pub estimation: crate::couverture::Estimation,
+}
+
+/// Rapport des estimations : une ligne par page de chaque travail rendu, imprimé ou non,
+/// au coût estimé ; mêmes conventions que `csv` (`;`, virgule, colonnes fixes, total).
+pub fn csv_estimations(pages: &[PageEstimee]) -> String {
+    let rangs: Vec<Vec<Cellule>> = pages
+        .iter()
+        .map(|p| {
+            let e = &p.estimation;
+            let t = |s: &str| Cellule::Texte(s.to_string());
+            let mut par_encre = BTreeMap::<&str, f64>::new();
+            for l in &e.encres {
+                let colonne = match crate::epson::canal(&l.nom) {
+                    Some(crate::epson::Canal::K) => "BK",
+                    Some(crate::epson::Canal::C) => "C",
+                    Some(crate::epson::Canal::M) => "M",
+                    Some(crate::epson::Canal::Y) => "Y",
+                    Some(crate::epson::Canal::WH) => "WH",
+                    Some(crate::epson::Canal::MS) => "MS",
+                    None => "autres",
+                };
+                *par_encre.entry(colonne).or_default() += l.ml;
+            }
+            let mut c = vec![t(&p.date), t(&p.nom), t(&p.id.to_string()), nombre(Some(p.page as f64), 0, false), t(e.support.as_deref().unwrap_or("")), nombre(Some(e.surface_m2), 4, true), nombre(Some(e.surface_support_m2), 4, true)];
+            c.extend(ENCRES_ESTIMEES.iter().chain(&["autres"]).map(|n| nombre(Some(par_encre.get(n).copied().unwrap_or(0.0)), 2, true)));
+            c.extend([nombre(Some(e.ml), 2, true), nombre(Some(e.cout_encres), 4, true), nombre(Some(e.cout_support), 4, true), nombre(Some(e.total), 4, true), t(if e.ttc { "TTC" } else { "HT" })]);
+            c
+        })
+        .collect();
+    ecrire_csv(&colonnes_estimations(), &rangs, false)
 }
 
 #[cfg(test)]
@@ -673,6 +732,35 @@ mod tests {
         assert_eq!(jours.iter().skip(1).map(|x| x[0].as_str()).collect::<Vec<_>>(), ["1970-01-01", "1970-01-02", "total"]);
         assert_eq!(jours[2][col("impressions")], "2");
         assert_eq!(jours[3][col("encre_reelle_ml")], total[col("encre_reelle_ml")]);
+    }
+
+    /// Rapport des estimations : colonnes stables, plaques rangées par encre (ton direct en
+    /// `autres_ml`), décimales à la virgule, total = somme des lignes.
+    #[test]
+    fn rapport_des_estimations() {
+        let vide = csv_estimations(&[]);
+        assert_eq!(vide.lines().count(), 1);
+        let t = Tarifs { affichage_ttc: true, support_m2: 5.0, ..Tarifs::default() };
+        let page = |c: f64, spot: f64| PageEstimee {
+            date: "2026-10-25 10:00:00".into(),
+            nom: "a".into(),
+            id: Uuid::nil(),
+            page: 1,
+            estimation: crate::couverture::estimer(1.0, 1000.0, &BTreeMap::from([("Cyan".into(), c), ("Black".into(), 0.25), ("PANTONE 485 C".into(), spot)]), &[], &t, None),
+        };
+        let texte = csv_estimations(&[page(0.5, 0.0), page(0.333, 0.1)]);
+        assert_eq!(texte.lines().next(), vide.lines().next(), "en-tête stable");
+        let t = lire_csv(&texte);
+        let col = |n: &str| t[0].iter().position(|c| c == n).unwrap();
+        assert_eq!(t.len(), 4);
+        assert_eq!((t[1][col("C_ml")].as_str(), t[1][col("BK_ml")].as_str(), t[1][col("autres_ml")].as_str()), ("5,00", "2,50", "0,00"));
+        assert_eq!((t[2][col("C_ml")].as_str(), t[2][col("autres_ml")].as_str()), ("3,33", "1,00"));
+        assert_eq!(t[3][0], "total");
+        for n in ["surface_m2", "surface_support_m2", "C_ml", "BK_ml", "autres_ml", "encre_ml", "cout_encres", "cout_support", "total"] {
+            let somme: f64 = t[1..3].iter().map(|x| valeur(&x[col(n)])).sum();
+            assert!((valeur(&t[3][col(n)]) - somme).abs() < 1e-9, "{n}");
+        }
+        assert_eq!(t[3][col("base")], "TTC");
     }
 
     /// 6.6 — facteur proposé = réel / estimé (avant correction) sur les N dernières.

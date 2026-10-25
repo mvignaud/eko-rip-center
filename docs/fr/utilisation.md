@@ -855,8 +855,14 @@ longueur imprimée. La carte du travail affiche son **prix de revient** (encre +
 (20 % par défaut) et la base du **prix de revient affiché** (HT par défaut) ; la carte,
 l'estimation de chaque page et le CSV (colonne `base`) suivent.
 
-**Exporter la consommation (CSV)** télécharge le rapport du journal des impressions
-(voir ci-dessous).
+Deux rapports : **Exporter la consommation (CSV)** donne le **réel**, une ligne par
+impression du journal (voir ci-dessous) ; **Exporter les estimations (CSV)** donne
+l'**estimé**, une ligne par page de chaque travail rendu, imprimé ou non : date UTC,
+travail, page, support, surface, surface de support, ml estimés par encre (`BK_ml`,
+`C_ml`, `M_ml`, `Y_ml`, `WH_ml`, `MS_ml`, tons directs dans `autres_ml`), coûts encre et
+support, total et base. Mêmes conventions : séparateur `;`, décimales à la virgule,
+colonnes fixes, ligne `total` égale à la somme, période par
+`/api/rapports/estimations.csv?depuis=&jusqua=` (date de création du travail, secondes Unix).
 
 Limite connue : sans largeur de rouleau connue, le support compté est la surface de la
 page, pas la longueur de rouleau consommée sur toute la laize.
