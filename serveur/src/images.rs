@@ -253,10 +253,37 @@ fn infos_tiff(d: &mut Decodeur) -> Result<InfosTiff, Refus> {
     let y = d.find_tag(Tag::YResolution).ok().flatten().and_then(reel);
     let ppi = match (x, y) {
         (Some(x), y) if x > 0.0 && unite > 0.0 => Some((x * unite, y.filter(|y| *y > 0.0).unwrap_or(x) * unite)),
-        _ => None,
+        // Photoshop peut écrire « 1 sans unité » dans l'en-tête TIFF et garder la vraie
+        // résolution dans ses propres données (relevé le 25/10 sur une affiche de l'atelier).
+        _ => d.find_tag(Tag::Unknown(34377)).ok().flatten().and_then(|v| v.into_u8_vec().ok()).and_then(|o| resolution_photoshop(&o)),
     };
     let icc = d.find_tag(Tag::Unknown(34675)).ok().flatten().and_then(|v| v.into_u8_vec().ok()).filter(|p| p.len() > 128);
     Ok(InfosTiff { largeur, hauteur, espace, couleur, canaux, alpha, bits, ppi, icc })
+}
+
+/// Résolution des ressources d'image Photoshop (bloc `8BIM` n° 1005, ResolutionInfo) :
+/// virgule fixe 16.16, unité 1 = pixels par pouce, 2 = pixels par cm.
+fn resolution_photoshop(o: &[u8]) -> Option<(f64, f64)> {
+    let mut i = 0;
+    while i + 12 <= o.len() {
+        if &o[i..i + 4] != b"8BIM" {
+            i += 1;
+            continue;
+        }
+        let id = u16::from_be_bytes([o[i + 4], o[i + 5]]);
+        let nom = 1 + *o.get(i + 6)? as usize;
+        let j = i + 6 + nom + nom % 2;
+        let taille = u32::from_be_bytes(o.get(j..j + 4)?.try_into().ok()?) as usize;
+        let donnees = o.get(j + 4..j + 4 + taille)?;
+        if id == 1005 && donnees.len() >= 16 {
+            let fixe = |k: usize| u32::from_be_bytes(donnees[k..k + 4].try_into().unwrap()) as f64 / 65536.0;
+            let unite = |k: usize| if u16::from_be_bytes([donnees[k], donnees[k + 1]]) == 2 { 2.54 } else { 1.0 };
+            let (h, v) = (fixe(0) * unite(4), fixe(8) * unite(12));
+            return (h > 0.0).then_some((h, if v > 0.0 { v } else { h }));
+        }
+        i = j + 4 + taille + taille % 2;
+    }
+    None
 }
 
 /// Lit le TIFF ligne par ligne (bandes ou tuiles), en octets gros-boutistes.
@@ -302,12 +329,22 @@ fn tiff_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
     let i = infos_tiff(&mut ouvrir_tiff(src)?)?;
     let ignores = i.canaux - i.couleur - usize::from(i.alpha.is_some());
     let ppi = i.ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT));
-    let img = Image { largeur: i.largeur, hauteur: i.hauteur, ppi, espace: i.espace, composantes: i.couleur as u32, bits: i.bits, icc: i.icc.clone(), decode: None, dct: None, alpha: i.alpha.is_some() };
     let octets = (i.bits as usize).div_ceil(8);
+    // Un alpha partout opaque ne devient pas un masque : la transparence ralentit beaucoup
+    // le rendu (Ghostscript passe alors par son moteur de transparence).
+    let mut opaque = true;
+    if let Some(a) = i.alpha {
+        lignes_tiff(src, |l| {
+            opaque &= l.chunks_exact(i.canaux * octets).all(|px| px[a * octets..(a + 1) * octets].iter().all(|&o| o == 0xFF));
+            Ok(())
+        })?;
+    }
+    let i = InfosTiff { alpha: i.alpha.filter(|_| !opaque), ..i };
+    let img = Image { largeur: i.largeur, hauteur: i.hauteur, ppi, espace: i.espace, composantes: i.couleur as u32, bits: i.bits, icc: i.icc.clone(), decode: None, dct: None, alpha: i.alpha.is_some() };
     let passe = |w: &mut dyn Write, garder_alpha: bool| -> Result<(), Refus> {
         let (mut c, mut a) = (vec![], vec![]);
         lignes_tiff(src, |l| {
-            if i.bits == 1 || (ignores == 0 && i.alpha.is_none()) {
+            if i.bits == 1 || i.canaux == i.couleur {
                 return w.write_all(l).map_err(interne);
             }
             separer(l, i.canaux, i.couleur, i.alpha, octets, &mut c, &mut a);
@@ -349,10 +386,22 @@ fn png_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
         png::ColorType::Rgba => ("DeviceRGB", 3, 4),
         png::ColorType::Indexed => return Err(illisible("palette non dépliée")),
     };
-    let alpha = (canaux > couleur).then_some(couleur);
-    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: couleur as u32, bits, icc, decode: None, dct: None, alpha: alpha.is_some() };
     let octets = bits as usize / 8;
     drop(r);
+    // Alpha partout opaque : pas de masque (voir le TIFF).
+    let mut alpha = (canaux > couleur).then_some(couleur);
+    if let Some(a) = alpha {
+        let mut r = lecteur_png(src)?;
+        let mut opaque = true;
+        while let Some(l) = r.next_row().map_err(illisible)? {
+            opaque &= l.data().chunks_exact(canaux * octets).all(|px| px[a * octets..(a + 1) * octets].iter().all(|&o| o == 0xFF));
+            if !opaque {
+                break;
+            }
+        }
+        alpha = alpha.filter(|_| !opaque);
+    }
+    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: couleur as u32, bits, icc, decode: None, dct: None, alpha: alpha.is_some() };
     let passe = |w: &mut dyn Write, garder_alpha: bool| -> Result<(), Refus> {
         let mut r = lecteur_png(src)?;
         let (mut c, mut a) = (vec![], vec![]);
@@ -505,6 +554,31 @@ mod tests {
         assert!(r.sans_resolution, "pas de résolution : 72 ppi supposés");
         assert!(plaques(&pdf, &d, 72, 3, 5)[1] < 60, "rouge opaque : magenta posé");
         assert_eq!(plaques(&pdf, &d, 72, 16, 5), [255, 255, 255, 255], "transparent : rien");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// Résolution Photoshop (8BIM 1005) quand l'en-tête TIFF est « 1 sans unité » ; un alpha
+    /// partout opaque ne devient pas un masque.
+    #[test]
+    fn tiff_resolution_photoshop_et_alpha_opaque() {
+        let d = dossier();
+        let src = d.join("ps.tif");
+        let mut res = b"8BIM\x03\xed\x00\x00\x00\x00\x00\x10".to_vec();
+        res.extend_from_slice(&(300u32 << 16).to_be_bytes());
+        res.extend_from_slice(&[0, 1, 0, 1]);
+        res.extend_from_slice(&(300u32 << 16).to_be_bytes());
+        res.extend_from_slice(&[0, 1, 0, 1]);
+        let mut e = tiff::encoder::TiffEncoder::new(File::create(&src).unwrap()).unwrap();
+        let mut im = e.new_image::<tiff::encoder::colortype::RGBA8>(600, 300).unwrap();
+        im.resolution(tiff::tags::ResolutionUnit::None, tiff::encoder::Rational { n: 1, d: 1 });
+        im.encoder().write_tag(tiff::tags::Tag::Unknown(34377), &res[..]).unwrap();
+        im.write_data(&[255u8, 0, 0, 255].repeat(600 * 300)).unwrap();
+        let pdf = d.join("ps.pdf");
+        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        assert_eq!((r.largeur_mm.round(), r.hauteur_mm.round(), r.sans_resolution), (51.0, 25.0, false), "300 ppi de Photoshop");
+        let o = std::fs::read(&pdf).unwrap();
+        assert!(!o.windows(6).any(|w| w == b"/SMask"), "alpha opaque : pas de masque");
+        assert!(plaques(&pdf, &d, 10, 5, 5)[1] < 60, "rouge : magenta posé");
         std::fs::remove_dir_all(&d).unwrap();
     }
 
