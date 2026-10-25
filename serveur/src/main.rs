@@ -477,6 +477,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let mut d = Demande::default();
     let (mut mosaique, mut laize_mm, mut recouvrement_mm, mut reperes_les) = (false, 1600.0f64, 20.0f64, false);
     let (mut hauteur_max_mm, mut soudure, mut coupe_milieu) = (None, false, false);
+    let (mut etendre, mut etendre_largeur, mut etendre_seuil) = (false, 1.0f64, 0.5f64);
 
     loop {
         let champ = match form.next_field().await {
@@ -607,6 +608,12 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 d.decoupeuse = Some(valeur).filter(|v| !v.is_empty());
                 Ok(())
             }
+            "etendre" => {
+                etendre = valeur == "oui";
+                Ok(())
+            }
+            "etendre_largeur_mm" => valeur.parse().map(|v| etendre_largeur = v).map_err(|_| erreur("etendre_invalide")),
+            "etendre_seuil_mm" => valeur.parse().map(|v| etendre_seuil = v).map_err(|_| erreur("etendre_invalide")),
             _ => Ok(()),
         };
         if let Err(r) = r {
@@ -617,6 +624,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     };
     d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les, hauteur_max_mm, soudure, coupe_milieu, ..Default::default() });
+    d.etendre_coupe = etendre.then_some(coupe::Etendre { largeur_mm: etendre_largeur, seuil_mm: etendre_seuil });
     match creer_travail(&etat, id, nom, format, d).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,

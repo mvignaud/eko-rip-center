@@ -2751,7 +2751,8 @@ function vuePage(t, page, n) {
   couches.append(...vignettes);
   const basculer = bouton(T().couches_bouton(vignettes.length), () => { couchesOuvertes = !couchesOuvertes; couches.hidden = !couchesOuvertes; basculer.setAttribute("aria-expanded", couchesOuvertes); });
   basculer.setAttribute("aria-expanded", couchesOuvertes);
-  bloc.append(el("div", { className: "apercu-principal" }, principal), vignettes.length ? basculer : null, couches);
+  // `append` ne filtre pas null : sans vignette, pas de bouton (sinon « null » s'affiche).
+  bloc.append(el("div", { className: "apercu-principal" }, principal), ...(vignettes.length ? [basculer] : []), couches);
   return bloc;
 }
 /** Couches (découpe, plaques) montrées ou non, gardé d'une page et d'un rafraîchissement à l'autre. */
