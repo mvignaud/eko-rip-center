@@ -1677,14 +1677,24 @@ async fn media_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>) 
 }
 
 /// Relevé SNMP d'une Epson : encres et longueur restante, n° du support chargé et laize ;
+/// Une lecture SNMP d'une Epson : relevé (encres, rouleau), n° de support, laize, chauffages, alertes.
+struct Lecture {
+    releve: releves::Releve,
+    numero: Option<u8>,
+    largeur_mm: f64,
+    chauffages: Vec<(u8, u8)>,
+    alertes: Vec<String>,
+}
+
 /// `None` si elle ne répond pas.
-async fn lire_releve(hote: String) -> Option<(releves::Releve, Option<u8>, f64)> {
+async fn lire_releve(hote: String) -> Option<Lecture> {
     let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
     let lecture = move || {
         let d = Duration::from_secs(2);
         let e = media::lire_etat_epson(&hote, &communaute, d)?;
         let media = media::lire_medias(&hote, &communaute, d).ok()?.into_iter().next()?;
-        (!e.encres.is_empty()).then(|| (releves::Releve { le: maintenant(), encres: e.encres, longueur_m: media.longueur_m }, e.support, media.largeur_mm))
+        let alertes = media::lire_alertes(&hote, &communaute, d).unwrap_or_default();
+        (!e.encres.is_empty()).then(|| Lecture { releve: releves::Releve { le: maintenant(), encres: e.encres, longueur_m: media.longueur_m }, numero: e.support, largeur_mm: media.largeur_mm, chauffages: e.chauffages, alertes })
     };
     tokio::task::spawn_blocking(lecture).await.ok().flatten()
 }
@@ -1695,7 +1705,7 @@ async fn relever_maintenant(etat: &Etat, m: &machines::Machine) -> Option<u64> {
     if m.modele != machines::Modele::EpsonScS80600 {
         return None;
     }
-    let (r, _, _) = lire_releve(m.snmp.clone()?).await?;
+    let r = lire_releve(m.snmp.clone()?).await?.releve;
     releves::ajouter(&etat.config.donnees, &m.id, &r).map_err(|e| eprintln!("relevé {} : {e}", m.id)).ok()?;
     Some(r.le)
 }
@@ -1706,7 +1716,7 @@ async fn relever(etat: Partage) {
     loop {
         let cibles: Vec<(String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.snmp.clone()?))).collect();
         for (id, hote) in cibles {
-            let Some((r, numero, largeur_mm)) = lire_releve(hote).await else { continue };
+            let Some(Lecture { releve: r, numero, largeur_mm, chauffages, alertes }) = lire_releve(hote).await else { continue };
             // Support chargé lu sur la machine (n° de support), s'il a changé (roadmap 1.3).
             if let Some(n) = numero {
                 let support_uuid = supports::par_numero(&supports::lire(&etat.config.donnees, "epson"), &id, n).and_then(|s| s.id);
@@ -1715,6 +1725,8 @@ async fn relever(etat: Partage) {
                     let _ = supports::ecrire_charge(&etat.config.donnees, &id, supports::Charge { support_uuid, laize_mm: Some(largeur_mm), source: "machine".into(), le: maintenant() });
                 }
             }
+            // État publié à l'ERP (roadmap 7.9), après le support chargé qu'il reprend.
+            pont::noter_machine(&etat.config.donnees, &id, &r, &chauffages, &alertes);
             let dernier = derniers.entry(id.clone()).or_insert_with(|| releves::lire(&etat.config.donnees, &id).pop());
             if dernier.as_ref().is_some_and(|d| releves::identique(d, &r)) {
                 continue;

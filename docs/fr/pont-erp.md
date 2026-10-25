@@ -109,7 +109,7 @@ Enveloppe d'un événement (transport : § 6) :
   un `dernier_seq_traite` plus grand que le dernier `seq` du RIP, le RIP cesse d'envoyer et le
   signale dans Système : il ne renumérote jamais en silence.
 - `id` : identifiant unique de l'événement.
-- `type` : `catalogue.modifie`, `travail.etat`, `sortie.etat`, `travail.consommation`…
+- `type` : `catalogue.modifie`, `travail.etat`, `sortie.etat`, `travail.consommation`, `machine.etat`…
 
 ## 5. Modèle d'états
 
@@ -256,3 +256,21 @@ l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_deco
 - `encre_ml` est l'encre réelle répartie au moment de la fin (la répartition d'une baisse
   entre plusieurs impressions peut s'affiner ensuite dans les rapports du RIP).
 - `ref_erp` vaut `null` jusqu'à la réception des travaux de l'ERP (lot R3).
+
+`machine.etat` (roadmap 7.9) — état relevé d'une imprimante (SNMP, toutes les minutes), publié
+seulement quand il change (l'heure seule ne compte pas) :
+
+```json
+{ "machine_uuid": "…", "machine": "epson", "encres": [{ "encre": "BK", "pourcent": 80 }],
+  "longueur_restante_m": 37.5, "support_uuid": "…", "laize_mm": 1620,
+  "chauffages": [{ "ecran_c": 40, "autre_c": 45 }], "alertes": ["printer cover open"],
+  "bac_encre_usagee_pourcent": null, "releve_le": 1793000000 }
+```
+
+- `encres` : % restant, au point près comme l'imprimante le donne ; `longueur_restante_m` :
+  longueur saisie au chargement du rouleau, décomptée par la machine (`null` si inconnue).
+- `support_uuid` et `laize_mm` : support chargé (saisi par l'opérateur ou lu sur la machine).
+- `chauffages` : deux valeurs par chauffage ; `ecran_c` est celle de l'écran de l'imprimante.
+- `alertes` : textes de la machine, tels quels, bloquants ou non.
+- `bac_encre_usagee_pourcent` : `null` tant qu'il n'est pas lu sur l'Epson.
+- Aucun envoi à la demande pour l'instant : l'ERP garde le dernier `machine.etat` reçu.

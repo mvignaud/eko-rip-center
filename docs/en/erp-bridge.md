@@ -98,7 +98,7 @@ Event envelope (transport: § 6):
   the RIP's last `seq`, the RIP stops sending and reports it in System: it never renumbers
   silently.
 - `id`: unique event id. `type`: `catalogue.modifie`, `travail.etat`, `sortie.etat`,
-  `travail.consommation`…
+  `travail.consommation`, `machine.etat`…
 
 ## 5. State model
 
@@ -224,3 +224,21 @@ identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uu
 - `encre_ml` is the real ink split at the end time (splitting a drop among several prints
   may refine it later in the RIP reports).
 - `ref_erp` is `null` until jobs are received from the ERP (lot R3).
+
+`machine.etat` (roadmap 7.9) — state read from a printer (SNMP, every minute), published only
+when it changes (the time alone does not count):
+
+```json
+{ "machine_uuid": "…", "machine": "epson", "encres": [{ "encre": "BK", "pourcent": 80 }],
+  "longueur_restante_m": 37.5, "support_uuid": "…", "laize_mm": 1620,
+  "chauffages": [{ "ecran_c": 40, "autre_c": 45 }], "alertes": ["printer cover open"],
+  "bac_encre_usagee_pourcent": null, "releve_le": 1793000000 }
+```
+
+- `encres`: % left, to the point as the printer gives it; `longueur_restante_m`: length
+  entered when the roll was loaded, counted down by the machine (`null` if unknown).
+- `support_uuid` and `laize_mm`: loaded media (entered by the operator or read on the machine).
+- `chauffages`: two values per heater; `ecran_c` is the one shown on the printer's screen.
+- `alertes`: the machine's texts, as is, blocking or not.
+- `bac_encre_usagee_pourcent`: `null` until it is read on the Epson.
+- No on-demand send yet: the ERP keeps the last `machine.etat` received.

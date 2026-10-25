@@ -106,6 +106,9 @@ pub struct Etat {
     pub travaux: BTreeMap<Uuid, String>,
     #[serde(default)]
     pub sorties: BTreeMap<Uuid, String>,
+    /// Dernier état publié de chaque machine (données de `machine.etat` sans l'heure).
+    #[serde(default)]
+    pub machines: BTreeMap<String, String>,
     #[serde(default)]
     pub purge_le: u64,
 }
@@ -284,6 +287,37 @@ pub fn noter_travail(donnees: &Path, id: Uuid, etat: &str, code_erreur: Option<&
         }
     }
     o.e.travaux.insert(id, signe);
+    o.fermer();
+}
+
+/// État relevé d'une machine (roadmap 7.9) : `machine.etat` quand il change (l'heure seule ne
+/// compte pas). Le bac d'encre usagée n'est pas encore lu sur l'Epson : `null`.
+pub fn noter_machine(donnees: &Path, machine: &str, r: &crate::releves::Releve, chauffages: &[(u8, u8)], alertes: &[String]) {
+    let Some(mut o) = ouvrir(donnees) else { return };
+    let machines = machines::lire(donnees).unwrap_or_default();
+    let charge = crate::supports::lire_charges(donnees).remove(machine);
+    let d = json!({
+        "machine_uuid": uuid_machine(&machines, machine),
+        "machine": machine,
+        "encres": r.encres.iter().map(|(e, pc)| json!({ "encre": e, "pourcent": pc })).collect::<Vec<_>>(),
+        "longueur_restante_m": r.longueur_m,
+        "support_uuid": charge.as_ref().and_then(|c| c.support_uuid),
+        "laize_mm": charge.as_ref().and_then(|c| c.laize_mm),
+        "chauffages": chauffages.iter().map(|&(ecran, autre)| json!({ "ecran_c": ecran, "autre_c": autre })).collect::<Vec<_>>(),
+        "alertes": alertes,
+        "bac_encre_usagee_pourcent": null,
+    });
+    let signe = d.to_string();
+    if o.e.machines.get(machine) == Some(&signe) {
+        return;
+    }
+    let mut avec_heure = d;
+    avec_heure["releve_le"] = json!(r.le);
+    if let Err(e) = o.ajouter("machine.etat", avec_heure) {
+        eprintln!("pont ERP : événement non journalisé : {e}");
+        return;
+    }
+    o.e.machines.insert(machine.into(), signe);
     o.fermer();
 }
 
@@ -1270,6 +1304,30 @@ mod tests {
         }
         eprintln!("rafale : {total} événements, {} requêtes ({} POST, lots {:?}) en {:.1} s", e.requetes, e.posts, e.lots, debut.elapsed().as_secs_f64());
         drop(e);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Roadmap 7.9 : relevé SNMP → `machine.etat` avec les mêmes valeurs ; même état une
+    /// minute plus tard → rien ; une alerte de plus → nouvel événement.
+    #[test]
+    fn releve_machine_publie_une_fois_par_changement() {
+        let d = donnees("machine-etat", "http://127.0.0.1:9/rip/atelier");
+        let support = Uuid::new_v4();
+        crate::supports::ecrire_charge(&d, "epson", crate::supports::Charge { support_uuid: Some(support), laize_mm: Some(1620.0), source: "machine".into(), le: 1 }).unwrap();
+        let r = crate::releves::Releve { le: 100, encres: vec![("BK".into(), 80), ("C".into(), 41)], longueur_m: Some(37.5) };
+        noter_machine(&d, "epson", &r, &[(40, 45)], &[]);
+        noter_machine(&d, "epson", &crate::releves::Releve { le: 160, ..r.clone() }, &[(40, 45)], &[]);
+        noter_machine(&d, "epson", &crate::releves::Releve { le: 220, ..r.clone() }, &[(40, 45)], &["printer cover open".into()]);
+        let j: Vec<Evenement> = lire_journal(&d).into_iter().filter(|e| e.genre == "machine.etat").collect();
+        assert_eq!(j.len(), 2, "l'heure seule ne publie rien");
+        let x = &j[0].donnees;
+        assert_eq!(x["machine"], "epson");
+        assert_eq!(x["machine_uuid"], json!(machines::lire(&d).unwrap().iter().find(|m| m.id == "epson").unwrap().uuid));
+        assert_eq!(x["encres"], json!([{ "encre": "BK", "pourcent": 80 }, { "encre": "C", "pourcent": 41 }]));
+        assert_eq!((x["longueur_restante_m"].clone(), x["laize_mm"].clone(), x["support_uuid"].clone()), (json!(37.5), json!(1620.0), json!(support)));
+        assert_eq!(x["chauffages"], json!([{ "ecran_c": 40, "autre_c": 45 }]));
+        assert_eq!((x["releve_le"].clone(), x["bac_encre_usagee_pourcent"].clone()), (json!(100), Value::Null));
+        assert_eq!(j[1].donnees["alertes"], json!(["printer cover open"]));
         let _ = std::fs::remove_dir_all(&d);
     }
 
