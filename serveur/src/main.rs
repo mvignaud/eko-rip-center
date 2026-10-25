@@ -5712,6 +5712,20 @@ mod tests {
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
+        /// Formats d'avant ces réglages : machine sans coupe à l'arrivée ni variante (coupe à
+        /// l'arrivée active), réglages du travail sans extension ni fond sous repères, travail
+        /// sans mise en coupe (neutre) ni format de coupe ni détourage.
+        #[test]
+        fn anciens_formats_lus() {
+            let m: machines::Machine = serde_json::from_value(serde_json::json!({ "id": "kona", "nom": "Kona", "modele": "mutoh_kona", "laize_mm": 1650.0, "connexion": { "type": "dossier" } })).unwrap();
+            assert!(m.coupe_auto && m.variante_de.is_none() && m.reperage.is_none());
+            let d: Demande = serde_json::from_value(serde_json::json!({ "mode": "imprimer" })).unwrap();
+            assert!(d.etendre_coupe.is_none() && d.fond_reperes.is_none());
+            let t: Travail = serde_json::from_value(serde_json::json!({ "id": Uuid::nil(), "nom": "a.pdf", "statut": "termine", "erreur": null, "cree_le": 0, "pages": [{ "plaques": [], "traces_decoupe": 1 }] })).unwrap();
+            assert_eq!(t.mise_coupe, coupe::Mise::default());
+            assert_eq!((t.pages[0].taille_coupe_pt, t.pages[0].detourage), (None, 0));
+        }
+
         /// 4.12 : découpeuse sans coupe à l'arrivée → la découpe arrive suspendue (« attente
         /// opérateur ») et ne part qu'une fois reprise ; avec, elle part seule. Archivée, elle
         /// se restaure suspendue sur la première, en attente sur la seconde.
