@@ -15,6 +15,36 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.20.0] — 2026-10-25
+
+Finitions de l'éditeur, découpe complète, imbrication automatique, consommation réelle.
+Publiée sans la CI ; client macOS 0.19.0 et clients 0.16.0 toujours valables.
+
+### Ajouté
+- **Finitions** (éditeur et envoi) : traits de coupe, croix, contour, repères de pli et de
+  couture (styles de trait), fond perdu (couleur, premier pixel, miroir, duplication), œillets
+  par quantité ou espacement (4 formes), étiquette en marge, QR code avec balises ; annuler /
+  rétablir (50 pas) ; filtres couleur par travail (courbes C M J N, luminosité, saturation,
+  avant/après, export vers un réglage) et remplacement de couleur.
+- **Découpe** : préfixes de découpe réglables ; une couche par nom de ton, avec le réglage de
+  coupe du même nom ; ordre et activation des couches, enregistrés ; alertes de contrôle
+  préalable ; coupe seulement après l'impression ; pré-contrôle de la découpeuse avant
+  d'imprimer ; mise en coupe (rotation, flèche d'avance ; en découpe seule : miroir, échelle,
+  copies X/Y) ; contour automatique, retrait, décalage, extension de l'image près des tracés ;
+  tracés ouverts et tri ; coupe dès l'arrivée et archive après coupe ; détourage automatique ;
+  fond sous repères, compensation de cintrage, variantes de machine. Repérage Mutoh : un cadre
+  simple de 1,5 m et plus devient multi-cadre.
+- **Imbrication automatique dans la file** : stratégies (un par un, groupé, économie),
+  déclencheurs (minutes, inactivité, m², longueur cible ou maxi, rangée pleine), regroupement
+  par support, mode, découpeuse et réglages de coupe, planche en préparation visible dans la
+  file, contour de planche et marges, purge, justification ; **fiche travail** (commande,
+  client, quantité, échéance = priorité) ; **pages à ne pas imprimer** ; une planche abandonnée
+  rend ses travaux à la file et ne peut plus être relancée (pas de double impression).
+- **Consommation réelle par impression** : encre et support relevés au début et à la fin
+  (« < 7 ml » sous la précision de l'imprimante), gâche, journal des impressions (90 jours),
+  rapport CSV du réel et rapport CSV des estimations, facteurs de correction proposés et
+  appliqués sur validation, encre estimée en comptant les points du tramage.
+
 ### Corrigé
 - Les réglages de découpe du serveur (`decoupe.json` : préfixes, options) sont repris par la
   sauvegarde de la configuration et par la copie faite avant une mise à jour.
@@ -25,6 +55,11 @@ parité ; d'ici là, 0.Y.Z.
 ### Documentation
 - Doc d'utilisation (FR, EN) et d'administration à jour de tout ce qui est livré depuis la 0.14 :
   supports et modes, pilote direct de l'Epson, éditeur visuel, lés et tuilage, découpe.
+
+*Added: finishing (marks, bleed, grommets, label, QR, undo, colour filters), full cutting
+workflow (layers by name, pre-checks, cut after print, transforms, contours, auto-path, multi
+frame from 1.5 m), automatic nesting in the queue with job ticket and excluded pages, actual
+consumption per print with journal, reports and correction factors.*
 
 ## [0.19.0] — 2026-10-25
 
