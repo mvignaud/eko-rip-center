@@ -582,8 +582,14 @@ const textes = {
     nid_groupe: (s, d, m) => `Support : ${s || "—"} · découpeuse : ${d || "aucune"}${m ? " · miroir" : ""}`, nid_pret: "Déclencheur atteint : la planche part.",
     nid_reporte: "attend la planche suivante", imprimer_maintenant: "Imprimer maintenant", pdf_planche: "PDF de la planche", nid_lancee: "Planche lancée.", nid_contour: "contour NestTrimBox",
     strategie: "Imbrication", strategies: { un_par_un: "Un par un", groupe: "Groupé dans l'ordre", economie: "Économie de support" },
-    nid_delai: "Départ après (min)", nid_surface: "Départ à (m²)", nid_longueur: "Longueur cible (mm)", nid_pct: "Départ à (% de la cible)", nid_espace: "Espacement (mm)",
-    note_imbrication: "Un par un : chaque impression sort seule. Groupé : côte à côte dans l'ordre (échéance la plus proche d'abord). Économie : planche recalculée à chaque arrivée, quart de tour permis. Seuls s'imbriquent les travaux de même support, mode, découpeuse, miroir et réglages de coupe choisis par couche ; une couche décochée sur un travail n'est pas coupée sur la planche. Sans déclencheur, la planche attend « Imprimer maintenant » ; une longueur cible atteinte la fait partir. Planche en échec, annulée ou retirée avant impression : ses travaux reviennent en file.",
+    nid_delai: "Départ après (min)", nid_surface: "Départ à (m²)", nid_longueur: "Longueur cible (mm)", nid_pct: "Départ à (% de la cible)", nid_espace: "Espace entre copies (mm)",
+    nid_inactivite: "Départ sans arrivée depuis (min)", nid_longueur_max: "Départ à la longueur (mm)", nid_rangee: "Rangée pleine sortie seule",
+    nid_chargement: "Chargement", chargements: { libre: "Libre (laize du rouleau)", strict: "Strict (une planche par format)" },
+    nid_espace_v: "Espace entre rangées (mm)", nid_justification: "Justification", justifications: { gauche: "Gauche", centre: "Centre", droite: "Droite" },
+    nid_decalage: "Décalage d'origine X (mm)", nid_purge: "Bande de purge", purges: { "": "Aucune", gauche: "À gauche", droite: "À droite", les_deux: "Des deux côtés" },
+    nid_purge_mm: "Largeur de purge (mm)", nid_retourner: "Retourner un lé sur deux",
+    note_nid_placement: "Espace entre rangées vide : celui entre copies. Le décalage d'origine laisse du blanc à gauche de la planche. La bande de purge (cyan, magenta, jaune, noir) court le long de toute la planche, au bord choisi. Retourner un lé sur deux : les lés pairs d'une mosaïque sont posés à l'envers (demi-tour).",
+    note_imbrication: "Un par un : chaque impression sort seule. Groupé : côte à côte dans l'ordre (échéance la plus proche d'abord). Économie : planche recalculée à chaque arrivée, quart de tour permis. Seuls s'imbriquent les travaux de même support, mode, découpeuse, miroir et réglages de coupe choisis par couche ; une couche décochée sur un travail n'est pas coupée sur la planche. Déclencheurs : délai depuis le premier travail, inactivité depuis le dernier, surface, pourcentage de la longueur cible, longueur atteinte, rangée pleine (elle sort seule, le travail suivant attend). Sans déclencheur, la planche attend « Imprimer maintenant » ; une longueur cible atteinte la fait partir. Chargement strict : une planche par format (laize du support au catalogue, sinon de la mosaïque). Planche en échec, annulée ou retirée avant impression : ses travaux reviennent en file.",
     fiche_titre: "Fiche travail", fiche_commande: "N° de commande", fiche_client: "Client", fiche_societe: "Société", fiche_quantite: "Quantité due", fiche_echeance: "Échéance", fiche_notes: "Notes", fiche_operateur: "Opérateur",
     fiche_enregistrer: "Enregistrer la fiche", fiche_enregistree: "Fiche enregistrée.", note_fiche: "La quantité due fixe les copies posées sur la planche d'imbrication et s'imprime sur l'étiquette avec le n° de commande ; l'échéance la plus proche passe d'abord.",
     imprimer_page: "Imprimer cette page", page_non_imprimee: "Non imprimée", col_echeance: "Échéance", tri: "Tri", tri_date: "Arrivée", tri_echeance: "Échéance",
@@ -678,6 +684,8 @@ const textes = {
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
       fiche_invalide: "Fiche invalide : 200 caractères par champ, 2000 pour les notes, quantité 100 000 au plus.", page_exclue: "Cette page est exclue de l'impression : recochez-la d'abord.",
       rien_a_imbriquer: "Rien à imbriquer sur cette planche.", imbrication_changee: "La file a changé depuis l'aperçu : planche recalculée, réessayez.",
+      planche_rendue_a_la_file: "Planche abandonnée : ses travaux sont revenus en file. La refaire les imprimerait deux fois ; « Imprimer maintenant » sur la planche en préparation en refait une.",
+      sortie_sur_une_planche: "Cette page est sur une planche pas encore imprimée : la refaire l'imprimerait deux fois.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
       pool_incoherent: "Pool incohérent : nom d'identifiant libre, machines de même modèle et même laize.",
       support_different: "Les machines du pool n'ont pas le même support chargé : charger le même support, ou dupliquer la machine.",
@@ -808,8 +816,14 @@ const textes = {
     nid_groupe: (s, d, m) => `Media: ${s || "—"} · cutter: ${d || "none"}${m ? " · mirrored" : ""}`, nid_pret: "Trigger reached: the sheet is leaving.",
     nid_reporte: "waits for the next sheet", imprimer_maintenant: "Print now", pdf_planche: "Sheet PDF", nid_lancee: "Sheet started.", nid_contour: "NestTrimBox outline",
     strategie: "Nesting", strategies: { un_par_un: "One by one", groupe: "Grouped in order", economie: "Media saving" },
-    nid_delai: "Start after (min)", nid_surface: "Start at (m²)", nid_longueur: "Target length (mm)", nid_pct: "Start at (% of target)", nid_espace: "Spacing (mm)",
-    note_imbrication: "One by one: each print leaves alone. Grouped: side by side in order (nearest due date first). Media saving: the sheet is recomputed at each arrival, quarter turn allowed. Only jobs with the same media, mode, cutter, mirror and per-layer cut settings nest together; a layer unticked on a job is not cut on the sheet. Without a trigger, the sheet waits for \"Print now\"; a reached target length makes it leave. A sheet that fails, is cancelled or removed before printing sends its jobs back to the queue.",
+    nid_delai: "Start after (min)", nid_surface: "Start at (m²)", nid_longueur: "Target length (mm)", nid_pct: "Start at (% of target)", nid_espace: "Space between copies (mm)",
+    nid_inactivite: "Start with no arrival for (min)", nid_longueur_max: "Start at length (mm)", nid_rangee: "Full row leaves alone",
+    nid_chargement: "Loading", chargements: { libre: "Free (roll width)", strict: "Strict (one sheet per format)" },
+    nid_espace_v: "Space between rows (mm)", nid_justification: "Justification", justifications: { gauche: "Left", centre: "Centre", droite: "Right" },
+    nid_decalage: "Origin offset X (mm)", nid_purge: "Purge strip", purges: { "": "None", gauche: "Left", droite: "Right", les_deux: "Both sides" },
+    nid_purge_mm: "Purge width (mm)", nid_retourner: "Flip every other panel",
+    note_nid_placement: "Empty space between rows: the space between copies. The origin offset leaves blank on the left of the sheet. The purge strip (cyan, magenta, yellow, black) runs along the whole sheet, on the chosen edge. Flip every other panel: even panels of a tiling are laid upside down (half turn).",
+    note_imbrication: "One by one: each print leaves alone. Grouped: side by side in order (nearest due date first). Media saving: the sheet is recomputed at each arrival, quarter turn allowed. Only jobs with the same media, mode, cutter, mirror and per-layer cut settings nest together; a layer unticked on a job is not cut on the sheet. Triggers: delay since the first job, idle time since the last one, area, percentage of the target length, length reached, full row (it leaves alone, the next job waits). Without a trigger, the sheet waits for \"Print now\"; a reached target length makes it leave. Strict loading: one sheet per format (roll width of the media in the catalogue, else of the tiling). A sheet that fails, is cancelled or removed before printing sends its jobs back to the queue.",
     fiche_titre: "Job ticket", fiche_commande: "Order no.", fiche_client: "Customer", fiche_societe: "Company", fiche_quantite: "Quantity due", fiche_echeance: "Due date", fiche_notes: "Notes", fiche_operateur: "Operator",
     fiche_enregistrer: "Save the ticket", fiche_enregistree: "Ticket saved.", note_fiche: "The quantity due sets the copies placed on the nesting sheet and is printed on the label with the order no.; the nearest due date goes first.",
     imprimer_page: "Print this page", page_non_imprimee: "Not printed", col_echeance: "Due", tri: "Sort", tri_date: "Arrival", tri_echeance: "Due date",
@@ -904,6 +918,8 @@ const textes = {
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
       fiche_invalide: "Invalid ticket: 200 characters per field, 2000 for notes, quantity 100,000 at most.", page_exclue: "This page is excluded from printing: tick it again first.",
       rien_a_imbriquer: "Nothing to nest on this sheet.", imbrication_changee: "The queue changed since the preview: sheet recomputed, try again.",
+      planche_rendue_a_la_file: "Abandoned sheet: its jobs went back to the queue. Redoing it would print them twice; \"Print now\" on the nest in progress makes a new one.",
+      sortie_sur_une_planche: "This page is on a sheet not yet printed: redoing it would print it twice.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
       pool_incoherent: "Inconsistent pool: free id-like name, machines of the same model and roll width.",
       support_different: "The pool machines do not have the same loaded media: load the same media, or duplicate the machine.",
@@ -3010,7 +3026,7 @@ $("creer-planche").addEventListener("click", async () => {
 const actionsPossibles = {
   en_attente: ["en_tete", "monter", "descendre", "suspendre", "annuler"],
   suspendue: ["en_tete", "monter", "descendre", "reprendre", "annuler"],
-  en_cours: [], terminee: ["refaire", "retirer"], echec: ["refaire", "retirer"], annulee: ["refaire", "retirer"], imbriquee: ["refaire", "retirer"],
+  en_cours: [], terminee: ["refaire", "retirer"], echec: ["refaire", "retirer"], annulee: ["refaire", "retirer"], imbriquee: ["retirer"],
 };
 /** Découpe archivée (roadmap 4.12) : se restaure, ou se supprime. */
 const actionsArchive = ["restaurer", "retirer"];
@@ -3223,7 +3239,19 @@ function afficherEditeurMachines() {
         el("label", {}, T().nid_espace, nb("n_espace", n.espace_mm ?? 5, { min: 0, max: 100 })),
         el("label", {}, T().marge_haut, nb("n_haut", n.marge_haut_mm ?? 0, { min: 0, max: 200 })),
         el("label", {}, T().marge_bas, nb("n_bas", n.marge_bas_mm ?? 0, { min: 0, max: 200 })),
-        el("label", { className: "case" }, el("input", { type: "checkbox", name: "n_contour", checked: !!n.contour }), " ", T().contour_planche)));
+        el("label", { className: "case" }, el("input", { type: "checkbox", name: "n_contour", checked: !!n.contour }), " ", T().contour_planche)),
+      el("div", { className: "ligne bas", title: T().note_imbrication },
+        el("label", {}, T().nid_inactivite, nb("n_inactivite", n.inactivite_min, { min: 1, max: 1440, step: 1 })),
+        el("label", {}, T().nid_longueur_max, nb("n_lmax", n.longueur_max_mm, { min: 100, max: 100000 })),
+        el("label", { className: "case" }, el("input", { type: "checkbox", name: "n_rangee", checked: !!n.rangee_pleine }), " ", T().nid_rangee),
+        el("label", {}, T().nid_chargement, choix("n_chargement", ["libre", "strict"], n.chargement || "libre", T().chargements))),
+      el("div", { className: "ligne bas", title: T().note_nid_placement },
+        el("label", {}, T().nid_espace_v, nb("n_espace_v", n.espace_vertical_mm, { min: 0, max: 100 })),
+        el("label", {}, T().nid_justification, choix("n_justif", ["gauche", "centre", "droite"], n.justification || "gauche", T().justifications)),
+        el("label", {}, T().nid_decalage, nb("n_decalage", n.decalage_x_mm ?? 0, { min: 0, max: 1000 })),
+        el("label", {}, T().nid_purge, choix("n_purge", ["", "gauche", "droite", "les_deux"], n.purge_cote || "", T().purges)),
+        el("label", {}, T().nid_purge_mm, nb("n_purge_mm", n.purge_mm ?? 10, { min: 1, max: 100 })),
+        el("label", { className: "case" }, el("input", { type: "checkbox", name: "n_retourner", checked: !!n.retourner_les }), " ", T().nid_retourner)));
     }
     if (m.uuid) bloc.dataset.uuid = m.uuid;
     const valeur = (n) => bloc.querySelector(`[name=${n}]`).value.trim();
@@ -3270,7 +3298,10 @@ $("editeur-machines").addEventListener("submit", async (e) => {
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };
       }).filter((p) => p.nom),
       decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked, coupe_auto: b.querySelector("[name=coupe_auto]").checked,
-      imbrication: b.querySelector("[name=n_strategie]") ? { strategie: q("n_strategie"), delai_min: nv("n_delai"), surface_m2: nv("n_surface"), longueur_cible_mm: nv("n_longueur"), remplissage_pct: nv("n_pct"), espace_mm: nv("n_espace") ?? 5, marge_haut_mm: nv("n_haut") ?? 0, marge_bas_mm: nv("n_bas") ?? 0, contour: b.querySelector("[name=n_contour]").checked } : undefined };
+      imbrication: b.querySelector("[name=n_strategie]") ? { strategie: q("n_strategie"), delai_min: nv("n_delai"), surface_m2: nv("n_surface"), longueur_cible_mm: nv("n_longueur"), remplissage_pct: nv("n_pct"), espace_mm: nv("n_espace") ?? 5, marge_haut_mm: nv("n_haut") ?? 0, marge_bas_mm: nv("n_bas") ?? 0, contour: b.querySelector("[name=n_contour]").checked,
+        inactivite_min: nv("n_inactivite"), longueur_max_mm: nv("n_lmax"), rangee_pleine: b.querySelector("[name=n_rangee]").checked, chargement: q("n_chargement"),
+        espace_vertical_mm: nv("n_espace_v"), justification: q("n_justif"), decalage_x_mm: nv("n_decalage") ?? 0, purge_cote: q("n_purge") || null, purge_mm: nv("n_purge_mm") ?? 10,
+        retourner_les: b.querySelector("[name=n_retourner]").checked } : undefined };
   });
   const liste = lues.map((m) => {
     if (!m.variante_de) return m;

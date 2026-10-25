@@ -349,6 +349,9 @@ pub struct Finition {
     pub marge_bas: f64,
     pub marge_haut: f64,
     pub contour: bool,
+    /// Bandes de purge (roadmap 5.7) : x et largeur (points), le long de toute la planche,
+    /// une bande égale par encre C, M, J, N ; largeur nulle : pas de bande.
+    pub purges: [[f64; 2]; 2],
 }
 
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
@@ -373,7 +376,7 @@ pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize],
     for (n, (id, _, _)) in formulaires.iter().enumerate() {
         xobjets.set(format!("F{n}"), *id);
     }
-    let Finition { marge_bas, marge_haut, contour } = finition;
+    let Finition { marge_bas, marge_haut, contour, purges } = finition;
     for p in places {
         let n = elements[p.indice];
         let m = matrice_pose(formulaires[n].1, formulaires[n].2, p.angle, p.x, p.y + marge_bas);
@@ -389,7 +392,19 @@ pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize],
             Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 }),
         ]);
         ressources.set("ColorSpace", dictionary! { "NT" => ton });
-        contenu += &format!("q /NT CS 1 SCN 0.5 w 0 {marge_bas:.4} {:.4} {:.4} re S Q\n", planche.largeur, planche.hauteur);
+        // Autour des éléments posés (sans le décalage d'origine ni les bandes de purge).
+        let largeur = |p: &Place| {
+            let t = formulaires[elements[p.indice]].1;
+            if p.tourne() { t.hauteur } else { t.largeur }
+        };
+        let x1 = places.iter().map(|p| p.x + largeur(p)).fold(0.0, f64::max);
+        let x0 = places.iter().map(|p| p.x).fold(x1, f64::min);
+        contenu += &format!("q /NT CS 1 SCN 0.5 w {x0:.4} {marge_bas:.4} {:.4} {:.4} re S Q\n", x1 - x0, planche.hauteur);
+    }
+    for [x, l] in purges.into_iter().filter(|b| b[1] > 0.0) {
+        for (n, encre) in ["1 0 0 0", "0 1 0 0", "0 0 1 0", "0 0 0 1"].iter().enumerate() {
+            contenu += &format!("q {encre} k {:.4} {marge_bas:.4} {:.4} {:.4} re f Q\n", x + n as f64 * l / 4.0, l / 4.0, planche.hauteur);
+        }
     }
     let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
     let pages = cible.new_object_id();

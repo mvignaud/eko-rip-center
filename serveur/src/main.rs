@@ -1728,7 +1728,7 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
         return mauvais("marges 0–200 mm");
     }
     let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
-    let finition = imbrication::Finition { marge_bas: d.marge_bas_mm * imbrication::PT_PAR_MM, marge_haut: d.marge_haut_mm * imbrication::PT_PAR_MM, contour: d.contour };
+    let finition = imbrication::Finition { marge_bas: d.marge_bas_mm * imbrication::PT_PAR_MM, marge_haut: d.marge_haut_mm * imbrication::PT_PAR_MM, contour: d.contour, ..Default::default() };
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
@@ -2890,6 +2890,9 @@ async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
 
 async fn refaire(etat: &Partage, mut t: Travail) -> Response {
     let (donnees, id) = (&etat.config.donnees, t.id);
+    if let Err(code) = double_impression(&etat.file.lock().unwrap(), &t, None) {
+        return refus(StatusCode::CONFLICT, code, None);
+    }
     // Les sorties d'avant ne doivent pas survivre au nouveau rendu (un .plt périmé partirait au plotter).
     let rep = dossier(donnees, id);
     for sous in ["prod", "apercu"] {
@@ -3094,6 +3097,7 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
     };
     let rendu = nouvelles[0].clone();
     match modifier_file(&etat, |f| {
+        double_impression(f, &t, None)?;
         f.sorties.extend(nouvelles);
         Ok(())
     }) {
@@ -3105,7 +3109,12 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
 async fn agir_sur_la_file(State(etat): State<Partage>, Chemin((id, action)): Chemin<(Uuid, String)>) -> Response {
     let Ok(action) = serde_json::from_value::<file::Action>(serde_json::Value::String(action)) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
     let catalogue = etat.machines.read().unwrap().clone();
+    // Travail de la sortie, lu hors du verrou de la file (pour le garde-fou de « Refaire »).
+    let travail = (action == file::Action::Refaire).then(|| etat.file.lock().unwrap().sorties.iter().find(|s| s.id == id).map(|s| s.travail)).flatten().and_then(|t| lire_travail(&etat.config.donnees, t));
     match modifier_file(&etat, |f| {
+        if let Some(t) = &travail {
+            double_impression(f, t, f.sorties.iter().find(|s| s.id == id))?;
+        }
         f.agir(id, action, maintenant())?;
         // Restaurée sur une découpeuse sans coupe à l'arrivée : elle attend l'opérateur.
         if action == file::Action::Restaurer
@@ -3182,6 +3191,7 @@ fn groupes(etat: &Etat, catalogue: &[machines::Machine], m: &machines::Machine) 
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let donnees = &etat.config.donnees;
     let laize = supports::lire_charges(donnees).get(&m.id).and_then(|c| c.laize_mm).map_or(m.laize_mm, |l| l.min(m.laize_mm));
+    let formats = supports::lire(donnees, "epson");
     let mut groupes: Vec<(String, Groupe)> = vec![];
     // Envoyées à la machine ou à son pool (roadmap 1.7) : la première planche lancée les prend.
     let vise = |s: &file::Sortie| s.machine == m.id || m.pool.as_deref() == Some(s.machine.as_str());
@@ -3192,7 +3202,13 @@ fn groupes(etat: &Etat, catalogue: &[machines::Machine], m: &machines::Machine) 
         }
         let Some(taille) = std::fs::read(dossier(donnees, t.id).join(Format::Pdf.fichier())).ok().and_then(|pdf| imbrication::taille_page(&pdf, s.page).ok()) else { continue };
         let (cle, decoupeuse) = cle_imbrication(&t, &p, s.page, &sorties);
-        let candidat = nid::Candidat { taille, copies: t.fiche.copies(), echeance: t.fiche.echeance, arrivee: s.cree_le };
+        // Chargement strict (roadmap 5.11) : une planche par format, posée sur ce format.
+        let format = (m.imbrication.chargement == nid::Chargement::Strict).then(|| format_travail(&t, &formats)).flatten();
+        let (cle, laize) = match format {
+            Some(f) => (format!("{cle}|{f}"), f.min(laize)),
+            None => (cle, laize),
+        };
+        let candidat = nid::Candidat { taille, copies: t.fiche.copies(), le: p.tuile.as_ref().map(|x| x.numero), echeance: t.fiche.echeance, arrivee: s.cree_le };
         let i = groupes.iter().position(|(c, _)| *c == cle).unwrap_or_else(|| {
             groupes.push((cle.clone(), Groupe { code: code_groupe(&cle), decoupeuse, sorties: vec![], candidats: vec![], plan: None, laize_mm: laize }));
             groupes.len() - 1
@@ -3210,6 +3226,13 @@ fn groupes(etat: &Etat, catalogue: &[machines::Machine], m: &machines::Machine) 
             g
         })
         .collect()
+}
+
+/// Format d'un travail (roadmap 5.11) : laize de son support au catalogue, sinon celle pour
+/// laquelle sa mosaïque est faite.
+fn format_travail(t: &Travail, catalogue: &supports::Catalogue) -> Option<f64> {
+    let support = t.demande.support_uuid.and_then(|u| catalogue.supports.iter().find(|s| s.id == Some(u)));
+    support.and_then(|s| s.laize_mm).or(t.demande.mosaique.as_ref().map(|m| m.laize_mm))
 }
 
 /// Réglages de la planche : ceux de rendu du premier travail (communs au groupe), sans ce
@@ -3268,7 +3291,7 @@ fn pdf_planche(donnees: &std::path::Path, sources: &[SourcePlanche], plan: &nid:
     let sources: Vec<imbrication::Source> = sources.iter().zip(&pdfs).map(|((_, page, _), pdf)| imbrication::Source { pdf, page: *page, copies: 1 }).collect();
     // Copie k : candidat `plan.elements[k]`, source = son rang parmi les retenus.
     let elements: Vec<usize> = plan.elements.iter().map(|c| plan.retenus.iter().position(|r| r == c).unwrap_or(0)).collect();
-    imbrication::composer_places(&sources, &plan.places, &elements, plan.planche, finition)
+    imbrication::composer_places(&sources, &plan.places, &elements, plan.planche, imbrication::Finition { purges: plan.purges, ..finition })
 }
 
 fn sources_planche(g: &Groupe, plan: &nid::Plan) -> Vec<SourcePlanche> {
@@ -3360,6 +3383,24 @@ async fn lancer_imbrication(etat: &Partage, m: &machines::Machine, g: Groupe) ->
             Err(r)
         }
     }
+}
+
+/// Garde-fou contre la double impression (roadmap 5.13), sous le verrou de la file : une
+/// planche abandonnée dont les travaux sont revenus en file (plus aucune sortie ne la
+/// désigne) ne se refait, ne se relance ni ne se remet en file : ses travaux s'imprimeraient
+/// deux fois, sur elle et sur leur nouvelle planche (ou seuls). Refus plutôt que reprise des
+/// travaux : depuis leur retour ils ont pu être modifiés, exclus, retirés ou déjà reposés sur
+/// une autre planche ; « Imprimer maintenant » refait une planche juste. De même, une sortie
+/// « Imbriquée » ne se refait pas tant que sa planche n'est pas imprimée : la planche
+/// l'imprime déjà (`sortie`, la sortie à refaire).
+fn double_impression(f: &file::File, t: &Travail, sortie: Option<&file::Sortie>) -> Result<(), &'static str> {
+    if t.imbrication.is_some() && !f.sorties.iter().any(|s| s.planche == Some(t.id)) {
+        return Err("planche_rendue_a_la_file");
+    }
+    if sortie.is_some_and(|s| s.etat == file::Etat::Imbriquee) {
+        return Err("sortie_sur_une_planche");
+    }
+    Ok(())
 }
 
 /// Planches abandonnées : rendu en échec, travail supprimé, ou impression annulée, en échec
@@ -6802,6 +6843,118 @@ mod tests {
             let s = e.file.lock().unwrap().sorties.iter().find(|s| s.travail == p.id && s.operation() == machines::Operation::Impression).unwrap().id;
             assert_eq!(appel(&e, "POST", &format!("/api/file/{s}/annuler"), None, None).await.status(), StatusCode::NO_CONTENT);
             assert_eq!(etats(&e, &[&a]), [(file::Etat::EnAttente, None), (file::Etat::Suspendue, None)]);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.13 : planche en échec d'impression, travaux revenus en file : « Refaire » la
+        /// sortie de la planche, la relancer ou la remettre en file est refusé ; les travaux ne
+        /// partent qu'une fois, sur la planche suivante. Une sortie « Imbriquée » ne se refait
+        /// pas non plus tant que sa planche est en file ; une planche imprimée se refait.
+        #[tokio::test]
+        async fn refaire_une_planche_abandonnee_jamais_deux_fois() {
+            let e = etat("nid-refaire");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, ..Default::default() });
+            let d = Demande { dpi: 36, ..Default::default() };
+            let a = rendre(&e, etiquette_200x100(), d.clone()).await;
+            let b = rendre(&e, etiquette_200x100(), d).await;
+            for t in [&a, &b] {
+                en_file(&e, t, 1, "epson", "impression").await;
+            }
+            let p1 = lancer(&e).await;
+            // Tant que la planche est en file, la sortie imbriquée d'un travail ne se refait pas.
+            let imbriquee = e.file.lock().unwrap().sorties.iter().find(|s| s.travail == a.id).unwrap().id;
+            let r = appel(&e, "POST", &format!("/api/file/{imbriquee}/refaire"), None, None).await;
+            assert_eq!((r.status(), json(r).await["code"].clone()), (StatusCode::CONFLICT, serde_json::json!("sortie_sur_une_planche")));
+            // L'impression de la planche échoue ; ses travaux reviennent en file.
+            let sortie = {
+                let mut f = e.file.lock().unwrap();
+                let s = f.sorties.iter_mut().find(|s| s.travail == p1.id).unwrap();
+                s.etat = file::Etat::Echec;
+                s.id
+            };
+            reprendre_les_imbriquees(&e);
+            assert_eq!(etats(&e, &[&a, &b]), vec![(file::Etat::EnAttente, None); 2], "revenus en file");
+            let avant = e.file.lock().unwrap().sorties.len();
+            for (methode, url, corps) in [
+                ("POST", format!("/api/file/{sortie}/refaire"), None),
+                ("POST", format!("/api/travaux/{}/relancer", p1.id), None),
+                ("POST", "/api/file".to_string(), Some(serde_json::json!({ "travail": p1.id, "page": 1, "machine": "epson", "operation": "impression" }))),
+            ] {
+                let r = appel(&e, methode, &url, None, corps).await;
+                assert_eq!((r.status(), json(r).await["code"].clone()), (StatusCode::CONFLICT, serde_json::json!("planche_rendue_a_la_file")), "{url}");
+            }
+            assert_eq!(e.file.lock().unwrap().sorties.len(), avant, "aucune sortie ajoutée");
+            assert!(matches!(lire_travail(&e.config.donnees, p1.id).unwrap().statut, Statut::Termine), "planche pas relancée");
+            // Les travaux partent une fois, sur une nouvelle planche ; chaque page n'a qu'une
+            // impression qui l'imprime (la sienne, imbriquée sur la planche 2).
+            let p2 = lancer(&e).await;
+            let f = e.file.lock().unwrap().sorties.clone();
+            assert_eq!(f.iter().filter(|s| s.travail == p2.id && s.etat == file::Etat::EnAttente).count(), 1);
+            assert!(f.iter().filter(|s| s.travail == p1.id).all(|s| !s.active()), "planche 1 inerte");
+            for t in [&a, &b] {
+                let s: Vec<_> = f.iter().filter(|s| s.travail == t.id).map(|s| (s.etat, s.planche)).collect();
+                assert_eq!(s, [(file::Etat::Imbriquee, Some(p2.id))]);
+            }
+            // Planche imprimée : un « Refaire » est voulu (réimpression), il est accepté.
+            let s2 = f.iter().find(|s| s.travail == p2.id).unwrap().clone();
+            executer(e.clone(), s2.clone()).await;
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{}/refaire", s2.id), None, None).await.status(), StatusCode::NO_CONTENT);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.7 par le vrai circuit : centré, décalage d'origine, purge à droite ; la planche
+        /// produite a la laize, les éléments à leur place et la bande CMJN au bord droit.
+        #[tokio::test]
+        async fn purge_et_justification_sur_la_planche_produite() {
+            let e = etat("nid-purge");
+            let laize = e.machines.read().unwrap().iter().find(|m| m.id == "epson").unwrap().laize_mm;
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, espace_mm: 0.0, justification: nid::Justification::Centre, decalage_x_mm: 30.0, purge_cote: Some(nid::Cote::Droite), purge_mm: 20.0, ..Default::default() });
+            let d = Demande { dpi: 36, ..Default::default() };
+            for _ in 0..2 {
+                let t = rendre(&e, etiquette_200x100(), d.clone()).await;
+                en_file(&e, &t, 1, "epson", "impression").await;
+            }
+            let g = planches(&e).await.remove(0);
+            let x0 = 30.0 + (laize - 50.0 - 400.0) / 2.0;
+            let xs: Vec<f64> = g["places"].as_array().unwrap().iter().map(|p| p["x"].as_f64().unwrap()).collect();
+            assert!((xs[0] - x0).abs() < 1e-3 && (xs[1] - x0 - 200.0).abs() < 1e-3, "{xs:?}, attendu {x0}");
+            let planche = lancer(&e).await;
+            let produit = std::fs::read(dossier(&e.config.donnees, planche.id).join("source.pdf")).unwrap();
+            assert!((imbrication::taille_page(&produit, 1).unwrap().largeur / MM - laize).abs() < 1e-3, "planche à la laize");
+            let doc = lopdf::Document::load_mem(&produit).unwrap();
+            let contenu = String::from_utf8_lossy(&doc.get_page_content(*doc.get_pages().get(&1).unwrap())).to_string();
+            for (n, encre) in ["1 0 0 0", "0 1 0 0", "0 0 1 0", "0 0 0 1"].iter().enumerate() {
+                let bande = format!("{encre} k {:.4} 0.0000 {:.4} {:.4} re f", (laize - 20.0 + 5.0 * n as f64) * MM, 5.0 * MM, 100.0 * MM);
+                assert!(contenu.contains(&bande), "bande {encre} absente : {contenu}");
+            }
+            // Contours de découpe des deux étiquettes : à leur place justifiée.
+            let traces = &decoupe::extraire(&produit, false).unwrap()[0].traces;
+            let mut gauches: Vec<f64> = traces.iter().map(|t| t.points.iter().map(|p| p.0).fold(f64::MAX, f64::min) / MM).collect();
+            gauches.sort_by(f64::total_cmp);
+            // Le contour de l'étiquette d'essai est à 5 pt de son bord.
+            let bord = x0 + 5.0 / MM;
+            assert!(gauches.len() == 2 && (gauches[0] - bord).abs() < 0.01 && (gauches[1] - bord - 200.0).abs() < 0.01, "{gauches:?}");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.11 : chargement libre, une planche pour deux formats ; strict, une par format,
+        /// chacune posée sur son format.
+        #[tokio::test]
+        async fn chargement_strict_une_planche_par_format() {
+            let e = etat("nid-strict");
+            let d = Demande { dpi: 36, ..Default::default() };
+            for f in [1000.0, 1300.0] {
+                let mut t = rendre(&e, etiquette_200x100(), d.clone()).await;
+                t.demande.mosaique = Some(reglages::Mosaique { laize_mm: f, ..Default::default() });
+                ecrire(&e.config.donnees, &t).unwrap();
+                en_file(&e, &t, 1, "epson", "impression").await;
+            }
+            let laize = e.machines.read().unwrap().iter().find(|m| m.id == "epson").unwrap().laize_mm;
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, ..Default::default() });
+            let laizes = |p: Vec<serde_json::Value>| p.iter().map(|g| g["laize_mm"].as_f64().unwrap()).collect::<Vec<_>>();
+            assert_eq!(laizes(planches(&e).await), [laize], "libre : une planche, sur le rouleau");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, chargement: nid::Chargement::Strict, ..Default::default() });
+            assert_eq!(laizes(planches(&e).await), [1000.0, 1300.0], "strict : une planche par format");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
