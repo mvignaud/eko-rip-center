@@ -34,6 +34,7 @@ mod reperage;
 mod sauvegarde;
 mod separation;
 mod supports;
+mod tons;
 mod tramage;
 
 use axum::{
@@ -408,6 +409,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/coupe", axum::routing::post(enregistrer_mise))
         .route("/api/travaux/{id}/pages/{page}/detourage", axum::routing::post(detourer_page).delete(retirer_detourage))
         .route("/api/decoupe", get(lire_decoupe).post(enregistrer_decoupe))
+        .route("/api/tons-directs", get(lire_tons).post(enregistrer_tons))
+        .route("/api/tons-directs/import", axum::routing::post(importer_tons))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
@@ -1435,6 +1438,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         supports: Some(supports::lire(&etat.config.donnees, "epson")),
         decoupe: Some(decoupe::lire(&etat.config.donnees)),
         consommation: Some(consommation::lire_reglages(&etat.config.donnees)),
+        tons_directs: Some(tons::lire(&etat.config.donnees)),
         pont: Some(erp::lire(&etat.config.donnees).sauve()),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
@@ -1472,6 +1476,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         machines::identifier(&mut s.machines, &connues_et_sauvees)
     }).and(s.tarifs.verifier()).and(s.consommation.as_ref().map_or(Ok(()), consommation::Reglages::verifier)) {
         return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    if let Some(Err((code, detail))) = s.tons_directs.as_deref().map(tons::verifier) {
+        return refus(StatusCode::BAD_REQUEST, code, Some(detail));
     }
     if let Some(c) = &s.supports {
         let mut ids: Vec<_> = c.supports.iter().map(|x| x.id).chain(c.supports.iter().flat_map(|x| x.modes.iter().map(|m| m.id))).collect();
@@ -1519,6 +1526,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         if let Some(r) = &s.consommation {
             consommation::ecrire_reglages(&etat.config.donnees, r)?;
+        }
+        if let Some(t) = &s.tons_directs {
+            tons::ecrire(&etat.config.donnees, t)?;
         }
         // Pont ERP : URL, activation et instance (le jeton et le secret restent ceux du serveur).
         if let Some(p) = &s.pont {
@@ -3071,6 +3081,41 @@ async fn enregistrer_decoupe(State(etat): State<Partage>, Json(r): Json<decoupe:
     Json(r).into_response()
 }
 
+async fn lire_tons(State(etat): State<Partage>) -> Json<Vec<tons::Ton>> {
+    Json(tons::lire(&etat.config.donnees))
+}
+
+/// Table complète des tons directs (roadmap 8.6), prise par les rendus suivants.
+async fn enregistrer_tons(State(etat): State<Partage>, Json(table): Json<Vec<tons::Ton>>) -> Response {
+    if let Err((code, detail)) = tons::verifier(&table) {
+        return refus(StatusCode::BAD_REQUEST, code, Some(detail));
+    }
+    match tons::ecrire(&etat.config.donnees, &table) {
+        Ok(()) => Json(table).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Bibliothèque Lab d'un fournisseur (CSV `nom;L;a;b`) ajoutée à la table. Un nom déjà
+/// présent refuse tout l'import : rien n'est écrit.
+async fn importer_tons(State(etat): State<Partage>, corps: String) -> Response {
+    let nouveaux = match tons::lire_csv(&corps) {
+        Ok(t) if t.is_empty() => return refus(StatusCode::BAD_REQUEST, "csv_vide", None),
+        Ok(t) => t,
+        Err(e) => return refus(StatusCode::BAD_REQUEST, "csv_illisible", Some(e)),
+    };
+    let mut table = tons::lire(&etat.config.donnees);
+    let ajoutes = nouveaux.len();
+    table.extend(nouveaux);
+    if let Err((code, detail)) = tons::verifier(&table) {
+        return refus(StatusCode::BAD_REQUEST, code, Some(detail));
+    }
+    match tons::ecrire(&etat.config.donnees, &table) {
+        Ok(()) => Json(serde_json::json!({ "ajoutes": ajoutes, "total": table.len() })).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
 /// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
 async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
     let infos = infos_travail(etat, t.id, &t.nom, &t.demande, &t.fiche);
@@ -4217,7 +4262,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs"), include_str!("pont.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs"), include_str!("pont.rs"), include_str!("tons.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -4440,6 +4485,31 @@ mod tests {
             }
         }
 
+        /// Roadmap 8.6 : import d'une bibliothèque Lab de 50 teintes, puis un doublon refuse
+        /// tout l'import sans rien écrire ; un nom réservé est refusé.
+        #[tokio::test]
+        async fn tons_directs_import_csv() {
+            let e = etat("tons-directs");
+            let importer = |csv: String| {
+                let r = Request::builder().method("POST").uri("/api/tons-directs/import").header(header::USER_AGENT, "Mozilla/5.0 EKO-RIP-Client/0.9").header(header::CONTENT_TYPE, "text/csv").body(Body::from(csv)).unwrap();
+                routes(e.clone()).oneshot(r)
+            };
+            let csv: String = std::iter::once("Nom;L;a;b\n".to_string()).chain((0..50).map(|i| format!("HX {i:02};50;{i};-{i}\n"))).collect();
+            let r = importer(csv).await.unwrap();
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(super::couches_decoupe::json(r).await, serde_json::json!({ "ajoutes": 50, "total": 50 }));
+            let r = importer("HX 99;50;0;0\nHX 07;40;0;0\n".into()).await.unwrap();
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            let r = super::couches_decoupe::json(r).await;
+            assert_eq!((r["code"].as_str(), r["detail"].as_str()), (Some("nom_en_double"), Some("HX 07")));
+            assert_eq!(tons::lire(&e.config.donnees).len(), 50, "rien d'écrit");
+            let r = super::couches_decoupe::json(importer("Black;20;0;0".into()).await.unwrap()).await;
+            assert_eq!(r["code"], "nom_reserve");
+            let lu = super::couches_decoupe::json(appel(&e, "GET", "/api/tons-directs", None, None).await).await;
+            assert_eq!(lu[7]["lab"], serde_json::json!([50.0, 7.0, -7.0]));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
         /// Sauvegarde puis restauration sur un serveur neuf ; une sauvegarde fausse n'écrit rien.
         #[tokio::test]
         async fn sauvegarde_et_restauration_de_la_configuration() {
@@ -4450,6 +4520,8 @@ mod tests {
             std::fs::write(a.config.profils.join("atelier.icc"), &icc).unwrap();
             let reglage = serde_json::json!({ "nom": "Vinyle", "demande": { "dpi": 360 } });
             assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(reglage)).await.status(), StatusCode::CREATED);
+            let tons = serde_json::json!([{ "nom": "HX Rouge", "alias": ["Rouge HX"], "lab": [45.0, 60.0, 40.0] }]);
+            assert_eq!(appel(&a, "POST", "/api/tons-directs", None, Some(tons)).await.status(), StatusCode::OK);
             let r = appel(&a, "GET", "/api/sauvegarde", None, None).await;
             assert_eq!(r.status(), StatusCode::OK);
             let mut s: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 26).await.unwrap()).unwrap();
@@ -4472,6 +4544,8 @@ mod tests {
             // changer les réglages globaux des autres tests).
             assert!(decoupe::fichier(&b.config.donnees).exists(), "decoupe.json restauré");
             assert_eq!(decoupe::lire(&b.config.donnees), decoupe::lire(&a.config.donnees));
+            assert_eq!(tons::lire(&b.config.donnees), tons::lire(&a.config.donnees), "tons directs repris");
+            assert_eq!(tons::lire(&b.config.donnees).len(), 1);
             for e in [a, b] {
                 std::fs::remove_dir_all(&e.config.donnees).unwrap();
             }

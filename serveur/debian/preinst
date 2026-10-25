@@ -2,7 +2,7 @@
 # Avant une mise à jour (roadmap 0.7) : copie de la configuration en place dans
 # /var/lib/eko-rip/sauvegardes/avant-<version d'origine>-<date>.tar.gz (droits 0600).
 # Repris : machines, supports, réglages, tarifs, comptes, pont ERP, préfixes de découpe, réglages de
-# consommation (*.json et .prec)
+# consommation, tons directs (*.json et .prec)
 # et profils ICC. Ni les travaux ni la file. Les 10 plus récentes sont gardées.
 # Une sauvegarde impossible n'empêche jamais la mise à jour.
 set -e
@@ -12,7 +12,7 @@ if [ "$1" = "upgrade" ] && [ -d /var/lib/eko-rip ]; then
         cd /var/lib/eko-rip || exit 0
         install -d -o eko-rip -g eko-rip -m 0700 sauvegardes
         nom="sauvegardes/avant-${2:-inconnue}-$(date +%Y%m%d-%H%M%S).tar.gz"
-        fichiers=$(ls -d machines.json* supports.json* reglages.json* tarifs.json* utilisateurs.json* erp.json* decoupe.json* consommation.json* profils 2>/dev/null)
+        fichiers=$(ls -d machines.json* supports.json* reglages.json* tarifs.json* utilisateurs.json* erp.json* decoupe.json* consommation.json* tons_directs.json* profils 2>/dev/null)
         if [ -n "$fichiers" ]; then
             umask 077
             # shellcheck disable=SC2086
