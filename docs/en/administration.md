@@ -103,7 +103,8 @@ the ERP over outgoing HTTPS: no port to open. If the screen says:
 - **failing**: the code says what to do (signature refused → secret differs from the ERP's;
   signature expired → server clock, `timedatectl`; ERP unreachable → network, DNS,
   certificate). Nothing is lost: everything goes out when it is back, in order.
-- **replaced**: another installation talks to the ERP instead of this one. If intended,
+- **replaced**: another installation talks to the ERP instead of this one, or the sequence
+  was reset from the ERP screen. If intended,
   nothing to do; otherwise, **Draw a new instance** (the other one will stop in turn).
 - **anomaly**: the ERP and the RIP no longer count the same; check with the ERP, then draw a
   new instance.

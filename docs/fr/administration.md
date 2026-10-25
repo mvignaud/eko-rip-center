@@ -106,7 +106,8 @@ l'ERP en HTTPS sortant : aucun port à ouvrir. Si l'écran dit :
 - **en erreur** : le code dit quoi faire (signature refusée → secret différent de celui de
   l'ERP ; signature expirée → horloge du serveur, `timedatectl` ; ERP injoignable → réseau,
   DNS, certificat). Rien n'est perdu : tout part au retour, dans l'ordre.
-- **remplacé** : une autre installation parle à l'ERP à la place de celle-ci. Si c'est
+- **remplacé** : une autre installation parle à l'ERP à la place de celle-ci, ou la séquence
+  a été remise à zéro depuis l'écran de l'ERP. Si c'est
   voulu, rien à faire ; sinon, **Tirer une nouvelle instance** (l'autre s'arrêtera à son tour).
 - **anomalie** : l'ERP et le RIP ne comptent plus pareil ; voir avec l'ERP, puis tirer une
   nouvelle instance.

@@ -4410,8 +4410,11 @@ mod tests {
             // Sauvegarde : URL et instance, jamais le secret ; reprises sur un serveur neuf.
             let s = String::from_utf8(axum::body::to_bytes(appel(&e, "GET", "/api/sauvegarde", Some(chef), None).await.into_body(), 1 << 26).await.unwrap().to_vec()).unwrap();
             assert!(!s.contains(secret), "jamais le secret dans la sauvegarde");
-            let s: serde_json::Value = serde_json::from_str(&s).unwrap();
+            let mut s: serde_json::Value = serde_json::from_str(&s).unwrap();
             assert_eq!(s["pont"]["instance"], serde_json::json!(instance));
+            // Sans les réglages de découpe : leur restauration les installe pour tout le
+            // processus, sous les pieds de l'essai des préfixes qui tourne en même temps.
+            s["decoupe"] = serde_json::Value::Null;
             assert_eq!(appel(&neuf, "POST", "/api/sauvegarde", None, Some(s)).await.status(), StatusCode::OK);
             let c = erp::lire(&neuf.config.donnees);
             assert_eq!((c.instance, c.url.as_deref(), c.actif, c.secret_hmac), (instance, Some(url), false, None), "sans secret, le pont reste à activer");

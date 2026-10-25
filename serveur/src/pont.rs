@@ -26,8 +26,8 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex, MutexGuard};
-use std::time::Duration;
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 /// Les événements accusés sont gardés 30 jours (rejeu sur demande), puis purgés.
@@ -481,27 +481,60 @@ fn empreinte(v: &Value) -> String {
 
 // --- Canal HTTP(S) ---
 
+/// Écart minimal entre deux requêtes à l'ERP (GET compris) : 60 par minute au plus, même en
+/// rafale, sous la limite de 120 de l'ERP ; les événements arrivés entre-temps partent dans
+/// le lot suivant (100 au plus).
+pub const INTERVALLE: Duration = Duration::from_secs(1);
+/// Attente après un 429 sans `Retry-After` lisible.
+pub const ATTENTE_429: Duration = Duration::from_secs(60);
+
 /// Client du pont : délai de 30 s, statuts 4xx/5xx lus comme des réponses (leur corps dit
-/// le code de l'ERP).
-pub fn client() -> ureq::Agent {
-    ureq::Agent::config_builder()
+/// le code de l'ERP), une requête par `intervalle` au plus.
+#[derive(Clone)]
+pub struct Client {
+    agent: ureq::Agent,
+    intervalle: Duration,
+    derniere: Arc<Mutex<Option<Instant>>>,
+}
+
+pub fn client() -> Client {
+    client_espace(INTERVALLE)
+}
+
+fn client_espace(intervalle: Duration) -> Client {
+    let agent = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(30)))
         .user_agent(format!("eko-rip-serveur/{}", env!("CARGO_PKG_VERSION")))
         .build()
-        .into()
+        .into();
+    Client { agent, intervalle, derniere: Default::default() }
+}
+
+impl Client {
+    /// Attend que `intervalle` soit passé depuis la requête précédente.
+    fn a_son_tour(&self) {
+        let mut d = self.derniere.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(reste) = d.and_then(|t| self.intervalle.checked_sub(t.elapsed())) {
+            std::thread::sleep(reste);
+        }
+        *d = Some(Instant::now());
+    }
 }
 
 struct Reponse {
     statut: u16,
     corps: Value,
+    /// `Retry-After` en secondes (forme date non lue).
+    reessayer: Option<u64>,
 }
 
 fn lire_reponse(r: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Result<Reponse, String> {
     let mut r = r.map_err(|e| e.to_string())?;
     let statut = r.status().as_u16();
+    let reessayer = r.headers().get("retry-after").and_then(|v| v.to_str().ok()).and_then(|v| v.trim().parse().ok());
     let texte = r.body_mut().with_config().limit(1 << 20).read_to_string().unwrap_or_default();
-    Ok(Reponse { statut, corps: serde_json::from_str(&texte).unwrap_or(Value::Null) })
+    Ok(Reponse { statut, corps: serde_json::from_str(&texte).unwrap_or(Value::Null), reessayer })
 }
 
 /// Chemin de la base, tel qu'il part dans la ligne de requête (signé pour un GET).
@@ -509,15 +542,17 @@ fn chemin_de(base: &str) -> String {
     base.parse::<axum::http::Uri>().map(|u| u.path().trim_end_matches('/').to_string()).unwrap_or_default()
 }
 
-fn en_attente(client: &ureq::Agent, base: &str, secret: &str, instance: Uuid) -> Result<Reponse, String> {
+fn en_attente(client: &Client, base: &str, secret: &str, instance: Uuid) -> Result<Reponse, String> {
+    client.a_son_tour();
     let requete = format!("/en-attente?instance={instance}");
     let signe = erp::signature_get(secret, maintenant(), &format!("{}{requete}", chemin_de(base)));
-    lire_reponse(client.get(format!("{base}{requete}")).header("X-EKO-RIP-Signature", &signe).call())
+    lire_reponse(client.agent.get(format!("{base}{requete}")).header("X-EKO-RIP-Signature", &signe).call())
 }
 
-fn envoyer(client: &ureq::Agent, base: &str, secret: &str, corps: &[u8]) -> Result<Reponse, String> {
+fn envoyer(client: &Client, base: &str, secret: &str, corps: &[u8]) -> Result<Reponse, String> {
+    client.a_son_tour();
     let signe = erp::signature(secret, maintenant(), corps);
-    lire_reponse(client.post(format!("{base}/evenements")).header("Content-Type", "application/json").header("X-EKO-RIP-Signature", &signe).send(corps))
+    lire_reponse(client.agent.post(format!("{base}/evenements")).header("Content-Type", "application/json").header("X-EKO-RIP-Signature", &signe).send(corps))
 }
 
 /// Applique un `dernier_seq_traite` de l'ERP pour notre instance.
@@ -542,11 +577,16 @@ fn noter_erreur(donnees: &Path, code: &str, detail: Option<String>, statut: Opti
     }
 }
 
-/// Erreur d'une réponse HTTP de l'ERP : son code et son détail, ou le statut seul.
-fn erreur_http(donnees: &Path, r: &Reponse) {
+/// Erreur d'une réponse HTTP de l'ERP : son code et son détail, ou le statut seul. Un 429
+/// fait attendre `Retry-After` (borné à 1 h), sinon 60 s.
+fn erreur_http(donnees: &Path, r: &Reponse) -> Fin {
     let code = r.corps["code"].as_str().filter(|c| !c.is_empty() && c.len() <= 64).unwrap_or("erp_http");
     let detail = r.corps["detail"].as_str().map(|d| d.chars().take(500).collect()).or_else(|| Some(format!("HTTP {}", r.statut)));
     noter_erreur(donnees, code, detail, Some(r.statut));
+    match r.statut {
+        429 => Fin::Attendre(r.reessayer.map_or(ATTENTE_429, |s| Duration::from_secs(s.clamp(1, 3600)))),
+        _ => Fin::Erreur,
+    }
 }
 
 /// Fin d'un cycle : la boucle en déduit l'attente.
@@ -558,13 +598,15 @@ pub enum Fin {
     Presse,
     /// Erreur : 60 s, puis 5 min tant qu'elle dure.
     Erreur,
+    /// 429 : attendre ce que l'ERP demande avant tout nouvel appel.
+    Attendre(Duration),
 }
 
 static NON_PRIS: Mutex<String> = Mutex::new(String::new());
 
 /// Un cycle du canal : catalogue si besoin, `GET /en-attente`, puis envoi de tout ce que
 /// l'ERP n'a pas accusé. `premier` : premier cycle depuis le démarrage (catalogue envoyé).
-pub fn cycle(donnees: &Path, client: &ureq::Agent, premier: &mut bool) -> Fin {
+pub fn cycle(donnees: &Path, client: &Client, premier: &mut bool) -> Fin {
     let c = erp::lire(donnees);
     let (Some(base), Some(secret), Some(instance), true) = (c.url, c.secret_hmac, c.instance, c.actif) else { return Fin::Repos };
     let cat = catalogue(donnees);
@@ -590,10 +632,7 @@ pub fn cycle(donnees: &Path, client: &ureq::Agent, premier: &mut bool) -> Fin {
 
     let r = match en_attente(client, &base, &secret, instance) {
         Ok(r) if r.statut == 200 => r,
-        Ok(r) => {
-            erreur_http(donnees, &r);
-            return Fin::Erreur;
-        }
+        Ok(r) => return erreur_http(donnees, &r),
         Err(e) => {
             noter_erreur(donnees, "erp_injoignable", Some(e), None);
             return Fin::Erreur;
@@ -678,10 +717,7 @@ pub fn cycle(donnees: &Path, client: &ureq::Agent, premier: &mut bool) -> Fin {
         match (r.statut, d) {
             // Trou chez l'ERP : on renvoie tout ce qui suit son dernier traité.
             (200, Some(_)) | (409, Some(_)) => {}
-            _ => {
-                erreur_http(donnees, &r);
-                return Fin::Erreur;
-            }
+            _ => return erreur_http(donnees, &r),
         }
     }
     if let Some(mut o) = ouvrir(donnees) {
@@ -693,7 +729,10 @@ pub fn cycle(donnees: &Path, client: &ureq::Agent, premier: &mut bool) -> Fin {
 
 /// Boucle du pont, pour toute la vie du serveur.
 pub async fn boucle(donnees: PathBuf) {
-    let client = client();
+    boucle_avec(donnees, client()).await;
+}
+
+async fn boucle_avec(donnees: PathBuf, client: Client) {
     let mut premier = true;
     let mut erreurs = 0u32;
     loop {
@@ -710,6 +749,7 @@ pub async fn boucle(donnees: PathBuf) {
                 erreurs += 1;
                 tokio::time::sleep(if erreurs == 1 { ATTENTE_PREMIERE_ERREUR } else { ATTENTE_ERREURS }).await;
             }
+            Fin::Attendre(d) => tokio::time::sleep(d).await,
             _ => {
                 erreurs = 0;
                 let attente = if fin == Fin::Presse { PRESSE } else { CADENCE };
@@ -777,6 +817,25 @@ mod tests {
         catalogue_demande: bool,
         /// Au prochain POST, l'ERP « perd » ce qui suit ce numéro (trou à rejouer).
         perdre: Option<u64>,
+        /// Instant de chaque requête reçue (débit).
+        instants: Vec<Instant>,
+        /// Taille de chaque lot reçu.
+        lots: Vec<usize>,
+        /// Prochaine requête refusée en 429, avec ce `Retry-After` (en secondes) s'il y en a un.
+        trop: Option<Option<u64>>,
+    }
+
+    /// Compte la requête ; un 429 demandé est rendu à sa place.
+    fn compter(e: &mut Erp) -> Option<axum::response::Response> {
+        use axum::response::IntoResponse;
+        e.requetes += 1;
+        e.instants.push(Instant::now());
+        let attente = e.trop.take()?;
+        let corps = Json(json!({ "code": "trop_de_requetes", "detail": null }));
+        Some(match attente {
+            Some(s) => (StatusCode::TOO_MANY_REQUESTS, [("retry-after", s.to_string())], corps).into_response(),
+            None => (StatusCode::TOO_MANY_REQUESTS, corps).into_response(),
+        })
     }
     type Faux = Arc<std::sync::Mutex<Erp>>;
 
@@ -811,21 +870,29 @@ mod tests {
         (statut, Json(v))
     }
 
-    async fn evenements(State(f): State<Faux>, entetes: HeaderMap, corps: Bytes) -> (StatusCode, Json<Value>) {
+    async fn evenements(State(f): State<Faux>, entetes: HeaderMap, corps: Bytes) -> axum::response::Response {
+        use axum::response::IntoResponse;
         let mut e = f.lock().unwrap();
-        e.requetes += 1;
+        if let Some(r) = compter(&mut e) {
+            return r;
+        }
         e.posts += 1;
-        if !signe(&entetes, &corps) {
+        evenements_traites(&mut e, &entetes, &corps).into_response()
+    }
+
+    fn evenements_traites(e: &mut Erp, entetes: &HeaderMap, corps: &[u8]) -> (StatusCode, Json<Value>) {
+        if !signe(entetes, corps) {
             return reponse(StatusCode::UNAUTHORIZED, json!({ "code": "signature_invalide", "detail": null }));
         }
         if let Some(n) = e.perdre.take() {
             e.dernier = n;
         }
-        let liste = match serde_json::from_slice::<Value>(&corps) {
+        let liste = match serde_json::from_slice::<Value>(corps) {
             Ok(Value::Array(a)) => a,
             Ok(o @ Value::Object(_)) => vec![o],
             _ => return reponse(StatusCode::BAD_REQUEST, json!({ "code": "corps_invalide", "detail": null })),
         };
+        e.lots.push(liste.len());
         for v in liste {
             let ev: Evenement = serde_json::from_value(v).unwrap();
             assert_eq!(ev.contrat, erp::CONTRAT);
@@ -852,10 +919,17 @@ mod tests {
         reponse(StatusCode::OK, json!({ "instance": instance, "dernier_seq_traite": d }))
     }
 
-    async fn en_attente_erp(State(f): State<Faux>, entetes: HeaderMap, uri: Uri) -> (StatusCode, Json<Value>) {
+    async fn en_attente_erp(State(f): State<Faux>, entetes: HeaderMap, uri: Uri) -> axum::response::Response {
+        use axum::response::IntoResponse;
         let mut e = f.lock().unwrap();
-        e.requetes += 1;
-        if !signe(&entetes, format!("GET {}", uri.path_and_query().unwrap()).as_bytes()) {
+        if let Some(r) = compter(&mut e) {
+            return r;
+        }
+        en_attente_reponse(&e, &entetes, &uri).into_response()
+    }
+
+    fn en_attente_reponse(e: &Erp, entetes: &HeaderMap, uri: &Uri) -> (StatusCode, Json<Value>) {
+        if !signe(entetes, format!("GET {}", uri.path_and_query().unwrap()).as_bytes()) {
             return reponse(StatusCode::UNAUTHORIZED, json!({ "code": "signature_invalide", "detail": null }));
         }
         let Some(instance) = uri.query().and_then(|q| q.strip_prefix("instance=")).and_then(|i| Uuid::parse_str(i).ok()) else {
@@ -866,7 +940,7 @@ mod tests {
     }
 
     async fn faux_erp() -> (Faux, String) {
-        let f: Faux = Arc::new(std::sync::Mutex::new(Erp { active: None, dernier: 0, recus: vec![], requetes: 0, posts: 0, catalogue_demande: true, perdre: None }));
+        let f: Faux = Arc::new(std::sync::Mutex::new(Erp { active: None, dernier: 0, recus: vec![], requetes: 0, posts: 0, catalogue_demande: true, perdre: None, instants: vec![], lots: vec![], trop: None }));
         let app = Router::new().route("/rip/atelier/evenements", post(evenements)).route("/rip/atelier/en-attente", get(en_attente_erp)).with_state(f.clone());
         let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let adresse = l.local_addr().unwrap();
@@ -887,7 +961,7 @@ mod tests {
 
     async fn tourner(d: &Path, premier: bool) -> Fin {
         let d = d.to_path_buf();
-        tokio::task::spawn_blocking(move || cycle(&d, &client(), &mut { premier })).await.unwrap()
+        tokio::task::spawn_blocking(move || cycle(&d, &client_espace(Duration::ZERO), &mut { premier })).await.unwrap()
     }
 
     fn etat(d: &Path) -> Etat {
@@ -1141,6 +1215,69 @@ mod tests {
         assert_eq!(seqs(&e.recus), [1, 2, 3, 4, 5, 6], "dans l'ordre, sans trou ni doublon");
         assert_eq!(e.recus[..4], avant[..], "mêmes événements (id compris) qu'avant la coupure");
         assert_eq!(etat(&d).erreur, None);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// 500 événements en rafale, boucle réelle et client de production (une requête par
+    /// seconde) : au plus 60 requêtes par minute, lots de 100 au plus, tout accusé dans l'ordre.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn rafale_de_500_sous_60_requetes_par_minute() {
+        let (f, url) = faux_erp().await;
+        let d = donnees("rafale", &url);
+        let boucle = tokio::spawn(boucle_avec(d.clone(), client()));
+        let debut = Instant::now();
+        let dd = d.clone();
+        // Dix salves de 50, verrou rendu entre deux : la boucle envoie pendant la rafale. (Un
+        // `noter_travail` par événement réécrirait aussi l'état à chaque fois : trop de
+        // synchronisations disque pour les autres essais qui tournent en même temps.)
+        tokio::task::spawn_blocking(move || {
+            for _ in 0..10 {
+                let mut o = ouvrir(&dd).unwrap();
+                for _ in 0..50 {
+                    o.ajouter("travail.etat", json!({ "travail_uuid": Uuid::new_v4(), "ref_erp": null, "etat": "en_attente", "code_erreur": null, "pages": 0 })).unwrap();
+                }
+                o.fermer();
+                std::thread::sleep(Duration::from_millis(300));
+            }
+        })
+        .await
+        .unwrap();
+        let total = etat(&d).dernier_seq;
+        assert!(total >= 500);
+        while f.lock().unwrap().dernier < total {
+            assert!(debut.elapsed() < Duration::from_secs(120), "tout doit être accusé");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+        // Pont coupé avant d'arrêter la boucle : le cycle en cours finit sans rien relancer.
+        let mut c = erp::lire(&d);
+        c.actif = false;
+        erp::ecrire(&d, &c).unwrap();
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        boucle.abort();
+        let e = f.lock().unwrap();
+        assert_eq!(seqs(&e.recus), (1..=total).collect::<Vec<_>>(), "dans l'ordre, sans trou ni doublon");
+        assert!(e.lots.iter().all(|&n| n <= LOT), "{:?}", e.lots);
+        let ecarts: Vec<Duration> = e.instants.windows(2).map(|w| w[1] - w[0]).collect();
+        assert!(ecarts.iter().all(|&x| x >= Duration::from_millis(990)), "une requête par seconde au plus : {ecarts:?}");
+        for (i, t) in e.instants.iter().enumerate() {
+            assert!(e.instants[i..].iter().take_while(|&&u| u - *t < Duration::from_secs(60)).count() <= 60);
+        }
+        eprintln!("rafale : {total} événements, {} requêtes ({} POST, lots {:?}) en {:.1} s", e.requetes, e.posts, e.lots, debut.elapsed().as_secs_f64());
+        drop(e);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn trop_de_requetes_attend_retry_after() {
+        let (f, d) = accuse_un_lot("429").await;
+        f.lock().unwrap().trop = Some(Some(7));
+        assert_eq!(tourner(&d, false).await, Fin::Attendre(Duration::from_secs(7)));
+        assert_eq!(etat(&d).erreur.unwrap().statut, Some(429));
+        f.lock().unwrap().trop = Some(None);
+        assert_eq!(tourner(&d, false).await, Fin::Attendre(ATTENTE_429), "sans Retry-After : 60 s");
+        noter_travail(&d, Uuid::new_v4(), "en_attente", None, 0, neuf());
+        assert_eq!(tourner(&d, false).await, Fin::Repos);
+        assert_eq!(f.lock().unwrap().dernier, 5, "puis tout part");
         let _ = std::fs::remove_dir_all(&d);
     }
 

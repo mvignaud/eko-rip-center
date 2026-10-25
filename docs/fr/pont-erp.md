@@ -124,7 +124,8 @@ Publié aussi, lisible par programme, dans `GET /api/erp/contrat` (`etats`).
 | `termine` | rendu terminé : prêt à sortir |
 | `echec` | rendu impossible (code d'erreur stable) |
 
-Après une coupure : un travail `en_cours` redevient `en_attente` et son rendu reprend.
+Après une coupure : un travail `en_cours` passe en `echec` avec le code `interrompu` ; il est
+à relancer (il ne repart pas seul).
 
 **Sortie** (l'envoi d'une page à une machine) :
 
@@ -188,6 +189,10 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
   attend (`catalogue_demande`), et aussitôt qu'un événement s'ajoute.
 - Puis `POST <base>/evenements` : une **liste** de 100 événements au plus, dans l'ordre de
   `seq`, signée sur le corps exact ; tout ce qui suit le dernier accusé.
+- Débit : **une requête par seconde au plus** (GET compris), soit 60 par minute même en
+  rafale, sous la limite de 120 de l'ERP ; les événements arrivés pendant l'attente partent
+  dans le lot suivant. Sur `429`, le RIP attend `Retry-After` (en secondes, 1 h au plus),
+  sinon 60 s, avant tout nouvel appel.
 - Réponses : `200` et `409 seq_manquant` donnent `dernier_seq_traite` : le RIP renvoie tout
   ce qui suit. Toute autre erreur (401, 403, 404, 422, 429, 5xx, réseau) est affichée dans
   Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
@@ -206,6 +211,10 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
 - Réponse plus grande que le dernier `seq` du RIP (même instance), ou rejeu demandé
   d'événements purgés : « anomalie », arrêt, jamais de renumérotation silencieuse. Après
   vérification avec l'ERP : nouvelle instance.
+- **Remise à zéro de la séquence depuis l'écran de l'ERP** : l'ERP répond alors 0 pour une
+  instance déjà accusée, et le RIP ne peut pas la distinguer d'un remplacement. Il passe
+  « remplacé » et s'arrête ; il faut tirer une nouvelle instance dans Système pour qu'il
+  reprenne (journal rejoué depuis 1).
 
 ### 6.5 Événements
 

@@ -106,7 +106,8 @@ Also published, machine-readable, in `GET /api/erp/contrat` (`etats`).
 
 **Job** (rendering, the RIP step): `en_attente` received, waiting · `en_cours` rendering ·
 `termine` rendered, ready to output · `echec` failed (stable error code). After a power
-cut, an `en_cours` job goes back to `en_attente` and rendering resumes.
+cut, an `en_cours` job becomes `echec` with code `interrompu`; it must be restarted (it
+does not resume by itself).
 
 **Output** (one page sent to one machine): `en_attente` queued · `suspendue` held by an
 operator · `en_cours` being sent · `terminee` handed to the machine (print or cut) ·
@@ -159,6 +160,10 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   (`catalogue_demande`), and as soon as an event is added.
 - Then `POST <base>/evenements`: a **list** of at most 100 events, in `seq` order, signed
   over the exact body; everything after the last acknowledgement.
+- Rate: **at most one request per second** (GET included), i.e. 60 per minute even in a
+  burst, below the ERP's limit of 120; events arriving meanwhile go in the next batch. On
+  `429`, the RIP waits for `Retry-After` (in seconds, 1 h at most), else 60 s, before any
+  new call.
 - Answers: `200` and `409 seq_manquant` give `dernier_seq_traite`: the RIP resends
   everything after it. Any other error (401, 403, 404, 422, 429, 5xx, network) is shown in
   System with its code; the RIP retries after 60 s, then every 5 min. It never skips a
@@ -176,6 +181,9 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   administrator restarts it, by drawing a new instance: the log restarts from 1.
 - Answer above the RIP's last `seq` (same instance), or replay asked for purged events:
   "anomaly", stop, never a silent renumbering. After checking with the ERP: new instance.
+- **Sequence reset from the ERP screen**: the ERP then answers 0 for an instance already
+  acknowledged, and the RIP cannot tell it from a replacement. It goes "replaced" and stops;
+  draw a new instance in System to restart it (log replayed from 1).
 
 ### 6.5 Events
 

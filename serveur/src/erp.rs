@@ -174,7 +174,7 @@ pub fn modele_etats() -> serde_json::Value {
                 "termine": "rendu terminé : prêt à sortir",
                 "echec": "rendu impossible (code d'erreur stable)"
             },
-            "apres_coupure": "un travail en_cours redevient en_attente et son rendu reprend"
+            "apres_coupure": "un travail en_cours passe en echec (code interrompu) ; à relancer"
         },
         "sortie": {
             "etats": {
