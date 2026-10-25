@@ -99,6 +99,14 @@ pub struct Machine {
     /// une sortie par couche, la suivante retenue jusqu'à ce que l'opérateur la libère.
     #[serde(default)]
     pub mono_couche: bool,
+    /// Couper dès l'arrivée en file (roadmap 4.12, actif par défaut : comportement d'avant) ;
+    /// sinon chaque découpe arrive suspendue et part quand l'opérateur la reprend.
+    #[serde(default = "vrai")]
+    pub coupe_auto: bool,
+}
+
+fn vrai() -> bool {
+    true
 }
 
 /// Couches de découpe de CutServer à l'atelier (relevées le 24/10), reprises pour le Kona.
@@ -269,8 +277,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true },
     ]
 }
 

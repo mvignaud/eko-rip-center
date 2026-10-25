@@ -45,11 +45,28 @@ pub struct Sortie {
     /// Découpeuse mono-couche (roadmap 4.3) : la seule couche que la sortie coupe.
     #[serde(default)]
     pub couche: Option<String>,
+    /// Découpe terminée rangée dans l'archive de sa machine (roadmap 4.12) : hors de la file,
+    /// restaurable.
+    #[serde(default)]
+    pub archivee: bool,
+}
+
+/// Ce que devient une découpe terminée (roadmap 4.12) : réglage de découpe du serveur.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApresCoupe {
+    /// Elle reste dans l'historique de la file (comportement d'avant ce réglage).
+    #[default]
+    Rien,
+    /// Rangée dans l'archive de la machine, d'où elle se restaure.
+    Archiver,
+    /// Retirée de la file.
+    Supprimer,
 }
 
 impl Sortie {
     pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None }
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false }
     }
 
     pub fn operation(&self) -> Operation {
@@ -75,6 +92,8 @@ pub enum Action {
     Descendre,
     /// Nouvelle sortie identique, sans refaire le rendu.
     Refaire,
+    /// Sortie archivée remise en file (roadmap 4.12).
+    Restaurer,
 }
 
 #[derive(Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -146,6 +165,10 @@ impl File {
                     _ => {}
                 }
             }
+            Action::Restaurer if self.sorties[i].archivee => {
+                let s = &mut self.sorties[i];
+                (s.archivee, s.etat, s.debut, s.fin, s.code_erreur, s.erreur) = (false, Etat::EnAttente, None, None, None, None);
+            }
             Action::Refaire if !matches!(etat, Etat::EnCours) => {
                 let s = &self.sorties[i];
                 let copie = Sortie { couche: s.couche.clone(), ..Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le) };
@@ -154,6 +177,18 @@ impl File {
             _ => return Err("action_impossible"),
         }
         Ok(())
+    }
+
+    /// Découpe `id` terminée : laissée dans l'historique, archivée ou retirée selon `politique`.
+    pub fn apres_coupe(&mut self, id: Uuid, politique: ApresCoupe) {
+        let Some(i) = self.sorties.iter().position(|s| s.id == id && s.etat == Etat::Terminee) else { return };
+        match politique {
+            ApresCoupe::Rien => {}
+            ApresCoupe::Archiver => self.sorties[i].archivee = true,
+            ApresCoupe::Supprimer => {
+                self.sorties.remove(i);
+            }
+        }
     }
 
     /// Oublie l'historique d'un travail supprimé (ses sorties actives restent).
@@ -194,6 +229,39 @@ mod tests {
 
     fn noms(f: &File) -> Vec<&str> {
         f.sorties.iter().map(|s| s.nom.as_str()).collect()
+    }
+
+    /// 4.12 : les trois politiques après coupe, et la restauration depuis l'archive.
+    #[test]
+    fn apres_coupe_rien_archiver_supprimer() {
+        let terminee = |f: &mut File| {
+            f.sorties[0].etat = Etat::Terminee;
+            f.sorties[0].fin = Some(5);
+            f.sorties[0].id
+        };
+        let mut f = file(&[KONA]);
+        let id = terminee(&mut f);
+        f.apres_coupe(id, ApresCoupe::Rien);
+        assert_eq!((f.sorties.len(), f.sorties[0].archivee), (1, false), "rien : reste dans l'historique");
+        assert_eq!(f.agir(id, Action::Restaurer, 9), Err("action_impossible"), "pas archivée : rien à restaurer");
+        f.apres_coupe(id, ApresCoupe::Archiver);
+        assert!(f.sorties[0].archivee && f.sorties[0].etat == Etat::Terminee);
+        assert_eq!(f.prochaine(KONA), None, "une sortie archivée ne repart pas seule");
+        f.agir(id, Action::Restaurer, 9).unwrap();
+        assert_eq!((f.sorties[0].archivee, f.sorties[0].etat, f.sorties[0].fin), (false, Etat::EnAttente, None), "restaurée : de nouveau en file");
+        assert_eq!(f.prochaine(KONA), Some(0));
+        let id = terminee(&mut f);
+        f.apres_coupe(id, ApresCoupe::Supprimer);
+        assert!(f.sorties.is_empty(), "supprimée de la file");
+        // Une sortie en échec n'est jamais archivée ni retirée d'office.
+        let mut f = file(&[KONA]);
+        f.sorties[0].etat = Etat::Echec;
+        let id = f.sorties[0].id;
+        f.apres_coupe(id, ApresCoupe::Supprimer);
+        assert_eq!(f.sorties.len(), 1);
+        // file.json d'avant : pas archivée.
+        let ancienne: Sortie = serde_json::from_value(serde_json::json!({ "id": id, "machine": "kona", "travail": id, "nom": "a", "page": 1, "etat": "terminee", "cree_le": 0 })).unwrap();
+        assert!(!ancienne.archivee);
     }
 
     #[test]

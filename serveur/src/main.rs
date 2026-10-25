@@ -2370,14 +2370,16 @@ fn a_couper(t: &Travail, p: &Page) -> bool {
 /// mono-couche, la première prête et les suivantes retenues (changer d'outil ou de réglage
 /// avant de les libérer).
 fn sorties_de_coupe(t: &Travail, n: usize, p: &Page, cible: &str, m: &machines::Machine) -> Vec<file::Sortie> {
-    let une = |couche: Option<String>| file::Sortie { couche, ..file::Sortie::nouvelle(cible, machines::Operation::Decoupe, t.id, &t.nom, n, maintenant()) };
+    // Découpeuse sans coupe à l'arrivée (roadmap 4.12) : tout arrive suspendu.
+    let arrivee = if m.coupe_auto { file::Etat::EnAttente } else { file::Etat::Suspendue };
+    let une = |couche: Option<String>| file::Sortie { couche, etat: arrivee, ..file::Sortie::nouvelle(cible, machines::Operation::Decoupe, t.id, &t.nom, n, maintenant()) };
     if !m.mono_couche || t.couches_decoupe.is_empty() {
         return vec![une(None)];
     }
     couches_a_couper(t, p)
         .into_iter()
         .enumerate()
-        .map(|(i, c)| file::Sortie { etat: if i == 0 { file::Etat::EnAttente } else { file::Etat::Suspendue }, ..une(Some(c)) })
+        .map(|(i, c)| file::Sortie { etat: if i == 0 { arrivee } else { file::Etat::Suspendue }, ..une(Some(c)) })
         .collect()
 }
 
@@ -2760,7 +2762,18 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
 
 async fn agir_sur_la_file(State(etat): State<Partage>, Chemin((id, action)): Chemin<(Uuid, String)>) -> Response {
     let Ok(action) = serde_json::from_value::<file::Action>(serde_json::Value::String(action)) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    match modifier_file(&etat, |f| f.agir(id, action, maintenant())) {
+    let catalogue = etat.machines.read().unwrap().clone();
+    match modifier_file(&etat, |f| {
+        f.agir(id, action, maintenant())?;
+        // Restaurée sur une découpeuse sans coupe à l'arrivée : elle attend l'opérateur.
+        if action == file::Action::Restaurer
+            && let Some(s) = f.sorties.iter_mut().find(|s| s.id == id)
+            && catalogue.iter().any(|m| m.id == s.machine && !m.coupe_auto)
+        {
+            s.etat = file::Etat::Suspendue;
+        }
+        Ok(())
+    }) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(r) => *r,
     }
@@ -2825,6 +2838,10 @@ async fn executer(etat: Partage, s: file::Sortie) {
             Ok(()) => x.etat = file::Etat::Terminee,
             Err((code, e)) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e)),
         }
+    }
+    // Découpe terminée : laissée, archivée ou retirée (roadmap 4.12).
+    if s.operation() == machines::Operation::Decoupe {
+        f.apres_coupe(s.id, decoupe::reglages().apres_coupe);
     }
     let _ = f.ecrire(&etat.config.donnees);
 }
@@ -3790,6 +3807,7 @@ mod tests {
                 decoupe_retournee: false,
                 pool: None,
                 mono_couche: false,
+                coupe_auto: true,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
@@ -5409,6 +5427,59 @@ mod tests {
             assert_eq!(contour, [[a - 1.0, a - 1.0, b + 1.0, b + 1.0].map(|v| (v * 100.0).round() / 100.0)], "coupe décalée de 1 mm");
             let mauvais = Demande { etendre_coupe: Some(coupe::Etendre { largeur_mm: 20.0, seuil_mm: 0.5 }), ..Default::default() };
             assert_eq!(mauvais.verifier(&[]), Err("etendre_invalide"));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 4.12 : découpeuse sans coupe à l'arrivée → la découpe arrive suspendue (« attente
+        /// opérateur ») et ne part qu'une fois reprise ; avec, elle part seule. Archivée, elle
+        /// se restaure suspendue sur la première, en attente sur la seconde.
+        #[tokio::test]
+        async fn coupe_a_l_arrivee_ou_sur_ordre() {
+            let e = etat("coupe-auto");
+            let mut catalogue = e.machines.read().unwrap().clone();
+            let graphtec = |id: &str, coupe_auto| machines::Machine { id: id.into(), uuid: None, modele: machines::Modele::GraphtecFc7000, connexion: machines::Connexion::Dossier, parametres_decoupe: vec![], coupe_auto, ..catalogue[1].clone() };
+            catalogue.extend([graphtec("sur-ordre", false), graphtec("auto", true)]);
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await.status(), StatusCode::OK);
+            assert!(machines::lire(&e.config.donnees).unwrap().iter().any(|m| m.id == "sur-ordre" && !m.coupe_auto), "gardé dans machines.json");
+            let t = rendre(&e, pdf_tons(&["CutContour"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            for m in ["sur-ordre", "auto"] {
+                let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": m }))).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let file_ = json(appel(&e, "GET", "/api/file", None, None).await).await;
+            assert_eq!((file_[0]["etat"].as_str(), file_[0]["raison_attente"].as_str()), (Some("suspendue"), Some("attente_operateur")));
+            assert_eq!(file_[1]["etat"], "en_attente");
+            tokio::spawn(repartir(e.clone()));
+            let etat_de = |i: usize| e.file.lock().unwrap().sorties[i].etat;
+            for _ in 0..100 {
+                if etat_de(1) == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!((etat_de(0), etat_de(1)), (file::Etat::Suspendue, file::Etat::Terminee), "seule la machine « auto » a coupé");
+            let id = e.file.lock().unwrap().sorties[0].id;
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{id}/reprendre"), None, None).await.status(), StatusCode::NO_CONTENT);
+            for _ in 0..100 {
+                if etat_de(0) == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!(etat_de(0), file::Etat::Terminee, "« Couper » : partie");
+            assert_eq!(std::fs::read_dir(e.config.donnees.join("sorties").join("sur-ordre")).unwrap().count(), 1);
+            // Après coupe « rien » (défaut) : les deux restent dans l'historique ; archivées à la
+            // main, la restauration suit la machine.
+            let ids: Vec<Uuid> = e.file.lock().unwrap().sorties.iter().map(|s| s.id).collect();
+            {
+                let mut f = e.file.lock().unwrap();
+                ids.iter().for_each(|i| f.apres_coupe(*i, file::ApresCoupe::Archiver));
+                f.sorties.iter_mut().for_each(|s| s.machine = if s.id == ids[0] { "sur-ordre".into() } else { "auto-arrete".into() });
+            }
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{}/restaurer", ids[0]), None, None).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{}/restaurer", ids[1]), None, None).await.status(), StatusCode::NO_CONTENT);
+            let f = e.file.lock().unwrap().sorties.clone();
+            assert_eq!((f[0].etat, f[0].archivee, f[1].etat), (file::Etat::Suspendue, false, file::Etat::EnAttente));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }

@@ -583,7 +583,8 @@ const textes = {
     systeme_decoupe: "Découpe", prefixes_decoupe: "Préfixes de découpe (séparés par ;)", note_prefixes: "Un ton est de découpe si son nom commence par un préfixe (CutContour reconnaît CutContour1 et CutContourKissCut, pas 1CutContour ; sans casse, espaces ni tirets). Pris aux rendus suivants : relancer un travail déjà rendu.",
     ancien_reglage_coupe: (n) => `Ancien réglage de coupe du travail entier : « ${n} ». Il va à la couche du même nom, ou à la seule couche ; sinon, le choisir couche par couche puis enregistrer.`,
     calques_non_imprimables: "Couper aussi les tracés des calques non imprimables",
-    traces_ouverts: "Autoriser les tracés ouverts (évents de bâche)", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
+    traces_ouverts: "Autoriser les tracés ouverts (évents de bâche)", apres_coupe: "Après coupe", apres_coupe_rien: "ne rien faire (historique)", apres_coupe_archiver: "archiver (restaurable)", apres_coupe_supprimer: "supprimer de la file",
+    coupe_auto: "Couper dès l'arrivée", note_coupe_auto: "Décoché : chaque découpe arrive suspendue dans la file de la machine et part quand l'opérateur la reprend (« Couper maintenant »).", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
@@ -609,7 +610,7 @@ const textes = {
     note_epson: "Pilote à venir : les plaques sont copiées dans sorties/epson/ sur le serveur.",
     raisons: { attente_impression: ["Impression pas finie", "La découpe part quand l'impression de la page est terminée à 100 %."], decoupeuse_indisponible: ["Découpeuse indisponible", "La découpeuse affectée est absente, hors ligne, mal connectée, ou une couche n'y trouve pas son réglage : rien ne part, pour ne pas gâcher d'encre ni de support."], attente_operateur: ["Retenue", "Suspendue par un opérateur : « Reprendre » pour la relancer."], machine_hors_ligne: ["Machine injoignable", "La machine n'est pas branchée ou absente du catalogue : la sortie partira dès qu'elle répond."], source_absente: ["Fichier manquant", "Le rendu ou le tracé de cette page est introuvable : relancer le travail."], format_trop_petit: ["Trop large", "La page (repères compris) dépasse la laize de la machine : tourner, réduire ou changer de support."], attente_support: ["Autre support", "Le support chargé n'est pas celui du travail."] },
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
-    actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
+    actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer", restaurer: "Restaurer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `Reste ${m} m de rouleau`, fichiers_etat: "Fichiers et dossiers", dossier_absent: (d, r) => r ? `dossier ${d} absent : recréé` : `dossier ${d} absent et impossible à recréer (droits ?)`, fichier_illisible: (f, r) => r ? `${f} illisible (coupure ?) : version précédente reprise` : `${f} illisible, sans version précédente : à restaurer (copie dans ${f}.illisible)`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
     media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
@@ -625,7 +626,7 @@ const textes = {
     support_m2: "Support sans choix (€ / m²)", enregistrer: "Enregistrer", tarifs_enregistres: "Tarifs enregistrés.", export_csv: "Exporter la consommation (CSV)",
     note_tarifs: "Valeurs de départ à remplacer par celles de l'atelier. Contenance et prix de la cartouche, s'ils sont saisis, fixent le prix au litre. Une case vide prend la ligne « Toutes les autres ».",
     estimation: (m2, ml, total, encre, support) => `${m2} m² · encre ${ml} ml · ≈ ${total} € (encre ${encre} €, support ${support} €)`,
-    aucune_sortie: "Rien en file.", historique: "Historique", ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
+    aucune_sortie: "Rien en file.", historique: "Historique", archive: (n) => `Archive (${n})`, ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
       format_inconnu: "Format non reconnu : envoyer un PDF, un AI ou un SVG.",
       ai_sans_pdf: "Fichier Illustrator sans compatibilité PDF : l'enregistrer avec « Créer un fichier compatible PDF ».",
@@ -781,7 +782,8 @@ const textes = {
     systeme_decoupe: "Cutting", prefixes_decoupe: "Cut prefixes (separated by ;)", note_prefixes: "A spot colour is a cut one if its name starts with a prefix (CutContour matches CutContour1 and CutContourKissCut, not 1CutContour; case, spaces and dashes ignored). Used by the next renderings: restart a job already rendered.",
     ancien_reglage_coupe: (n) => `Former cut setting of the whole job: “${n}”. It goes to the layer of the same name, or to the only layer; otherwise choose it layer by layer, then save.`,
     calques_non_imprimables: "Also cut the paths of non-printing layers",
-    traces_ouverts: "Allow open paths (banner vents)", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
+    traces_ouverts: "Allow open paths (banner vents)", apres_coupe: "After cutting", apres_coupe_rien: "do nothing (history)", apres_coupe_archiver: "archive (can be restored)", apres_coupe_supprimer: "remove from the queue",
+    coupe_auto: "Cut on arrival", note_coupe_auto: "Unticked: each cut arrives on hold in the machine's queue and goes when the operator resumes it (\"Cut now\").", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
@@ -807,7 +809,7 @@ const textes = {
     note_epson: "Driver to come: plates are copied to sorties/epson/ on the server.",
     raisons: { attente_impression: ["Print not finished", "The cut starts once the page is 100 % printed."], decoupeuse_indisponible: ["Cutter unavailable", "The assigned cutter is missing, offline, badly connected, or a layer finds no setting on it: nothing goes out, so no ink or media is wasted."], attente_operateur: ["Held", "Held by an operator: \"Resume\" to restart it."], machine_hors_ligne: ["Machine unreachable", "The machine is unplugged or missing from the catalogue: the output leaves as soon as it answers."], source_absente: ["File missing", "This page's rendering or cut path cannot be found: re-run the job."], format_trop_petit: ["Too wide", "The page (marks included) is wider than the machine's roll: rotate, scale down or change media."], attente_support: ["Other media", "The loaded media is not the job's."] },
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
-    actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
+    actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove", restaurer: "Restore" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `${m} m of roll left`, fichiers_etat: "Files and folders", dossier_absent: (d, r) => r ? `folder ${d} missing: recreated` : `folder ${d} missing and could not be recreated (permissions?)`, fichier_illisible: (f, r) => r ? `${f} unreadable (power cut?): previous version restored` : `${f} unreadable, no previous version: restore it (copy in ${f}.illisible)`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
     media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
@@ -823,7 +825,7 @@ const textes = {
     support_m2: "Media when none chosen (€ / m²)", enregistrer: "Save", tarifs_enregistres: "Rates saved.", export_csv: "Export consumption (CSV)",
     note_tarifs: "Starting values, to be replaced by the workshop's own. Cartridge size and price, when entered, set the price per litre. An empty box takes the “All others” row.",
     estimation: (m2, ml, total, encre, support) => `${m2} m² · ink ${ml} ml · ≈ €${total} (ink €${encre}, media €${support})`,
-    aucune_sortie: "Nothing queued.", historique: "History", ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
+    aucune_sortie: "Nothing queued.", historique: "History", archive: (n) => `Archive (${n})`, ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
       format_inconnu: "Unknown format: send a PDF, AI or SVG file.",
       ai_sans_pdf: "Illustrator file without PDF compatibility: save it with “Create PDF Compatible File”.",
@@ -1207,15 +1209,17 @@ function formulaireDecoupe() {
   const calques = el("input", { type: "checkbox", name: "calques_non_imprimables", checked: !!r.calques_non_imprimables });
   const ouverts = el("input", { type: "checkbox", name: "traces_ouverts", checked: r.traces_ouverts !== false });
   const trier = el("input", { type: "checkbox", name: "trier", checked: r.trier !== false });
+  const apres = el("select", { name: "apres_coupe" }, ...["rien", "archiver", "supprimer"].map((v) => el("option", { value: v, selected: (r.apres_coupe || "rien") === v }, T()[`apres_coupe_${v}`])));
   const f = el("form", { className: "admin", id: "reglages-decoupe" }, el("h3", {}, T().systeme_decoupe),
     el("label", {}, T().prefixes_decoupe, prefixes), el("p", { className: "meta", style: "margin: 0" }, T().note_prefixes),
     el("label", { className: "case" }, calques, " ", T().calques_non_imprimables),
     el("label", { className: "case" }, ouverts, " ", T().traces_ouverts),
     el("label", { className: "case" }, trier, " ", T().trier_traces),
+    el("label", {}, T().apres_coupe, " ", apres),
     el("div", { className: "ligne" }, el("button", { type: "submit" }, T().enregistrer)));
   f.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const lu = await api("/api/decoupe", json("POST", { prefixes: prefixes.value.split(";").map((x) => x.trim()).filter(Boolean), calques_non_imprimables: calques.checked, traces_ouverts: ouverts.checked, trier: trier.checked }));
+    const lu = await api("/api/decoupe", json("POST", { prefixes: prefixes.value.split(";").map((x) => x.trim()).filter(Boolean), calques_non_imprimables: calques.checked, traces_ouverts: ouverts.checked, trier: trier.checked, apres_coupe: apres.value }));
     if (lu) { reglagesDecoupe = lu; dire(T().decoupe_enregistree); afficherSysteme(); }
   });
   return f;
@@ -2479,6 +2483,10 @@ function signalerFins(avant, apres) {
     dire(texte, s.etat === "echec");
     try { if (window.Notification?.permission === "granted") new Notification("E-KO RIP Center", { body: texte }); } catch {}
   }
+  // Découpe retirée de la file dès la fin (« Après coupe : supprimer ») : finie aussi.
+  for (const a of avant.filter((x) => x.etat === "en_cours" && !apres.some((y) => y.id === x.id))) {
+    dire(T().notif_finie(a.nom, catalogue.find((m) => m.id === a.machine)?.nom || a.machine));
+  }
 }
 // Demandée une fois, au premier clic (les navigateurs l'exigent après un geste).
 document.addEventListener("click", () => { try { if (window.Notification?.permission === "default") Notification.requestPermission(); } catch {} }, { once: true });
@@ -2822,6 +2830,8 @@ const actionsPossibles = {
   suspendue: ["en_tete", "monter", "descendre", "reprendre", "annuler"],
   en_cours: [], terminee: ["refaire", "retirer"], echec: ["refaire", "retirer"], annulee: ["refaire", "retirer"],
 };
+/** Découpe archivée (roadmap 4.12) : se restaure, ou se supprime. */
+const actionsArchive = ["restaurer", "retirer"];
 const aPasser = (s) => ["en_cours", "en_attente", "suspendue"].includes(s.etat);
 function afficherFile() {
   // L'historique ouvert reste ouvert d'un rafraîchissement à l'autre.
@@ -2829,7 +2839,8 @@ function afficherFile() {
   const colonnes = catalogue.map((m) => {
     const machine = m.id;
     // Une sortie envoyée au pool apparaît chez chaque membre tant qu'aucun ne l'a prise.
-    const miennes = sorties.filter((s) => s.machine === machine || (m.pool && s.machine === m.pool));
+    const toutes = sorties.filter((s) => s.machine === machine || (m.pool && s.machine === m.pool));
+    const miennes = toutes.filter((s) => !s.archivee), archive = toutes.filter((s) => s.archivee).reverse();
     const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
     const ligne = (s) => el("div", { className: "sortie" },
       el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}${s.couche ? ` · ${T().couche_de_sortie(s.couche)}` : ""}`)),
@@ -2840,14 +2851,15 @@ function afficherFile() {
           el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
           s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
-      el("div", { className: "actions" }, ...actionsPossibles[s.etat].map((a) => bouton(T().actions[a], () =>
+      el("div", { className: "actions" }, ...(s.archivee ? actionsArchive : actionsPossibles[s.etat]).map((a) => bouton(T().actions[a], () =>
         (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
     const enCours = miennes.filter(aPasser);
     const reste = enCours.reduce((a, s) => a + (s.duree_min || 0), 0);
     return el("section", { className: "panneau" },
       el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), reste > 0 ? el("span", { className: "meta" }, ` · ${T().reste(duree(reste))}`) : null, m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
       el("div", {}, ...(enCours.length ? enCours.map(ligne) : [el("p", { className: "vide-liste" }, T().aucune_sortie)])),
-      finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null);
+      finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null,
+      archive.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().archive(archive.length)), el("div", {}, ...archive.map(ligne))) : null);
   });
   $("vue-file").replaceChildren(...colonnes);
   $("vue-file").querySelectorAll("details").forEach((d, i) => { d.open = !!ouvert[i]; });
@@ -2985,7 +2997,8 @@ function afficherEditeurMachines() {
     (m.parametres_decoupe || []).forEach((p) => ligneCoupe(p));
     bloc.append(el("div", { className: "ligne bas" }, el("strong", {}, T().coupes_titre), bouton(T().coupe_ajouter, () => ligneCoupe()),
       el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee),
-      el("label", { className: "case", title: T().note_mono_couche }, el("input", { type: "checkbox", name: "mono_couche", checked: !!m.mono_couche }), " ", T().mono_couche)), coupes);
+      el("label", { className: "case", title: T().note_mono_couche }, el("input", { type: "checkbox", name: "mono_couche", checked: !!m.mono_couche }), " ", T().mono_couche),
+      el("label", { className: "case", title: T().note_coupe_auto }, el("input", { type: "checkbox", name: "coupe_auto", checked: m.coupe_auto !== false }), " ", T().coupe_auto)), coupes);
     if (m.uuid) bloc.dataset.uuid = m.uuid;
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
@@ -3008,7 +3021,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
           // « 8/2 8/2 4/1 » : paires coupé/relevé en mm (virgule décimale acceptée).
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };
       }).filter((p) => p.nom),
-      decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked };
+      decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked, coupe_auto: b.querySelector("[name=coupe_auto]").checked };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

@@ -36,11 +36,14 @@ pub struct Reglages {
     /// Tri des tracés (intérieurs d'abord, plus proche voisin) ; sinon l'ordre de création.
     #[serde(default = "vrai")]
     pub trier: bool,
+    /// Ce que devient une découpe terminée (roadmap 4.12).
+    #[serde(default)]
+    pub apres_coupe: crate::file::ApresCoupe,
 }
 
 impl Default for Reglages {
     fn default() -> Self {
-        Reglages { prefixes: PREFIXES_DEFAUT.map(String::from).to_vec(), calques_non_imprimables: false, traces_ouverts: true, trier: true }
+        Reglages { prefixes: PREFIXES_DEFAUT.map(String::from).to_vec(), calques_non_imprimables: false, traces_ouverts: true, trier: true, apres_coupe: crate::file::ApresCoupe::Rien }
     }
 }
 
