@@ -111,13 +111,27 @@ pub struct Mise {
     /// Cadre Mutoh : coins opposés (x1, y1, x2, y2) au MILIEU des traits, ce que le Kona
     /// attend dans `AL5` (mesuré sur la capture ONYX du 24/10 : écart = cadre − épaisseur).
     pub coins: Option<[f64; 4]>,
+    /// Repérage réellement appliqué à la page (le cadre simple devient multi-cadre au-delà de
+    /// `MULTI_DES_MM`).
+    pub reperage: Reperage,
+}
+
+/// Longueur (sens d'avance = hauteur de page) à partir de laquelle le cadre simple avec code
+/// devient un multi-cadre : manuel Kona AP-75380 § 6.3 — cadre simple déconseillé au-delà de
+/// 2 m, multi-cadre déconseillé sous 1,5 m et conçu pour les grandes longueurs.
+pub const MULTI_DES_MM: f64 = 1500.0;
+
+/// Repérage effectif d'une page de `hauteur` pt : `CadreCode` passe en `CadreMulti` dès
+/// `MULTI_DES_MM` ; les autres restent tels quels.
+pub fn effectif(reperage: Reperage, hauteur: f64) -> Reperage {
+    if reperage == Reperage::CadreCode && hauteur / PT_PAR_MM >= MULTI_DES_MM { Reperage::CadreMulti } else { reperage }
 }
 
 /// `numero` : celui des codes-barres (Types 2 et 3), ignoré sinon.
 pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64) -> Mise {
     let mm = |v: f64| v * PT_PAR_MM;
     match reperage {
-        Reperage::Aucun => Mise { page: (largeur, hauteur), decalage: (0.0, 0.0), rectangles: vec![], coins: None },
+        Reperage::Aucun => Mise { page: (largeur, hauteur), decalage: (0.0, 0.0), rectangles: vec![], coins: None, reperage },
         Reperage::Cadre | Reperage::CadreCode | Reperage::CadreMulti => {
             use cadre::*;
             let avec_code = reperage != Reperage::Cadre;
@@ -172,7 +186,7 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
             // bas-droit, hors de l'image (marge de 10 mm).
             rectangles.extend(fleche_vers_le_haut(x1 - mm(3.0) - mm(FLECHE) / 2.0, y0 + e + mm(3.0)));
             let coins = Some([x0 + e / 2.0, y0 + e / 2.0, x0 + ext_l - e / 2.0, y0 + ext_h - e / 2.0]);
-            Mise { page: (ext_l + 2.0 * mm(BORD_COTE), y0 + ext_h + mm(BORD_ARRIERE)), decalage, rectangles, coins }
+            Mise { page: (ext_l + 2.0 * mm(BORD_COTE), y0 + ext_h + mm(BORD_ARRIERE)), decalage, rectangles, coins, reperage }
         }
         Reperage::Manuel => {
             let bord = mm(CROIX_BORD + CROIX_BRAS / 2.0);
@@ -184,7 +198,7 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
                 rectangles.push([cx - bras / 2.0, cy - trait_ / 2.0, bras, trait_]);
                 rectangles.push([cx - trait_ / 2.0, cy - bras / 2.0, trait_, bras]);
             }
-            Mise { page: (largeur + 2.0 * (bord + m), hauteur + 2.0 * (bord + m)), decalage, rectangles, coins: None }
+            Mise { page: (largeur + 2.0 * (bord + m), hauteur + 2.0 * (bord + m)), decalage, rectangles, coins: None, reperage }
         }
     }
 }
@@ -299,6 +313,7 @@ fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage
     if dict.get(b"Rotate").and_then(Object::as_i64).is_ok_and(|r| r % 360 != 0) {
         return Err("page tournée (/Rotate) : repérage non pris en charge".into());
     }
+    let reperage = effectif(reperage, boite[3] - boite[1]);
     let mise = mise_en_page(reperage, boite[2] - boite[0], boite[3] - boite[1], numero);
     let (dx, dy) = (mise.decalage.0 - boite[0], mise.decalage.1 - boite[1]);
 
@@ -329,6 +344,19 @@ fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn cadre_simple_long_devient_multi_cadre() {
+        // Manuel Kona § 6.3 : multi-cadre dès 1,5 m (sens d'avance = hauteur de page).
+        assert_eq!(effectif(Reperage::CadreCode, 1499.0 * MM), Reperage::CadreCode);
+        assert_eq!(effectif(Reperage::CadreCode, 1534.0 * MM), Reperage::CadreMulti);
+        assert_eq!(effectif(Reperage::Cadre, 3000.0 * MM), Reperage::Cadre, "Type 1 : pas de code, pas de multi");
+        let simple = mise_en_page(Reperage::CadreCode, 370.0 * MM, 1534.0 * MM, 1);
+        let multi = mise_en_page(effectif(Reperage::CadreCode, 1534.0 * MM), 370.0 * MM, 1534.0 * MM, 1);
+        assert_eq!(multi.reperage, Reperage::CadreMulti);
+        assert!(multi.rectangles.len() > simple.rectangles.len(), "repères intermédiaires ajoutés : {} > {}", multi.rectangles.len(), simple.rectangles.len());
+        assert_eq!(Reperage::CadreMulti.code_cutserver(), Some("MF"));
+    }
     use super::*;
 
     const MM: f64 = PT_PAR_MM;

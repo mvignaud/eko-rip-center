@@ -99,6 +99,9 @@ struct Travail {
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct Page {
+    /// Repérage réellement appliqué (un cadre simple long devient multi-cadre).
+    #[serde(default)]
+    reperage: Option<reperage::Reperage>,
     /// Plaques de la page (vide en découpe seule).
     plaques: Vec<String>,
     /// Parmi elles, les tons de découpe (`CutContour`…) : jamais envoyés à l'imprimante.
@@ -913,6 +916,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             largeur_mm: mesure.largeur_mm,
                             hauteur_mm: mesure.hauteur_mm,
                             cadre_pt: mises.get(i).and_then(|m| m.coins),
+                            reperage: mises.get(i).map(|m| m.reperage),
                             geometrie: geometrie.get(i).copied().flatten(),
                             tuile: tuiles.get(i).cloned().flatten().map(|t| mosaique::Tuile { decalage_mm: mises.get(i).map_or([0.0; 2], |m| [m.decalage.0 / imbrication::PT_PAR_MM, m.decalage.1 / imbrication::PT_PAR_MM]), ..t }),
                         }
@@ -2653,8 +2657,8 @@ struct ChoixMachine {
 /// Avec un cadre à code-barres, nommé pour Mutoh CutServer : `Nom_SF|MF_<numéro>.plt`.
 /// `?machine=<id>` : le fichier tel que cette machine le reçoit (à envoyer à la main).
 async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>, axum::extract::Query(q): axum::extract::Query<ChoixMachine>) -> Response {
-    let cutserver = lire_page(&etat.config.donnees, id, page).and_then(|(t, _)| {
-        let mot = t.demande.reperage.code_cutserver()?;
+    let cutserver = lire_page(&etat.config.donnees, id, page).and_then(|(t, p)| {
+        let mot = p.reperage.unwrap_or(t.demande.reperage).code_cutserver()?;
         let base: String = std::path::Path::new(&t.nom).file_stem()?.to_string_lossy().chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' }).collect();
         Some(format!("{base}_{mot}_{:011}.plt", reperage::numero(id, page)))
     });
