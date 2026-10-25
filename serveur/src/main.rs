@@ -922,6 +922,11 @@ async fn traiter(etat: Partage, mut t: Travail) {
     };
     match rendu {
         Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
+            // L'image est étendue près des tracés dans la garde ; en échec, le rendu échoue.
+            Ok(decoupes) if let Some(Err(e)) = etendre_plaques(&rep, plaques.as_deref(), &decoupes, t.demande.etendre_coupe, t.demande.dpi).await => {
+                eprintln!("travail {} : {e}", t.id);
+                (t.statut, t.code_erreur, t.erreur) = (Statut::Echec, Some("rendu_echoue".into()), Some(e));
+            }
             Ok(decoupes) => {
                 // Couches : celles connues gardent ordre et réglages, les nouvelles prennent leur rang.
                 for d in &decoupes {
@@ -2251,6 +2256,59 @@ fn posee(t: &Travail, p: &Page, traces: &[decoupe::Trace]) -> coupe::Posee {
     t.mise_coupe.appliquer(traces, taille_coupe(p, traces), p.cadre_pt)
 }
 
+/// Étendre l'image près des tracés (roadmap 4.10) : chaque plaque imprimée des pages qui ont
+/// des contours fermés, en production et en aperçu (le composite, lui, n'est pas refait).
+/// `None` : rien à faire.
+async fn etendre_plaques(rep: &std::path::Path, plaques: Option<&[Vec<String>]>, decoupes: &[decoupe::Decoupe], e: Option<coupe::Etendre>, dpi: u32) -> Option<Result<(), String>> {
+    let (e, plaques) = (e?, plaques?);
+    // Page, plaque, tracés, format de la page.
+    type APlaque = (usize, String, Vec<decoupe::Trace>, (f64, f64));
+    let travail: Vec<APlaque> = decoupes
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.traces.iter().any(|t| t.ferme))
+        .flat_map(|(i, d)| plaques.get(i).into_iter().flatten().filter(|n| !decoupe::est_ton_de_decoupe(n)).map(move |n| (i + 1, n.clone(), d.traces.clone(), (d.largeur, d.hauteur))))
+        .collect();
+    let rep = rep.to_path_buf();
+    Some(
+        tokio::task::spawn_blocking(move || {
+            for (page, nom, traces, format) in travail {
+                let tif = render::chemin_plaque(&rep, page, &nom);
+                let mut lecteur = blanc::LecteurTiff::ouvrir(&tif)?;
+                let (l, h) = (lecteur.largeur, lecteur.hauteur);
+                let tmp = tif.with_extension("tif.tmp");
+                let mut ecrivain = blanc::EcrivainTiff::creer(&tmp, l as u32, h as u32, dpi).map_err(|e| e.to_string())?;
+                let mut bande: Vec<u8> = Vec::with_capacity(blanc::RANGS_PAR_BANDE * l);
+                let mut faites = 0;
+                coupe::etendre(l, h, || lecteur.ligne(), |ligne| {
+                    bande.extend_from_slice(ligne);
+                    faites += 1;
+                    if faites % blanc::RANGS_PAR_BANDE == 0 || faites == h {
+                        ecrivain.bande(&bande).map_err(|e| e.to_string())?;
+                        bande.clear();
+                    }
+                    Ok(())
+                }, &traces, format, &e)?;
+                ecrivain.finir().map_err(|e| e.to_string())?;
+                std::fs::rename(&tmp, &tif).map_err(|e| e.to_string())?;
+                let png = render::chemin_apercu_plaque(&rep, page, &nom);
+                let img = image::open(&png).map_err(|e| format!("{} : {e}", png.display()))?.to_luma8();
+                let (l, h) = (img.width() as usize, img.height() as usize);
+                let mut lignes = img.as_raw().chunks(l.max(1)).map(<[u8]>::to_vec);
+                let mut sortie = Vec::with_capacity(l * h);
+                coupe::etendre(l, h, || lignes.next().ok_or_else(|| "aperçu tronqué".to_string()), |ligne| {
+                    sortie.extend_from_slice(ligne);
+                    Ok(())
+                }, &traces, format, &e)?;
+                image::GrayImage::from_raw(l as u32, h as u32, sortie).ok_or("aperçu étendu")?.save(&png).map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or_else(|e| Err(e.to_string())),
+    )
+}
+
 /// `prod/decoupe-NNN.plt` (couches actives dans leur ordre) et `apercu/decoupe-NNN.svg` de
 /// chaque page qui a des tracés, posés par la mise en coupe.
 fn ecrire_coupes(rep: &std::path::Path, t: &Travail) -> std::io::Result<()> {
@@ -3036,7 +3094,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -4090,7 +4148,7 @@ mod tests {
 
         /// Format (mm) d'une plaque de production, et boîte [x0, y0, x1, y1] (mm, origine en
         /// bas à gauche comme le HP-GL) de ses pixels encrés.
-        fn encre(rep: &std::path::Path, page: usize, plaque: &str, dpi: u32) -> ((f64, f64), [f64; 4]) {
+        pub(super) fn encre(rep: &std::path::Path, page: usize, plaque: &str, dpi: u32) -> ((f64, f64), [f64; 4]) {
             let img = image::open(render::chemin_plaque(rep, page, plaque)).unwrap().to_luma8();
             let (l, h) = img.dimensions();
             let mm = |px: u32| px as f64 * 25.4 / dpi as f64;
@@ -5298,6 +5356,50 @@ mod tests {
             let b = poser(serde_json::json!({ "miroir": true, "echelle": [200, 100] })).await;
             // Page 200 × 50 mm après échelle ; rectangle 20–120 mm, retourné : 80–180 mm.
             assert_eq!(b, [[80.0, 20.0, 180.0, 40.0]], "miroir et échelle non proportionnelle");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 4.10 : aplat cyan de 100 pt bordé d'un contour CutContour, rendu à 144 dpi ; étendre
+        /// de 2 mm → l'encre de la plaque de production déborde de 2 mm (± 1 pixel) de chaque
+        /// côté, l'aperçu aussi ; le contour, lui, reste où il est. Puis décaler la coupe de
+        /// 1 mm : le contour grandit de 1 mm, l'encre ne bouge pas.
+        #[tokio::test]
+        async fn etendre_l_image_et_decaler_la_coupe() {
+            use lopdf::{Document, Object, Stream, dictionary};
+            let e = etat("etendre");
+            let mut doc = Document::with_version("1.4");
+            let sep = Object::Array(vec!["Separation".into(), "CutContour".into(), "DeviceCMYK".into(), Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 })]);
+            let c = doc.add_object(Stream::new(dictionary! {}, b"1 0 0 0 k 50 50 100 100 re f /CS0 CS 1 SCN 0.5 w 50 50 100 100 re S".to_vec()));
+            let parent = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), 200.into(), 200.into()], "Contents" => c, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => sep } } });
+            doc.objects.insert(parent, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => parent });
+            doc.trailer.set("Root", cat);
+            let mut pdf = vec![];
+            doc.save_to(&mut pdf).unwrap();
+            let mm = |pt: f64| pt / imbrication::PT_PAR_MM;
+            let (a, b) = (mm(50.0), mm(150.0));
+            let sans = rendre(&e, pdf.clone(), Demande { dpi: 144, ..Default::default() }).await;
+            let (_, cyan) = super::regression_geometrie::encre(&dossier(&e.config.donnees, sans.id), 1, "Cyan", 144);
+            let px = 25.4 / 144.0;
+            assert!(cyan.iter().zip([a, a, b, b]).all(|(x, y)| (x - y).abs() <= px), "sans extension : {cyan:?}");
+            let d = Demande { dpi: 144, etendre_coupe: Some(coupe::Etendre { largeur_mm: 2.0, seuil_mm: 0.5 }), ..Default::default() };
+            let t = rendre(&e, pdf, d).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let (_, cyan) = super::regression_geometrie::encre(&rep, 1, "Cyan", 144);
+            assert!(cyan.iter().zip([a - 2.0, a - 2.0, b + 2.0, b + 2.0]).all(|(x, y)| (x - y).abs() <= px), "étendue de 2 mm : {cyan:?}");
+            // Aperçu (50 dpi) : étendu aussi.
+            let apercu = image::open(render::chemin_apercu_plaque(&rep, 1, "Cyan")).unwrap().to_luma8();
+            let encres = (0..apercu.width()).filter(|&x| apercu.get_pixel(x, apercu.height() / 2)[0] < 128).count() as f64 * 25.4 / 50.0;
+            assert!((encres - (b - a + 4.0)).abs() <= 2.0 * 25.4 / 50.0, "aperçu : {encres} mm");
+            let contour = boites_hpgl(&std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap());
+            assert_eq!(contour, [[a, a, b, b].map(|v| (v * 100.0).round() / 100.0)], "le contour ne bouge pas");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/coupe", t.id), None, Some(serde_json::json!({ "decalage_mm": 1.0 }))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let contour = boites_hpgl(&std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap());
+            assert_eq!(contour, [[a - 1.0, a - 1.0, b + 1.0, b + 1.0].map(|v| (v * 100.0).round() / 100.0)], "coupe décalée de 1 mm");
+            let mauvais = Demande { etendre_coupe: Some(coupe::Etendre { largeur_mm: 20.0, seuil_mm: 0.5 }), ..Default::default() };
+            assert_eq!(mauvais.verifier(&[]), Err("etendre_invalide"));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }

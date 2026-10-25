@@ -275,9 +275,14 @@ pub struct Edition {
     pub marge_mm: f64,
     #[serde(default)]
     pub oeillets: Option<Oeillets>,
-    /// Contour `CutContour` rectangulaire, décalé du bord de l'image (mm, négatif = dedans).
+    /// Contour `CutContour` rectangulaire, décalé de son bord de référence (mm, négatif =
+    /// dedans : le retrait, « choke »).
     #[serde(default)]
     pub contour_mm: Option<f64>,
+    /// Bord de référence du contour (roadmap 4.10) : l'image, son fond perdu, ou le blanc de
+    /// rogne autour (« trim box »).
+    #[serde(default)]
+    pub contour_sur: BordContour,
     /// Recadrage (x, y, l, h) en mm dans la page source, origine au coin bas gauche de sa
     /// MediaBox : la page produite est ce cadre, le contenu et la découpe y sont rognés.
     #[serde(default)]
@@ -303,6 +308,18 @@ pub struct Edition {
     pub filtre: Option<crate::filtre::Filtre>,
 }
 
+/// Bord autour duquel le contour rectangulaire est tracé.
+#[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BordContour {
+    /// Bord de l'image, le trait de coupe (comportement d'avant ce champ).
+    #[default]
+    Image,
+    FondPerdu,
+    /// Fond perdu et blanc de rogne : la boîte de rognage.
+    Rogne,
+}
+
 /// Portée du miroir. ⚠️ À éprouver à l'atelier : selon le support et la pose (vitrophanie
 /// vue de l'extérieur, caisson retourné…), la découpe doit suivre l'image ou non ; le choix
 /// reste explicite tant qu'aucun essai réel ne l'a tranché.
@@ -322,7 +339,7 @@ fn cent() -> f64 {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None, recadrage: None, echelle_xy: None, miroir_portee: PorteeMiroir::default(), marques: None, fond_perdu: None, etiquette: None, code: None, filtre: None }
+        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None, contour_sur: BordContour::Image, recadrage: None, echelle_xy: None, miroir_portee: PorteeMiroir::default(), marques: None, fond_perdu: None, etiquette: None, code: None, filtre: None }
     }
 }
 
@@ -330,7 +347,8 @@ impl Edition {
     /// Rien à faire au PDF : la portée d'un miroir absent ne compte pas, le filtre couleur
     /// non plus (il agit sur les plaques).
     pub fn neutre(&self) -> bool {
-        Edition { miroir_portee: if self.miroir { self.miroir_portee } else { PorteeMiroir::default() }, filtre: None, ..self.clone() } == Edition::default()
+        let contour_sur = if self.contour_mm.is_some() { self.contour_sur } else { BordContour::default() };
+        Edition { miroir_portee: if self.miroir { self.miroir_portee } else { PorteeMiroir::default() }, contour_sur, filtre: None, ..self.clone() } == Edition::default()
     }
 
     /// Échelle de chaque axe (1 = 100 %).
@@ -753,8 +771,19 @@ pub fn appliquer(pdf: &[u8], e: &Edition) -> Result<Vec<u8>, (&'static str, Stri
             contenu += &dessin_marques(mq, image, fond);
         }
         if let Some(c) = e.contour_mm {
+            // Autour de l'image, de son fond perdu, ou du blanc de rogne : gauche, bas, droite, haut.
+            let rogne = e.fond_perdu.map_or([0.0; 4], |f| [f.rogne_mm[2], f.rogne_mm[1], f.rogne_mm[3], f.rogne_mm[0]].map(|v| v * PT_PAR_MM));
+            let autour: [f64; 4] = match e.contour_sur {
+                BordContour::Image => [0.0; 4],
+                BordContour::FondPerdu => fond,
+                BordContour::Rogne => std::array::from_fn(|i| fond[i] + rogne[i]),
+            };
             let d = c * PT_PAR_MM;
-            contenu += &format!("q /CC CS 1 SCN 0.5 w {:.4} {:.4} {:.4} {:.4} re S Q\n", bg - d, bb - d, lw + 2.0 * d, lh + 2.0 * d);
+            let (x, y) = (bg - autour[0] - d, bb - autour[1] - d);
+            let (l, h) = (lw + autour[0] + autour[2] + 2.0 * d, lh + autour[1] + autour[3] + 2.0 * d);
+            if l > 0.0 && h > 0.0 {
+                contenu += &format!("q /CC CS 1 SCN 0.5 w {x:.4} {y:.4} {l:.4} {h:.4} re S Q\n");
+            }
         }
         let flux = cible.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
         let mut xobjets = Dictionary::new();
@@ -839,6 +868,35 @@ mod tests {
         // Miroir : le contour d'origine reste symétrique (5 pt de chaque bord).
         let (x0, _, x1, _) = boite(p, 0);
         assert!((x0 - (m5 + 5.0)).abs() < 1e-3 && (x1 - (m5 + 95.0)).abs() < 1e-3);
+    }
+
+    /// Contour automatique (roadmap 4.10) : retrait de 1 mm sur le bord de l'image → réduit
+    /// de 1 mm ± 0,05 de chaque côté ; sur le fond perdu (3 mm) puis la boîte de rognage
+    /// (fond perdu + rogne de 2 mm), décalé d'autant.
+    #[test]
+    fn contour_auto_retrait_et_bords_de_reference() {
+        let source = crate::imbrication::tests::pdf(100.0 * MM, 50.0 * MM, "1 0 0 0", (0.0, 0.0));
+        let fond = FondPerdu { cotes_mm: [3.0; 4], rogne_mm: [2.0; 4], ..Default::default() };
+        let contour = |sur: BordContour, mm: f64| {
+            let e = Edition { contour_mm: Some(mm), contour_sur: sur, fond_perdu: Some(fond), ..Default::default() };
+            let p = &crate::decoupe::extraire(&appliquer(&source, &e).unwrap(), false).unwrap()[0];
+            // Le contour d'origine (5 pt dans l'image) puis le contour ajouté.
+            assert_eq!(p.traces.len(), 2);
+            let (x0, y0, x1, y1) = boite(p, 1);
+            // Image posée à 5 mm (fond perdu 3 + rogne 2) du bord de la page.
+            [x0 / MM - 5.0, y0 / MM - 5.0, x1 / MM - 5.0, y1 / MM - 5.0]
+        };
+        let proche = |a: [f64; 4], b: [f64; 4]| a.iter().zip(b).all(|(x, y)| (x - y).abs() <= 0.05);
+        let c = contour(BordContour::Image, -1.0);
+        assert!(proche(c, [1.0, 1.0, 99.0, 49.0]), "retrait de 1 mm : {c:?}");
+        let c = contour(BordContour::FondPerdu, 0.0);
+        assert!(proche(c, [-3.0, -3.0, 103.0, 53.0]), "fond perdu : {c:?}");
+        let c = contour(BordContour::Rogne, -1.0);
+        assert!(proche(c, [-4.0, -4.0, 104.0, 54.0]), "boîte de rognage moins 1 mm : {c:?}");
+        // Ancienne édition (sans le champ) : sur l'image.
+        let ancienne: Edition = serde_json::from_str(r#"{"contour_mm": 2.0}"#).unwrap();
+        assert_eq!(ancienne.contour_sur, BordContour::Image);
+        assert!(Edition { contour_sur: BordContour::Rogne, ..Default::default() }.neutre(), "sans contour, le bord ne compte pas");
     }
 
     /// Rendu réel : page cyan à gauche, magenta à droite ; miroir → magenta à gauche.

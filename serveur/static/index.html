@@ -377,6 +377,14 @@
           </label>
           <p class="meta" style="margin: 0" data-t="note_blanc"></p>
         </div></details>
+        <details class="section"><summary data-t="etendre"></summary><div>
+          <label class="case"><input type="checkbox" name="etendre" value="oui"> <span data-t="etendre_activer"></span></label>
+          <div class="deux">
+            <label><span data-t="etendre_largeur"></span> <input type="number" name="etendre_largeur_mm" value="1" min="0.1" max="10" step="0.1"></label>
+            <label><span data-t="etendre_seuil"></span> <input type="number" name="etendre_seuil_mm" value="0.5" min="0" max="10" step="0.1"></label>
+          </div>
+          <p class="meta" style="margin: 0" data-t="note_etendre"></p>
+        </div></details>
         <details class="section"><summary data-t="mosaique"></summary><div>
           <label class="case"><input type="checkbox" name="mosaique" value="oui"> <span data-t="mosaique_activer"></span></label>
           <div class="deux">
@@ -498,7 +506,11 @@ const textes = {
     nom_reglage: "Nom du réglage (son dossier surveillé portera ce nom) :", reglage_enregistre: (n) => `Réglage « ${n} » enregistré ; dossier surveillé : entrees/${n}/`,
     edition: "Édition rapide", echelle: "Échelle (%)", rotation_ed: "Rotation", marge: "Marge blanche (mm)", miroir: "Miroir (vitrophanie)",
     oeillets: "Œillets (repères imprimés)", espacement_oe: "Écart maximal (mm)", retrait_oe: "Distance au bord (mm)", diametre_oe: "Diamètre (mm)",
-    bords: ["Haut", "Bas", "Gauche", "Droite"], contour: "Contour de découpe rectangulaire", contour_mm: "Décalage du contour (mm, négatif = dedans)",
+    bords: ["Haut", "Bas", "Gauche", "Droite"], contour: "Contour de découpe rectangulaire", contour_mm: "Décalage du contour (mm, négatif = retrait vers l'intérieur)",
+    contour_sur: "Contour autour de", contour_sur_image: "l'image", contour_sur_fond_perdu: "le fond perdu", contour_sur_rogne: "la boîte de rognage (fond perdu + rogne)",
+    etendre: "Tolérance de découpe", etendre_activer: "Étendre l'image près des tracés", etendre_largeur: "Largeur (mm)", etendre_seuil: "Seuil de proximité (mm)",
+    note_etendre: "L'encre qui s'arrête à moins du seuil d'un contour fermé est prolongée jusqu'au contour puis au-delà, sur la largeur : la coupe ne laisse pas de liseré blanc. Valeurs prudentes ; ne remplace pas l'étalonnage imprimante-découpeuse (décalage de la machine). L'aperçu composite ne le montre pas, les plaques si.",
+    mise_decalage: "Décaler la coupe vers l'extérieur (mm)", note_mise_decalage: "La pièce grandit d'autant (un trou se resserre). Ne remplace pas l'étalonnage imprimante-découpeuse.",
     fi_repartition: "Répartition", fi_par_espacement: "par espacement", fi_par_quantite: "par quantité", fi_quantites: "Nombre par bord, coins compris (haut, bas, gauche, droite)", fi_forme: "Forme",
     fi_formes: { cercle: "Cercle", disque: "Disque plein", croix: "Croix", cercle_croix: "Cercle et croix" }, fi_depuis_coupe: "Distance comptée depuis le trait de coupe (vers l'intérieur)",
     fi_marques: "Marques imprimées", fi_coupe: "Traits de coupe aux angles", fi_croix: "Croix de repérage aux angles (remplacent les traits de coupe)", fi_contour_imprime: "Contour imprimé sur le trait de coupe",
@@ -652,8 +664,9 @@ const textes = {
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
       couches_invalides: "Couches de découpe invalides : les mêmes couches qu'au rendu, réglage de 40 caractères au plus.",
-      mise_coupe_invalide: "Mise en coupe invalide : rotation 0, 90, 180 ou 270 ; échelle de 1 à 1000 % ; 1 à 100 copies par sens (1000 en tout) ; écart de 0 à 1000 mm.",
+      mise_coupe_invalide: "Mise en coupe invalide : rotation 0, 90, 180 ou 270 ; échelle de 1 à 1000 % ; 1 à 100 copies par sens (1000 en tout) ; écart de 0 à 1000 mm ; décalage de 0 à 5 mm.",
       mise_decoupe_seule: "Miroir, échelle, copies et départ à l'origine : en découpe seule uniquement (la coupe ne suivrait plus l'impression).",
+      etendre_invalide: "Étendre l'image près des tracés : largeur de 0,1 à 10 mm, seuil de 0 à 10 mm.",
       prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
       decoupeuse_invalide: "Découpeuse invalide.",
       decoupeuse_indisponible: "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
@@ -689,7 +702,11 @@ const textes = {
     nom_reglage: "Preset name (its hot folder will have this name):", reglage_enregistre: (n) => `Preset “${n}” saved; hot folder: entrees/${n}/`,
     edition: "Quick edit", echelle: "Scale (%)", rotation_ed: "Rotation", marge: "White margin (mm)", miroir: "Mirror (window film)",
     oeillets: "Grommets (printed marks)", espacement_oe: "Maximum spacing (mm)", retrait_oe: "Distance from edge (mm)", diametre_oe: "Diameter (mm)",
-    bords: ["Top", "Bottom", "Left", "Right"], contour: "Rectangular cut contour", contour_mm: "Contour offset (mm, negative = inside)",
+    bords: ["Top", "Bottom", "Left", "Right"], contour: "Rectangular cut contour", contour_mm: "Contour offset (mm, negative = choke inwards)",
+    contour_sur: "Contour around", contour_sur_image: "the image", contour_sur_fond_perdu: "the bleed", contour_sur_rogne: "the trim box (bleed + trim)",
+    etendre: "Cutting tolerance", etendre_activer: "Add bleed near cuts", etendre_largeur: "Width (mm)", etendre_seuil: "Proximity threshold (mm)",
+    note_etendre: "Ink that stops within the threshold of a closed contour is carried up to the contour then beyond it, over the width: the cut leaves no white edge. Use cautious values; it does not replace the printer-cutter calibration (machine offset). The composite preview does not show it, the plates do.",
+    mise_decalage: "Expand the cut outwards (mm)", note_mise_decalage: "The piece grows by as much (a hole gets smaller). It does not replace the printer-cutter calibration.",
     fi_repartition: "Placement", fi_par_espacement: "by spacing", fi_par_quantite: "by quantity", fi_quantites: "Number per edge, corners included (top, bottom, left, right)", fi_forme: "Shape",
     fi_formes: { cercle: "Circle", disque: "Filled disc", croix: "Cross", cercle_croix: "Circle and cross" }, fi_depuis_coupe: "Distance measured from the cut line (inwards)",
     fi_marques: "Printed marks", fi_coupe: "Corner crop marks", fi_croix: "Corner registration crosses (replace the crop marks)", fi_contour_imprime: "Contour printed on the cut line",
@@ -843,8 +860,9 @@ const textes = {
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
       couches_invalides: "Invalid cut layers: the same layers as at rendering, setting of 40 characters at most.",
-      mise_coupe_invalide: "Invalid cut placement: rotation 0, 90, 180 or 270; scale from 1 to 1000 %; 1 to 100 copies each way (1000 in all); gap from 0 to 1000 mm.",
+      mise_coupe_invalide: "Invalid cut placement: rotation 0, 90, 180 or 270; scale from 1 to 1000 %; 1 to 100 copies each way (1000 in all); gap from 0 to 1000 mm; offset from 0 to 5 mm.",
       mise_decoupe_seule: "Mirror, scale, copies and start from the origin: for cut only jobs (the cut would no longer follow the print).",
+      etendre_invalide: "Add bleed near cuts: width from 0.1 to 10 mm, threshold from 0 to 10 mm.",
       prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
       decoupeuse_invalide: "Invalid cutter.",
       decoupeuse_indisponible: "Cutter unavailable: a layer setting does not exist on this machine.",
@@ -1217,6 +1235,7 @@ function demandeDuFormulaire() {
     mosaique: f.mosaique.checked ? mosaiqueDuFormulaire(f) : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
     couches: f.couches.value,
+    etendre_coupe: f.etendre.checked ? { largeur_mm: +f.etendre_largeur_mm.value, seuil_mm: +f.etendre_seuil_mm.value } : null,
     edition: lireEdition($("edition-envoi")),
     auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
     support: f.support.value || null,
@@ -1248,7 +1267,7 @@ const COTES = ["haut", "bas", "gauche", "droite"];
 
 /** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
 function champsEdition(racine, e) {
-  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(e || {}) };
+  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, contour_sur: "image", recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(e || {}) };
   // Réglés dans la visionneuse : gardés tels quels (le filtre couleur aussi : un réglage qui
   // le porte le garde quand on l'enregistre de nouveau) ; l'échelle déliée tombe si on retouche le %.
   racine._garde = { recadrage: e.recadrage, echelle_xy: e.echelle_xy, echelle: e.echelle, filtre: e.filtre };
@@ -1289,6 +1308,7 @@ function champsEdition(racine, e) {
       el("div", { className: "ligne" }, ...d.bords.map((b, i) => el("label", { className: "case" }, cocher(`bord${i}`, o.bords[i]), b)))),
     el("label", { className: "case" }, cocher("contour", e.contour_mm !== null && e.contour_mm !== undefined), d.contour),
     el("label", {}, d.contour_mm, nombre("contour_mm", e.contour_mm ?? 0, { min: -50, max: 50 })),
+    el("label", {}, d.contour_sur, choix("contour_sur", e.contour_sur || "image", ["image", "fond_perdu", "rogne"], { image: d.contour_sur_image, fond_perdu: d.contour_sur_fond_perdu, rogne: d.contour_sur_rogne })),
     groupe(d.fi_marques, !!e.marques,
       caseA("marques", !!e.marques, d.fi_marques),
       caseA("mq_coupe", mq.coupe, d.fi_coupe), caseA("mq_reperage", mq.reperage, d.fi_croix), caseA("mq_contour", mq.contour, d.fi_contour_imprime),
@@ -1331,6 +1351,7 @@ function lireEdition(racine) {
     oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked),
       quantites: q("oe_mode").value === "quantite" ? n4("oe_quantite").map(Math.round) : null, forme: q("oe_forme").value, depuis_coupe: q("oe_depuis_coupe").checked } : null,
     contour_mm: q("contour").checked ? +q("contour_mm").value : null,
+    contour_sur: q("contour_sur").value,
     marques: q("marques").checked ? marques : null,
     fond_perdu: q("fond_perdu").checked ? { cotes_mm: n4("fond"), genre: q("fond_genre").value, couleur: n4("fond_cmjn", 0.01), rogne_mm: n4("rogne") } : null,
     etiquette: q("etiquette").checked ? { cote: q("et_cote").value, taille_mm: +q("et_taille").value } : null,
@@ -1356,6 +1377,8 @@ function appliquerDemande(d) {
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
   f.couches.value = d.couches || "dessous";
+  f.etendre.checked = !!d.etendre_coupe;
+  if (d.etendre_coupe) { f.etendre_largeur_mm.value = d.etendre_coupe.largeur_mm; f.etendre_seuil_mm.value = d.etendre_coupe.seuil_mm; }
   champsEdition($("edition-envoi"), d.edition);
   const a = d.auto || {};
   f.auto_imprimer.checked = !!a.imprimer; f.auto_decouper.checked = !!a.decouper; f.auto_suspendre.checked = !!a.suspendre;
@@ -1800,7 +1823,7 @@ function boiteA(m, [x, y, l, h]) {
   const p = appliquerA(m, [x, y]), q = appliquerA(m, [x + l, y + h]);
   return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
 }
-const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(t.edition || {}) });
+const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, contour_sur: "image", recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(t.edition || {}) });
 const echellesDe = (e) => (e.echelle_xy ? e.echelle_xy.map((v) => v / 100) : [e.echelle / 100, e.echelle / 100]);
 const geomVue = () => vue.travail.pages[vue.n - 1].geometrie;
 const arrondi = (v) => Math.round(v * 100) / 100;
@@ -2558,10 +2581,10 @@ function panneauCouches(t) {
 }
 
 /** Mise en coupe par défaut (même forme que le serveur) et celle du travail. */
-const MISE_NEUTRE = { rotation: 0, miroir: false, echelle: [100, 100], copies: [1, 1], ecart_mm: [0, 0], depuis_origine: false };
+const MISE_NEUTRE = { rotation: 0, miroir: false, echelle: [100, 100], copies: [1, 1], ecart_mm: [0, 0], depuis_origine: false, decalage_mm: 0 };
 const miseDe = (t) => ({ ...MISE_NEUTRE, ...(t.mise_coupe || {}) });
 /** Coupe posée comme l'impression : l'aperçu de coupe se superpose à l'image. */
-const miseSuitImpression = (t) => JSON.stringify(miseDe(t)) === JSON.stringify(MISE_NEUTRE);
+const miseSuitImpression = (t) => JSON.stringify({ ...miseDe(t), decalage_mm: 0 }) === JSON.stringify(MISE_NEUTRE);
 const brouillonsMise = new Map();
 /** Travaux dont l'échelle Y se règle à part (« Proportionnelle » décochée). */
 const echelleLibre = new Set();
@@ -2584,7 +2607,9 @@ function panneauMise(t) {
     return el("label", { className: "case" }, c, " ", texte);
   };
   const prop = m.echelle[0] === m.echelle[1] && !echelleLibre.has(t.id);
-  const lignes = [el("p", { className: "meta", style: "margin: 0" }, T().note_mise_coupe), el("label", {}, T().mise_rotation, " ", rotation)];
+  const lignes = [el("p", { className: "meta", style: "margin: 0" }, T().note_mise_coupe), el("label", {}, T().mise_rotation, " ", rotation),
+    champ(T().mise_decalage, m.decalage_mm, { min: 0, max: 5, step: 0.05, title: T().note_mise_decalage }, (v, x) => { v.decalage_mm = x; }),
+    el("p", { className: "meta", style: "margin: 0" }, T().note_mise_decalage)];
   if (seule) {
     lignes.push(el("p", { className: "meta", style: "margin: 0" }, T().note_mise_seule),
       caseM(T().mise_miroir, m.miroir, (v, c) => { v.miroir = c; }),

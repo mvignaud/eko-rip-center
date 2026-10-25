@@ -938,7 +938,7 @@ pub fn hpgl(traces: &[Trace], couches: &[Couche]) -> String {
     format!("IN;{corps}PU;SP0;")
 }
 
-fn dans_polygone((x, y): (f64, f64), poly: &[(f64, f64)]) -> bool {
+pub(crate) fn dans_polygone((x, y): (f64, f64), poly: &[(f64, f64)]) -> bool {
     let mut dedans = false;
     let mut j = poly.len() - 1;
     for i in 0..poly.len() {

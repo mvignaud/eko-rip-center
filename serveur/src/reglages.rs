@@ -135,6 +135,9 @@ pub struct Demande {
     /// alors (repérage compris). Sans effet avec une rotation choisie ou une mosaïque.
     #[serde(default = "vrai")]
     pub rotation_auto: bool,
+    /// Étendre l'image près des tracés de découpe (roadmap 4.10), sur les plaques rendues.
+    #[serde(default)]
+    pub etendre_coupe: Option<crate::coupe::Etendre>,
 }
 
 fn vrai() -> bool {
@@ -161,7 +164,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None }
     }
 }
 
@@ -176,6 +179,7 @@ impl Demande {
         }
         self.blanc.verifier()?;
         self.edition.verifier()?;
+        self.etendre_coupe.as_ref().map_or(Ok(()), crate::coupe::Etendre::verifier)?;
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
         }
