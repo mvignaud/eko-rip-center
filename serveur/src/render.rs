@@ -34,8 +34,9 @@ fn prefixe(page: usize) -> String {
 /// Rend `pdf` dans `dossier` : plaques pleine définition (`prod/`), plaques et
 /// composites basse définition pour l'aperçu (`apercu/`). `options` : réglages de
 /// couleur (profils ICC, intention), appliqués aussi aux aperçus. Un ton direct de `table`
-/// est fondu dans C, M, J, N d'après sa couleur Lab, et sa plaque disparaît.
-pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[String], delai: Duration, table: &[crate::tons::Ton]) -> Result<Rendu, String> {
+/// est fondu dans C, M, J, N d'après sa couleur Lab, convertie avec l'intention de la table
+/// (roadmap 8.7), et sa plaque disparaît.
+pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[String], delai: Duration, table: &crate::tons::Table) -> Result<Rendu, String> {
     let prod = dossier.join("prod");
     let apercu = dossier.join("apercu");
     for d in [&prod, &apercu] {
@@ -47,13 +48,14 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
 
     let mut pages = plaques_par_page(&prod)?;
     let mut recettes: BTreeMap<String, [u8; 4]> = BTreeMap::new();
+    let options_tons: Vec<String> = options.iter().filter(|o| !o.starts_with("-dRenderIntent=")).cloned().chain([format!("-dRenderIntent={}", table.intention)]).collect();
     for (i, plaques) in pages.iter_mut().enumerate() {
         let n = i + 1;
         for nom in plaques.clone() {
-            let Some(ton) = crate::tons::trouver(table, &nom) else { continue };
+            let Some(ton) = crate::tons::trouver(&table.tons, &nom) else { continue };
             let recette = match recettes.get(&nom) {
                 Some(r) => *r,
-                None => *recettes.entry(nom.clone()).or_insert(crate::tons::recette(gs, options, ton.lab, delai).await?),
+                None => *recettes.entry(nom.clone()).or_insert(crate::tons::recette(gs, &options_tons, ton.lab, delai).await?),
             };
             for (d, r) in [(&prod, dpi), (&apercu, DPI_APERCU)] {
                 let cmjn = ["Cyan", "Magenta", "Yellow", "Black"].map(|c| d.join(format!("{}({c}).tif", prefixe(n))));
@@ -76,7 +78,7 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
         pdf.to_path_buf()
     } else {
         let octets = std::fs::read(pdf).map_err(|e| e.to_string())?;
-        let (lab, _) = crate::tons::en_lab(&octets, table)?;
+        let (lab, _) = crate::tons::en_lab(&octets, &table.tons)?;
         std::fs::write(&pdf_lab, lab).map_err(|e| e.to_string())?;
         pdf_lab.clone()
     };
@@ -216,7 +218,7 @@ mod tests {
         std::fs::write(&pdf, pdf_deux_pages()).unwrap();
 
         let dpi = 72;
-        let r = rendre("gs", &pdf, &dossier, dpi, &[], Duration::from_secs(60), &[]).await.unwrap();
+        let r = rendre("gs", &pdf, &dossier, dpi, &[], Duration::from_secs(60), &Default::default()).await.unwrap();
 
         assert_eq!(r.pages.len(), 2);
         assert_eq!(r.pages[0], ["Black", "Cyan", "Magenta", "Silver", "White", "Yellow"]);
@@ -266,11 +268,11 @@ mod tests {
         texte += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objets.len() + 1);
         std::fs::write(&pdf, texte).unwrap();
 
-        let r = rendre("gs", &pdf, &dossier, 72, &[], Duration::from_secs(60), &[]).await.unwrap();
+        let r = rendre("gs", &pdf, &dossier, 72, &[], Duration::from_secs(60), &Default::default()).await.unwrap();
         assert_eq!(r.pages[0], ["Black", "Cyan", "HX Rouge", "Magenta", "White", "Yellow"], "sans table : plaque gardée");
         assert!(r.tons_fondus.is_empty());
 
-        let table = [crate::tons::Ton { nom: "HX Rouge".into(), alias: vec![], lab: [48.0, 68.0, 48.0] }];
+        let table = crate::tons::Table { tons: vec![crate::tons::Ton { nom: "HX Rouge".into(), alias: vec![], lab: [48.0, 68.0, 48.0] }], ..Default::default() };
         let r = rendre("gs", &pdf, &dossier, 72, &[], Duration::from_secs(60), &table).await.unwrap();
         assert_eq!(r.pages[0], ["Black", "Cyan", "Magenta", "White", "Yellow"], "plaque fondue");
         assert_eq!(r.tons_fondus, ["HX Rouge"]);
@@ -298,7 +300,7 @@ mod tests {
         std::fs::write(&pdf, pdf_deux_pages()).unwrap();
         let profil = crate::couleur::tests::profils_ghostscript().join("ps_cmyk.icc");
         let options = [format!("-sOutputICCProfile={}", profil.display())];
-        rendre("gs", &pdf, &dossier, 72, &options, Duration::from_secs(60), &[]).await.unwrap();
+        rendre("gs", &pdf, &dossier, 72, &options, Duration::from_secs(60), &Default::default()).await.unwrap();
         let (c, m) = (pixel(&dossier, 1, "Cyan", 50.0, 72), pixel(&dossier, 1, "Magenta", 50.0, 72));
         assert_ne!((c, m), (204, 102), "valeurs inchangées : le profil n'a pas été appliqué");
         assert_eq!(pixel(&dossier, 1, "White", 140.0, 72), 0, "un ton direct n'est pas converti");

@@ -756,6 +756,12 @@ en CMJN d'après la table »).
   Un nom déjà présent refuse tout l'import, sans rien écrire. Aucune bibliothèque n'est
   livrée avec le RIP ; n'importez que celles que vous avez le droit d'utiliser.
 - `White`, `Silver`, `Metallic` et les tons de découpe ne peuvent pas entrer dans la table.
+- **Intention des tons directs** : colorimétrique relative par défaut (on vise la teinte).
+  Elle se règle pour le serveur dans Système > Tons directs ; un réglage ou un travail peut
+  en choisir une autre (bloc Couleur, « Intention des tons directs »). Changer celle du
+  serveur ne touche que les travaux restés sur « Celle du serveur », aux rendus suivants.
+  Avec les profils de base de Ghostscript, perceptuelle et relative donnent le même
+  résultat ; avec le profil ICC d'un support, elles diffèrent.
 - Une teinte à 50 % pose la moitié de la recette CMJN de la teinte pleine.
 - Un ton du fichier qui n'est ni une encre, ni un ton de découpe, ni dans la table est
   signalé sur la page (« ton direct absent de la table ») et noté dans **Tons rencontrés

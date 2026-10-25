@@ -359,6 +359,7 @@
           <label><span data-t="profil_rvb"></span><select name="profil_rvb" data-espace="RGB"></select></label>
           <label><span data-t="profil_sortie"></span><select name="profil_sortie" data-espace="CMYK"></select></label>
           <label><span data-t="intention"></span><select name="intention"></select></label>
+          <label><span data-t="intention_tons"></span><select name="intention_tons"></select></label>
           <label class="case"><input type="checkbox" name="forcer_profils" value="oui"> <span data-t="forcer"></span></label>
           <label class="lien admin"><span data-t="deposer"></span><input type="file" id="profil" accept=".icc,.icm" hidden></label>
         </div></details>
@@ -516,6 +517,7 @@ const textes = {
     imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
     traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
     couleur: "Couleur", profil_cmjn: "Entrée CMJN", profil_rvb: "Entrée RVB", profil_sortie: "Support (sortie)", defaut: "Par défaut",
+    intention_tons: "Intention des tons directs", intention_serveur: "Celle du serveur (Système)", intention_tons_serveur: "Intention des tons directs (travaux sans choix propre)", tons_intention_enregistree: "Intention des tons directs enregistrée.",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
     version: "Version", disque: "Espace libre", conservation: "Conservation des travaux", jours: (j) => (j ? `${j} jours` : "illimitée"),
@@ -761,6 +763,7 @@ const textes = {
       detourage_impossible: "Détourage : seulement sur une page imprimée d'un PDF rendu (il faut une image à détourer).",
       prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
       csv_vide: "Le fichier CSV ne contient aucune teinte.",
+      intention_invalide: "Intention inconnue : de 0 (perceptuelle) à 3 (colorimétrique absolue).",
       csv_illisible: "Fichier CSV illisible : une ligne par teinte, nom;L;a;b.",
       lab_invalide: "Valeur Lab hors bornes : L de 0 à 100, a et b de −128 à 127.",
       nom_vide: "Un ton direct (ou un alias) n'a pas de nom.",
@@ -789,6 +792,7 @@ const textes = {
     imprimer: "Print (and cut)", decouper: "Cut only",
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
     couleur: "Colour", profil_cmjn: "CMYK input", profil_rvb: "RGB input", profil_sortie: "Media (output)", defaut: "Default",
+    intention_tons: "Spot colour intent", intention_serveur: "The server's (System)", intention_tons_serveur: "Spot colour intent (jobs without their own choice)", tons_intention_enregistree: "Spot colour intent saved.",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
     version: "Version", disque: "Free space", conservation: "Job retention", jours: (j) => (j ? `${j} days` : "unlimited"),
@@ -1034,6 +1038,7 @@ const textes = {
       detourage_impossible: "Auto contour: only on a printed page of a rendered PDF (it needs an image to trace).",
       prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
       csv_vide: "The CSV file contains no colour.",
+      intention_invalide: "Unknown intent: 0 (perceptual) to 3 (absolute colorimetric).",
       csv_illisible: "Unreadable CSV file: one colour per line, name;L;a;b.",
       lab_invalide: "Lab value out of range: L 0 to 100, a and b −128 to 127.",
       nom_vide: "A spot colour (or an alias) has no name.",
@@ -1175,6 +1180,9 @@ function remplirProfils() {
   const i = form.intention, garde = i.value || "0";
   i.replaceChildren(...T().intentions.map((n, k) => el("option", { value: String(k) }, n)));
   i.value = garde;
+  const it = form.intention_tons, garde_tons = it.value;
+  it.replaceChildren(el("option", { value: "" }, T().intention_serveur), ...T().intentions.map((n, k) => el("option", { value: String(k) }, n)));
+  it.value = garde_tons;
 }
 $("profil").addEventListener("change", async (e) => {
   const fichier = e.target.files[0];
@@ -1449,9 +1457,11 @@ function formulaireDecoupe() {
 
 /** Table des tons directs (roadmap 8.6) : liste, import CSV Lab, retrait (admin). */
 function formulaireTons() {
-  const table = tonsDirects;
-  if (!table) return null;
-  const enregistrer = async (nouvelle) => { const lu = await api("/api/tons-directs", json("POST", nouvelle)); if (lu) { tonsDirects = lu; tonsInconnus = await api("/api/tons-directs/inconnus"); afficherSysteme(); } };
+  if (!tonsDirects) return null;
+  const table = tonsDirects.tons;
+  const intention = el("select", { name: "intention_tons_serveur" }, ...T().intentions.map((n, k) => el("option", { value: String(k), selected: tonsDirects.intention === k }, n)));
+  const enregistrer = async (nouvelle, message) => { const lu = await api("/api/tons-directs", json("POST", { intention: +intention.value, tons: nouvelle })); if (lu) { tonsDirects = lu; tonsInconnus = await api("/api/tons-directs/inconnus"); if (message) dire(message); afficherSysteme(); } };
+  intention.addEventListener("change", () => enregistrer(table, T().tons_intention_enregistree));
   const ajouter = async (nom) => {
     const saisie = await demander(T().tons_saisir_lab(nom), { saisie: "" });
     if (saisie === null) return;
@@ -1475,6 +1485,7 @@ function formulaireTons() {
   });
   return el("form", { className: "admin", id: "tons-directs", onsubmit: (e) => e.preventDefault() }, el("h3", {}, T().systeme_tons, " ", el("span", { className: "meta" }, T().tons_nombre(table.length))),
     el("p", { className: "meta", style: "margin: 0" }, T().note_tons),
+    el("label", {}, T().intention_tons_serveur, " ", intention),
     table.length ? el("div", { style: "max-height: 16em; overflow: auto" }, el("table", {}, el("tbody", {}, ...lignes))) : el("p", { className: "meta" }, T().tons_aucun),
     el("div", { className: "ligne" }, fichier, bouton(T().tons_importer, () => fichier.click(), "")),
     inconnus.length ? el("div", {}, el("h4", {}, T().tons_inconnus), el("table", {}, el("tbody", {}, ...inconnus.map(([n, r]) => el("tr", {}, el("td", {}, n), el("td", { className: "meta" }, T().tons_inconnu_ligne(r.travaux, date(r.dernier))), el("td", {}, bouton(T().tons_ajouter, () => ajouter(n)))))))) : null);
@@ -1498,7 +1509,7 @@ function demandeDuFormulaire() {
   const f = form, profil = (n) => f[n].value || null;
   return {
     mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
-    couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked },
+    couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked, intention_tons: f.intention_tons.value === "" ? null : +f.intention_tons.value },
     mosaique: f.mosaique.checked ? mosaiqueDuFormulaire(f) : null,
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
     couches: f.couches.value,
@@ -1639,6 +1650,7 @@ function appliquerDemande(d) {
   f.mode.value = d.mode; f.traces.value = d.tous_les_traces ? "tous" : "tons"; f.reperage.value = d.reperage; f.dpi.value = String(d.dpi);
   f.profil_cmjn.value = d.couleur.entree_cmjn || ""; f.profil_rvb.value = d.couleur.entree_rvb || ""; f.profil_sortie.value = d.couleur.sortie || "";
   f.intention.value = String(d.couleur.intention); f.forcer_profils.checked = d.couleur.forcer;
+  f.intention_tons.value = d.couleur.intention_tons == null ? "" : String(d.couleur.intention_tons);
   f.mosaique.checked = !!d.mosaique;
   if (d.mosaique) {
     const m = d.mosaique;

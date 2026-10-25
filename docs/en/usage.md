@@ -716,6 +716,11 @@ shows the Lab colour. The job says so ("Spot colours printed in CMYK from the ta
   present refuses the whole import, nothing is written. No library ships with the RIP;
   only import the ones you are entitled to use.
 - `White`, `Silver`, `Metallic` and cut colours cannot go into the table.
+- **Spot colour intent**: relative colorimetric by default (aiming at the hue). It is set
+  for the server in System > Spot colours; a setting or a job can pick another one (Colour
+  block, "Spot colour intent"). Changing the server's one only affects jobs left on "The
+  server's", at the next renderings. With Ghostscript's basic profiles, perceptual and
+  relative give the same result; with a media ICC profile, they differ.
 - A 50 % tint lays half of the full colour's CMYK recipe.
 - A colour in the file that is neither an ink, nor a cut colour, nor in the table is
   flagged on the page ("spot colour missing from the table") and listed under **Spot

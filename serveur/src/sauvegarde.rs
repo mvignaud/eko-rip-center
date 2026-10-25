@@ -32,7 +32,7 @@ pub struct Sauvegarde {
     pub consommation: Option<crate::consommation::Reglages>,
     /// Table des tons directs (`tons_directs.json`) ; absente des sauvegardes d'avant.
     #[serde(default)]
-    pub tons_directs: Option<Vec<crate::tons::Ton>>,
+    pub tons_directs: Option<crate::tons::Table>,
     /// Pont ERP : URL, activation, instance (ni jeton ni secret) ; absent des sauvegardes
     /// d'avant le lot R2 : le pont en place est gardé.
     #[serde(default)]

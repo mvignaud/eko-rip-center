@@ -20,16 +20,51 @@ pub struct Ton {
     pub lab: [f64; 3],
 }
 
+/// `tons_directs.json` : l'intention des tons (roadmap 8.7) et la table.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Table {
+    /// Intention du serveur pour les tons de la table (0 à 3, comme `Couleur::intention`) ;
+    /// colorimétrique relative par défaut : on vise la teinte, pas l'harmonie de l'image.
+    #[serde(default = "intention_par_defaut")]
+    pub intention: u8,
+    #[serde(default)]
+    pub tons: Vec<Ton>,
+}
+
+fn intention_par_defaut() -> u8 {
+    1
+}
+
+impl Default for Table {
+    fn default() -> Self {
+        Table { intention: intention_par_defaut(), tons: vec![] }
+    }
+}
+
 pub fn fichier(donnees: &Path) -> PathBuf {
     donnees.join("tons_directs.json")
 }
 
-pub fn lire(donnees: &Path) -> Vec<Ton> {
+pub fn lire_table(donnees: &Path) -> Table {
     crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default()
 }
 
-pub fn ecrire(donnees: &Path, table: &[Ton]) -> std::io::Result<()> {
-    crate::etat::ecrire(&fichier(donnees), &table, false)
+pub fn lire(donnees: &Path) -> Vec<Ton> {
+    lire_table(donnees).tons
+}
+
+pub fn ecrire(donnees: &Path, table: &Table) -> std::io::Result<()> {
+    crate::etat::ecrire(&fichier(donnees), table, false)
+}
+
+/// Table et intention qu'utilise le rendu d'un travail : la sienne (ou celle de son
+/// réglage, qui lui a été copiée), sinon celle du serveur.
+pub fn pour_le_travail(donnees: &Path, c: &crate::couleur::Couleur) -> Table {
+    let mut t = lire_table(donnees);
+    if let Some(i) = c.intention_tons {
+        t.intention = i;
+    }
+    t
 }
 
 /// Ton de la table pour ce nom de séparation (nom ou alias, à l'identique).
@@ -37,11 +72,15 @@ pub fn trouver<'a>(table: &'a [Ton], nom: &str) -> Option<&'a Ton> {
     table.iter().find(|t| t.nom == nom || t.alias.iter().any(|a| a == nom))
 }
 
-/// Refus (code, détail) : nom vide, Lab hors bornes, nom en double (alias compris), ou nom
-/// qui a déjà sa propre encre ou sert à la découpe (la table ne doit pas l'avaler).
-pub fn verifier(table: &[Ton]) -> Result<(), (&'static str, String)> {
+/// Refus (code, détail) : intention hors 0..=3, nom vide, Lab hors bornes, nom en double
+/// (alias compris), ou nom qui a déjà sa propre encre ou sert à la découpe (la table ne
+/// doit pas l'avaler).
+pub fn verifier(table: &Table) -> Result<(), (&'static str, String)> {
+    if table.intention > 3 {
+        return Err(("intention_invalide", table.intention.to_string()));
+    }
     let mut vus = std::collections::HashSet::new();
-    for t in table {
+    for t in &table.tons {
         let [l, a, b] = t.lab;
         if !(0.0..=100.0).contains(&l) || !(-128.0..=127.0).contains(&a) || !(-128.0..=127.0).contains(&b) {
             return Err(("lab_invalide", t.nom.clone()));
@@ -260,6 +299,10 @@ mod tests {
         Ton { nom: nom.into(), alias: vec![], lab }
     }
 
+    fn tab(tons: Vec<Ton>) -> Table {
+        Table { tons, ..Default::default() }
+    }
+
     #[test]
     fn csv_cinquante_teintes_et_formats() {
         let mut csv = String::from("\u{feff}Nom;L*;a*;b*\r\n");
@@ -272,7 +315,7 @@ mod tests {
         assert_eq!(lire_csv("Bleu fonce,30.1,5,-40").unwrap(), [ton("Bleu fonce", [30.1, 5.0, -40.0])]);
         assert_eq!(lire_csv(" Or\t70\t5\t60").unwrap()[0].nom, " Or", "nom gardé tel quel");
         assert_eq!(lire_csv("a;1;2;3\nb;x;2;3").unwrap_err(), "ligne 2 : attendu nom;L;a;b");
-        assert!(verifier(&t).is_ok());
+        assert!(verifier(&tab(t)).is_ok());
     }
 
     /// Surimpression : v' = v × (1 − t·r) en valeurs « 255 = pas d'encre ».
@@ -327,9 +370,30 @@ mod tests {
         let j = lire_inconnus(&d);
         assert_eq!(j["PANTONE 485 C"], Rencontre { travaux: 2, dernier: 20 });
         assert_eq!(j["HX Bleu"].travaux, 1);
-        ecrire(&d, &[ton("HX Bleu", [40.0, 0.0, -40.0])]).unwrap();
+        ecrire(&d, &tab(vec![ton("HX Bleu", [40.0, 0.0, -40.0])])).unwrap();
         noter_inconnus(&d, &[], 30);
         assert!(!lire_inconnus(&d).contains_key("HX Bleu"), "entré dans la table : sort du journal");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// Roadmap 8.7 : l'intention globale ne change que les travaux restés « par défaut », et
+    /// elle change bien la recette d'une couleur hors gamut.
+    #[tokio::test]
+    async fn intention_globale_seulement_pour_les_travaux_par_defaut() {
+        let d = std::env::temp_dir().join(format!("tons-intention-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        let defaut = crate::couleur::Couleur::default();
+        let force = crate::couleur::Couleur { intention_tons: Some(3), ..Default::default() };
+        assert_eq!((pour_le_travail(&d, &defaut).intention, pour_le_travail(&d, &force).intention), (1, 3));
+        ecrire(&d, &Table { intention: 0, tons: vec![] }).unwrap();
+        assert_eq!((pour_le_travail(&d, &defaut).intention, pour_le_travail(&d, &force).intention), (0, 3), "seul le travail par défaut suit");
+        // Profils livrés avec Ghostscript : même table en perceptuelle et en relative ;
+        // l'absolue diffère (M 210 → 201 mesuré le 25/10 sur ce violet hors gamut).
+        let options = |i: u8| vec![format!("-dRenderIntent={i}")];
+        let violet = [40.0, 80.0, -90.0];
+        let delai = std::time::Duration::from_secs(30);
+        let (r, a) = (recette("gs", &options(1), violet, delai).await.unwrap(), recette("gs", &options(3), violet, delai).await.unwrap());
+        assert!(r[1].abs_diff(a[1]) >= 5, "l'intention ne change pas la recette : {r:?} {a:?}");
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -343,10 +407,11 @@ mod tests {
         assert!(trouver(&table, "pantone 485 c").is_none(), "casse exacte");
         assert!(trouver(&table, "PANTONE  485 C").is_none(), "espaces exacts");
         let double = [ton("A", [50.0, 0.0, 0.0]), Ton { nom: "B".into(), alias: vec!["A".into()], lab: [50.0, 0.0, 0.0] }];
-        assert_eq!(verifier(&double), Err(("nom_en_double", "A".into())));
-        assert_eq!(verifier(&[ton("White", [95.0, 0.0, 0.0])]), Err(("nom_reserve", "White".into())));
-        assert_eq!(verifier(&[ton("CutContour", [50.0, 0.0, 0.0])]), Err(("nom_reserve", "CutContour".into())));
-        assert_eq!(verifier(&[ton("X", [101.0, 0.0, 0.0])]), Err(("lab_invalide", "X".into())));
-        assert_eq!(verifier(&[ton(" ", [50.0, 0.0, 0.0])]), Err(("nom_vide", " ".into())));
+        assert_eq!(verifier(&tab(double.to_vec())), Err(("nom_en_double", "A".into())));
+        assert_eq!(verifier(&tab(vec![ton("White", [95.0, 0.0, 0.0])])), Err(("nom_reserve", "White".into())));
+        assert_eq!(verifier(&tab(vec![ton("CutContour", [50.0, 0.0, 0.0])])), Err(("nom_reserve", "CutContour".into())));
+        assert_eq!(verifier(&tab(vec![ton("X", [101.0, 0.0, 0.0])])), Err(("lab_invalide", "X".into())));
+        assert_eq!(verifier(&tab(vec![ton(" ", [50.0, 0.0, 0.0])])), Err(("nom_vide", " ".into())));
+        assert_eq!(verifier(&Table { intention: 4, tons: vec![] }), Err(("intention_invalide", "4".into())));
     }
 }

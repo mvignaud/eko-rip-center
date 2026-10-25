@@ -710,6 +710,11 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "intention" => valeur.parse().map(|v| d.couleur.intention = v).map_err(|_| erreur("profil_inadapte")),
+            "intention_tons" if valeur.is_empty() => {
+                d.couleur.intention_tons = None;
+                Ok(())
+            }
+            "intention_tons" => valeur.parse().map(|v| d.couleur.intention_tons = Some(v)).map_err(|_| erreur("profil_inadapte")),
             "forcer_profils" => {
                     d.couleur.forcer = valeur == "oui";
                     Ok(())
@@ -1133,7 +1138,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
         Mode::Imprimer => match preparer_impression(&rep, reperage, t.demande.fond_reperes, t.id).await {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
-                match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai, &tons::lire(donnees)).await {
+                match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai, &tons::pour_le_travail(donnees, &t.demande.couleur)).await {
                     Ok(r) => match filtrer(&rep, &r.pages, t.demande.edition.filtre.clone(), t.demande.dpi).await {
                         Ok(()) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises, r.tons_fondus)),
                         Err(e) => Err(e),
@@ -1460,7 +1465,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         supports: Some(supports::lire(&etat.config.donnees, "epson")),
         decoupe: Some(decoupe::lire(&etat.config.donnees)),
         consommation: Some(consommation::lire_reglages(&etat.config.donnees)),
-        tons_directs: Some(tons::lire(&etat.config.donnees)),
+        tons_directs: Some(tons::lire_table(&etat.config.donnees)),
         pont: Some(erp::lire(&etat.config.donnees).sauve()),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
@@ -1499,7 +1504,7 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     }).and(s.tarifs.verifier()).and(s.consommation.as_ref().map_or(Ok(()), consommation::Reglages::verifier)) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
-    if let Some(Err((code, detail))) = s.tons_directs.as_deref().map(tons::verifier) {
+    if let Some(Err((code, detail))) = s.tons_directs.as_ref().map(tons::verifier) {
         return refus(StatusCode::BAD_REQUEST, code, Some(detail));
     }
     if let Some(c) = &s.supports {
@@ -3108,12 +3113,13 @@ async fn lire_tons_inconnus(State(etat): State<Partage>) -> Json<std::collection
     Json(tons::lire_inconnus(&etat.config.donnees))
 }
 
-async fn lire_tons(State(etat): State<Partage>) -> Json<Vec<tons::Ton>> {
-    Json(tons::lire(&etat.config.donnees))
+async fn lire_tons(State(etat): State<Partage>) -> Json<tons::Table> {
+    Json(tons::lire_table(&etat.config.donnees))
 }
 
-/// Table complète des tons directs (roadmap 8.6), prise par les rendus suivants.
-async fn enregistrer_tons(State(etat): State<Partage>, Json(table): Json<Vec<tons::Ton>>) -> Response {
+/// Table complète des tons directs et leur intention (roadmap 8.6, 8.7), prises par les
+/// rendus suivants.
+async fn enregistrer_tons(State(etat): State<Partage>, Json(table): Json<tons::Table>) -> Response {
     if let Err((code, detail)) = tons::verifier(&table) {
         return refus(StatusCode::BAD_REQUEST, code, Some(detail));
     }
@@ -3131,14 +3137,14 @@ async fn importer_tons(State(etat): State<Partage>, corps: String) -> Response {
         Ok(t) => t,
         Err(e) => return refus(StatusCode::BAD_REQUEST, "csv_illisible", Some(e)),
     };
-    let mut table = tons::lire(&etat.config.donnees);
+    let mut table = tons::lire_table(&etat.config.donnees);
     let ajoutes = nouveaux.len();
-    table.extend(nouveaux);
+    table.tons.extend(nouveaux);
     if let Err((code, detail)) = tons::verifier(&table) {
         return refus(StatusCode::BAD_REQUEST, code, Some(detail));
     }
     match tons::ecrire(&etat.config.donnees, &table) {
-        Ok(()) => Json(serde_json::json!({ "ajoutes": ajoutes, "total": table.len() })).into_response(),
+        Ok(()) => Json(serde_json::json!({ "ajoutes": ajoutes, "total": table.tons.len() })).into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
 }
@@ -4533,7 +4539,7 @@ mod tests {
             let r = super::couches_decoupe::json(importer("Black;20;0;0".into()).await.unwrap()).await;
             assert_eq!(r["code"], "nom_reserve");
             let lu = super::couches_decoupe::json(appel(&e, "GET", "/api/tons-directs", None, None).await).await;
-            assert_eq!(lu[7]["lab"], serde_json::json!([50.0, 7.0, -7.0]));
+            assert_eq!((lu["intention"].clone(), lu["tons"][7]["lab"].clone()), (serde_json::json!(1), serde_json::json!([50.0, 7.0, -7.0])));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
@@ -4547,7 +4553,7 @@ mod tests {
             std::fs::write(a.config.profils.join("atelier.icc"), &icc).unwrap();
             let reglage = serde_json::json!({ "nom": "Vinyle", "demande": { "dpi": 360 } });
             assert_eq!(appel(&a, "POST", "/api/reglages", None, Some(reglage)).await.status(), StatusCode::CREATED);
-            let tons = serde_json::json!([{ "nom": "HX Rouge", "alias": ["Rouge HX"], "lab": [45.0, 60.0, 40.0] }]);
+            let tons = serde_json::json!({ "intention": 3, "tons": [{ "nom": "HX Rouge", "alias": ["Rouge HX"], "lab": [45.0, 60.0, 40.0] }] });
             assert_eq!(appel(&a, "POST", "/api/tons-directs", None, Some(tons)).await.status(), StatusCode::OK);
             let r = appel(&a, "GET", "/api/sauvegarde", None, None).await;
             assert_eq!(r.status(), StatusCode::OK);
@@ -4571,7 +4577,8 @@ mod tests {
             // changer les réglages globaux des autres tests).
             assert!(decoupe::fichier(&b.config.donnees).exists(), "decoupe.json restauré");
             assert_eq!(decoupe::lire(&b.config.donnees), decoupe::lire(&a.config.donnees));
-            assert_eq!(tons::lire(&b.config.donnees), tons::lire(&a.config.donnees), "tons directs repris");
+            assert_eq!(tons::lire_table(&b.config.donnees), tons::lire_table(&a.config.donnees), "tons directs et intention repris");
+            assert_eq!(tons::lire_table(&b.config.donnees).intention, 3);
             assert_eq!(tons::lire(&b.config.donnees).len(), 1);
             for e in [a, b] {
                 std::fs::remove_dir_all(&e.config.donnees).unwrap();

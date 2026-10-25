@@ -27,6 +27,10 @@ pub struct Couleur {
     pub intention: u8,
     /// Ignorer les profils embarqués dans le PDF au profit des profils d'entrée.
     pub forcer: bool,
+    /// Intention des tons directs de la table (roadmap 8.7) ; `None` : celle du serveur
+    /// (Système > Tons directs). Un réglage enregistré la porte aussi.
+    #[serde(default)]
+    pub intention_tons: Option<u8>,
 }
 
 /// Lit l'en-tête d'un profil ICC ; `None` si ce n'en est pas un.
@@ -106,7 +110,7 @@ pub fn verifier(c: &Couleur, profils: &[Profil]) -> Result<(), &'static str> {
             Some(Some(_)) => {}
         }
     }
-    if c.intention > 3 {
+    if c.intention > 3 || c.intention_tons.is_some_and(|i| i > 3) {
         return Err("profil_inadapte");
     }
     Ok(())
@@ -169,7 +173,7 @@ pub mod tests {
     fn choix_controles() {
         let p = |f: &str, e: &str| Profil { fichier: f.into(), classe: "prtr".into(), espace: e.into(), description: String::new() };
         let profils = [p("cmjn.icc", "CMYK"), p("rvb.icc", "RGB")];
-        let ok = Couleur { entree_cmjn: Some("cmjn.icc".into()), entree_rvb: Some("rvb.icc".into()), sortie: Some("cmjn.icc".into()), intention: 1, forcer: true };
+        let ok = Couleur { entree_cmjn: Some("cmjn.icc".into()), entree_rvb: Some("rvb.icc".into()), sortie: Some("cmjn.icc".into()), intention: 1, forcer: true, intention_tons: None };
         assert_eq!(verifier(&ok, &profils), Ok(()));
         let inconnu = Couleur { sortie: Some("absent.icc".into()), ..Default::default() };
         assert_eq!(verifier(&inconnu, &profils), Err("profil_inconnu"));
