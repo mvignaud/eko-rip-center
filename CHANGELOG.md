@@ -15,6 +15,17 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Corrigé
+- Les réglages de découpe du serveur (`decoupe.json` : préfixes, options) sont repris par la
+  sauvegarde de la configuration et par la copie faite avant une mise à jour.
+- Textes de l'écran : origine Y de l'Epson comptée après la tête vide de 20 mm ; note de la
+  connexion Dossier de l'Epson (le pilote direct existe : connexion Réseau) ; « Reprendre »
+  au lieu d'un bouton « Couper maintenant » inexistant.
+
+### Documentation
+- Doc d'utilisation (FR, EN) et d'administration à jour de tout ce qui est livré depuis la 0.14 :
+  supports et modes, pilote direct de l'Epson, éditeur visuel, lés et tuilage, découpe.
+
 ## [0.19.0] — 2026-10-25
 
 **Premier tirage par notre propre pilote de l'Epson**, et l'éditeur visuel prend forme.
