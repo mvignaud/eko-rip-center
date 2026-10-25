@@ -699,8 +699,25 @@ hand, can be **Redone** (a wanted reprint).
 - **Media (output)**: profile of the printed media; the preview simulates it.
 - **Intent**: perceptual, relative colorimetric, saturation, absolute.
 
-Spot colours (`White`, `Silver`…) are never converted. To adjust a job's colours: the
-viewer's [colour filter](#colour-filter).
+Spot colours that have their own ink (`White`, `Silver`…) are never converted. To adjust
+a job's colours: the viewer's [colour filter](#colour-filter).
+
+### Spot colour table
+
+**System > Spot colours** (administrator): a spot colour in the file whose name is in the
+table is printed in CMYK from **its Lab colour**, not from the fallback colour written in
+the PDF. The conversion goes through the job's output profile and intent; the preview
+shows the Lab colour. The job says so ("Spot colours printed in CMYK from the table").
+
+- The name must be **identical**: case and spaces count ("PANTONE 485 C" does not match
+  "Pantone 485 C"). An **alias** covers another spelling.
+- **Import a Lab CSV**: your supplier's library (e.g. the HEXIS colour chart), one colour
+  per line, `name;L;a;b` (`;`, tab or `,`; decimal comma allowed with `;`). A name already
+  present refuses the whole import, nothing is written. No library ships with the RIP;
+  only import the ones you are entitled to use.
+- `White`, `Silver`, `Metallic` and cut colours cannot go into the table.
+- A 50 % tint lays half of the full colour's CMYK recipe.
+- Used by the next renderings: restart a job already rendered.
 
 ## System
 

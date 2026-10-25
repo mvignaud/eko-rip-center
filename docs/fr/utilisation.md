@@ -738,8 +738,26 @@ Bloc **Couleur** (mode Imprimer) :
 - **Support (sortie)** : profil du support imprimé ; l'aperçu simule son rendu.
 - **Intention** : perceptuelle, colorimétrique relative, saturation, absolue.
 
-Les tons directs (`White`, `Silver`…) ne sont jamais convertis. Pour retoucher les
-couleurs d'un travail : [filtre couleur](#filtre-couleur) de la visionneuse.
+Les tons directs qui ont leur encre (`White`, `Silver`…) ne sont jamais convertis. Pour
+retoucher les couleurs d'un travail : [filtre couleur](#filtre-couleur) de la visionneuse.
+
+### Table des tons directs
+
+**Système > Tons directs** (administrateur) : un ton direct du fichier dont le nom figure
+dans la table est imprimé en CMJN d'après **sa couleur Lab**, et non d'après la couleur de
+secours écrite dans le PDF. La conversion passe par le profil de sortie et l'intention du
+travail ; l'aperçu montre la couleur Lab. Le travail le signale (« Tons directs imprimés
+en CMJN d'après la table »).
+
+- Le nom doit être **identique** : casse et espaces comptent (« PANTONE 485 C » ne trouve
+  pas « Pantone 485 C »). Un **alias** couvre une autre écriture.
+- **Importer un CSV Lab** : la bibliothèque de votre fournisseur (ex. nuancier HEXIS), une
+  teinte par ligne, `nom;L;a;b` (`;`, tabulation ou `,` ; virgule décimale admise avec `;`).
+  Un nom déjà présent refuse tout l'import, sans rien écrire. Aucune bibliothèque n'est
+  livrée avec le RIP ; n'importez que celles que vous avez le droit d'utiliser.
+- `White`, `Silver`, `Metallic` et les tons de découpe ne peuvent pas entrer dans la table.
+- Une teinte à 50 % pose la moitié de la recette CMJN de la teinte pleine.
+- Pris aux rendus suivants : relancer un travail déjà rendu.
 
 ## Système
 

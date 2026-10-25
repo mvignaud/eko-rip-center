@@ -34,6 +34,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
 | `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |
 | `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; compris dans la sauvegarde de la configuration et dans la copie avant mise à jour |
+| `tons_directs.json` | table des tons directs (Système > Tons directs : nom exact, alias, couleur Lab) ; comprise dans la sauvegarde et dans la copie avant mise à jour |
 | `utilisateurs.json` | comptes (mots de passe hachés, droits 0600) |
 | `file.json` | file des sorties et historique |
 | `profils/` | profils ICC déposés |
@@ -146,7 +147,8 @@ retirée du catalogue (ni par une restauration) tant qu'une sortie l'attend : la
 l'annuler d'abord.
 
 **« Envoi à l'imprimante impossible » sur l'Epson.** Un ton direct n'a pas d'encre sur
-l'Epson (le renommer `White` ou `Metallic`, ou le convertir en CMJN), ou la page porte
+l'Epson (le renommer `White` ou `Metallic`, le convertir en CMJN, ou l'ajouter à la table
+des tons directs avec sa couleur Lab, puis relancer le travail), ou la page porte
 à la fois du blanc et de l'argent. En connexion Réseau (pilote direct), le blanc et
 l'argent sont refusés pour l'instant : passer par une machine en Dossier.
 

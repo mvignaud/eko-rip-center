@@ -1132,9 +1132,9 @@ async fn traiter(etat: Partage, mut t: Travail) {
         Mode::Imprimer => match preparer_impression(&rep, reperage, t.demande.fond_reperes, t.id).await {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
-                match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await {
+                match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai, &tons::lire(donnees)).await {
                     Ok(r) => match filtrer(&rep, &r.pages, t.demande.edition.filtre.clone(), t.demande.dpi).await {
-                        Ok(()) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises)),
+                        Ok(()) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises, r.tons_fondus)),
                         Err(e) => Err(e),
                     },
                     Err(e) => Err(e),
@@ -1142,10 +1142,17 @@ async fn traiter(etat: Partage, mut t: Travail) {
             }
             Err(e) => Err(e),
         },
-        Mode::Decouper => Ok((None, vec![])),
+        Mode::Decouper => Ok((None, vec![], vec![])),
     };
+    // Tons directs pris dans la table (roadmap 8.6) : dit sur le travail, pour information.
+    t.alertes.retain(|a| a.code != "tons_directs_fondus");
+    if let Ok((_, _, fondus)) = &rendu
+        && !fondus.is_empty()
+    {
+        t.alertes.push(controle::Alerte { code: "tons_directs_fondus".into(), page: None, detail: fondus.join(", ") });
+    }
     match rendu {
-        Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
+        Ok((plaques, mises, _)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
             // L'image est étendue près des tracés dans la garde ; en échec, le rendu échoue.
             Ok(decoupes) if let Some(Err(e)) = etendre_plaques(&rep, plaques.as_deref(), &decoupes, t.demande.etendre_coupe, t.demande.dpi).await => {
                 eprintln!("travail {} : {e}", t.id);

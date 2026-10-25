@@ -31,6 +31,7 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `pont/` | ERP bridge: event log (`journal.jsonl`) and sending state (`etat.json`); not configuration, not backed up |
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
 | `charges.json` | media loaded in each machine, set by the operator or read from the Epson |
+| `tons_directs.json` | spot colour table (System > Spot colours: exact name, aliases, Lab colour); included in the backup and in the copy made before an update |
 | `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); included in the configuration backup and in the copy made before an update |
 | `utilisateurs.json` | accounts (hashed passwords, mode 0600) |
 | `file.json` | output queue and history |
@@ -141,7 +142,8 @@ missing port (`/dev/kona`), machine off or unreachable, permission denied. Fix i
 restore): run or cancel it first.
 
 **"Cannot send to the printer" on the Epson.** A spot colour has no ink on the Epson
-(rename it `White` or `Metallic`, or convert it to CMYK), or the page carries both white
+(rename it `White` or `Metallic`, convert it to CMYK, or add it to the spot colour table
+with its Lab colour, then restart the job), or the page carries both white
 and silver. On a Network connection (direct driver), white and silver are refused for
 now: use a machine on Folder.
 

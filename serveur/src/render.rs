@@ -17,6 +17,8 @@ pub const DPI_APERCU: u32 = 50;
 pub struct Rendu {
     /// Pour chaque page (dans l'ordre), ses plaques en ordre alphabétique.
     pub pages: Vec<Vec<String>>,
+    /// Tons directs de la table fondus en CMJN (roadmap 8.6), sans doublon.
+    pub tons_fondus: Vec<String>,
 }
 
 /// Plaque de production (pleine définition) d'une page.
@@ -31,8 +33,9 @@ fn prefixe(page: usize) -> String {
 
 /// Rend `pdf` dans `dossier` : plaques pleine définition (`prod/`), plaques et
 /// composites basse définition pour l'aperçu (`apercu/`). `options` : réglages de
-/// couleur (profils ICC, intention), appliqués aussi aux aperçus.
-pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[String], delai: Duration) -> Result<Rendu, String> {
+/// couleur (profils ICC, intention), appliqués aussi aux aperçus. Un ton direct de `table`
+/// est fondu dans C, M, J, N d'après sa couleur Lab, et sa plaque disparaît.
+pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[String], delai: Duration, table: &[crate::tons::Ton]) -> Result<Rendu, String> {
     let prod = dossier.join("prod");
     let apercu = dossier.join("apercu");
     for d in [&prod, &apercu] {
@@ -41,11 +44,45 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
 
     ghostscript(gs, pdf, "tiffsep", dpi, options, &prod.join("plaque-%03d.tif"), delai).await?;
     ghostscript(gs, pdf, "tiffsep", DPI_APERCU, options, &apercu.join("plaque-%03d.tif"), delai).await?;
-    // L'aperçu est en RVB : le profil du support (CMJN) y sert d'épreuve écran.
-    let epreuve: Vec<String> = options.iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
-    ghostscript(gs, pdf, "png16m", DPI_APERCU, &epreuve, &apercu.join("composite-%03d.png"), delai).await?;
 
-    let pages = plaques_par_page(&prod)?;
+    let mut pages = plaques_par_page(&prod)?;
+    let mut recettes: BTreeMap<String, [u8; 4]> = BTreeMap::new();
+    for (i, plaques) in pages.iter_mut().enumerate() {
+        let n = i + 1;
+        for nom in plaques.clone() {
+            let Some(ton) = crate::tons::trouver(table, &nom) else { continue };
+            let recette = match recettes.get(&nom) {
+                Some(r) => *r,
+                None => *recettes.entry(nom.clone()).or_insert(crate::tons::recette(gs, options, ton.lab, delai).await?),
+            };
+            for (d, r) in [(&prod, dpi), (&apercu, DPI_APERCU)] {
+                let cmjn = ["Cyan", "Magenta", "Yellow", "Black"].map(|c| d.join(format!("{}({c}).tif", prefixe(n))));
+                let spot = d.join(format!("{}({nom}).tif", prefixe(n)));
+                let (c2, s2) = (cmjn.clone(), spot.clone());
+                tokio::task::spawn_blocking(move || crate::tons::fondre(c2.each_ref().map(PathBuf::as_path), &s2, recette, r))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| format!("ton direct « {nom} », page {n} : {e}"))?;
+                let _ = std::fs::remove_file(&spot);
+            }
+            plaques.retain(|p| *p != nom);
+        }
+    }
+    // L'aperçu est en RVB : le profil du support (CMJN) y sert d'épreuve écran. Les tons
+    // fondus y prennent leur couleur Lab plutôt que l'alternative du PDF.
+    let epreuve: Vec<String> = options.iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
+    let pdf_lab = dossier.join("apercu-lab.pdf");
+    let source_apercu = if recettes.is_empty() {
+        pdf.to_path_buf()
+    } else {
+        let octets = std::fs::read(pdf).map_err(|e| e.to_string())?;
+        let (lab, _) = crate::tons::en_lab(&octets, table)?;
+        std::fs::write(&pdf_lab, lab).map_err(|e| e.to_string())?;
+        pdf_lab.clone()
+    };
+    let composite = ghostscript(gs, &source_apercu, "png16m", DPI_APERCU, &epreuve, &apercu.join("composite-%03d.png"), delai).await;
+    let _ = std::fs::remove_file(&pdf_lab);
+    composite?;
     for (i, plaques) in pages.iter().enumerate() {
         for nom in plaques {
             let tif = apercu.join(format!("{}({nom}).tif", prefixe(i + 1)));
@@ -60,7 +97,7 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
             let _ = std::fs::remove_file(d.join(format!("{}.tif", prefixe(i + 1))));
         }
     }
-    Ok(Rendu { pages })
+    Ok(Rendu { pages, tons_fondus: recettes.into_keys().collect() })
 }
 
 pub(crate) async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, options: &[String], sortie: &Path, delai: Duration) -> Result<(), String> {
@@ -179,7 +216,7 @@ mod tests {
         std::fs::write(&pdf, pdf_deux_pages()).unwrap();
 
         let dpi = 72;
-        let r = rendre("gs", &pdf, &dossier, dpi, &[], Duration::from_secs(60)).await.unwrap();
+        let r = rendre("gs", &pdf, &dossier, dpi, &[], Duration::from_secs(60), &[]).await.unwrap();
 
         assert_eq!(r.pages.len(), 2);
         assert_eq!(r.pages[0], ["Black", "Cyan", "Magenta", "Silver", "White", "Yellow"]);
@@ -200,6 +237,58 @@ mod tests {
         std::fs::remove_dir_all(&dossier).unwrap();
     }
 
+    /// Roadmap 8.6 : un ton de la table (alternative du PDF volontairement fausse : cyan pur)
+    /// est imprimé d'après sa couleur Lab (rouge) et sa plaque disparaît ; sans table, il
+    /// garde sa plaque. Le ton hors table (`White`) n'est pas touché.
+    #[tokio::test]
+    async fn ton_de_la_table_fondu_en_cmjn() {
+        let dossier = std::env::temp_dir().join(format!("eko-rip-tons-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+        let pdf = dossier.join("source.pdf");
+        let contenu = "/R cs 1 scn 0 0 50 100 re f\n/R cs 0.5 scn 50 0 50 100 re f\n/W cs 1 scn 100 0 50 100 re f\n";
+        let objets = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 150 100] /Contents 4 0 R /Resources << /ColorSpace << /R [/Separation /HX#20Rouge /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [1 0 0 0] /N 1 >>] /W [/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 0.1] /N 1 >>] >> >> >>".to_string(),
+            format!("<< /Length {} >>\nstream\n{contenu}endstream", contenu.len()),
+        ];
+        let mut texte = String::from("%PDF-1.4\n");
+        let mut positions = vec![];
+        for (i, o) in objets.iter().enumerate() {
+            positions.push(texte.len());
+            texte += &format!("{} 0 obj\n{o}\nendobj\n", i + 1);
+        }
+        let xref = texte.len();
+        texte += &format!("xref\n0 {}\n0000000000 65535 f \n", objets.len() + 1);
+        for p in positions {
+            texte += &format!("{p:010} 00000 n \n");
+        }
+        texte += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objets.len() + 1);
+        std::fs::write(&pdf, texte).unwrap();
+
+        let r = rendre("gs", &pdf, &dossier, 72, &[], Duration::from_secs(60), &[]).await.unwrap();
+        assert_eq!(r.pages[0], ["Black", "Cyan", "HX Rouge", "Magenta", "White", "Yellow"], "sans table : plaque gardée");
+        assert!(r.tons_fondus.is_empty());
+
+        let table = [crate::tons::Ton { nom: "HX Rouge".into(), alias: vec![], lab: [48.0, 68.0, 48.0] }];
+        let r = rendre("gs", &pdf, &dossier, 72, &[], Duration::from_secs(60), &table).await.unwrap();
+        assert_eq!(r.pages[0], ["Black", "Cyan", "Magenta", "White", "Yellow"], "plaque fondue");
+        assert_eq!(r.tons_fondus, ["HX Rouge"]);
+        assert!(!dossier.join("prod/plaque-001(HX Rouge).tif").exists());
+        assert!(!dossier.join("apercu/plaque-001(HX Rouge).tif").exists());
+        let (c, m, y) = (pixel(&dossier, 1, "Cyan", 25.0, 72), pixel(&dossier, 1, "Magenta", 25.0, 72), pixel(&dossier, 1, "Yellow", 25.0, 72));
+        assert!(m < 60 && y < 110 && c > 200, "rouge Lab, pas le cyan de l'alternative : C {c} M {m} J {y}");
+        let m50 = pixel(&dossier, 1, "Magenta", 75.0, 72);
+        assert!(m50 > m + 60 && m50 < 230, "teinte 50 % : moitié de la recette ({m} → {m50})");
+        assert_eq!(pixel(&dossier, 1, "White", 125.0, 72), 0, "ton hors table intact");
+        assert_eq!(pixel(&dossier, 1, "Magenta", 125.0, 72), 255);
+        // Composite d'aperçu : rouge (alternative Lab), pas cyan.
+        let px = image::open(chemin_composite(&dossier, 1)).unwrap().to_rgb8().get_pixel(10, 30).0;
+        assert!(px[0] > 150 && px[2] < 120, "composite rouge : {px:?}");
+        assert!(!dossier.join("apercu-lab.pdf").exists());
+        std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
     /// Un profil de sortie convertit les couleurs : le cyan à 20 % ne reste pas tel quel.
     #[tokio::test]
     async fn le_profil_de_sortie_convertit() {
@@ -209,7 +298,7 @@ mod tests {
         std::fs::write(&pdf, pdf_deux_pages()).unwrap();
         let profil = crate::couleur::tests::profils_ghostscript().join("ps_cmyk.icc");
         let options = [format!("-sOutputICCProfile={}", profil.display())];
-        rendre("gs", &pdf, &dossier, 72, &options, Duration::from_secs(60)).await.unwrap();
+        rendre("gs", &pdf, &dossier, 72, &options, Duration::from_secs(60), &[]).await.unwrap();
         let (c, m) = (pixel(&dossier, 1, "Cyan", 50.0, 72), pixel(&dossier, 1, "Magenta", 50.0, 72));
         assert_ne!((c, m), (204, 102), "valeurs inchangées : le profil n'a pas été appliqué");
         assert_eq!(pixel(&dossier, 1, "White", 140.0, 72), 0, "un ton direct n'est pas converti");
