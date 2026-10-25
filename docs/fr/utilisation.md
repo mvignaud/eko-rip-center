@@ -786,8 +786,11 @@ support, ou dupliquer la machine.
 **Système > Supports de l'Epson** (administrateur) : le catalogue des supports. Pour
 chacun : **Nom**, **N° dans l'imprimante** (le n° de support enregistré dans l'Epson,
 qui permet de reconnaître le support chargé), **Laize (mm)**, **Encres**, et ses
-**Modes** d'impression, écrits `Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4`. Les
-prix restent dans « Coûts d'encre et de support », reliés par le nom. Chaque support et
+**Modes** d'impression, écrits `Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4`. Un
+troisième champ, facultatif, donne le volume des gouttes petite, moyenne et grosse pour
+l'encre estimée : `Autre = 360 dpi / 4 / 5-10-15 pL`. Sans lui, 5-10-15 pL : des valeurs
+de départ choisies par nous (proportionnelles aux trois tailles de point du tramage), à
+étalonner. Les prix restent dans « Coûts d'encre et de support », reliés par le nom. Chaque support et
 chaque mode garde un identifiant stable : le renommer ne le change pas.
 
 **À l'envoi**, **Support et mode d'impression** : le mode impose la résolution du rendu ;
@@ -852,12 +855,70 @@ longueur imprimée. La carte du travail affiche son **prix de revient** (encre +
 (20 % par défaut) et la base du **prix de revient affiché** (HT par défaut) ; la carte,
 l'estimation de chaque page et le CSV (colonne `base`) suivent.
 
-**Exporter la consommation (CSV)** télécharge une ligne par page imprimée (date UTC,
-travail, page, surface, ml par encre, coûts), séparateur `;`, décimales avec un point,
-pour un tableur ou E-KO ERP.
+**Exporter la consommation (CSV)** télécharge le rapport du journal des impressions
+(voir ci-dessous).
 
 Limite connue : sans largeur de rouleau connue, le support compté est la surface de la
 page, pas la longueur de rouleau consommée sur toute la laize.
+
+## Journal des impressions
+
+**Système > Journal des impressions** : chaque impression terminée, la plus récente en
+haut (les 200 dernières) : **Date**, **Machine**, **Travail** (et sa page), **Support**,
+**Mode**, **Opérateur** (celui de la fiche travail), **Surface**, **Longueur**, **Encre
+estimée**, **Encre réelle**, **Écart** et **Coût encre**. Le survol de l'encre estimée ou
+réelle donne le détail par encre (BK, C, LC…).
+
+**Encre réelle** : par le pilote direct, le serveur relève l'Epson (SNMP) juste avant
+l'envoi et juste après la fin de l'impression, en plus du relevé de chaque minute. Ce qui a
+baissé entre les deux est rangé dans la sortie ; la file l'affiche sur la ligne de la
+sortie terminée : `Relevé : encre 14 ml, support 574 mm`. L'imprimante ne donne l'encre
+qu'au % près d'une poche (1 % de 700 ml = 7 ml) :
+
+- une impression qui ne voit aucune baisse affiche **< 7 ml**, jamais 0 ;
+- une baisse de 1 % s'est faite depuis la variation précédente du même canal : elle est
+  partagée entre toutes les impressions faites depuis, au prorata de leur encre estimée
+  (à défaut, de leur durée). Un chiffre isolé reste approximatif ; la somme sur une
+  période est fiable. Une baisse hors de toute impression (nettoyage) n'est attribuée à
+  personne ; un changement de poche n'est pas une consommation.
+
+La contenance d'une poche est celle de la cartouche saisie dans « Coûts d'encre et de
+support » (ligne de l'encre, de sa plaque ou **Toutes les autres**), 700 ml sinon. Sans
+adresse SNMP, l'encre réelle est **non mesuré**.
+
+**Longueur** : `369 → 574 mm (gâche 204 mm)` : la longueur de la page, celle relevée sur
+le rouleau entre le début et la fin, et la différence (amorce, tête vide, marges).
+🏭 À vérifier à l'atelier sur un vrai tirage (le 24/10 : travail de 369,8 mm, 574 mm
+relevés, soit 204 mm de gâche).
+
+**Encre estimée** : par le pilote direct, les points posés par le tramage sont comptés
+encre par encre et taille par taille ; *ml = Σ points × volume de goutte du mode* (voir
+« Supports et modes d'impression »), multiplié par le facteur de correction validé. Une
+sortie en dossier (plaques en ton continu, tramées par un autre logiciel) est **non
+calculable** : ni encre ni coût encre, plutôt qu'un chiffre faux. L'estimation affichée
+sur la carte du travail avant impression reste celle de la couverture de l'aperçu.
+
+**Rapports CSV** : **Rapport CSV par impression** (une ligne par impression) et **Rapport
+CSV par jour** (une ligne par jour et par machine), avec une dernière ligne `total` égale
+à la somme des lignes. Séparateur `;`, décimales à la virgule, colonnes toujours les
+mêmes et dans le même ordre : identité (date UTC, machine, travail, page, nombre
+d'impressions, support, mode, dpi, opérateur), surface, longueurs prévue et réelle,
+gâche, méthode d'estimation (`points` ou `non calculable`), encre estimée et réelle
+côte à côte (totaux, `sous_seuil`, écart en %, puis une paire `<encre>_estime_ml` /
+`<encre>_reel_ml` pour chacune des 11 encres du catalogue), coûts et base HT/TTC.
+L'adresse `/api/rapports/consommation.csv?depuis=&jusqua=` (secondes Unix) limite à
+une période.
+
+**Rétention (jours)** (administrateur) : les impressions plus anciennes sortent du
+journal, 90 jours par défaut ; la purge passe toutes les 5 minutes. **Purger le
+journal** demande combien de derniers jours garder (0 : tout effacer). Les travaux et la
+file ne sont jamais touchés. Les relevés de l'imprimante restent.
+
+**Facteurs de correction de l'encre estimée** (administrateur) : un facteur par machine,
+résolution et encre, 1 par défaut. Le serveur propose *encre réelle ÷ encre estimée* sur
+les 10 dernières impressions mesurées de chaque combinaison ; **Appliquer** le valide,
+**Remettre à 1** l'enlève. Il ne vaut que pour les impressions suivantes : le journal garde
+le facteur de chacune. Rétention et facteurs sont dans la sauvegarde de la configuration.
 
 ## Ce qui n'existe pas encore
 

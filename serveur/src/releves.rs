@@ -3,8 +3,8 @@
 //! `releves/<machine>.jsonl`, une ligne par relevé qui change quelque chose.
 //!
 //! Seules les baisses comptent : une hausse est un changement de cartouche ou de rouleau.
-//! ponytail: l'imprimante ne donne l'encre qu'au % près (≈ 7 à 15 ml selon la poche) ;
-//! la consommation par travail viendra avec le pilote d'impression (fenêtre début/fin).
+//! L'imprimante ne donne l'encre qu'au % près (≈ 7 ml d'une poche de 700 ml) : la part de
+//! chaque impression se déduit de la fenêtre début/fin de sa sortie (`consommation.rs`).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -26,6 +26,8 @@ pub struct Consommation {
     pub encres: BTreeMap<String, u32>,
     /// Mètres de support consommés.
     pub metres: f64,
+    /// Au moins deux relevés successifs donnaient la longueur restante : `metres` est mesuré.
+    pub longueur: bool,
     /// Nombre de relevés utilisés, et leur étendue (secondes Unix).
     pub releves: usize,
     pub du: Option<u64>,
@@ -41,12 +43,17 @@ pub fn ajouter(donnees: &Path, machine: &str, r: &Releve) -> std::io::Result<()>
     let f = fichier(donnees, machine);
     std::fs::create_dir_all(f.parent().unwrap())?;
     let mut o = std::fs::OpenOptions::new().create(true).append(true).open(f)?;
-    writeln!(o, "{}", serde_json::to_string(r)?)
+    // Une seule écriture par ligne : le relevé de la minute et celui forcé par une impression
+    // peuvent s'ajouter en même temps sans se mêler.
+    o.write_all(format!("{}\n", serde_json::to_string(r)?).as_bytes())
 }
 
-/// Relevés de la machine, dans l'ordre ; les lignes illisibles sont ignorées.
+/// Relevés de la machine, dans l'ordre du temps ; les lignes illisibles sont ignorées.
 pub fn lire(donnees: &Path, machine: &str) -> Vec<Releve> {
-    std::fs::read_to_string(fichier(donnees, machine)).unwrap_or_default().lines().filter_map(|l| serde_json::from_str(l).ok()).collect()
+    let mut v: Vec<Releve> = std::fs::read_to_string(fichier(donnees, machine)).unwrap_or_default().lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    // Deux écrivains (minute, impression) : une ligne peut arriver une seconde après sa suivante.
+    v.sort_by_key(|r| r.le);
+    v
 }
 
 /// Même état (encres et longueur), quelle que soit l'heure.
@@ -68,6 +75,7 @@ pub fn consommation(releves: &[Releve], depuis: u64, jusqua: u64) -> Consommatio
         }
         if let (Some(x), Some(y)) = (a.longueur_m, b.longueur_m) {
             c.metres += (x - y).max(0.0);
+            c.longueur = true;
         }
     }
     c.metres = (c.metres * 1000.0).round() / 1000.0;

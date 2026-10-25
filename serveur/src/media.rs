@@ -356,13 +356,21 @@ pub(crate) mod tests {
 
     /// Agent SNMP v1 factice sur un port local : répond aux GetNext d'après `table`
     /// (OID complet, valeur BER), triée ou non. Rend son adresse.
-    pub(crate) fn agent_factice(mut table: Vec<(Vec<u32>, Vec<u8>)>) -> String {
-        table.sort();
+    pub(crate) fn agent_factice(table: Vec<(Vec<u32>, Vec<u8>)>) -> String {
+        agent_modifiable(std::sync::Arc::new(std::sync::Mutex::new(table)))
+    }
+
+    pub(crate) type Table = std::sync::Arc<std::sync::Mutex<Vec<(Vec<u32>, Vec<u8>)>>>;
+
+    /// Agent factice dont la table peut changer pendant l'essai (niveaux qui baissent).
+    pub(crate) fn agent_modifiable(partagee: Table) -> String {
         let agent = UdpSocket::bind("127.0.0.1:0").unwrap();
         let adresse = agent.local_addr().unwrap().to_string();
         std::thread::spawn(move || {
             let mut t = [0u8; 1500];
             while let Ok((n, de)) = agent.recv_from(&mut t) {
+                let mut table = partagee.lock().unwrap().clone();
+                table.sort();
                 // Lire la requête GetNext comme une réponse : même structure, autre type.
                 let mut q = t[..n].to_vec();
                 let pos = q.iter().position(|b| *b == 0xA1).unwrap();
@@ -376,6 +384,32 @@ pub(crate) mod tests {
             }
         });
         adresse
+    }
+
+    /// Une Epson qui répond : encres `(code Epson, %)` dans la réponse « @BDC ST2 », rouleau
+    /// de 1615 mm dont il reste `longueur_um` micromètres.
+    pub(crate) fn epson_d_essai(encres: &[(u8, u8)], longueur_um: i64) -> Vec<(Vec<u32>, Vec<u8>)> {
+        let mut champ = vec![0x0f, 1 + 3 * encres.len() as u8, 3];
+        champ.extend(encres.iter().flat_map(|&(code, pc)| [0, code, pc]));
+        let mut st2 = b"@BDC ST2\r\n".to_vec();
+        st2.extend([champ.len() as u8, 0]);
+        st2.extend(champ);
+        let entree = |col: u32| PRT_INPUT.iter().copied().chain([col, 1, 1]).collect::<Vec<u32>>();
+        vec![
+            (ETAT_EPSON.iter().copied().chain([1]).collect(), tlv(0x04, &st2)),
+            (entree(COL_UNITE), entier(4)),
+            (entree(COL_LARGEUR), entier(1_615_000)),
+            (entree(COL_UNITE_CAPACITE), entier(4)),
+            (entree(COL_NIVEAU), entier(longueur_um)),
+        ]
+    }
+
+    #[test]
+    fn epson_d_essai_relue() {
+        let a = agent_factice(epson_d_essai(&[(0x01, 48), (0x00, 80)], 49_426_000));
+        let d = Duration::from_secs(2);
+        assert_eq!(lire_etat_epson(&a, "public", d).unwrap().encres, [("C".to_string(), 48), ("BK".to_string(), 80)]);
+        assert_eq!(lire_medias(&a, "public", d).unwrap()[0].longueur_m, Some(49.426));
     }
 
     /// Alertes en cours : capot ouvert (texte relevé), papier épuisé (gravité critique),

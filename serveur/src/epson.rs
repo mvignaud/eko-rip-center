@@ -108,11 +108,15 @@ pub fn verifier_pour_le_pilote(plaques: &[String], couches: Couches) -> Result<(
     }
 }
 
+/// Points posés par encre : petits, moyens, gros (roadmap 6.9, encre estimée).
+pub type Points = Vec<(Encre, [u64; 3])>;
+
 /// Pilote direct : les plaques C, M, J, N (`plaques`, TIFF 8 bits du rendu, 0 = pleine
 /// encre) sont séparées, tramées et émises dans `w` bande par bande. `t` donne le nom,
 /// la résolution, la position et la largeur de page ; la taille de l'image vient des
-/// plaques. Rend l'écrivain une fois le flux complet écrit.
-pub fn imprimer<W: Write>(plaques: [&Path; 4], mut t: escp2::Travail, sep: &Separation, trame: &Tramage, w: W) -> Result<W, String> {
+/// plaques. Rend l'écrivain une fois le flux complet écrit, et les points posés, comptés
+/// au tramage (sans relire les plaques).
+pub fn imprimer<W: Write>(plaques: [&Path; 4], mut t: escp2::Travail, sep: &Separation, trame: &Tramage, w: W) -> Result<(W, Points), String> {
     let mut lecteurs = plaques.map(LecteurTiff::ouvrir).into_iter().collect::<Result<Vec<_>, _>>()?;
     let (l, h) = (lecteurs[0].largeur, lecteurs[0].hauteur);
     if lecteurs.iter().any(|x| (x.largeur, x.hauteur) != (l, h)) {
@@ -123,6 +127,7 @@ pub fn imprimer<W: Write>(plaques: [&Path; 4], mut t: escp2::Travail, sep: &Sepa
     let mut trameurs = separation::ENCRES.iter().map(|&encre| Trameur::nouveau(encre, l, trame)).collect::<Result<Vec<_>, _>>()?;
     let mut cmjn = vec![vec![0u8; LIGNES * l]; 4];
     let mut points = vec![vec![0u8; LIGNES * l]; separation::ENCRES.len()];
+    let mut comptes = vec![[0u64; 3]; separation::ENCRES.len()];
     for y0 in (0..h).step_by(LIGNES) {
         let n = LIGNES.min(h - y0);
         for (lecteur, canal) in lecteurs.iter_mut().zip(cmjn.iter_mut()) {
@@ -135,15 +140,20 @@ pub fn imprimer<W: Write>(plaques: [&Path; 4], mut t: escp2::Travail, sep: &Sepa
         }
         let z = n * l;
         let s = separation::separer(&Cmjn { c: &cmjn[0][..z], m: &cmjn[1][..z], y: &cmjn[2][..z], k: &cmjn[3][..z], or: None, rd: None }, sep)?;
-        for ((trameur, (_, valeurs)), sortie) in trameurs.iter_mut().zip(&s).zip(points.iter_mut()) {
+        for (((trameur, (_, valeurs)), sortie), compte) in trameurs.iter_mut().zip(&s).zip(points.iter_mut()).zip(comptes.iter_mut()) {
             for r in 0..n {
                 trameur.tramer_ligne(&valeurs[r * l..(r + 1) * l], &mut sortie[r * l..(r + 1) * l]);
+            }
+            for &p in &sortie[..z] {
+                if p > 0 {
+                    compte[p as usize - 1] += 1;
+                }
             }
         }
         let plans: Vec<(Encre, &[u8])> = s.iter().zip(&points).map(|((encre, _), p)| (*encre, &p[..z])).collect();
         e.bande(&plans)?;
     }
-    e.finir()
+    Ok((e.finir()?, separation::ENCRES.iter().copied().zip(comptes).collect()))
 }
 
 #[cfg(test)]
@@ -162,6 +172,45 @@ mod tests {
         assert!(e.canaux.iter().all(|(_, p)| !decoupe::est_ton_de_decoupe(p)), "jamais de plaque de découpe");
         assert_eq!(e.couches, Couches::Dessus);
         assert_eq!(preparer(&noms(&["Argent", "Cyan"]), Couches::Dessous).unwrap().canaux, [(Canal::C, "Cyan".into()), (Canal::MS, "Argent".into())]);
+    }
+
+    /// Roadmap 6.9 : les points comptés au tramage sont ceux que le flux ESC/P2 transporte,
+    /// taille par taille et encre par encre (relus dans le flux décodé).
+    #[test]
+    fn points_comptes_au_tramage_egaux_au_flux() {
+        let d = std::env::temp_dir().join(format!("epson-points-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        let (l, h) = (80u32, 40u32);
+        // Plaques du rendu : 0 = pleine encre. Cyan en dégradé, magenta en bande, jaune vide.
+        type Plaque = (&'static str, fn(u32, u32) -> u8);
+        let plaques: [Plaque; 4] = [("c", |x, _| 255 - (x * 255 / 79) as u8), ("m", |_, y| if y < 20 { 128 } else { 255 }), ("y", |_, _| 255), ("k", |x, y| if x > 60 && y > 30 { 0 } else { 255 })];
+        for (nom, f) in plaques {
+            image::GrayImage::from_fn(l, h, |x, y| image::Luma([f(x, y)])).save(d.join(format!("{nom}.tif"))).unwrap();
+        }
+        let chemins = ["c", "m", "y", "k"].map(|n| d.join(format!("{n}.tif")));
+        let t = escp2::Travail { nom: "points".into(), poste: "atelier".into(), utilisateur: "essai".into(), largeur: 0, hauteur: 0, dpi: 720, x: 0, y: 0, page_largeur: 200, page_hauteur: 0 };
+        let (flux, points) = imprimer(chemins.each_ref().map(|p| p.as_path()), t, &Separation::default(), &Tramage::default(), Vec::new()).unwrap();
+        let (_, blocs) = escp2::tests::decoder(&flux);
+        let mut total = 0;
+        for (encre, compte) in &points {
+            let mut lu = [0u64; 3];
+            for b in blocs.iter().filter(|b| b.code == encre.code()) {
+                for o in &b.donnees {
+                    for k in 0..4 {
+                        let v = (o >> (6 - 2 * k)) & 3;
+                        if v > 0 {
+                            lu[v as usize - 1] += 1;
+                        }
+                    }
+                }
+            }
+            assert_eq!(*compte, lu, "{encre:?}");
+            total += compte.iter().sum::<u64>();
+        }
+        let jaune = points.iter().find(|(e, _)| *e == Encre::Y).unwrap().1;
+        assert_eq!(jaune, [0; 3], "plaque jaune vide : aucun point");
+        assert!(total > 1000, "{points:?}");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

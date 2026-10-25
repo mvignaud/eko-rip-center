@@ -29,6 +29,10 @@ pub struct ModeImpression {
     /// Chauffage demandé (°C), si le mode l'impose.
     #[serde(default)]
     pub chauffage_c: Option<f64>,
+    /// Volume d'une goutte petite, moyenne, grosse (pL) pour l'encre estimée par comptage
+    /// des points (roadmap 6.9) ; absent : `consommation::GOUTTES_PL`.
+    #[serde(default)]
+    pub gouttes_pl: Option<[f64; 3]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -110,7 +114,7 @@ fn fichier(donnees: &Path) -> PathBuf {
 
 /// Mode de la capture de l'atelier (720 × 720, 8 passes), donné aux supports repris.
 pub fn mode_par_defaut() -> ModeImpression {
-    ModeImpression { id: None, nom: "720 × 720 · 8 passes".into(), dpi: [720, 720], passes: 8, chauffage_c: None }
+    ModeImpression { id: None, nom: "720 × 720 · 8 passes".into(), dpi: [720, 720], passes: 8, chauffage_c: None, gouttes_pl: None }
 }
 
 /// Catalogue en place ; au premier démarrage, repris des supports de `tarifs.json`
@@ -211,6 +215,7 @@ pub fn verifier(supports: &[Support]) -> Result<(), &'static str> {
                     && m.dpi.iter().all(|d| (90..=2880).contains(d))
                     && (1..=64).contains(&m.passes)
                     && m.chauffage_c.is_none_or(|c| (0.0..=120.0).contains(&c))
+                && m.gouttes_pl.is_none_or(|g| g.iter().all(|v| v.is_finite() && *v > 0.0 && *v <= 200.0))
             })
     });
     if bon { Ok(()) } else { Err("supports_invalides") }
@@ -272,7 +277,7 @@ mod tests {
 
     #[test]
     fn le_mode_impose_la_resolution() {
-        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, numero_machine: Some(6), modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None }] }];
+        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, numero_machine: Some(6), modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: None }] }];
         attribuer_ids(&mut s, &[]);
         let c = Catalogue { version: VERSION, supports: s.clone() };
         let mut d = crate::reglages::Demande { mode_uuid: s[0].modes[1].id, ..Default::default() };

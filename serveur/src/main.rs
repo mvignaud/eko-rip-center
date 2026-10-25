@@ -7,6 +7,7 @@ mod blanc;
 mod couleur;
 mod controle;
 mod coupe;
+mod consommation;
 mod couverture;
 mod decoupe;
 mod detourage;
@@ -399,6 +400,9 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
         .route("/api/tarifs", get(lire_tarifs).post(enregistrer_tarifs))
         .route("/api/rapports/consommation.csv", get(rapport_consommation))
+        .route("/api/consommation/journal", get(journal_des_impressions))
+        .route("/api/consommation/journal/purger", axum::routing::post(purger_le_journal))
+        .route("/api/consommation/reglages", get(lire_reglages_consommation).post(enregistrer_reglages_consommation))
         .route("/api/file", get(lister_file).post(mettre_en_file))
         .route("/api/imbrications", get(lister_imbrications))
         .route("/api/imbrications/{machine}/{code}/imprimer", axum::routing::post(imprimer_imbrication))
@@ -493,35 +497,70 @@ fn date_utc(s: u64) -> String {
     format!("{a:04}-{m:02}-{j:02} {:02}:{:02}:{:02}", reste / 3600, reste % 3600 / 60, reste % 60)
 }
 
-/// Consommation par page imprimée, pour un tableur ou l'ERP : séparateur `;`, décimales
-/// avec un point, une colonne de ml par encre rencontrée.
-async fn rapport_consommation(State(etat): State<Partage>) -> Response {
-    let tarifs = couverture::lire(&etat.config.donnees);
-    let travaux = lire_tous(&etat.config.donnees);
-    let mut encres = std::collections::BTreeSet::new();
-    let mut lignes = vec![];
-    for t in travaux.iter().filter(|t| matches!(t.statut, Statut::Termine) && t.demande.mode == Mode::Imprimer) {
-        for (i, p) in t.pages.iter().enumerate() {
-            let e = couverture::estimer(p.surface_m2, p.hauteur_mm, &p.couverture, &p.plaques_decoupe, &tarifs, t.demande.support.as_deref());
-            encres.extend(e.encres.iter().map(|l| l.nom.clone()));
-            lignes.push((t, i + 1, e));
-        }
-    }
-    let csv_texte = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
-    let mut csv = String::from("date;travail;id;page;support;surface_m2;surface_support_m2");
-    for n in &encres {
-        csv.push_str(&format!(";{}", csv_texte(&format!("{n}_ml"))));
-    }
-    csv.push_str(";encre_ml;cout_encres;cout_support;total;base\n");
-    for (t, page, e) in lignes {
-        csv.push_str(&format!("{};{};{};{page};{};{:.4};{:.4}", date_utc(t.cree_le), csv_texte(&t.nom), t.id, csv_texte(e.support.as_deref().unwrap_or("")), e.surface_m2, e.surface_support_m2));
-        for n in &encres {
-            let ml = e.encres.iter().find(|l| &l.nom == n).map_or(0.0, |l| l.ml);
-            csv.push_str(&format!(";{ml:.2}"));
-        }
-        csv.push_str(&format!(";{:.2};{:.4};{:.4};{:.4};{}\n", e.ml, e.cout_encres, e.cout_support, e.total, if e.ttc { "TTC" } else { "HT" }));
-    }
+#[derive(Deserialize)]
+struct Rapport {
+    /// Secondes Unix, bornes incluses ; par défaut tout le journal.
+    depuis: Option<u64>,
+    jusqua: Option<u64>,
+    /// `jour` : une ligne par jour et par machine.
+    par: Option<String>,
+}
+
+/// Journal des impressions (roadmap 6.4) avec l'encre réelle répartie, dans l'ordre des fins.
+fn lignes_du_journal(donnees: &std::path::Path, depuis: Option<u64>, jusqua: Option<u64>) -> Vec<consommation::Ligne> {
+    let tarifs = couverture::lire(donnees);
+    let lignes = consommation::lignes(consommation::journal(donnees), |m| releves::lire(donnees, m), |n| consommation::contenance_ml(&tarifs, n));
+    lignes.into_iter().filter(|l| depuis.is_none_or(|d| l.impression.fin >= d) && jusqua.is_none_or(|j| l.impression.fin <= j)).collect()
+}
+
+/// Consommation réelle et estimée par impression ou par jour, pour un tableur ou l'ERP
+/// (roadmap 6.5) : séparateur `;`, décimales à la virgule, colonnes fixes, total en fin.
+async fn rapport_consommation(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<Rapport>) -> Response {
+    let lignes = lignes_du_journal(&etat.config.donnees, q.depuis, q.jusqua);
+    let csv = consommation::csv(&lignes, q.par.as_deref() == Some("jour"), date_utc);
     ([(header::CONTENT_TYPE, "text/csv; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"consommation.csv\"")], csv).into_response()
+}
+
+/// Journal pour l'écran : les 200 dernières impressions de la période, les plus récentes d'abord.
+async fn journal_des_impressions(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<Rapport>) -> Json<Vec<consommation::Ligne>> {
+    let mut v = lignes_du_journal(&etat.config.donnees, q.depuis, q.jusqua);
+    v.reverse();
+    v.truncate(200);
+    Json(v)
+}
+
+#[derive(Deserialize)]
+struct Purge {
+    /// Garder les impressions des `jours` derniers jours (0 : tout retirer).
+    jours: u32,
+}
+
+/// Purge manuelle du journal ; les travaux et la file ne sont pas touchés.
+async fn purger_le_journal(State(etat): State<Partage>, Json(p): Json<Purge>) -> Response {
+    match consommation::purger(&etat.config.donnees, maintenant().saturating_sub(p.jours as u64 * 86_400) + u64::from(p.jours == 0)) {
+        Ok(n) => Json(serde_json::json!({ "retirees": n })).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Réglages de la consommation, et les facteurs proposés sur les 10 dernières impressions
+/// mesurées de chaque machine × résolution × encre (roadmap 6.6).
+async fn lire_reglages_consommation(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    let r = consommation::lire_reglages(&etat.config.donnees);
+    let proposes = consommation::proposer(&lignes_du_journal(&etat.config.donnees, None, None), 10, &r);
+    let mut v = serde_json::to_value(&r).unwrap();
+    v["proposes"] = serde_json::json!(proposes);
+    Json(v)
+}
+
+async fn enregistrer_reglages_consommation(State(etat): State<Partage>, Json(r): Json<consommation::Reglages>) -> Response {
+    if let Err(code) = r.verifier() {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    match consommation::ecrire_reglages(&etat.config.donnees, &r) {
+        Ok(()) => Json(r).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
 }
 
 /// Réponse d'erreur : `code` est stable et traduit par l'écran, `detail` reste technique.
@@ -1351,6 +1390,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         profils,
         supports: Some(supports::lire(&etat.config.donnees, "epson")),
         decoupe: Some(decoupe::lire(&etat.config.donnees)),
+        consommation: Some(consommation::lire_reglages(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1378,7 +1418,7 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     if let Err(code) = machines::verifier(&s.machines).and_then(|()| {
         machines::accorder_variantes(&mut s.machines);
         machines::identifier(&mut s.machines, &connues_et_sauvees)
-    }).and(s.tarifs.verifier()) {
+    }).and(s.tarifs.verifier()).and(s.consommation.as_ref().map_or(Ok(()), consommation::Reglages::verifier)) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     if let Some(c) = &s.supports {
@@ -1424,6 +1464,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         if let Some(r) = &s.decoupe {
             decoupe::ecrire(&etat.config.donnees, r)?;
             decoupe::installer(r.clone());
+        }
+        if let Some(r) = &s.consommation {
+            consommation::ecrire_reglages(&etat.config.donnees, r)?;
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -1574,20 +1617,37 @@ async fn media_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>) 
     }
 }
 
+/// Relevé SNMP d'une Epson : encres et longueur restante, n° du support chargé et laize ;
+/// `None` si elle ne répond pas.
+async fn lire_releve(hote: String) -> Option<(releves::Releve, Option<u8>, f64)> {
+    let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
+    let lecture = move || {
+        let d = Duration::from_secs(2);
+        let e = media::lire_etat_epson(&hote, &communaute, d)?;
+        let media = media::lire_medias(&hote, &communaute, d).ok()?.into_iter().next()?;
+        (!e.encres.is_empty()).then(|| (releves::Releve { le: maintenant(), encres: e.encres, longueur_m: media.longueur_m }, e.support, media.largeur_mm))
+    };
+    tokio::task::spawn_blocking(lecture).await.ok().flatten()
+}
+
+/// Relevé forcé au début ou à la fin d'une impression (roadmap 6.1), écrit même s'il ne
+/// change rien : il borne la fenêtre de la sortie. Rend son heure.
+async fn relever_maintenant(etat: &Etat, m: &machines::Machine) -> Option<u64> {
+    if m.modele != machines::Modele::EpsonScS80600 {
+        return None;
+    }
+    let (r, _, _) = lire_releve(m.snmp.clone()?).await?;
+    releves::ajouter(&etat.config.donnees, &m.id, &r).map_err(|e| eprintln!("relevé {} : {e}", m.id)).ok()?;
+    Some(r.le)
+}
+
 /// Relevé SNMP de chaque Epson toutes les minutes (encres et rouleau), gardé quand il change.
 async fn relever(etat: Partage) {
     let mut derniers: std::collections::HashMap<String, Option<releves::Releve>> = Default::default();
     loop {
         let cibles: Vec<(String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.snmp.clone()?))).collect();
         for (id, hote) in cibles {
-            let communaute = env_ou("EKO_RIP_EPSON_COMMUNAUTE", "public");
-            let lecture = move || {
-                let d = Duration::from_secs(2);
-                let e = media::lire_etat_epson(&hote, &communaute, d)?;
-                let media = media::lire_medias(&hote, &communaute, d).ok()?.into_iter().next()?;
-                (!e.encres.is_empty()).then_some((e.encres, media.longueur_m, e.support, media.largeur_mm))
-            };
-            let Ok(Some((encres, longueur_m, numero, largeur_mm))) = tokio::task::spawn_blocking(lecture).await else { continue };
+            let Some((r, numero, largeur_mm)) = lire_releve(hote).await else { continue };
             // Support chargé lu sur la machine (n° de support), s'il a changé (roadmap 1.3).
             if let Some(n) = numero {
                 let support_uuid = supports::par_numero(&supports::lire(&etat.config.donnees, "epson"), &id, n).and_then(|s| s.id);
@@ -1596,7 +1656,6 @@ async fn relever(etat: Partage) {
                     let _ = supports::ecrire_charge(&etat.config.donnees, &id, supports::Charge { support_uuid, laize_mm: Some(largeur_mm), source: "machine".into(), le: maintenant() });
                 }
             }
-            let r = releves::Releve { le: maintenant(), encres, longueur_m };
             let dernier = derniers.entry(id.clone()).or_insert_with(|| releves::lire(&etat.config.donnees, &id).pop());
             if dernier.as_ref().is_some_and(|d| releves::identique(d, &r)) {
                 continue;
@@ -2088,6 +2147,13 @@ fn a_purger(travaux: &[Travail], maintenant: u64, jours: u64) -> Vec<Uuid> {
 async fn purger(etat: Partage) {
     loop {
         let donnees = &etat.config.donnees;
+        // Journal des impressions (roadmap 6.4) : au-delà de la rétention.
+        let jours = consommation::lire_reglages(donnees).retention_jours as u64;
+        match consommation::purger(donnees, maintenant().saturating_sub(jours * 86_400)) {
+            Ok(n) if n > 0 => eprintln!("journal des impressions : {n} impression(s) de plus de {jours} jours retirée(s)"),
+            Err(e) => eprintln!("journal des impressions : {e}"),
+            _ => {}
+        }
         for id in a_purger(&lire_tous(donnees), maintenant(), etat.config.conservation_jours) {
             if effacer_travail(&etat, id).await {
                 eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours);
@@ -3618,27 +3684,54 @@ async fn repartir(etat: Partage) {
     }
 }
 
-/// Exécute une sortie selon le modèle et l'opération, et note le résultat.
+/// Exécute une sortie selon le modèle et l'opération, et note le résultat. Une impression
+/// par le pilote direct est bornée par deux relevés SNMP forcés (roadmap 6.1) ; chaque
+/// impression réussie entre au journal (6.4).
 async fn executer(etat: Partage, s: file::Sortie) {
     let echec = |e: String| ("sortie_echouee", e);
-    let resultat = match machine(&etat, &s.machine) {
+    let m = machine(&etat, &s.machine);
+    let direct = m.as_ref().filter(|m| s.operation() == machines::Operation::Impression && matches!(m.connexion, machines::Connexion::Reseau { .. }));
+    let du = match direct {
+        Some(m) => relever_maintenant(&etat, m).await,
+        None => None,
+    };
+    let debut = du.or(s.debut).unwrap_or_else(maintenant);
+    let resultat = match m.clone() {
         None => Err(echec(format!("machine « {} » absente du catalogue", s.machine))),
         Some(m) => match (s.operation(), m.connexion.clone()) {
-            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await.map_err(echec),
-            (machines::Operation::Impression, machines::Connexion::Reseau { hote, port }) if m.modele == machines::Modele::EpsonScS80600 => imprimer_sur_l_epson(&etat, &s, &m, hote, port).await,
+            (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await.map(|()| None).map_err(echec),
+            (machines::Operation::Impression, machines::Connexion::Reseau { hote, port }) if m.modele == machines::Modele::EpsonScS80600 => imprimer_sur_l_epson(&etat, &s, &m, hote, port).await.map(Some),
             (machines::Operation::Impression, _) => Err(echec(format!("pilote d'impression à venir pour {}", m.nom))),
-            (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await.map_err(echec),
+            (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await.map(|()| None).map_err(echec),
         },
     };
     if let Err((_, e)) = &resultat {
         eprintln!("sortie {} ({}, travail {} page {}) : {e}", s.id, s.machine, s.travail, s.page);
     }
+    let au = match (direct, du, &resultat) {
+        (Some(m), Some(du), Ok(_)) => {
+            // Relevés à la seconde : la fin doit tomber après le début pour borner la fenêtre.
+            if maintenant() <= du {
+                tokio::time::sleep(Duration::from_millis(1100)).await;
+            }
+            relever_maintenant(&etat, m).await
+        }
+        _ => None,
+    };
+    let tarifs = couverture::lire(&etat.config.donnees);
+    let reel = du.zip(au).and_then(|(du, au)| consommation::Reel::mesurer(&releves::lire(&etat.config.donnees, &s.machine), du, au, |n| consommation::contenance_ml(&tarifs, n)));
+    if let (Ok(points), Some(m)) = (&resultat, &m)
+        && s.operation() == machines::Operation::Impression
+    {
+        noter_impression(&etat, &s, m, debut, reel.clone(), points.as_ref(), &tarifs);
+    }
     let mut f = etat.file.lock().unwrap();
     let imprimee = resultat.is_ok() && s.operation() == machines::Operation::Impression;
     if let Some(x) = f.sorties.iter_mut().find(|x| x.id == s.id) {
         x.fin = Some(maintenant());
+        x.consommation = reel;
         match resultat {
-            Ok(()) => x.etat = file::Etat::Terminee,
+            Ok(_) => x.etat = file::Etat::Terminee,
             Err((code, e)) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e)),
         }
     }
@@ -3659,6 +3752,48 @@ async fn executer(etat: Partage, s: file::Sortie) {
     reprendre_les_imbriquees(&etat);
 }
 
+/// Ajoute une impression réussie au journal (roadmap 6.4) : encre estimée par les points
+/// posés quand le pilote direct a tramé (6.9), sinon non calculable (6.7).
+fn noter_impression(etat: &Etat, s: &file::Sortie, m: &machines::Machine, debut: u64, reel: Option<consommation::Reel>, points: Option<&epson::Points>, tarifs: &couverture::Tarifs) {
+    let donnees = &etat.config.donnees;
+    let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { return };
+    let catalogue = supports::lire(donnees, "epson");
+    let support = catalogue.supports.iter().find(|x| t.demande.support_uuid.is_some() && x.id == t.demande.support_uuid);
+    let mode = catalogue.supports.iter().flat_map(|x| &x.modes).find(|x| t.demande.mode_uuid.is_some() && x.id == t.demande.mode_uuid);
+    let nom_support = t.demande.support.clone().or_else(|| support.map(|x| x.nom.clone()));
+    let cout_support = couverture::estimer(p.surface_m2, p.hauteur_mm, &Default::default(), &[], tarifs, nom_support.as_deref()).cout_support;
+    let reglages = consommation::lire_reglages(donnees);
+    let dpi = t.demande.dpi;
+    let estime = match points {
+        Some(points) => {
+            let points: Vec<(String, [u64; 3])> = points.iter().map(|(e, n)| (e.nom().to_string(), *n)).collect();
+            let pl = mode.and_then(|x| x.gouttes_pl).unwrap_or(consommation::GOUTTES_PL);
+            consommation::estimer_points(&points, pl, |n| reglages.facteur(&m.id, dpi, n), tarifs, cout_support)
+        }
+        None => consommation::Estime { cout_support, ttc: tarifs.affichage_ttc, ..Default::default() },
+    };
+    let i = consommation::Impression {
+        sortie: s.id,
+        travail: s.travail,
+        nom: t.nom.clone(),
+        page: s.page,
+        machine: m.id.clone(),
+        debut,
+        fin: maintenant(),
+        support: nom_support,
+        mode: Some(mode.map_or(format!("{dpi} dpi"), |x| x.nom.clone())),
+        dpi,
+        operateur: t.fiche.operateur.clone(),
+        surface_m2: p.surface_m2,
+        longueur_prevue_mm: p.hauteur_mm,
+        reel,
+        estime,
+    };
+    if let Err(e) = consommation::noter(donnees, &i) {
+        eprintln!("journal des impressions : {e}");
+    }
+}
+
 /// Intervalle des relevés SNMP pendant une impression par le pilote direct.
 const RELEVE_IMPRESSION: Duration = Duration::from_secs(5);
 
@@ -3668,7 +3803,7 @@ const RELEVE_IMPRESSION: Duration = Duration::from_secs(5);
 /// l'envoi et jusqu'à la fin de l'impression (`hrPrinterStatus` quitte « imprime ») : une
 /// alerte bloquante coupe la connexion et fait échouer la sortie. Un relevé sans réponse
 /// ne fait rien échouer : il ne dit rien.
-async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, hote: String, port: u16) -> Result<(), (&'static str, String)> {
+async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, hote: String, port: u16) -> Result<epson::Points, (&'static str, String)> {
     let echec = |e: String| ("sortie_echouee", e);
     let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or(echec("travail ou page disparu".into()))?;
     epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches).map_err(|e| ("envoi_impossible", e))?;
@@ -3704,14 +3839,15 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     let connexion = tokio::task::spawn_blocking(move || machines::ouvrir_reseau(&hote, port)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
     let coupure = connexion.try_clone().map_err(|e| echec(e.to_string()))?;
     let mut envoi = tokio::task::spawn_blocking(move || {
-        let w = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation::Separation::default(), &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
+        let (w, points) = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation::Separation::default(), &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
         let c = w.into_inner().map_err(|e| format!("envoi du flux : {}", e.error()))?;
-        c.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())
+        c.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())?;
+        Ok(points)
     });
     let Some(h) = m.snmp.clone() else { return envoi.await.map_err(|e| echec(e.to_string()))?.map_err(echec) };
     let mut tic = tokio::time::interval(RELEVE_IMPRESSION);
     tic.tick().await;
-    loop {
+    let points = loop {
         tokio::select! {
             r = &mut envoi => break r.map_err(|e| echec(e.to_string()))?.map_err(echec)?,
             _ = tic.tick() => if let Some(a) = alertes(h.clone(), communaute.clone()).await {
@@ -3720,7 +3856,7 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
                 return Err(("imprimante_en_alerte", a));
             },
         }
-    }
+    };
     // Envoyé : l'imprimante finit la page. Surveillée tant qu'elle se dit en train
     // d'imprimer, au plus deux fois la durée estimée plus 10 min.
     let limite = m.duree_impression_min(p.hauteur_mm, dpi).map_or(Duration::from_secs(4 * 3600), |d| Duration::from_secs_f64((2.0 * d + 10.0) * 60.0));
@@ -3735,7 +3871,7 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
         }
         tic.tick().await;
     }
-    Ok(())
+    Ok(points)
 }
 
 /// Tête vide en début de page sur l'Epson (mm), avant l'origine Y de la machine.
@@ -3936,7 +4072,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -4094,11 +4230,12 @@ mod tests {
             let session: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(appel(&e, "GET", "/api/session", Some(op), None).await.into_body(), 1 << 16).await.unwrap()).unwrap();
             assert_eq!(session["role"], "operateur");
             let reglage = serde_json::json!({ "nom": "Vinyle", "demande": {} });
-            for (methode, chemin, corps) in [("POST", "/api/reglages", Some(reglage.clone())), ("DELETE", "/api/reglages/Vinyle", None), ("POST", "/api/tarifs", Some(serde_json::json!({})))] {
+            for (methode, chemin, corps) in [("POST", "/api/reglages", Some(reglage.clone())), ("DELETE", "/api/reglages/Vinyle", None), ("POST", "/api/tarifs", Some(serde_json::json!({}))), ("POST", "/api/consommation/reglages", Some(serde_json::json!({}))), ("POST", "/api/consommation/journal/purger", Some(serde_json::json!({ "jours": 0 })))] {
                 assert_eq!(appel(&e, methode, chemin, Some(op), corps).await.status(), StatusCode::FORBIDDEN, "{methode} {chemin}");
             }
             assert_eq!(appel(&e, "GET", "/api/machines", Some(op), None).await.status(), StatusCode::OK, "lecture permise");
             assert_eq!(appel(&e, "GET", "/api/file", Some(op), None).await.status(), StatusCode::OK);
+            assert_eq!(appel(&e, "GET", "/api/consommation/journal", Some(op), None).await.status(), StatusCode::OK, "le journal se lit");
             assert_eq!(appel(&e, "POST", "/api/reglages", Some(chef), Some(reglage)).await.status(), StatusCode::CREATED, "l'administrateur règle");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
@@ -4774,7 +4911,7 @@ mod tests {
             let e = etat("mode-travail");
             let donnees = e.config.donnees.clone();
             let mut c = supports::lire(&donnees, "epson");
-            c.supports[0].modes.push(supports::ModeImpression { id: None, nom: "Brouillon 90".into(), dpi: [90, 90], passes: 2, chauffage_c: None });
+            c.supports[0].modes.push(supports::ModeImpression { id: None, nom: "Brouillon 90".into(), dpi: [90, 90], passes: 2, chauffage_c: None, gouttes_pl: None });
             let connus = supports::lire(&donnees, "epson").supports;
             assert!(supports::attribuer_ids(&mut c.supports, &connus));
             supports::ecrire(&donnees, &c).unwrap();
@@ -4963,10 +5100,11 @@ mod tests {
             let r = appel(&e, "GET", "/api/rapports/consommation.csv", None, None).await;
             assert_eq!(r.headers()[header::CONTENT_TYPE], "text/csv; charset=utf-8");
             let csv = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            // Le rapport suit le journal des impressions (roadmap 6.5) : un travail rendu mais
+            // jamais imprimé n'y est pas ; l'en-tête est toujours le même.
             let lignes: Vec<&str> = csv.lines().collect();
-            assert_eq!(lignes.len(), 2, "{csv}");
-            assert!(lignes[0].contains("\"Cyan_ml\"") && !lignes[0].contains("CutContour"), "{}", lignes[0]);
-            assert!(lignes[1].contains("\"cyan;\"\"2x1\"\".pdf\""), "nom protégé : {}", lignes[1]);
+            assert_eq!(lignes.len(), 1, "{csv}");
+            assert!(lignes[0].contains("\"C_estime_ml\";\"C_reel_ml\"") && !lignes[0].contains("CutContour"), "{}", lignes[0]);
             std::fs::remove_dir_all(&donnees).unwrap();
         }
     }
@@ -5619,6 +5757,104 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
             assert_eq!(e.file.lock().unwrap().sorties[0].etat, file::Etat::Terminee);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        async fn json(r: Response) -> serde_json::Value {
+            serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap()).unwrap()
+        }
+
+        /// Phase 6 par le vrai circuit, SNMP et port 9100 simulés : relevés forcés au début et à
+        /// la fin (6.1), longueur et gâche (6.3), journal (6.4), encre estimée par les points
+        /// posés (6.9), rapport (6.5), purge manuelle qui laisse travaux et file (6.4).
+        #[tokio::test]
+        async fn consommation_de_la_sortie_et_journal() {
+            let e = etat("pilote-epson-conso");
+            let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = ecoute.local_addr().unwrap().port();
+            let table = std::sync::Arc::new(std::sync::Mutex::new(media::tests::epson_d_essai(&[(0x01, 50), (0x00, 80)], 50_000_000)));
+            let snmp = media::tests::agent_modifiable(table.clone());
+            // L'imprimante consomme pendant l'envoi : 2 % de cyan, 574 mm de rouleau.
+            let recu = std::thread::spawn(move || {
+                let (mut f, _) = ecoute.accept().unwrap();
+                *table.lock().unwrap() = media::tests::epson_d_essai(&[(0x01, 48), (0x00, 80)], 49_426_000);
+                std::io::Read::read_to_end(&mut f, &mut vec![]).unwrap();
+                // Seconde impression (volumes de goutte du mode).
+                let (mut f, _) = ecoute.accept().unwrap();
+                std::io::Read::read_to_end(&mut f, &mut vec![]).unwrap();
+            });
+            en_reseau(&e, port, Some(snmp));
+            let t = rendre(&e, pdf(false), Demande { dpi: 360, ..Default::default() }).await;
+            let mut t = lire_travail(&e.config.donnees, t.id).unwrap();
+            t.fiche.operateur = "Léa".into();
+            ecrire(&e.config.donnees, &t).unwrap();
+            let s = executer_sur_l_epson(&e, t.id).await;
+            assert_eq!(s.etat, file::Etat::Terminee, "{:?}", s.erreur);
+            let c = s.consommation.expect("consommation rangée dans la sortie");
+            assert_eq!(c.encres_pc, std::collections::BTreeMap::from([("BK".into(), 0), ("C".into(), 2)]));
+            assert_eq!((c.seuil_ml["C"], c.longueur_mm), (7.0, Some(574.0)));
+            assert_eq!(releves::lire(&e.config.donnees, "epson").len(), 2, "un relevé forcé à chaque bout");
+
+            let j = json(appel(&e, "GET", "/api/consommation/journal", None, None).await).await;
+            assert_eq!(j.as_array().unwrap().len(), 1, "{j}");
+            let l = &j[0];
+            assert_eq!((l["operateur"].as_str(), l["dpi"].as_u64(), l["mode"].as_str()), (Some("Léa"), Some(360), Some("360 dpi")));
+            assert_eq!(l["estime"]["methode"], "points", "{l}");
+            let estime = l["estime_total_ml"].as_f64().unwrap();
+            assert!(estime > 0.0 && estime < 1.0, "page de 2 cm² : {estime} ml");
+            assert_eq!(l["reel_total_ml"].as_f64(), Some(14.0));
+            let p = &t.pages[0];
+            assert!((l["gache_mm"].as_f64().unwrap() - (574.0 - p.hauteur_mm)).abs() < 1e-9, "{l}");
+            assert!(l["estime"]["cout_encres"].as_f64().unwrap() > 0.0);
+
+            let r = appel(&e, "GET", "/api/rapports/consommation.csv", None, None).await;
+            let csv = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            let lignes: Vec<&str> = csv.lines().collect();
+            assert_eq!(lignes.len(), 3, "en-tête, l'impression, le total : {csv}");
+            assert!(lignes[1].contains(";\"points\";") && lignes[1].contains(";14,00;"), "{}", lignes[1]);
+
+            // 6.9 : volumes de goutte du mode, éditables ; deux fois plus gros, deux fois plus d'encre.
+            let mut catalogue = supports::lire(&e.config.donnees, "epson");
+            catalogue.supports[0].modes.push(supports::ModeImpression { id: None, nom: "360 étalonné".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: Some([10.0, 20.0, 30.0]) });
+            let connus = supports::lire(&e.config.donnees, "epson").supports;
+            supports::attribuer_ids(&mut catalogue.supports, &connus);
+            supports::ecrire(&e.config.donnees, &catalogue).unwrap();
+            let mut t2 = lire_travail(&e.config.donnees, t.id).unwrap();
+            t2.demande.mode_uuid = catalogue.supports[0].modes.last().unwrap().id;
+            ecrire(&e.config.donnees, &t2).unwrap();
+            assert_eq!(executer_sur_l_epson(&e, t.id).await.etat, file::Etat::Terminee);
+            recu.join().unwrap();
+            let j = json(appel(&e, "GET", "/api/consommation/journal", None, None).await).await;
+            assert_eq!(j[0]["mode"], "360 étalonné");
+            assert!((j[0]["estime_total_ml"].as_f64().unwrap() - 2.0 * estime).abs() < 1e-12, "{} ≠ 2 × {estime}", j[0]["estime_total_ml"]);
+
+            // Purge manuelle de tout le journal : le travail et la sortie restent.
+            let r = json(appel(&e, "POST", "/api/consommation/journal/purger", None, Some(serde_json::json!({ "jours": 0 }))).await).await;
+            assert_eq!(r["retirees"], 2);
+            assert!(json(appel(&e, "GET", "/api/consommation/journal", None, None).await).await.as_array().unwrap().is_empty());
+            assert!(lire_travail(&e.config.donnees, t.id).is_some());
+            assert!(e.file.lock().unwrap().sorties.iter().any(|x| x.id == s.id));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 6.4 : la rétention se règle (défaut 90 j) ; un réglage hors bornes est refusé ; la
+        /// sauvegarde porte ces réglages.
+        #[tokio::test]
+        async fn retention_reglable_et_sauvegardee() {
+            let e = etat("conso-reglages");
+            let r = json(appel(&e, "GET", "/api/consommation/reglages", None, None).await).await;
+            assert_eq!(r["retention_jours"], 90);
+            let bon = serde_json::json!({ "retention_jours": 1, "facteurs": [{ "machine": "epson", "dpi": 720, "encre": "C", "valeur": 1.4 }] });
+            assert_eq!(appel(&e, "POST", "/api/consommation/reglages", None, Some(bon)).await.status(), StatusCode::OK);
+            let mauvais = serde_json::json!({ "retention_jours": 0 });
+            assert_eq!(appel(&e, "POST", "/api/consommation/reglages", None, Some(mauvais)).await.status(), StatusCode::BAD_REQUEST);
+            let s = json(appel(&e, "GET", "/api/sauvegarde", None, None).await).await;
+            assert_eq!(s["consommation"]["facteurs"][0]["valeur"], 1.4, "{}", s["consommation"]);
+            // Une sauvegarde d'avant n'a pas la clé : elle se restaure sans y toucher.
+            let mut ancienne = s.clone();
+            ancienne.as_object_mut().unwrap().remove("consommation");
+            assert_eq!(appel(&e, "POST", "/api/sauvegarde", None, Some(ancienne)).await.status(), StatusCode::OK);
+            assert_eq!(consommation::lire_reglages(&e.config.donnees).retention_jours, 1);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

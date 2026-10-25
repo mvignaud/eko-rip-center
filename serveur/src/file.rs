@@ -59,6 +59,10 @@ pub struct Sortie {
     /// État d'avant l'imbrication, rendu si la planche est abandonnée.
     #[serde(default)]
     pub avant_imbrication: Option<Etat>,
+    /// Consommation relevée sur la machine entre le début et la fin de l'impression
+    /// (roadmap 6.1) ; absente sans relevé SNMP.
+    #[serde(default)]
+    pub consommation: Option<crate::consommation::Reel>,
 }
 
 /// Ce que devient une découpe terminée (roadmap 4.12) : réglage de découpe du serveur.
@@ -76,7 +80,7 @@ pub enum ApresCoupe {
 
 impl Sortie {
     pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false, planche: None, avant_imbrication: None }
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false, planche: None, avant_imbrication: None, consommation: None }
     }
 
     pub fn operation(&self) -> Operation {

@@ -25,6 +25,10 @@ pub struct Sauvegarde {
     /// Préfixes et options de découpe (`decoupe.json`) ; absent des sauvegardes d'avant.
     #[serde(default)]
     pub decoupe: Option<crate::decoupe::Reglages>,
+    /// Rétention du journal et facteurs de correction (`consommation.json`) ; absent des
+    /// sauvegardes d'avant.
+    #[serde(default)]
+    pub consommation: Option<crate::consommation::Reglages>,
 }
 
 pub fn hex(octets: &[u8]) -> String {

@@ -29,6 +29,21 @@ pub enum Encre {
 }
 
 impl Encre {
+    /// Nom de l'encre dans l'état de l'imprimante (`media.rs`, relevés SNMP).
+    pub fn nom(self) -> &'static str {
+        match self {
+            Encre::K => "BK",
+            Encre::M => "M",
+            Encre::C => "C",
+            Encre::Y => "Y",
+            Encre::Lk => "LK",
+            Encre::Lm => "LM",
+            Encre::Lc => "LC",
+            Encre::Or => "OR",
+            Encre::Rd => "R",
+        }
+    }
+
     pub fn code(self) -> u8 {
         match self {
             Encre::K => 0,

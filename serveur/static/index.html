@@ -150,6 +150,10 @@
   .vue-systeme { display: grid; gap: 16px; }
   .tarifs { display: grid; grid-template-columns: minmax(120px, max-content) repeat(2, minmax(90px, 140px)); gap: 6px 12px; align-items: center; }
   .tarifs input { width: 100%; }
+  .table-journal { overflow-x: auto; }
+  .table-journal table { border-collapse: collapse; font-size: 12px; width: 100%; }
+  .table-journal th, .table-journal td { padding: 3px 6px; border-bottom: 1px solid var(--bord, #ddd); text-align: left; white-space: nowrap; }
+  .table-journal th { color: var(--doux); font-weight: normal; }
   .tarifs .tete { font-size: 12px; color: var(--doux); }
   .jauge { height: 8px; border-radius: 4px; background: var(--attente-doux); overflow: hidden; margin-top: 4px; max-width: 320px; }
   .jauge > div { height: 100%; background: var(--accent); }
@@ -462,6 +466,7 @@
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
     <section class="panneau admin"><h2 data-t="machines_titre"></h2><form class="corps" id="editeur-machines"></form></section>
     <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
+    <section class="panneau"><h2 data-t="journal_titre"></h2><div class="corps" id="journal"></div></section>
     <section class="panneau admin"><h2 data-t="supports_titre"></h2><form class="corps" id="editeur-supports"></form></section>
     <section class="panneau admin"><h2 data-t="couts"></h2><form class="corps" id="tarifs"></form></section>
     <section class="panneau admin"><h2 data-t="sauvegarde"></h2><div class="corps">
@@ -656,17 +661,30 @@ const textes = {
     longueur_restante: (m) => `Reste ${m} m de rouleau`, fichiers_etat: "Fichiers et dossiers", dossier_absent: (d, r) => r ? `dossier ${d} absent : recréé` : `dossier ${d} absent et impossible à recréer (droits ?)`, fichier_illisible: (f, r) => r ? `${f} illisible (coupure ?) : version précédente reprise` : `${f} illisible, sans version précédente : à restaurer (copie dans ${f}.illisible)`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
     media_non_configure: "Lecture non configurée : renseigner EKO_RIP_EPSON_SNMP (adresse IP de l'Epson) dans /etc/default/eko-rip-serveur.",
     sauvegarde: "Sauvegarde de la configuration", sauvegarder: "Télécharger la sauvegarde", restaurer: "Restaurer…",
-    note_sauvegarde: "Un fichier JSON : machines, tarifs, réglages enregistrés et profils ICC. Les comptes n'y sont pas (ils se recréent sur le serveur), ni les travaux.",
+    note_sauvegarde: "Un fichier JSON : machines, tarifs, réglages enregistrés, rétention du journal et facteurs de correction, profils ICC. Les comptes n'y sont pas (ils se recréent sur le serveur), ni les travaux, ni le journal des impressions.",
     confirmer_restauration: (n) => `Remplacer les machines, les tarifs et les réglages par ceux de « ${n} » ?`,
     restauree: (r) => `Configuration restaurée : ${r.machines} machine(s), ${r.reglages} réglage(s), ${r.profils} profil(s).`,
     couts: "Coûts d'encre et de support", cartouche_ml: "Cartouche (ml)", cartouche_prix: "Prix cartouche (€)",
     supports: "Supports (rouleaux)", note_supports: "Prix au m², ou largeur + longueur + prix payé du rouleau : le prix au m² est calculé. Avec une largeur, la matière comptée est toute la largeur du rouleau sur la longueur imprimée.",
     support_nom: "Nom (ex. Vinyle blanc mat)", largeur_mm: "Largeur (mm)", longueur_m: "Longueur (m)", prix_paye: "Prix payé (€)", ou_prix_m2: "ou €/m²",
-    ajouter_support: "Ajouter un support", saisie: "Prix saisis", affichage: "Prix de revient affiché", tva: "TVA (%)", ht: "HT", ttc: "TTC", support_choix: "Support (prix de revient)", support_mode: "Support et mode d'impression", supports_titre: "Supports de l'Epson", support_charge: "Support chargé", charge_machine: "— lu sur l'imprimante —", charge_inconnue: "Support chargé : inconnu (l'imprimante ne le dit pas encore).", charge_connue: (n, src) => `Support chargé : ${n} (${src})`, charge_saisie: "saisi", charge_lue: "lu sur l'imprimante", charge_hors_catalogue: "Support chargé : n° inconnu du catalogue (renseigner son n° ci-dessous).", numero_machine: "N° dans l'imprimante", note_numero_machine: "Le n° de support enregistré dans l'Epson : il permet de reconnaître le support chargé.", laize_mm_champ: "Laize (mm)", encres_champ: "Encres", modes_champ: "Modes", note_modes: "« Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4 »", note_supports_epson: "Chaque support porte ses modes d'impression ; le mode choisi à l'envoi impose la résolution. Les prix restent dans « Coûts d'encre et de support », reliés par le nom.", supports_enregistres: "Supports enregistrés.", miroir_file: "Miroir", note_miroir_file: "Ce travail est imprimé en miroir.", pool: "Pool", aucun_pool: "aucun", note_pool: "Même nom de pool sur des machines identiques (même modèle, même laize) : une impression envoyée au pool part sur la première prête, à condition que le même support y soit chargé.", pool_nom: (p) => `pool « ${p} »`, note_reglages_echange: "Réglages enregistrés : les exporter tous pour un autre serveur, ou importer ceux d'un export.", exporter_reglages: "Exporter les réglages", importer_reglages: "Importer des réglages", doublon: "Si le nom existe", doublon_renommer: "renommer (« nom 2 »)", doublon_ecraser: "écraser", reglages_importes: (n) => `Réglages importés : ${n}.`, exporter_paquet: "Exporter", note_exporter_paquet: "Un fichier avec ce support, ses modes et les réglages qui s'en servent (sans profil ICC).", importer_paquet: "Importer un paquet support", paquet_importe: "Paquet support importé.", nom: "Nom", support_mode_aucun: "— résolution choisie à la main —", note_support_mode: "Le mode impose la résolution du rendu ; le support relie aux tarifs.", support_defaut: "— prix par défaut —",
+    ajouter_support: "Ajouter un support", saisie: "Prix saisis", affichage: "Prix de revient affiché", tva: "TVA (%)", ht: "HT", ttc: "TTC", support_choix: "Support (prix de revient)", support_mode: "Support et mode d'impression", supports_titre: "Supports de l'Epson", support_charge: "Support chargé", charge_machine: "— lu sur l'imprimante —", charge_inconnue: "Support chargé : inconnu (l'imprimante ne le dit pas encore).", charge_connue: (n, src) => `Support chargé : ${n} (${src})`, charge_saisie: "saisi", charge_lue: "lu sur l'imprimante", charge_hors_catalogue: "Support chargé : n° inconnu du catalogue (renseigner son n° ci-dessous).", numero_machine: "N° dans l'imprimante", note_numero_machine: "Le n° de support enregistré dans l'Epson : il permet de reconnaître le support chargé.", laize_mm_champ: "Laize (mm)", encres_champ: "Encres", modes_champ: "Modes", note_modes: "« Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4 / 5-10-15 pL » : le dernier champ, facultatif, donne le volume des gouttes petite, moyenne et grosse pour l'encre estimée (5-10-15 pL sans lui, valeurs de départ à étalonner).", note_supports_epson: "Chaque support porte ses modes d'impression ; le mode choisi à l'envoi impose la résolution. Les prix restent dans « Coûts d'encre et de support », reliés par le nom.", supports_enregistres: "Supports enregistrés.", miroir_file: "Miroir", note_miroir_file: "Ce travail est imprimé en miroir.", pool: "Pool", aucun_pool: "aucun", note_pool: "Même nom de pool sur des machines identiques (même modèle, même laize) : une impression envoyée au pool part sur la première prête, à condition que le même support y soit chargé.", pool_nom: (p) => `pool « ${p} »`, note_reglages_echange: "Réglages enregistrés : les exporter tous pour un autre serveur, ou importer ceux d'un export.", exporter_reglages: "Exporter les réglages", importer_reglages: "Importer des réglages", doublon: "Si le nom existe", doublon_renommer: "renommer (« nom 2 »)", doublon_ecraser: "écraser", reglages_importes: (n) => `Réglages importés : ${n}.`, exporter_paquet: "Exporter", note_exporter_paquet: "Un fichier avec ce support, ses modes et les réglages qui s'en servent (sans profil ICC).", importer_paquet: "Importer un paquet support", paquet_importe: "Paquet support importé.", nom: "Nom", support_mode_aucun: "— résolution choisie à la main —", note_support_mode: "Le mode impose la résolution du rendu ; le support relie aux tarifs.", support_defaut: "— prix par défaut —",
     prix_de_revient: "Prix de revient estimé (encre + matière)", matiere: (n, m2) => `${n} : ${m2} m² de matière`, encre: "Encre", ml_m2: "ml/m² à 100 %", prix_litre: "€ / litre", autres_encres: "Toutes les autres",
     support_m2: "Support sans choix (€ / m²)", enregistrer: "Enregistrer", tarifs_enregistres: "Tarifs enregistrés.", export_csv: "Exporter la consommation (CSV)",
     note_tarifs: "Valeurs de départ à remplacer par celles de l'atelier. Contenance et prix de la cartouche, s'ils sont saisis, fixent le prix au litre. Une case vide prend la ligne « Toutes les autres ».",
     estimation: (m2, ml, total, encre, support) => `${m2} m² · encre ${ml} ml · ≈ ${total} € (encre ${encre} €, support ${support} €)`,
+    journal_titre: "Journal des impressions", journal_vide: "Aucune impression au journal.",
+    note_journal: "Chaque impression terminée : encre estimée (points posés par le pilote × volume de goutte du mode, facteur de correction appliqué) et encre réelle relevée sur l'imprimante. L'imprimante ne donne l'encre qu'au % près d'une poche : une baisse est partagée entre les impressions faites depuis la précédente, et une impression qui n'en voit aucune affiche « < 7 ml ». Longueur : page → relevée, et la gâche (amorce, marges).",
+    j_date: "Date", j_machine: "Machine", j_travail: "Travail", j_support: "Support", j_mode: "Mode", j_operateur: "Opérateur", j_surface: "Surface", j_longueur: "Longueur", j_estimee: "Encre estimée", j_reelle: "Encre réelle", j_ecart: "Écart", j_cout: "Coût encre",
+    j_longueur_val: (p, r, g) => `${p} → ${r} mm (gâche ${g} mm)`, non_calculable: "non calculable", non_mesure: "non mesuré",
+    note_non_calculable: "Plaques en ton continu (sortie en dossier) : le tramage n'est pas le nôtre, l'encre ne se calcule pas.",
+    csv_par_impression: "Rapport CSV par impression", csv_par_jour: "Rapport CSV par jour",
+    retention_jours: "Rétention (jours)", note_retention: "Les impressions plus anciennes sortent du journal (90 jours par défaut). Les travaux et la file n'en dépendent pas.",
+    purger_journal: "Purger le journal", question_purge: "Garder les impressions des combien de derniers jours ? (0 : tout effacer)", journal_purge: (n) => `Journal purgé : ${n} impression(s) retirée(s).`, conso_enregistree: "Réglages de consommation enregistrés.",
+    facteurs_titre: "Facteurs de correction de l'encre estimée", note_facteurs: "Par machine, résolution et encre ; 1 par défaut. Proposé = encre réelle / encre estimée sur les 10 dernières impressions mesurées ; appliqué seulement sur validation, aux impressions suivantes.",
+    facteur_propose: (p, r, e) => `${p.machine} · ${p.dpi} dpi · ${p.encre} : proposé ${p.valeur} (actuel ${p.actuel}, ${p.impressions} impression(s) : ${r} ml relevés pour ${e} ml estimés)`,
+    facteur_applique: (f) => `${f.machine} · ${f.dpi} dpi · ${f.encre} : ${f.valeur}`, conso_appliquer: "Appliquer", remettre_a_un: "Remettre à 1",
+    aucun_facteur: "Rien à proposer : il faut des impressions par le pilote direct, avec relevé SNMP.",
+    releve_sortie: (e, l) => `Relevé : encre ${e}${l ? `, support ${l}` : ""}`,
     aucune_sortie: "Rien en file.", historique: "Historique", archive: (n) => `Archive (${n})`, ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
       format_inconnu: "Format non reconnu : envoyer un PDF, un AI ou un SVG.",
@@ -687,6 +705,7 @@ const textes = {
       planche_rendue_a_la_file: "Planche abandonnée : ses travaux sont revenus en file. La refaire les imprimerait deux fois ; « Imprimer maintenant » sur la planche en préparation en refait une.",
       sortie_sur_une_planche: "Cette page est sur une planche pas encore imprimée : la refaire l'imprimerait deux fois.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
+      consommation_invalide: "Réglages de consommation invalides : rétention de 1 à 3650 jours, facteurs de 0 à 10, une fois chacun.",
       pool_incoherent: "Pool incohérent : nom d'identifiant libre, machines de même modèle et même laize.",
       support_different: "Les machines du pool n'ont pas le même support chargé : charger le même support, ou dupliquer la machine.",
       paquet_invalide: "Paquet support invalide.",
@@ -890,17 +909,30 @@ const textes = {
     longueur_restante: (m) => `${m} m of roll left`, fichiers_etat: "Files and folders", dossier_absent: (d, r) => r ? `folder ${d} missing: recreated` : `folder ${d} missing and could not be recreated (permissions?)`, fichier_illisible: (f, r) => r ? `${f} unreadable (power cut?): previous version restored` : `${f} unreadable, no previous version: restore it (copy in ${f}.illisible)`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
     media_non_configure: "Reading not set up: set EKO_RIP_EPSON_SNMP (the Epson's IP address) in /etc/default/eko-rip-serveur.",
     sauvegarde: "Configuration backup", sauvegarder: "Download the backup", restaurer: "Restore…",
-    note_sauvegarde: "One JSON file: machines, prices, saved presets and ICC profiles. Accounts are not in it (recreate them on the server), nor jobs.",
+    note_sauvegarde: "One JSON file: machines, prices, saved presets, log retention and correction factors, ICC profiles. Accounts are not in it (recreate them on the server), nor jobs, nor the print log.",
     confirmer_restauration: (n) => `Replace machines, prices and presets with those of “${n}”?`,
     restauree: (r) => `Configuration restored: ${r.machines} machine(s), ${r.reglages} preset(s), ${r.profils} profile(s).`,
     couts: "Ink and media costs", cartouche_ml: "Cartridge (ml)", cartouche_prix: "Cartridge price (€)",
     supports: "Media (rolls)", note_supports: "Price per m², or roll width + length + price paid: the price per m² is computed. With a width, the media counted is the whole roll width over the printed length.",
     support_nom: "Name (e.g. Matt white vinyl)", largeur_mm: "Width (mm)", longueur_m: "Length (m)", prix_paye: "Price paid (€)", ou_prix_m2: "or €/m²",
-    ajouter_support: "Add a medium", saisie: "Prices entered", affichage: "Cost price shown", tva: "VAT (%)", ht: "excl. VAT", ttc: "incl. VAT", support_choix: "Media (cost price)", support_mode: "Media and print mode", supports_titre: "Epson media", support_charge: "Loaded media", charge_machine: "— read from the printer —", charge_inconnue: "Loaded media: unknown (the printer has not reported it yet).", charge_connue: (n, src) => `Loaded media: ${n} (${src})`, charge_saisie: "set by hand", charge_lue: "read from the printer", charge_hors_catalogue: "Loaded media: number unknown to the catalogue (fill in its number below).", numero_machine: "No. in the printer", note_numero_machine: "The media number stored in the Epson: it lets the loaded media be recognised.", laize_mm_champ: "Roll width (mm)", encres_champ: "Inks", modes_champ: "Modes", note_modes: "\"Name = 720 dpi / 8 passes; Other = 360 dpi / 4\"", note_supports_epson: "Each media carries its print modes; the mode chosen when sending sets the resolution. Prices stay in \"Ink and media costs\", linked by name.", supports_enregistres: "Media saved.", miroir_file: "Mirror", note_miroir_file: "This job is printed mirrored.", pool: "Pool", aucun_pool: "none", note_pool: "Same pool name on identical machines (same model, same roll width): a print sent to the pool goes to the first ready one, provided the same media is loaded.", pool_nom: (p) => `pool "${p}"`, note_reglages_echange: "Saved presets: export them all for another server, or import those of an export.", exporter_reglages: "Export presets", importer_reglages: "Import presets", doublon: "If the name exists", doublon_renommer: "rename (\"name 2\")", doublon_ecraser: "overwrite", reglages_importes: (n) => `Presets imported: ${n}.`, exporter_paquet: "Export", note_exporter_paquet: "One file with this media, its modes and the presets that use it (no ICC profile).", importer_paquet: "Import a media package", paquet_importe: "Media package imported.", nom: "Name", support_mode_aucun: "— resolution set by hand —", note_support_mode: "The mode sets the rendering resolution; the media links to the price list.", support_defaut: "— default price —",
+    ajouter_support: "Add a medium", saisie: "Prices entered", affichage: "Cost price shown", tva: "VAT (%)", ht: "excl. VAT", ttc: "incl. VAT", support_choix: "Media (cost price)", support_mode: "Media and print mode", supports_titre: "Epson media", support_charge: "Loaded media", charge_machine: "— read from the printer —", charge_inconnue: "Loaded media: unknown (the printer has not reported it yet).", charge_connue: (n, src) => `Loaded media: ${n} (${src})`, charge_saisie: "set by hand", charge_lue: "read from the printer", charge_hors_catalogue: "Loaded media: number unknown to the catalogue (fill in its number below).", numero_machine: "No. in the printer", note_numero_machine: "The media number stored in the Epson: it lets the loaded media be recognised.", laize_mm_champ: "Roll width (mm)", encres_champ: "Inks", modes_champ: "Modes", note_modes: "\"Name = 720 dpi / 8 passes; Other = 360 dpi / 4 / 5-10-15 pL\": the last, optional field gives the small, medium and large droplet volume for the estimated ink (5-10-15 pL without it, starting values to calibrate).", note_supports_epson: "Each media carries its print modes; the mode chosen when sending sets the resolution. Prices stay in \"Ink and media costs\", linked by name.", supports_enregistres: "Media saved.", miroir_file: "Mirror", note_miroir_file: "This job is printed mirrored.", pool: "Pool", aucun_pool: "none", note_pool: "Same pool name on identical machines (same model, same roll width): a print sent to the pool goes to the first ready one, provided the same media is loaded.", pool_nom: (p) => `pool "${p}"`, note_reglages_echange: "Saved presets: export them all for another server, or import those of an export.", exporter_reglages: "Export presets", importer_reglages: "Import presets", doublon: "If the name exists", doublon_renommer: "rename (\"name 2\")", doublon_ecraser: "overwrite", reglages_importes: (n) => `Presets imported: ${n}.`, exporter_paquet: "Export", note_exporter_paquet: "One file with this media, its modes and the presets that use it (no ICC profile).", importer_paquet: "Import a media package", paquet_importe: "Media package imported.", nom: "Name", support_mode_aucun: "— resolution set by hand —", note_support_mode: "The mode sets the rendering resolution; the media links to the price list.", support_defaut: "— default price —",
     prix_de_revient: "Estimated cost price (ink + media)", matiere: (n, m2) => `${n}: ${m2} m² of media`, encre: "Ink", ml_m2: "ml/m² at 100 %", prix_litre: "€ / litre", autres_encres: "All others",
     support_m2: "Media when none chosen (€ / m²)", enregistrer: "Save", tarifs_enregistres: "Rates saved.", export_csv: "Export consumption (CSV)",
     note_tarifs: "Starting values, to be replaced by the workshop's own. Cartridge size and price, when entered, set the price per litre. An empty box takes the “All others” row.",
     estimation: (m2, ml, total, encre, support) => `${m2} m² · ink ${ml} ml · ≈ €${total} (ink €${encre}, media €${support})`,
+    journal_titre: "Print log", journal_vide: "No print in the log.",
+    note_journal: "Each finished print: estimated ink (dots laid by the driver × droplet volume of the mode, correction factor applied) and real ink read from the printer. The printer only gives ink to the nearest % of a pouch: a drop is shared between the prints made since the previous one, and a print that sees none shows \"< 7 ml\". Length: page → measured, and the waste (lead-in, margins).",
+    j_date: "Date", j_machine: "Machine", j_travail: "Job", j_support: "Media", j_mode: "Mode", j_operateur: "Operator", j_surface: "Area", j_longueur: "Length", j_estimee: "Estimated ink", j_reelle: "Real ink", j_ecart: "Gap", j_cout: "Ink cost",
+    j_longueur_val: (p, r, g) => `${p} → ${r} mm (waste ${g} mm)`, non_calculable: "not computable", non_mesure: "not measured",
+    note_non_calculable: "Continuous-tone plates (folder output): the screening is not ours, the ink cannot be computed.",
+    csv_par_impression: "CSV report per print", csv_par_jour: "CSV report per day",
+    retention_jours: "Retention (days)", note_retention: "Older prints leave the log (90 days by default). Jobs and the queue do not depend on it.",
+    purger_journal: "Purge the log", question_purge: "Keep the prints of how many last days? (0: erase all)", journal_purge: (n) => `Log purged: ${n} print(s) removed.`, conso_enregistree: "Consumption settings saved.",
+    facteurs_titre: "Estimated ink correction factors", note_facteurs: "Per machine, resolution and ink; 1 by default. Proposed = real ink / estimated ink over the last 10 measured prints; applied only once validated, to the following prints.",
+    facteur_propose: (p, r, e) => `${p.machine} · ${p.dpi} dpi · ${p.encre}: proposed ${p.valeur} (current ${p.actuel}, ${p.impressions} print(s): ${r} ml measured for ${e} ml estimated)`,
+    facteur_applique: (f) => `${f.machine} · ${f.dpi} dpi · ${f.encre}: ${f.valeur}`, conso_appliquer: "Apply", remettre_a_un: "Reset to 1",
+    aucun_facteur: "Nothing to propose: prints through the direct driver, with SNMP readings, are needed.",
+    releve_sortie: (e, l) => `Measured: ink ${e}${l ? `, media ${l}` : ""}`,
     aucune_sortie: "Nothing queued.", historique: "History", archive: (n) => `Archive (${n})`, ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
       format_inconnu: "Unknown format: send a PDF, AI or SVG file.",
@@ -921,6 +953,7 @@ const textes = {
       planche_rendue_a_la_file: "Abandoned sheet: its jobs went back to the queue. Redoing it would print them twice; \"Print now\" on the nest in progress makes a new one.",
       sortie_sur_une_planche: "This page is on a sheet not yet printed: redoing it would print it twice.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
+      consommation_invalide: "Invalid consumption settings: retention 1 to 3650 days, factors 0 to 10, once each.",
       pool_incoherent: "Inconsistent pool: free id-like name, machines of the same model and roll width.",
       support_different: "The pool machines do not have the same loaded media: load the same media, or duplicate the machine.",
       paquet_invalide: "Invalid media package.",
@@ -1193,7 +1226,7 @@ function afficherEditeurSupports() {
   const f = $("editeur-supports"), lignes = el("div", { style: "display: grid; gap: 8px" });
   const ligne = (x = { nom: "", encres: ["OR", "LK", "BK", "C", "M", "Y", "R", "LC", "LM"], modes: [{ nom: "720 × 720 · 8 passes", dpi: [720, 720], passes: 8 }] }) => {
     const champ = (nom, valeur, attrs = {}) => el("input", { name: nom, value: valeur ?? "", ...attrs });
-    const modes = x.modes.map((m) => `${m.nom} = ${m.dpi[0]} dpi / ${m.passes}`).join(" ; ");
+    const modes = x.modes.map((m) => `${m.nom} = ${m.dpi[0]} dpi / ${m.passes}${m.gouttes_pl ? ` / ${m.gouttes_pl.join("-")} pL` : ""}`).join(" ; ");
     const r = el("div", { className: "ligne bas ligne-support" },
       el("label", {}, T().nom, champ("s_nom", x.nom, { style: "width: 12em" })),
       el("label", { title: T().note_numero_machine }, T().numero_machine, champ("s_numero", x.numero_machine, { type: "number", min: 0, max: 255, style: "width: 5em" })),
@@ -1226,9 +1259,11 @@ $("editeur-supports").addEventListener("submit", async (e) => {
     // « Nom = 720 dpi / 8 ; Autre = 360 dpi / 4 » : un mode connu par son nom garde son identifiant.
     const modes = v("s_modes").split(";").map((t) => t.trim()).filter(Boolean).map((t) => {
       const [nom, reste = ""] = t.split("=").map((x) => x.trim());
-      const [dpi, passes] = reste.split("/").map((x) => parseInt(x, 10));
+      const [dpi, passes, gouttes = ""] = reste.split("/");
       const ancien = anciens.find((m) => m.nom === nom);
-      return { id: ancien?.id ?? null, nom, dpi: [dpi || 720, dpi || 720], passes: passes || 1, chauffage_c: ancien?.chauffage_c ?? null };
+      // Volumes de goutte (roadmap 6.9) : « 5-10-15 pL », trois nombres ou rien.
+      const pl = (gouttes.match(/[0-9]+(?:[.,][0-9]+)?/g) || []).map((x) => +x.replace(",", "."));
+      return { id: ancien?.id ?? null, nom, dpi: [parseInt(dpi, 10) || 720, parseInt(dpi, 10) || 720], passes: parseInt(passes, 10) || 1, chauffage_c: ancien?.chauffage_c ?? null, gouttes_pl: pl.length === 3 ? pl : null };
     });
     return { id: r.dataset.uuid || null, machine: "epson", nom: v("s_nom"), numero_machine: v("s_numero") === "" ? null : +v("s_numero"), laize_mm: v("s_laize") === "" ? null : +v("s_laize"), encres: v("s_encres").split(/\s+/).filter(Boolean), modes };
   });
@@ -1541,6 +1576,7 @@ function appliquerLangue() {
   afficherEditeurMachines();
   if (media || erreurMedia) afficherMedia();
   afficherTarifs();
+  afficherJournal();
   remplirSupports();
   afficherSession();
   majPlanche();
@@ -3050,7 +3086,8 @@ function afficherFile() {
           ...ficheEnBref(s.fiche).map((x) => el("span", { className: "meta" }, x)),
           s.fiche?.echeance ? el("span", { className: `badge${echue(s.fiche) ? " echec" : ""}` }, T().echeance_le(jour(s.fiche.echeance))) : null,
           el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
-          s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null),
+          s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null,
+          s.consommation ? el("span", { className: "meta" }, releveDeSortie(s.consommation)) : null),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
       el("div", { className: "actions" }, ...(s.archivee ? actionsArchive : actionsPossibles[s.etat]).map((a) => bouton(T().actions[a], () =>
         (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
@@ -3129,6 +3166,63 @@ function afficherMedia() {
     z.replaceChildren(el("p", { className: code === "media_non_configure" ? "meta" : "erreur", style: "margin: 0" },
       code === "media_non_configure" ? T().media_non_configure : texteErreur(code, erreurMedia?.detail)), el("div", { className: "ligne" }, bouton(T().relire, chargerMedia)));
   }
+}
+
+/** Encre et support relevés pendant une sortie (roadmap 6.1) ; rien vu : « < 7 ml ». */
+function releveDeSortie(c) {
+  const ml = Object.entries(c.encres_pc).reduce((a, [n, pc]) => a + pc * (c.seuil_ml[n] || 0), 0);
+  const seuil = Math.max(0, ...Object.values(c.seuil_ml));
+  return T().releve_sortie(ml > 0 ? `${nombre(ml, 0)} ml` : `< ${nombre(seuil, 0)} ml`, c.longueur_mm != null ? `${nombre(c.longueur_mm, 0)} mm` : "");
+}
+
+/** Journal des impressions (roadmap 6.4) : estimé et réel côte à côte (6.5) ; rétention,
+ *  purge et facteurs de correction (6.6) réservés à l'administrateur. */
+let journalImpressions = [], reglagesConso = null;
+async function chargerJournal() {
+  const lire = (url, defaut) => fetch(url).then((r) => (r.ok ? r.json() : defaut)).catch(() => defaut);
+  [journalImpressions, reglagesConso] = await Promise.all([lire("/api/consommation/journal", []), lire("/api/consommation/reglages", null)]);
+  afficherJournal();
+}
+async function enregistrerConso(r) {
+  const { proposes, ...reglages } = r;
+  if (await api("/api/consommation/reglages", json("POST", reglages))) { document.activeElement?.blur(); dire(T().conso_enregistree); chargerJournal(); }
+}
+function afficherJournal() {
+  const z = $("journal");
+  if (z.contains(document.activeElement)) return;
+  const parEncre = (m) => Object.entries(m || {}).map(([n, v]) => `${n} ${nombre(v, 2)} ml`).join(" · ");
+  const ligne = (l) => {
+    const estime = l.estime_total_ml == null ? el("span", { title: T().note_non_calculable }, T().non_calculable) : el("span", { title: parEncre(l.estime_ml) }, `${nombre(l.estime_total_ml, 2)} ml`);
+    const reel = l.reel_total_ml == null ? T().non_mesure : el("span", { title: parEncre(l.reel_ml) }, l.sous_seuil_ml != null ? `< ${nombre(l.sous_seuil_ml, 0)} ml` : `${nombre(l.reel_total_ml, 2)} ml`);
+    const longueur = l.longueur_reelle_mm != null ? T().j_longueur_val(nombre(l.longueur_prevue_mm, 0), nombre(l.longueur_reelle_mm, 0), nombre(l.gache_mm, 0)) : `${nombre(l.longueur_prevue_mm, 0)} mm`;
+    const cout = l.estime.cout_encres == null ? T().non_calculable : `${nombre(l.estime.cout_encres, 2)} € ${l.estime.ttc ? T().ttc : T().ht}`;
+    return el("tr", {}, ...[date(l.fin), catalogue.find((m) => m.id === l.machine)?.nom || l.machine, `${l.nom} · ${T().page(l.page)}`, l.support || "—", l.mode || "—", l.operateur || "—",
+      `${nombre(l.surface_m2, 3)} m²`, longueur, estime, reel, l.ecart_pct == null ? "—" : `${l.ecart_pct > 0 ? "+" : ""}${nombre(l.ecart_pct, 0)} %`, cout].map((x) => el("td", {}, x)));
+  };
+  const entete = el("tr", {}, ...["j_date", "j_machine", "j_travail", "j_support", "j_mode", "j_operateur", "j_surface", "j_longueur", "j_estimee", "j_reelle", "j_ecart", "j_cout"].map((k) => el("th", {}, T()[k])));
+  const table = journalImpressions.length ? el("div", { className: "table-journal" }, el("table", {}, el("thead", {}, entete), el("tbody", {}, ...journalImpressions.map(ligne)))) : el("p", { className: "vide-liste", style: "margin: 0" }, T().journal_vide);
+  const liens = el("div", { className: "ligne" }, el("a", { href: "/api/rapports/consommation.csv", download: "consommation.csv" }, T().csv_par_impression), el("a", { href: "/api/rapports/consommation.csv?par=jour", download: "consommation-par-jour.csv" }, T().csv_par_jour));
+  const r = reglagesConso;
+  let admin = null;
+  if (r) {
+    const retention = el("input", { type: "number", min: 1, max: 3650, value: r.retention_jours, style: "width: 6em" });
+    const facteurs = (r.facteurs || []).map((f) => el("div", { className: "ligne" }, el("span", {}, T().facteur_applique({ ...f, valeur: nombre(f.valeur, 3) })),
+      bouton(T().remettre_a_un, () => enregistrerConso({ ...r, facteurs: r.facteurs.filter((x) => x !== f) }))));
+    const proposes = (r.proposes || []).filter((p) => p.valeur !== p.actuel).map((p) => el("div", { className: "ligne" }, el("span", {}, T().facteur_propose({ ...p, valeur: nombre(p.valeur, 3), actuel: nombre(p.actuel, 3) }, nombre(p.reel_ml, 1), nombre(p.estime_ml, 1))),
+      bouton(T().conso_appliquer, () => enregistrerConso({ ...r, facteurs: [...r.facteurs.filter((x) => !(x.machine === p.machine && x.dpi === p.dpi && x.encre === p.encre)), { machine: p.machine, dpi: p.dpi, encre: p.encre, valeur: p.valeur }] }), "")));
+    admin = el("div", { className: "admin", style: "display: grid; gap: 8px" },
+      el("div", { className: "ligne bas" }, el("label", { title: T().note_retention }, T().retention_jours, retention),
+        bouton(T().enregistrer, () => enregistrerConso({ ...r, retention_jours: +retention.value }), ""),
+        bouton(T().purger_journal, async () => {
+          const garder = await demander(T().question_purge, { saisie: String(r.retention_jours) });
+          if (garder === null || garder.trim() === "" || isNaN(+garder)) return;
+          const p = await api("/api/consommation/journal/purger", json("POST", { jours: Math.max(0, Math.floor(+garder)) }));
+          if (p) { document.activeElement?.blur(); dire(T().journal_purge(p.retirees)); chargerJournal(); }
+        }, "discret danger")),
+      el("strong", {}, T().facteurs_titre), el("p", { className: "meta", style: "margin: 0" }, T().note_facteurs),
+      ...facteurs, ...proposes, r.proposes?.length ? null : el("p", { className: "meta", style: "margin: 0" }, T().aucun_facteur));
+  }
+  z.replaceChildren(...[el("p", { className: "meta", style: "margin: 0" }, T().note_journal), table, liens, admin].filter(Boolean));
 }
 
 /** Catalogue des machines ; les capacités suivent le modèle (comme côté serveur). */
@@ -3325,6 +3419,7 @@ function toutCharger() {
   chargerProfils().then(chargerReglages);
   chargerTarifs();
   chargerSysteme();
+  chargerJournal();
   rafraichir();
 }
 appliquerLangue();
@@ -3333,6 +3428,7 @@ montrer(location.hash.slice(1));
 toutCharger();
 setInterval(rafraichir, 3000);
 setInterval(chargerSysteme, 60000);
+setInterval(chargerJournal, 60000);
 </script>
 </body>
 </html>

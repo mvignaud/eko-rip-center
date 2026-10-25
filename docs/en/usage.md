@@ -743,8 +743,11 @@ media of the members differ: load the same media, or duplicate the machine.
 **System > Epson media** (administrator): the media catalogue. For each: **Name**, **No.
 in the printer** (the media number stored in the Epson, which lets the loaded media be
 recognised), **Roll width (mm)**, **Inks**, and its print **Modes**, written
-`Name = 720 dpi / 8 passes; Other = 360 dpi / 4`. Prices stay in “Ink and media costs”,
-linked by name. Each media and each mode keeps a stable identifier: renaming does not
+`Name = 720 dpi / 8 passes; Other = 360 dpi / 4`. An optional third field gives the small,
+medium and large droplet volume for the estimated ink: `Other = 360 dpi / 4 / 5-10-15 pL`.
+Without it, 5-10-15 pL: starting values chosen by us (in proportion to the three dot
+sizes of the screening), to calibrate. Prices stay in “Ink and media costs”, linked by
+name. Each media and each mode keeps a stable identifier: renaming does not
 change it.
 
 **When sending**, **Media and print mode**: the mode sets the rendering resolution; the
@@ -806,11 +809,65 @@ media).
 (20 % by default) and the basis of the **cost price shown** (excl. VAT by default); the
 card, each page's estimate and the CSV (`base` column) follow.
 
-**Export consumption (CSV)** downloads one row per printed page (UTC date, job, page,
-area, ml per ink, costs), `;` separator, dot decimals, for a spreadsheet or E-KO ERP.
+**Export consumption (CSV)** downloads the print log report (see below).
 
 Known limit: without a known roll width, the media counted is the page area, not the
 roll length used across the whole roll width.
+
+## Print log
+
+**System > Print log**: each finished print, most recent first (the last 200): **Date**,
+**Machine**, **Job** (and its page), **Media**, **Mode**, **Operator** (the one on the job
+ticket), **Area**, **Length**, **Estimated ink**, **Real ink**, **Gap** and **Ink cost**.
+Hovering the estimated or real ink gives the detail per ink (BK, C, LC…).
+
+**Real ink**: through the direct driver, the server reads the Epson (SNMP) just before
+sending and just after the print ends, on top of the reading every minute. What dropped
+between the two is stored in the output; the queue shows it on the line of the finished
+output: `Measured: ink 14 ml, media 574 mm`. The printer only gives ink to the nearest %
+of a pouch (1 % of 700 ml = 7 ml):
+
+- a print that sees no drop shows **< 7 ml**, never 0;
+- a 1 % drop happened since the previous change of the same channel: it is shared
+  between all the prints made since, in proportion to their estimated ink (failing that,
+  their duration). A single figure stays approximate; the sum over a period is reliable.
+  A drop outside any print (cleaning) is given to nobody; a new pouch is not consumption.
+
+The pouch size is the cartridge entered in “Ink and media costs” (row of the ink, of its
+plate or **All others**), 700 ml otherwise. Without an SNMP address, the real ink is
+**not measured**.
+
+**Length**: `369 → 574 mm (waste 204 mm)`: the page length, the length measured on the
+roll between start and end, and the difference (lead-in, empty head, margins).
+🏭 To be checked at the workshop on a real print (24/10: a 369.8 mm job, 574 mm measured,
+i.e. 204 mm of waste).
+
+**Estimated ink**: through the direct driver, the dots laid by the screening are counted
+ink by ink and size by size; *ml = Σ dots × droplet volume of the mode* (see “Media and
+print modes”), times the validated correction factor. A folder output (continuous-tone
+plates, screened by other software) is **not computable**: no ink and no ink cost,
+rather than a false figure. The estimate shown on the job card before printing remains
+the one from the preview coverage.
+
+**CSV reports**: **CSV report per print** (one row per print) and **CSV report per day**
+(one row per day and machine), with a last `total` row equal to the sum of the rows.
+`;` separator, comma decimals, columns always the same and in the same order: identity
+(UTC date, machine, job, page, number of prints, media, mode, dpi, operator), area,
+planned and real lengths, waste, estimation method (`points` or `non calculable`),
+estimated and real ink side by side (totals, `sous_seuil`, gap in %, then an
+`<ink>_estime_ml` / `<ink>_reel_ml` pair for each of the 11 catalogue inks), costs and
+VAT basis. The address `/api/rapports/consommation.csv?depuis=&jusqua=` (Unix seconds)
+limits it to a period.
+
+**Retention (days)** (administrator): older prints leave the log, 90 days by default;
+the purge runs every 5 minutes. **Purge the log** asks how many last days to keep (0:
+erase all). Jobs and the queue are never touched. The printer readings stay.
+
+**Estimated ink correction factors** (administrator): one factor per machine, resolution
+and ink, 1 by default. The server proposes *real ink ÷ estimated ink* over the last 10
+measured prints of each combination; **Apply** validates it, **Reset to 1** removes it.
+It only applies to the following prints: the log keeps each one's factor. Retention and
+factors are in the configuration backup.
 
 ## Not there yet
 
