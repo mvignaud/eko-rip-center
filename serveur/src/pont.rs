@@ -1257,8 +1257,14 @@ mod tests {
         let e = f.lock().unwrap();
         assert_eq!(seqs(&e.recus), (1..=total).collect::<Vec<_>>(), "dans l'ordre, sans trou ni doublon");
         assert!(e.lots.iter().all(|&n| n <= LOT), "{:?}", e.lots);
+        // Instants pris à la réception : une requête retardée en route (machine chargée) rapproche
+        // la suivante. D'où 250 ms de marge par écart, et sur l'étendue entière (qui ne dépend
+        // que du retard de la première et de la dernière) ; une rafale sans espacement donne
+        // des écarts de quelques ms.
         let ecarts: Vec<Duration> = e.instants.windows(2).map(|w| w[1] - w[0]).collect();
-        assert!(ecarts.iter().all(|&x| x >= Duration::from_millis(990)), "une requête par seconde au plus : {ecarts:?}");
+        let marge = Duration::from_millis(250);
+        assert!(ecarts.iter().all(|&x| x + marge >= INTERVALLE), "une requête par seconde au plus : {ecarts:?}");
+        assert!(ecarts.iter().sum::<Duration>() + marge >= INTERVALLE * ecarts.len() as u32, "{ecarts:?}");
         for (i, t) in e.instants.iter().enumerate() {
             assert!(e.instants[i..].iter().take_while(|&&u| u - *t < Duration::from_secs(60)).count() <= 60);
         }
