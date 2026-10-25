@@ -15,6 +15,20 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.23.0] — 2026-10-25
+
+Vue Production : clic droit, colonnes, glisser-déposer. Publiée sans la CI.
+
+### Ajouté
+- **Clic droit** : sur une ligne (actions de file de la sortie, puis celles de la barre
+  d'outils), sur une machine (n'afficher qu'elle, son état, relire l'Epson, la configurer),
+  sur l'en-tête d'un tableau (colonnes à montrer ou masquer, gardées par le poste).
+- **Glisser-déposer** dans « À imprimer » : une sortie en attente ou suspendue prend la place
+  d'une autre de la même machine.
+
+*Added: right-click menus (rows, machines, headers), column choice kept per computer,
+drag and drop to reorder the queue.*
+
 ## [0.22.0] — 2026-10-25
 
 Écran principal refait : une seule vue de production. Publiée sans la CI ; l'écran est servi
