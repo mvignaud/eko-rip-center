@@ -204,9 +204,29 @@ changements et **Page entière (sans mosaïque)** revient à une seule page.
 
 ## Suivre les travaux
 
-Chaque travail est une ligne du tableau : vignette, nom, état, format, pages, support,
-prix de revient et date. États : *En attente*, *En cours*, *Prêt*, *Échec*. Un clic sur
-la ligne l'ouvre dans l'inspecteur :
+Vue **Production** (barre du haut ; **Système** à côté), en trois zones :
+
+- **Machines** (en haut) : une ligne par machine, avec son état (prête, en cours et la
+  sortie qui passe, injoignable), le support chargé, les niveaux d'encre de l'Epson, le
+  nombre de sorties en file et la durée restante. Un clic n'affiche que cette machine ; un
+  second clic les remet toutes (même choix que **Afficher**).
+- **À imprimer** : les sorties en file, dans l'ordre de la file, puis les travaux pas encore
+  envoyés (« Non envoyé »). Colonnes : vignette, nom, état, machine, format, échéance,
+  durée, date. Les planches en préparation s'affichent au-dessus. La colonne de boutons à
+  gauche agit sur la sortie choisie : **En tête**, **Monter**, **Descendre**,
+  **Suspendre**, **Reprendre**, **Annuler**, **Refaire**, **Restaurer**, **Retirer** (un
+  bouton grisé ne s'applique pas à son état).
+- **Imprimés** (repliable, avec leur nombre) : les sorties finies, en échec ou annulées, la
+  plus récente d'abord, avec l'heure de fin et le relevé d'encre et de support.
+
+À droite, l'**inspecteur** a quatre onglets : **Travail** (le détail ci-dessous),
+**Machine** (support, encres, chauffages, alertes de la machine affichée ou de la sortie
+choisie), **Réglages** (déposer un fichier sur un réglage l'importe avec ce réglage ; un
+clic ouvre l'import avec lui) et **Journal** (les messages de l'écran, le plus récent
+d'abord). Sur un écran de moins de 1100 px, l'inspecteur passe sous les tableaux ; sous
+1360 px, les outils de la barre gardent leur symbole et leur nom passe en bulle.
+
+Un clic sur une ligne ouvre son travail dans l'inspecteur :
 
 - une partie par page, avec le nombre de tracés de découpe ;
 - un bouton **Imprimer sur…** par imprimante (et par pool) et **Découper sur…** par
@@ -240,14 +260,13 @@ décochée, la page n'entre ni dans la file ni dans une planche d'imbrication (b
 imprimée**) ; une sortie déjà en file attend avec la raison **Page exclue**. Recochée, elle
 revient. Une page décochée ne se met pas en file à la main non plus.
 
-La barre de recherche filtre par nom ; les pastilles **Tous**, **En cours**,
-**Prêt** et **Échec** filtrent par état. **Relancer** refait un travail en échec ;
+La barre de recherche filtre par nom, n° de commande, client ou société. **Relancer** refait un travail en échec ;
 **Supprimer** efface un travail fini (refusé tant qu'une sortie l'attend dans la file).
 
 ## File d'attente
 
-Vue **File d'attente** : une colonne par machine. Le nombre de sorties à passer
-s'affiche dans l'onglet.
+La file de chaque machine se lit dans la vue **Production** (zone **À imprimer**, filtrée
+par machine). Le nombre de sorties à passer s'affiche sur le bouton **Production**.
 
 - **Mutoh Kona 1650** : la découpe part par le port du plotter (`/dev/kona`).
 - **Epson SC-S80600** : en connexion **Réseau (TCP)**, port 9100, le RIP imprime par son

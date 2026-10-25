@@ -45,34 +45,40 @@
   /* Coque : barre d'outils, latéral, contenu, inspecteur */
   body { height: 100vh; display: grid; grid-template-rows: auto auto 1fr; overflow: hidden; }
   .barre { background: var(--barre); border-bottom: 1px solid var(--trait); display: flex; align-items: center; gap: 6px; padding: 6px 12px; flex-wrap: wrap; }
-  .logo { font-weight: 700; font-size: 15px; letter-spacing: .2px; margin-right: 12px; white-space: nowrap; }
+  .logo { font-weight: 700; font-size: 15px; letter-spacing: .2px; margin-right: 6px; white-space: nowrap; }
   .logo span { color: var(--accent); }
-  .outil { background: transparent; color: var(--texte); border: 1px solid transparent; border-radius: 6px; padding: 5px 10px; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+  .outil { background: transparent; color: var(--texte); border: 1px solid transparent; border-radius: 6px; padding: 5px 8px; white-space: nowrap; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
   .outil:hover:not(:disabled) { background: var(--accent-doux); border-color: var(--trait); }
   .outil.principal { background: var(--accent); color: #fff; }
   .outil .ico { font-size: 15px; line-height: 1; }
   .sep { width: 1px; align-self: stretch; background: var(--trait); margin: 2px 4px; }
-  .barre .recherche { margin-left: auto; width: 220px; }
+  .barre .recherche { margin-left: auto; width: 170px; min-width: 110px; flex: 0 1 170px; }
+  /* Écran moyen : les outils gardent leur symbole, le libellé passe en bulle. */
+  @media (max-width: 1360px) { .barre .outil:has(.ico) span:not(.ico) { display: none; } }
   .outils { display: flex; align-items: center; gap: 6px; }
   .bandeau { margin: 0; padding: 8px 16px; background: var(--echec-doux); color: var(--echec); }
-  .coque { display: grid; grid-template-columns: 220px 1fr; min-height: 0; }
-  .lateral { background: var(--lateral); border-right: 1px solid var(--trait); overflow: auto; padding: 10px 0; }
-  .lateral h3 { margin: 14px 14px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--doux); }
-  .lateral button.entree { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 8px; background: none; color: var(--texte); border-radius: 0; padding: 7px 14px; font-weight: 400; text-align: left; }
-  .lateral button.entree:hover { background: var(--accent-doux); }
-  .lateral button.entree[aria-current=page] { background: var(--ligne-sel); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
-  .lateral .pastille { font-size: 11px; border-radius: 10px; padding: 0 7px; background: var(--attente-doux); color: var(--attente); }
-  .lateral .pastille.active { background: var(--accent); color: #fff; }
+  .coque { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .vues { display: flex; gap: 2px; }
+  .vues .outil[aria-current=page] { background: var(--ligne-sel); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 600; }
+  .pastille { font-size: 11px; border-radius: 10px; padding: 0 7px; background: var(--attente-doux); color: var(--attente); }
+  .pastille.active { background: var(--accent); color: #fff; }
   .teinte { display: inline-block; width: 1.2em; height: 1.2em; border-radius: 3px; border: 1px solid var(--bord, #8884); vertical-align: middle; }
-  .lateral .sous { display: block; font-size: 11px; color: var(--doux); font-weight: 400; }
   main { min-height: 0; overflow: auto; padding: 14px; }
   .vue-travaux { display: grid; grid-template-columns: 1fr 380px; gap: 14px; align-items: start; min-height: 100%; }
   @media (max-width: 1100px) { .vue-travaux { grid-template-columns: 1fr; } }
-  @media (max-width: 760px) { .coque { grid-template-columns: 1fr; } .lateral { display: none; } body { overflow: auto; height: auto; } }
+  @media (max-width: 760px) { body { overflow: auto; height: auto; } }
   .panneau { background: var(--carte); border: 1px solid var(--trait); border-radius: 8px; box-shadow: var(--ombre); }
   .panneau > h2, .panneau > header { margin: 0; padding: 10px 14px; border-bottom: 1px solid var(--trait); font-size: 13px; }
   .corps { padding: 14px; display: grid; gap: 12px; }
-  #inspecteur { position: sticky; top: 0; max-height: calc(100vh - 90px); overflow: auto; }
+  .colonne-inspecteur { position: sticky; top: 0; max-height: calc(100vh - 90px); overflow: auto; }
+  .onglets { display: flex; gap: 2px; border-bottom: 1px solid var(--trait); padding: 0 8px; position: sticky; top: 0; background: var(--carte); z-index: 1; }
+  .onglet { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 9px 10px; color: var(--doux); font-weight: 600; }
+  .onglet[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+  .onglet-corps { padding: 12px 16px; display: grid; gap: 10px; }
+  .cible-reglage { border: 1px dashed var(--trait); border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+  .cible-reglage.survol { border-color: var(--accent); background: var(--accent-doux); }
+  .journal-ecran { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+  .journal-ecran li { padding: 4px 0; border-bottom: 1px solid var(--trait); }
   /* Tableau des travaux */
   table.tableau { width: 100%; border-collapse: collapse; font-size: 13px; }
   .tableau th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--doux); padding: 8px 10px; border-bottom: 1px solid var(--trait); position: sticky; top: 0; background: var(--carte); }
@@ -110,6 +116,7 @@
   #message.erreur { background: var(--echec); color: #fff; }
 
   /* Liste des travaux */
+  .filtres label { display: inline-flex; gap: 6px; align-items: center; }
   .filtres { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
   .filtres input[type=search] { flex: 1; min-width: 180px; }
   .puce { background: var(--carte); color: var(--doux); border: 1px solid var(--trait); border-radius: 999px; padding: 4px 12px; font-weight: 400; }
@@ -139,7 +146,16 @@
   #planche .corps { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: end; }
 
   /* File d'attente */
-  .vue-file { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)); gap: 16px; align-items: start; }
+  .bandeau-machines { margin-bottom: 14px; }
+  .bandeau-machines tr[aria-current=true] { background: var(--accent-doux); }
+  .bandeau-machines .encres { display: flex; gap: 3px; }
+  .bandeau-machines .jauge-encre { height: 22px; width: 8px; }
+  .bandeau-machines .encre span { display: none; }
+  .zone-file { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; align-items: start; }
+  .actions-file { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
+  .actions-file button { width: 34px; height: 30px; padding: 0; font-size: 15px; }
+  .zone-imprimes { margin-top: 14px; }
+  .zone-imprimes > summary { padding: 10px 16px; cursor: pointer; font-weight: 600; }
   .sortie { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 10px 16px; border-top: 1px solid var(--trait); }
   .sortie:first-child { border-top: 0; }
   @media (max-width: 560px) { .sortie { grid-template-columns: 1fr; } }
@@ -231,6 +247,11 @@
 <body>
 <header class="barre">
   <div class="logo">E-KO <span>RIP</span> Center</div>
+  <nav class="vues" aria-label="Navigation">
+    <button type="button" class="outil" data-vue="travaux"><span data-t="nav_production"></span><span id="compte-file" class="pastille active" hidden></span></button>
+    <button type="button" class="outil" data-vue="systeme"><span data-t="nav_systeme"></span></button>
+  </nav>
+  <span class="sep"></span>
   <button type="button" class="outil principal" id="ouvrir-importer"><span class="ico">＋</span><span data-t="importer"></span></button>
   <span class="sep"></span>
   <button type="button" class="outil" id="o-imprimer"><span class="ico">⎙</span><span data-t="o_imprimer"></span></button>
@@ -417,18 +438,6 @@
 </dialog>
 
 <div class="coque">
-  <aside class="lateral">
-    <nav aria-label="Navigation">
-      <h3 data-t="vues"></h3>
-      <button type="button" class="entree" data-vue="travaux"><span data-t="nav_travaux"></span><span id="compte-travaux" class="pastille"></span></button>
-      <button type="button" class="entree" data-vue="file"><span data-t="nav_file"></span><span id="compte-file" class="pastille active" hidden></span></button>
-      <button type="button" class="entree" data-vue="systeme"><span data-t="nav_systeme"></span></button>
-    </nav>
-    <h3 data-t="machines_titre"></h3>
-    <div id="liste-machines"></div>
-    <h3 data-t="reglages_titre"></h3>
-    <div id="liste-reglages"></div>
-  </aside>
 <main>
   <section id="vue-travaux" class="vue-travaux">
     <div>
@@ -450,19 +459,28 @@
         </div>
         <div id="imposition" style="padding: 0 16px 16px"></div>
       </section>
+      <section id="bandeau-machines" class="panneau bandeau-machines"></section>
+      <div id="nids"></div>
       <div class="filtres">
-        <button type="button" class="puce" data-filtre="" aria-pressed="true" data-t="filtre_tous"></button>
-        <button type="button" class="puce" data-filtre="actif" aria-pressed="false" data-t="filtre_actifs"></button>
-        <button type="button" class="puce" data-filtre="termine" aria-pressed="false" data-t="termine"></button>
-        <button type="button" class="puce" data-filtre="echec" aria-pressed="false" data-t="echec"></button>
+        <strong data-t="a_imprimer"></strong>
+        <label class="meta"><span data-t="afficher_pour"></span> <select id="filtre-machine"></select></label>
         <label class="meta"><span data-t="tri"></span> <select id="tri"><option value="date" data-t="tri_date"></option><option value="echeance" data-t="tri_echeance"></option></select></label>
       </div>
-      <section id="travaux" class="panneau" aria-live="polite"></section>
+      <div class="zone-file">
+        <div id="actions-file" class="actions-file" role="toolbar"></div>
+        <section id="travaux" class="panneau" aria-live="polite"></section>
+      </div>
+      <details id="zone-imprimes" class="panneau zone-imprimes"><summary id="titre-imprimes"></summary><div id="imprimes"></div></details>
     </div>
-    <aside id="inspecteur" class="panneau"></aside>
+    <aside class="panneau colonne-inspecteur">
+      <nav id="onglets-inspecteur" class="onglets" role="tablist"></nav>
+      <div id="inspecteur" role="tabpanel"></div>
+      <div id="onglet-machine" class="onglet-corps" role="tabpanel" hidden></div>
+      <div id="onglet-reglages" class="onglet-corps" role="tabpanel" hidden></div>
+      <div id="onglet-journal" class="onglet-corps" role="tabpanel" hidden></div>
+    </aside>
   </section>
 
-  <section id="vue-file" class="vue-file" hidden></section>
 
   <section id="vue-systeme" class="vue-systeme" hidden>
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
@@ -512,7 +530,7 @@ const textes = {
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
     laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, decouper_sur: (n) => `Découper sur ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} en file sur ${m}.`,
-    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nouveau_travail: "Nouveau travail",
+    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
     deposer_ici: "Déposer un fichier ici", fichier: "PDF, AI ou SVG — ou cliquer pour choisir", resolution: "Résolution", mode: "Mode",
     imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
     traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
@@ -787,7 +805,7 @@ const textes = {
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
     laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, decouper_sur: (n) => `Cut on ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} queued on ${m}.`,
-    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nouveau_travail: "New job",
+    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
     deposer_ici: "Drop a file here", fichier: "PDF, AI or SVG — or click to choose", resolution: "Resolution", mode: "Mode",
     imprimer: "Print (and cut)", decouper: "Cut only",
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
@@ -1071,7 +1089,12 @@ function bouton(texte, action, classe = "discret") {
 }
 /** Message flottant, commun à toutes les vues ; une erreur reste plus longtemps. */
 let minuterieMessage;
+/** Journal de l'écran (onglet Journal) : les 200 derniers messages, le plus récent d'abord. */
+const journalEcran = [];
+/** Onglet ouvert de l'inspecteur (vue Production). */
+let ongletInspecteur = "travail";
 function dire(texte, erreur = false) {
+  if (texte) { journalEcran.unshift({ le: Date.now(), texte, erreur }); journalEcran.length = Math.min(journalEcran.length, 200); if (ongletInspecteur === "journal") afficherOngletJournal(); }
   msg.className = erreur ? "erreur" : "";
   msg.textContent = texte;
   msg.hidden = !texte;
@@ -1153,7 +1176,7 @@ $("deconnexion").addEventListener("click", async () => {
 });
 
 // Navigation entre les vues ; la vue choisie est gardée dans l'adresse (#file…).
-const vues = ["travaux", "file", "systeme"];
+const vues = ["travaux", "systeme"];
 function montrer(vue) {
   if (!vues.includes(vue)) vue = "travaux";
   vues.forEach((v) => { $(`vue-${v}`).hidden = v !== vue; });
@@ -1716,6 +1739,8 @@ function appliquerLangue() {
   document.querySelectorAll("[data-t-placeholder]").forEach((n) => { n.placeholder = T()[n.dataset.tPlaceholder]; });
   document.querySelectorAll("[data-t-title]").forEach((n) => { n.title = T()[n.dataset.tTitle]; });
   document.querySelectorAll("[data-t-aria]").forEach((n) => { n.setAttribute("aria-label", T()[n.dataset.tAria]); });
+  // Outils de la barre : leur libellé en bulle (il est masqué sur un écran moyen).
+  document.querySelectorAll(".barre .outil [data-t]").forEach((n) => { n.closest(".outil").title = n.textContent; });
   boutonLangue.textContent = T().autre;
   remplirProfils();
   remplirReglages();
@@ -2720,26 +2745,23 @@ function glisserLes(pt) {
 }
 
 // --- Travaux ---
-let travaux = [], sorties = [], filtre = "", imbrications = [];
+let travaux = [], sorties = [], imbrications = [];
+/** Vue Production : machine affichée (vide = toutes) et sortie choisie dans les tableaux. */
+let filtreMachine = "", sortieChoisie = null;
 $("recherche").addEventListener("input", () => afficherTravaux());
-document.querySelectorAll("[data-filtre]").forEach((b) => b.addEventListener("click", () => {
-  filtre = b.dataset.filtre;
-  document.querySelectorAll("[data-filtre]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
-  afficherTravaux();
-}));
+$("filtre-machine").addEventListener("change", () => { filtreMachine = $("filtre-machine").value; afficherTravaux(); });
 const saisieDansListe = () => $("inspecteur").contains(document.activeElement) && document.activeElement.tagName === "INPUT";
 
 async function rafraichir() {
   const lire = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   // Planches en préparation (roadmap 5.4) : lues seulement pour la file, s'il y a lieu.
-  const avecNid = vueCourante() === "file" && catalogue.some((m) => (m.imbrication?.strategie || "un_par_un") !== "un_par_un");
+  const avecNid = vueCourante() === "travaux" && catalogue.some((m) => (m.imbrication?.strategie || "un_par_un") !== "un_par_un");
   const [t, s, n] = await Promise.all([lire("/api/travaux"), lire("/api/file"), avecNid ? lire("/api/imbrications") : Promise.resolve([])]);
   if (t) travaux = t;
   if (n) imbrications = n;
   if (s) { signalerFins(sorties, s); sorties = s; }
   const aPasser = sorties.filter((x) => ["en_attente", "en_cours", "suspendue"].includes(x.etat)).length;
   $("compte-file").hidden = !aPasser; $("compte-file").textContent = aPasser;
-  $("compte-travaux").textContent = travaux.length;
   afficherLateral();
   // Reconstruire seulement si quelque chose a changé : un clic en cours ne doit pas tomber
   // sur un bouton remplacé entre l'appui et le relâchement.
@@ -2772,47 +2794,179 @@ function signalerFins(avant, apres) {
 document.addEventListener("click", () => { try { if (window.Notification?.permission === "default") Notification.requestPermission(); } catch {} }, { once: true });
 function afficherVue() {
   if (vueCourante() === "travaux") afficherTravaux();
-  if (vueCourante() === "file") afficherFile();
 }
 
 let selectionne = null;
 const travailSelectionne = () => travaux.find((t) => t.id === selectionne);
 
+/** Lignes de la vue Production : « à imprimer » (sorties en file, dans l'ordre de la file,
+ *  puis travaux jamais envoyés) et « imprimés » (sorties finies, la plus récente d'abord). */
+function lignesProduction() {
+  const q = $("recherche").value.trim().toLowerCase();
+  const trouve = (t, s) => !q || [s?.nom, t?.nom, t?.fiche?.commande, t?.fiche?.client, t?.fiche?.societe].some((x) => x && x.toLowerCase().includes(q));
+  const pool = catalogue.find((m) => m.id === filtreMachine)?.pool;
+  const aImprimer = [], imprimes = [];
+  for (const s of sorties) {
+    const t = travaux.find((x) => x.id === s.travail);
+    if ((filtreMachine && s.machine !== filtreMachine && s.machine !== pool) || !trouve(t, s)) continue;
+    (aPasser(s) ? aImprimer : imprimes).push({ t, s });
+  }
+  if (!filtreMachine) aImprimer.push(...travaux.filter((t) => trouve(t) && !sorties.some((s) => s.travail === t.id)).map((t) => ({ t })));
+  // Tri par échéance (roadmap 5.6) : la plus proche d'abord, sans échéance ensuite.
+  const echeance = (x) => x.t?.fiche?.echeance ?? x.s?.fiche?.echeance ?? Infinity;
+  if ($("tri").value === "echeance") aImprimer.sort((a, b) => echeance(a) - echeance(b));
+  imprimes.sort((a, b) => (b.s.fin || b.s.cree_le) - (a.s.fin || a.s.cree_le));
+  return { aImprimer, imprimes };
+}
+
 function afficherTravaux() {
   // Pas de reconstruction pendant une saisie dans l'inspecteur (nombre de copies…).
   if (saisieDansListe()) return;
-  const q = $("recherche").value.trim().toLowerCase();
-  const visibles = travaux.filter((t) => (!q || [t.nom, t.fiche?.commande, t.fiche?.client, t.fiche?.societe].some((x) => x && x.toLowerCase().includes(q)))
-    && (!filtre || (filtre === "actif" ? ["en_attente", "en_cours"].includes(t.statut) : t.statut === filtre)));
-  // Tri par échéance (roadmap 5.6) : la plus proche d'abord, sans échéance ensuite.
-  if ($("tri").value === "echeance") visibles.sort((a, b) => (a.fiche?.echeance ?? Infinity) - (b.fiche?.echeance ?? Infinity));
-  if (!visibles.length) {
-    liste.replaceChildren(el("p", { className: "vide-liste" }, T().aucun_travail));
-  } else {
-    const tete = el("tr", {}, ...["", T().col_nom, T().col_etat, T().col_format, T().col_pages, T().col_support, T().col_prix, T().col_echeance, T().col_date].map((x, k) => el("th", { className: k >= 4 && k !== 5 ? "num" : "" }, x)));
-    liste.replaceChildren(el("table", { className: "tableau" }, el("thead", {}, tete), el("tbody", {}, ...visibles.map(ligneTravail))));
-  }
+  const choix = $("filtre-machine");
+  const options = [["", T().toutes_machines], ...catalogue.map((m) => [m.id, m.nom])];
+  if (choix.options.length !== options.length || [...choix.options].some((o, i) => o.textContent !== options[i][1])) choix.replaceChildren(...options.map(([v, n]) => el("option", { value: v }, n)));
+  choix.value = filtreMachine;
+  afficherBandeau();
+  $("nids").replaceChildren(...imbrications.filter((g) => !filtreMachine || g.machine === filtreMachine).map((g) =>
+    el("section", { className: "panneau", style: "margin-bottom: 14px" }, el("header", {}, el("strong", {}, catalogue.find((m) => m.id === g.machine)?.nom || g.machine)), panneauNid(g))));
+  const { aImprimer, imprimes } = lignesProduction();
+  const tete = (cols) => el("thead", {}, el("tr", {}, ...cols.map(([x, num]) => el("th", { className: num ? "num" : "" }, x))));
+  liste.replaceChildren(aImprimer.length
+    ? el("table", { className: "tableau" }, tete([["", 0], [T().col_nom, 0], [T().col_etat, 0], [T().col_machine, 0], [T().col_format, 1], [T().col_echeance, 1], [T().col_duree, 1], [T().col_date, 1]]), el("tbody", {}, ...aImprimer.map((x) => lignePro(x, false))))
+    : el("p", { className: "vide-liste" }, T().rien_a_imprimer));
+  $("titre-imprimes").textContent = T().imprimes(imprimes.length);
+  $("imprimes").replaceChildren(imprimes.length
+    ? el("table", { className: "tableau" }, tete([["", 0], [T().col_nom, 0], [T().col_etat, 0], [T().col_machine, 0], [T().col_fin, 1], [T().col_releve, 0]]), el("tbody", {}, ...imprimes.slice(0, 200).map((x) => lignePro(x, true))))
+    : el("p", { className: "vide-liste" }, T().aucun_imprime));
+  afficherActionsFile();
   afficherInspecteur();
+  afficherOnglets();
   majOutils();
 }
 
-function ligneTravail(t) {
-  const base = `/api/travaux/${t.id}/pages/1`, pret = t.statut === "termine" && t.pages.length;
-  const image = pret ? (t.mode === "decouper" ? `${base}/decoupe.svg` : `${base}/apercu.png`) : null;
+/** Inspecteur à onglets (à droite) : le travail choisi, la machine, les réglages (dépôt d'un
+ *  fichier sur un réglage = import avec ce réglage), le journal de l'écran. */
+function afficherOnglets() {
+  const z = $("onglets-inspecteur");
+  // Pas de reconstruction pendant une saisie (support chargé, champs du travail).
+  if (z.parentElement.contains(document.activeElement) && ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+  z.replaceChildren(...["travail", "machine", "reglages", "journal"].map((o) => {
+    const b = el("button", { type: "button", className: "onglet", role: "tab" }, T().onglets[o]);
+    b.setAttribute("aria-selected", String(o === ongletInspecteur));
+    b.addEventListener("click", () => { ongletInspecteur = o; afficherOnglets(); });
+    return b;
+  }));
+  $("inspecteur").hidden = ongletInspecteur !== "travail";
+  for (const o of ["machine", "reglages", "journal"]) $(`onglet-${o}`).hidden = o !== ongletInspecteur;
+  if (ongletInspecteur === "machine") afficherOngletMachine();
+  if (ongletInspecteur === "reglages") afficherOngletReglages();
+  if (ongletInspecteur === "journal") afficherOngletJournal();
+}
+/** Machine affichée : celle du filtre, sinon celle de la sortie choisie, sinon la première. */
+function afficherOngletMachine() {
+  const id = filtreMachine || sorties.find((x) => x.id === sortieChoisie)?.machine || catalogue[0]?.id;
+  const m = catalogue.find((x) => x.id === id);
+  if (!m) { $("onglet-machine").replaceChildren(el("p", { className: "vide-liste" }, T().aucune_machine)); return; }
+  const actives = sorties.filter((s) => (s.machine === m.id || (m.pool && s.machine === m.pool)) && aPasser(s));
+  $("onglet-machine").replaceChildren(el("div", { className: "nom" }, m.nom),
+    el("p", { className: "meta", style: "margin: 0" }, [T().laize_mm(Math.round(m.laize_mm)), T().en_file(actives.length), m.connexion?.type ? T().connexions[m.connexion.type] : null].filter(Boolean).join(" · ")),
+    ...(m.id === "epson" ? contenuMedia() : []));
+}
+function afficherOngletReglages() {
+  const cibles = reglages.map((r) => {
+    const c = el("div", { className: "cible-reglage" }, el("div", { className: "nom" }, r.nom), el("div", { className: "meta" }, r.demande.mode === "decouper" ? T().decouper : `${r.demande.dpi} dpi`));
+    const choisir = () => { choixReglage.value = r.nom; appliquerDemande(r.demande); $("supprimer-reglage").hidden = false; };
+    c.addEventListener("click", () => { choisir(); $("importer").showModal(); });
+    c.addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) { e.preventDefault(); c.classList.add("survol"); } });
+    c.addEventListener("dragleave", () => c.classList.remove("survol"));
+    c.addEventListener("drop", async (e) => {
+      if (!e.dataTransfer?.files.length) return;
+      e.preventDefault(); e.stopPropagation();
+      c.classList.remove("survol"); document.body.classList.remove("glisse");
+      choisir();
+      for (const f of e.dataTransfer.files) await envoyerFichier(f);
+      rafraichir();
+    });
+    return c;
+  });
+  $("onglet-reglages").replaceChildren(el("p", { className: "meta", style: "margin: 0" }, T().note_onglet_reglages),
+    ...(cibles.length ? cibles : [el("p", { className: "vide-liste" }, T().aucun_reglage_enregistre)]));
+}
+function afficherOngletJournal() {
+  $("onglet-journal").replaceChildren(journalEcran.length
+    ? el("ul", { className: "journal-ecran" }, ...journalEcran.map((j) => el("li", { className: j.erreur ? "erreur" : "" }, el("span", { className: "meta" }, `${new Date(j.le).toLocaleTimeString(locale())} `), j.texte)))
+    : el("p", { className: "vide-liste" }, T().journal_ecran_vide));
+}
+
+/** Une ligne : une sortie (avec son travail), ou un travail pas encore envoyé. */
+function lignePro({ t, s }, fini) {
+  const n = s?.page || 1, base = t ? `/api/travaux/${t.id}/pages/${n}` : null, pret = t && t.statut === "termine" && t.pages.length >= n;
+  const image = pret ? (t.mode === "decouper" || s?.operation === "decoupe" ? `${base}/decoupe.svg` : `${base}/apercu.png`) : null;
   const mini = el("div", { className: image ? "mini" : "mini vide" });
   if (image) mini.style.backgroundImage = `url("${image}")`;
-  const p = t.pages[0];
-  const format = p && p.largeur_mm ? `${Math.round(p.largeur_mm)} × ${Math.round(p.hauteur_mm)}` : "—";
-  const prix = t.prix_de_revient > 0 ? `${nombre(t.prix_de_revient, 2)} €` : "—";
-  const etat = el("td", {}, el("span", { className: `badge ${t.statut}` }, T()[t.statut]), t.alertes?.length ? el("span", { className: "badge alerte", style: "margin-left: 4px" }, "⚠") : null);
-  const ligne = el("tr", { ariaSelected: String(t.id === selectionne) },
-    el("td", {}, mini), el("td", {}, el("div", { className: "nom" }, t.nom), el("div", { className: "meta" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`, ...ficheEnBref(t.fiche).map((x) => ` · ${x}`))),
-    etat, el("td", { className: "num" }, format), el("td", { className: "num" }, String(t.pages.length || "—")),
-    el("td", {}, t.support || "—"), el("td", { className: "num" }, prix), el("td", { className: "num" + (echue(t.fiche) ? " erreur" : "") }, t.fiche?.echeance ? jour(t.fiche.echeance) : "—"), el("td", { className: "num" }, date(t.cree_le)));
-  ligne.setAttribute("aria-selected", String(t.id === selectionne));
-  ligne.addEventListener("click", () => { selectionne = t.id; afficherTravaux(); });
-  ligne.addEventListener("dblclick", () => { selectionne = t.id; if (t.format === "pdf" && t.statut !== "en_cours") ouvrirEdition(t); });
+  const m = s && catalogue.find((x) => x.id === s.machine);
+  const page = t?.pages[n - 1];
+  const format = page && page.largeur_mm ? `${Math.round(page.largeur_mm)} × ${Math.round(page.hauteur_mm)}` : "—";
+  const fiche = t?.fiche || s?.fiche;
+  const etat = el("td", {}, s
+    ? el("span", { className: `badge ${s.etat}` }, etatSortie(s))
+    : el("span", { className: `badge ${t.statut}` }, T()[t.statut]),
+    !s && t.statut === "termine" ? el("span", { className: "meta" }, ` ${T().non_envoye}`) : null,
+    s?.raison_attente && s.raison_attente !== "attente_operateur" && T().raisons[s.raison_attente] ? el("span", { className: "badge echec", style: "margin-left: 4px", title: T().raisons[s.raison_attente][1] }, T().raisons[s.raison_attente][0]) : null,
+    t?.alertes?.length ? el("span", { className: "badge alerte", style: "margin-left: 4px" }, "⚠") : null);
+  const nom = el("td", {}, el("div", { className: "nom" }, s?.nom || t.nom),
+    el("div", { className: "meta" }, t ? (t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`) : "", s && (t?.pages.length || 1) > 1 ? ` · ${T().page(n)}` : "", s?.couche ? ` · ${T().couche_de_sortie(s.couche)}` : "", s?.planche_nom ? ` · ${T().sur_planche(s.planche_nom)}` : "", ...ficheEnBref(fiche).map((x) => ` · ${x}`)));
+  const machine = el("td", {}, m ? m.nom : "—", m?.modele_imprime && m?.modele_decoupe ? el("span", { className: "meta" }, ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}`) : null);
+  const cellules = fini
+    ? [el("td", {}, mini), nom, etat, machine, el("td", { className: "num" }, s.fin ? date(s.fin) : "—"), el("td", { className: "meta" }, s.consommation ? releveDeSortie(s.consommation) : s.code_erreur ? texteErreur(s.code_erreur, s.erreur) : "")]
+    : [el("td", {}, mini), nom, etat, machine, el("td", { className: "num" }, format),
+      el("td", { className: "num" + (echue(fiche) ? " erreur" : "") }, fiche?.echeance ? jour(fiche.echeance) : "—"),
+      el("td", { className: "num" }, s?.duree_min > 0 ? duree(s.duree_min) : t?.duree_impression_min > 0 ? duree(t.duree_impression_min) : "—"),
+      el("td", { className: "num" }, date(s?.cree_le || t.cree_le))];
+  const ligne = el("tr", {}, ...cellules);
+  ligne.setAttribute("aria-selected", String(s ? s.id === sortieChoisie : !sortieChoisie && t.id === selectionne));
+  ligne.addEventListener("click", () => { selectionne = t?.id ?? null; sortieChoisie = s?.id ?? null; afficherTravaux(); });
+  if (t) ligne.addEventListener("dblclick", () => { selectionne = t.id; if (t.format === "pdf" && t.statut !== "en_cours") ouvrirEdition(t); });
   return ligne;
+}
+
+/** Colonne d'actions de la file (à gauche du tableau) : agit sur la sortie choisie. */
+const SYMBOLES_FILE = { en_tete: "⤒", monter: "▲", descendre: "▼", suspendre: "⏸", reprendre: "▶", annuler: "✕", refaire: "↻", restaurer: "⤺", retirer: "🗑" };
+function afficherActionsFile() {
+  const s = sorties.find((x) => x.id === sortieChoisie);
+  const possibles = s ? (s.archivee ? actionsArchive : actionsPossibles[s.etat] || []) : [];
+  $("actions-file").replaceChildren(...Object.entries(SYMBOLES_FILE).map(([a, symbole]) => {
+    const b = bouton(symbole, () => (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret");
+    b.title = T().actions[a];
+    b.setAttribute("aria-label", T().actions[a]);
+    b.disabled = !possibles.includes(a);
+    return b;
+  }));
+}
+
+/** Bandeau des machines : état, support chargé, encres (Epson), file ; un clic n'affiche que
+ *  cette machine, un second clic les remet toutes. */
+function afficherBandeau() {
+  const lignes = catalogue.map((m) => {
+    const actives = sorties.filter((s) => (s.machine === m.id || (m.pool && s.machine === m.pool)) && aPasser(s));
+    const enCours = actives.find((s) => s.etat === "en_cours");
+    const reste = actives.reduce((a, s) => a + (s.duree_min || 0), 0);
+    const epson = m.id === "epson";
+    const injoignable = epson && erreurMedia && erreurMedia.code !== "media_non_configure";
+    const etat = enCours ? `${T().etats.en_cours} · ${enCours.nom}` : injoignable ? T().injoignable : actives.length ? T().en_file(actives.length) : T().prete;
+    const charge = epson ? supportsEpson.find((x) => x.id === chargeEpson?.support_uuid)?.nom || (media ? T().laize_mm(Math.round(media.largeur_mm)) : "—") : T().laize_mm(Math.round(m.laize_mm));
+    const e = epson ? etatImprimante?.epson : null;
+    const encres = e?.encres?.length ? el("div", { className: "encres" }, ...e.encres.map(([nom, pc]) =>
+      el("div", { className: "encre", title: `${nom} ${pc} %` }, el("div", { className: "jauge-encre" }, el("div", { className: pc <= 15 ? "niveau-encre bas" : "niveau-encre", style: `height: ${pc}%` })), el("span", {}, nom)))) : "—";
+    const ligne = el("tr", {}, el("td", {}, el("div", { className: "nom" }, m.nom)), el("td", { className: injoignable ? "erreur" : "" }, etat), el("td", {}, charge), el("td", {}, encres),
+      el("td", { className: "num" }, String(actives.length)), el("td", { className: "num" }, reste > 0 ? duree(reste) : "—"));
+    ligne.setAttribute("aria-current", String(filtreMachine === m.id));
+    ligne.addEventListener("click", () => { filtreMachine = filtreMachine === m.id ? "" : m.id; afficherTravaux(); });
+    return ligne;
+  });
+  $("bandeau-machines").replaceChildren(el("table", { className: "tableau" },
+    el("thead", {}, el("tr", {}, ...[T().col_machine, T().col_etat, T().col_support_charge, T().col_encres, T().col_file, T().col_duree].map((x, k) => el("th", { className: k >= 4 ? "num" : "" }, x)))),
+    el("tbody", {}, ...lignes)));
 }
 
 /** Panneau d'inspection : le travail choisi dans le tableau, en détail. */
@@ -3215,46 +3369,6 @@ const actionsPossibles = {
 /** Découpe archivée (roadmap 4.12) : se restaure, ou se supprime. */
 const actionsArchive = ["restaurer", "retirer"];
 const aPasser = (s) => ["en_cours", "en_attente", "suspendue"].includes(s.etat);
-function afficherFile() {
-  // L'historique ouvert reste ouvert d'un rafraîchissement à l'autre.
-  const ouvert = [...$("vue-file").querySelectorAll("details")].map((d) => d.open);
-  const colonnes = catalogue.map((m) => {
-    const machine = m.id;
-    // Une sortie envoyée au pool apparaît chez chaque membre tant qu'aucun ne l'a prise.
-    const toutes = sorties.filter((s) => s.machine === machine || (m.pool && s.machine === m.pool));
-    const miennes = toutes.filter((s) => !s.archivee), archive = toutes.filter((s) => s.archivee).reverse();
-    const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
-    const ligne = (s) => el("div", { className: "sortie" },
-      el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}${s.couche ? ` · ${T().couche_de_sortie(s.couche)}` : ""}`)),
-        el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, etatSortie(s)),
-          // Travail miroité (roadmap 3.B3) : se voit dans la file avant d'imprimer.
-          travaux.find((x) => x.id === s.travail)?.edition?.miroir ? el("span", { className: "badge", title: T().note_miroir_file }, T().miroir_file) : null,
-          s.raison_attente && s.raison_attente !== "attente_operateur" && T().raisons[s.raison_attente] ? el("span", { className: "badge echec", title: T().raisons[s.raison_attente][1] }, T().raisons[s.raison_attente][0]) : null,
-          s.planche_nom ? el("span", { className: "meta" }, T().sur_planche(s.planche_nom)) : null,
-          ...ficheEnBref(s.fiche).map((x) => el("span", { className: "meta" }, x)),
-          s.fiche?.echeance ? el("span", { className: `badge${echue(s.fiche) ? " echec" : ""}` }, T().echeance_le(jour(s.fiche.echeance))) : null,
-          el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
-          s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null,
-          s.consommation ? el("span", { className: "meta" }, releveDeSortie(s.consommation)) : null),
-        s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
-      el("div", { className: "actions" }, ...(s.archivee ? actionsArchive : actionsPossibles[s.etat]).map((a) => bouton(T().actions[a], () =>
-        (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
-    const enCours = miennes.filter(aPasser);
-    const reste = enCours.reduce((a, s) => a + (s.duree_min || 0), 0);
-    const nids = imbrications.filter((g) => g.machine === machine);
-    return el("section", { className: "panneau" },
-      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), reste > 0 ? el("span", { className: "meta" }, ` · ${T().reste(duree(reste))}`) : null,
-        m.imbrication && m.imbrication.strategie !== "un_par_un" ? el("span", { className: "meta" }, ` · ${T().strategie} : ${T().strategies[m.imbrication.strategie]}`) : null,
-        m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
-      ...nids.map(panneauNid),
-      el("div", {}, ...(enCours.length ? enCours.map(ligne) : [el("p", { className: "vide-liste" }, T().aucune_sortie)])),
-      finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null,
-      archive.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().archive(archive.length)), el("div", {}, ...archive.map(ligne))) : null);
-  });
-  $("vue-file").replaceChildren(...colonnes);
-  $("vue-file").querySelectorAll("details").forEach((d, i) => { d.open = !!ouvert[i]; });
-}
-
 /** Planche en préparation dans la file (roadmap 5.4) : aperçu (le PDF produit, en lien),
  *  compteur de travaux, longueur et remplissage ; chaque page se décoche (roadmap 5.12). */
 function panneauNid(g) {
@@ -3295,7 +3409,10 @@ function utiliserMedia(dire_le) {
   majPlanche();
 }
 function afficherMedia() {
-  const z = $("media");
+  $("media").replaceChildren(...contenuMedia());
+}
+/** État de l'Epson (support, encres, chauffages, alertes, support chargé) : Système et onglet Machine. */
+function contenuMedia() {
   if (media) {
     const e = etatImprimante?.epson;
     const encres = e?.encres?.length ? el("div", { className: "encres" }, ...e.encres.map(([nom, pc]) =>
@@ -3304,16 +3421,15 @@ function afficherMedia() {
       e?.chauffages?.length ? T().chauffages(e.chauffages.map(([t]) => `${t} °C`).join(" · ")) : null].filter(Boolean);
     const c = consommation, encresConso = c ? Object.entries(c.encres).filter(([, v]) => v).map(([n, v]) => `${n} ${v} %`).join(" · ") : "";
     const conso = c?.releves > 1 ? el("p", { className: "meta", style: "margin: 0" }, T().conso_7j(c.metres.toFixed(1), encresConso)) : null;
-    z.replaceChildren(...[el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
+    return [el("p", { style: "margin: 0" }, T().media_charge(media.largeur_mm, media.nom)),
       infos.length ? el("p", { className: "meta", style: "margin: 0" }, infos.join(" — ")) : null, encres, conso,
       etatImprimante?.alertes?.length ? el("p", { className: "meta", style: "margin: 0" }, T().alertes_imprimante(etatImprimante.alertes.join(", "))) : null,
       ligneCharge(),
-      el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia))].filter(Boolean));
-  } else {
-    const code = erreurMedia?.code;
-    z.replaceChildren(el("p", { className: code === "media_non_configure" ? "meta" : "erreur", style: "margin: 0" },
-      code === "media_non_configure" ? T().media_non_configure : texteErreur(code, erreurMedia?.detail)), el("div", { className: "ligne" }, bouton(T().relire, chargerMedia)));
+      el("div", { className: "ligne" }, bouton(T().utiliser_laize, () => utiliserMedia(true)), bouton(T().relire, chargerMedia))].filter(Boolean);
   }
+  const code = erreurMedia?.code;
+  return [el("p", { className: code === "media_non_configure" ? "meta" : "erreur", style: "margin: 0" },
+    code === "media_non_configure" ? T().media_non_configure : texteErreur(code, erreurMedia?.detail)), el("div", { className: "ligne" }, bouton(T().relire, chargerMedia))];
 }
 
 /** Encre et support relevés pendant une sortie (roadmap 6.1) ; rien vu : « < 7 ml ». */
@@ -3389,21 +3505,9 @@ async function chargerMachines() {
   derniereEmpreinte = "";
   rafraichir();
 }
+/** Les réglages ont changé : l'onglet Réglages de l'inspecteur suit. */
 function afficherLateral() {
-  $("liste-machines").replaceChildren(...catalogue.map((m) => {
-    const actives = sorties.filter((s) => s.machine === m.id && ["en_attente", "en_cours", "suspendue"].includes(s.etat));
-    const enCours = actives.some((s) => s.etat === "en_cours");
-    const b = el("button", { type: "button", className: "entree" },
-      el("span", {}, m.nom, el("span", { className: "sous" }, enCours ? T().etats.en_cours : T().laize_mm(Math.round(m.laize_mm)))),
-      el("span", { className: actives.length ? "pastille active" : "pastille" }, String(actives.length)));
-    b.addEventListener("click", () => { montrer("file"); setTimeout(() => $(`file-${m.id}`)?.scrollIntoView({ block: "start" }), 50); });
-    return b;
-  }));
-  $("liste-reglages").replaceChildren(...(reglages.length ? reglages.map((r) => {
-    const b = el("button", { type: "button", className: "entree" }, el("span", {}, r.nom));
-    b.addEventListener("click", () => { choixReglage.value = r.nom; appliquerDemande(r.demande); $("supprimer-reglage").hidden = false; $("importer").showModal(); });
-    return b;
-  }) : [el("p", { className: "meta", style: "margin: 0 14px" }, T().aucun_reglage_enregistre)]));
+  if (ongletInspecteur === "reglages") afficherOngletReglages();
 }
 
 /** Éditeur du catalogue (Système > Machines). */
@@ -3576,6 +3680,8 @@ montrer(location.hash.slice(1));
 toutCharger();
 setInterval(rafraichir, 3000);
 setInterval(chargerSysteme, 60000);
+// État des machines du bandeau (encres, support) : relu chaque minute.
+setInterval(async () => { await chargerMedia(); if (vueCourante() === "travaux") afficherTravaux(); }, 60000);
 setInterval(chargerJournal, 60000);
 </script>
 </body>

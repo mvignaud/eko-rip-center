@@ -194,9 +194,28 @@ and **Whole page (no tiling)** goes back to a single page.
 
 ## Following jobs
 
-Each job is a row of the table: thumbnail, name, state, size, pages, media, cost price
-and date. States: *Queued*, *In progress*, *Ready*, *Failed*. Click a row to open it in
-the inspector:
+**Production** view (top bar; **System** next to it), in three areas:
+
+- **Machines** (top): one row per machine, with its state (ready, printing and the output
+  running, unreachable), loaded media, the Epson's ink levels, the number of queued outputs
+  and the time left. A click shows only that machine; a second click shows them all again
+  (same choice as **Show**).
+- **To print**: the queued outputs, in queue order, then the jobs not sent yet ("Not
+  sent"). Columns: thumbnail, name, state, machine, size, due date, time, date. Nests in
+  preparation show above. The button column on the left acts on the chosen output: **To
+  top**, **Up**, **Down**, **Hold**, **Resume**, **Cancel**, **Redo**, **Restore**,
+  **Remove** (a greyed button does not apply to its state).
+- **Printed** (collapsible, with their count): finished, failed or cancelled outputs,
+  latest first, with the end time and the ink and media reading.
+
+On the right, the **inspector** has four tabs: **Job** (the detail below), **Machine**
+(media, inks, heaters, alerts of the machine shown or of the chosen output), **Settings**
+(drop a file on a setting to import it with that setting; a click opens the import with
+it) and **Log** (the screen's messages, latest first). Below 1100 px, the inspector moves
+under the tables; below 1360 px, the bar's tools keep their symbol and their name goes to
+a tooltip.
+
+Click a row to open its job in the inspector:
 
 - one part per page, with its number of cut paths;
 - a **Print on…** button per printer (and per pool) and **Cut on…** per cutter, which add
@@ -227,14 +246,13 @@ unticked, the page goes into neither the queue nor a nesting sheet (**Not printe
 badge); an output already queued waits with the reason **Page excluded**. Ticked again,
 it comes back. An unticked page cannot be queued by hand either.
 
-The search bar filters by name; the **All**, **In progress**, **Ready** and **Failed**
-chips filter by state. **Retry** redoes a failed job; **Delete** removes a finished job
+The search bar filters by name, order number, customer or company. **Retry** redoes a failed job; **Delete** removes a finished job
 (refused while an output is waiting for it in the queue).
 
 ## Queue
 
-**Queue** view: one column per machine. The number of outputs still to run shows on
-the tab.
+Each machine's queue reads in the **Production** view (**To print** area, filtered by
+machine). The number of outputs still to run shows on the **Production** button.
 
 - **Mutoh Kona 1650**: the cut goes out through the cutter port (`/dev/kona`).
 - **Epson SC-S80600**: with a **Network (TCP)** connection, port 9100, the RIP prints
