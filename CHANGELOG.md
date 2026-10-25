@@ -15,6 +15,15 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.25.0] — 2026-10-25
+
+### Ajouté
+- **Progression de l'envoi** : un cadre (bas droite) donne le nom du fichier, une barre, les
+  Mo envoyés, le pourcentage et le temps restant, puis indique la conversion côté serveur ;
+  un gros fichier (plusieurs Go) ne laisse plus l'écran sans réaction.
+
+*Added: upload progress panel (file name, bar, MB, %, time left, then server-side conversion).*
+
 ## [0.24.0] — 2026-10-25
 
 Images en entrée. Publiée sans la CI.
