@@ -4162,6 +4162,11 @@ async fn plaque(State(etat): State<Partage>, Chemin((id, page, nom)): Chemin<(Uu
 mod tests {
     use super::*;
 
+    /// Les réglages de découpe sont globaux au processus : les essais qui les installent
+    /// passent l'un après l'autre (sinon la restauration d'une sauvegarde efface les préfixes
+    /// qu'un autre essai vient d'ajouter).
+    static DECOUPE_GLOBALE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
     #[test]
     fn purge_des_vieux_travaux_inactifs() {
         let jour = 86_400;
@@ -4426,6 +4431,7 @@ mod tests {
         /// Sauvegarde puis restauration sur un serveur neuf ; une sauvegarde fausse n'écrit rien.
         #[tokio::test]
         async fn sauvegarde_et_restauration_de_la_configuration() {
+            let _g = DECOUPE_GLOBALE.lock().await;
             let (a, b) = (etat("sauve-a"), etat("sauve-b"));
             let icc = std::fs::read(std::fs::read_dir(couleur::tests::profils_ghostscript()).unwrap().flatten().map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "icc")).unwrap()).unwrap();
             std::fs::create_dir_all(&a.config.profils).unwrap();
@@ -6505,6 +6511,7 @@ mod tests {
         /// alors qu'une découpeuse est choisie → alerte qui nomme les tons du fichier.
         #[tokio::test]
         async fn prefixes_reglables_et_prefixe_absent_signale() {
+            let _g = super::DECOUPE_GLOBALE.lock().await;
             let e = etat("prefixes");
             let mut avec_die = decoupe::Reglages::default();
             // Les préfixes sont globaux au processus : la liste d'origine reste dedans, les
