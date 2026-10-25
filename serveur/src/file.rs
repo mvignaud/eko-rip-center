@@ -128,16 +128,17 @@ impl File {
     /// Première sortie en attente de `machine` que `prete` accepte (les autres gardent leur
     /// raison d'attente et leur place) ; aucune si la machine a déjà une sortie en cours.
     pub fn prochaine_si(&self, machine: &str, prete: impl Fn(&Sortie) -> bool) -> Option<usize> {
-        self.prochaine_dans(machine, None, prete)
+        self.prochaine_dans(machine, &[], prete)
     }
 
-    /// Comme `prochaine_si`, en prenant aussi les sorties envoyées au `pool` de la machine
-    /// (roadmap 1.7), dans l'ordre de la file.
-    pub fn prochaine_dans(&self, machine: &str, pool: Option<&str>, prete: impl Fn(&Sortie) -> bool) -> Option<usize> {
+    /// Comme `prochaine_si`, en prenant aussi les sorties envoyées sous un autre nom de la
+    /// machine (`aussi` : son pool, roadmap 1.7, ses variantes, roadmap 4.15), dans l'ordre de
+    /// la file.
+    pub fn prochaine_dans(&self, machine: &str, aussi: &[&str], prete: impl Fn(&Sortie) -> bool) -> Option<usize> {
         if self.sorties.iter().any(|s| s.machine == machine && s.etat == Etat::EnCours) {
             return None;
         }
-        self.sorties.iter().position(|s| (s.machine == machine || pool == Some(s.machine.as_str())) && s.etat == Etat::EnAttente && prete(s))
+        self.sorties.iter().position(|s| (s.machine == machine || aussi.contains(&s.machine.as_str())) && s.etat == Etat::EnAttente && prete(s))
     }
 
     pub fn active_pour(&self, travail: Uuid) -> bool {

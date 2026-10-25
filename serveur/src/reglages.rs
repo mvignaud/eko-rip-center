@@ -138,6 +138,9 @@ pub struct Demande {
     /// Étendre l'image près des tracés de découpe (roadmap 4.10), sur les plaques rendues.
     #[serde(default)]
     pub etendre_coupe: Option<crate::coupe::Etendre>,
+    /// Fond sous les repères (roadmap 4.15), pour un support sombre ou transparent.
+    #[serde(default)]
+    pub fond_reperes: Option<reperage::FondReperes>,
 }
 
 fn vrai() -> bool {
@@ -164,7 +167,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None }
     }
 }
 
@@ -180,6 +183,7 @@ impl Demande {
         self.blanc.verifier()?;
         self.edition.verifier()?;
         self.etendre_coupe.as_ref().map_or(Ok(()), crate::coupe::Etendre::verifier)?;
+        self.fond_reperes.as_ref().map_or(Ok(()), reperage::FondReperes::verifier)?;
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
         }

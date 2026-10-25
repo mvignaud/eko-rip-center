@@ -377,6 +377,16 @@
           </label>
           <p class="meta" style="margin: 0" data-t="note_blanc"></p>
         </div></details>
+        <details class="section"><summary data-t="fond_reperes"></summary><div>
+          <label class="case"><input type="checkbox" name="fond_reperes" value="oui"> <span data-t="fond_reperes_activer"></span></label>
+          <div class="deux">
+            <label><span data-t="fond_debord"></span> <input type="number" name="fond_debord_mm" value="3" min="0.5" max="13" step="0.1"></label>
+            <label><span data-t="fond_encre"></span> <select name="fond_encre"><option value="blanc" data-t="fond_blanc"></option><option value="cmjn" data-t="fond_cmjn"></option></select></label>
+          </div>
+          <label><span data-t="fond_cmjn_valeurs"></span> <input name="fond_cmjn" value="0 0 100 0" placeholder="0 0 100 0"></label>
+          <label class="case"><input type="checkbox" name="fond_aplat" value="oui"> <span data-t="fond_aplat"></span></label>
+          <p class="meta" style="margin: 0" data-t="note_fond_reperes"></p>
+        </div></details>
         <details class="section"><summary data-t="etendre"></summary><div>
           <label class="case"><input type="checkbox" name="etendre" value="oui"> <span data-t="etendre_activer"></span></label>
           <div class="deux">
@@ -578,6 +588,8 @@ const textes = {
     detourage: "Détourage automatique", note_detourage: "Analyse l'image rendue, retire le blanc autour et propose un contour de découpe (CutContour). Aperçu d'abord, puis « Accepter ». Un nouveau rendu l'efface.",
     det_seuil: "Seuil du blanc (1–255)", det_interieurs: "Supprimer les contours intérieurs", det_aire: "Supprimer les plus petits que (mm²)", det_lissage: "Lissage (0–5)", det_decalage: "Décalage vers l'extérieur (mm)",
     det_apercu: "Aperçu", det_accepter: "Accepter", det_retirer: "Retirer le détourage", det_contours: (n) => `${n} contour${n > 1 ? "s" : ""} proposé${n > 1 ? "s" : ""}`, det_present: (n) => `Détourage accepté : ${n} contour${n > 1 ? "s" : ""}.`, det_accepte: "Détourage accepté : fichiers de coupe refaits.", det_retire: "Détourage retiré.",
+    cintrage: "Compensation de cintrage", cintrage_activer: "Compenser le cintrage", cintrage_largeur: "Largeur du support (mm)", cintrage_debut: "Début (mm d'avance)", cintrage_fleche: "Flèche (mm)",
+    note_cintrage: "L'impression sort courbée (milieu en retard sur les bords) une fois les sécheurs chauds : la coupe suit. Courbe centrée sur la largeur du support, rien avant le début (compté depuis le haut de la page), installée sur 50 mm. À mesurer sur un tirage.",
     mise_enregistrer: "Enregistrer la mise en coupe", mise_enregistree: "Mise en coupe enregistrée : fichiers de coupe refaits.",
     couche_monter: "Monter", couche_descendre: "Descendre", couches_enregistrer: "Enregistrer les couches", couches_annuler: "Annuler", couches_modifiees: "Modifications non enregistrées.", couches_enregistrees: "Couches enregistrées : fichiers de coupe refaits.",
     note_couches_decoupe: "Une couche par nom de ton. L'ordre est l'ordre de coupe (mi-chair avant coupe à travers) ; le réglage qui porte le nom de la couche s'applique seul, sinon le premier de la découpeuse. Rien n'est gardé sans « Enregistrer ».",
@@ -587,6 +599,10 @@ const textes = {
     ancien_reglage_coupe: (n) => `Ancien réglage de coupe du travail entier : « ${n} ». Il va à la couche du même nom, ou à la seule couche ; sinon, le choisir couche par couche puis enregistrer.`,
     calques_non_imprimables: "Couper aussi les tracés des calques non imprimables",
     traces_ouverts: "Autoriser les tracés ouverts (évents de bâche)", apres_coupe: "Après coupe", apres_coupe_rien: "ne rien faire (historique)", apres_coupe_archiver: "archiver (restaurable)", apres_coupe_supprimer: "supprimer de la file",
+    dupliquer_variante: "Dupliquer (autre jeu de repères)", copie: "copie", jeu_reperes: "Jeu de repères", jeu_du_travail: "— celui du travail —", variante_de: (id) => `Variante de « ${id} ».`,
+    note_variante: "Même machine physique (connexion, réglages de coupe repris d'elle) avec son propre jeu de repères : un travail affecté à cette variante prend ces repères, et sa découpe passe par la machine d'origine.",
+    fond_reperes: "Fond sous les repères", fond_reperes_activer: "Imprimer un fond sous les repères (support sombre, transparent, réfléchissant)", fond_debord: "Débord autour des repères (mm)", fond_aplat: "Aplat de toute la zone des repères (hors image)", fond_encre: "Encre", fond_blanc: "Blanc (ton White)", fond_cmjn: "CMJN", fond_cmjn_valeurs: "C M J N (%)",
+    note_fond_reperes: "Les repères noirs sont imprimés dessus en surimpression : le fond reste aussi sous eux.",
     coupe_auto: "Couper dès l'arrivée", note_coupe_auto: "Décoché : chaque découpe arrive suspendue dans la file de la machine et part quand l'opérateur la reprend (« Couper maintenant »).", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
@@ -673,6 +689,8 @@ const textes = {
       mise_coupe_invalide: "Mise en coupe invalide : rotation 0, 90, 180 ou 270 ; échelle de 1 à 1000 % ; 1 à 100 copies par sens (1000 en tout) ; écart de 0 à 1000 mm ; décalage de 0 à 5 mm.",
       mise_decoupe_seule: "Miroir, échelle, copies et départ à l'origine : en découpe seule uniquement (la coupe ne suivrait plus l'impression).",
       etendre_invalide: "Étendre l'image près des tracés : largeur de 0,1 à 10 mm, seuil de 0 à 10 mm.",
+      variante_invalide: "Variante invalide : elle doit reprendre une découpeuse du catalogue qui n'est pas elle-même une variante.",
+      fond_reperes_invalide: "Fond sous les repères : débord de 0,5 à 13 mm, CMJN de 0 à 100 %.",
       detourage_invalide: "Détourage invalide : seuil de 1 à 255, aire minimale de 0 à 10 000 mm², lissage de 0 à 5, décalage de 0 à 20 mm.",
       detourage_impossible: "Détourage : seulement sur une page imprimée d'un PDF rendu (il faut une image à détourer).",
       prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
@@ -782,6 +800,8 @@ const textes = {
     detourage: "Auto contour", note_detourage: "Analyses the rendered image, removes the white around it and proposes a cut contour (CutContour). Preview first, then \"Accept\". A new rendering erases it.",
     det_seuil: "White threshold (1–255)", det_interieurs: "Remove inner contours", det_aire: "Remove those smaller than (mm²)", det_lissage: "Smoothing (0–5)", det_decalage: "Outward offset (mm)",
     det_apercu: "Preview", det_accepter: "Accept", det_retirer: "Remove the auto contour", det_contours: (n) => `${n} contour${n > 1 ? "s" : ""} proposed`, det_present: (n) => `Auto contour accepted: ${n} contour${n > 1 ? "s" : ""}.`, det_accepte: "Auto contour accepted: cut files rebuilt.", det_retire: "Auto contour removed.",
+    cintrage: "Bowing compensation", cintrage_activer: "Compensate media bowing", cintrage_largeur: "Media width (mm)", cintrage_debut: "Start (mm of feed)", cintrage_fleche: "Sag (mm)",
+    note_cintrage: "The print comes out bowed (middle behind the edges) once the dryers are hot: the cut follows. Curve centred on the media width, nothing before the start (counted from the top of the page), set in over 50 mm. Measure it on a print.",
     mise_enregistrer: "Save cut placement", mise_enregistree: "Cut placement saved: cut files rebuilt.",
     couche_monter: "Up", couche_descendre: "Down", couches_enregistrer: "Save layers", couches_annuler: "Cancel", couches_modifiees: "Unsaved changes.", couches_enregistrees: "Layers saved: cut files rebuilt.",
     note_couches_decoupe: "One layer per spot colour name. The order is the cutting order (kiss cut before through cut); the setting named like the layer applies by itself, else the cutter's first one. Nothing is kept without \"Save\".",
@@ -791,6 +811,10 @@ const textes = {
     ancien_reglage_coupe: (n) => `Former cut setting of the whole job: “${n}”. It goes to the layer of the same name, or to the only layer; otherwise choose it layer by layer, then save.`,
     calques_non_imprimables: "Also cut the paths of non-printing layers",
     traces_ouverts: "Allow open paths (banner vents)", apres_coupe: "After cutting", apres_coupe_rien: "do nothing (history)", apres_coupe_archiver: "archive (can be restored)", apres_coupe_supprimer: "remove from the queue",
+    dupliquer_variante: "Duplicate (other set of marks)", copie: "copy", jeu_reperes: "Set of marks", jeu_du_travail: "— the job's —", variante_de: (id) => `Variant of “${id}”.`,
+    note_variante: "Same physical machine (connection, cut settings taken from it) with its own set of marks: a job assigned to this variant gets these marks, and its cut goes through the original machine.",
+    fond_reperes: "Background under marks", fond_reperes_activer: "Print a background under the marks (dark, clear or reflective media)", fond_debord: "Margin around the marks (mm)", fond_aplat: "Flood the whole marks area (image excluded)", fond_encre: "Ink", fond_blanc: "White (White spot colour)", fond_cmjn: "CMYK", fond_cmjn_valeurs: "C M Y K (%)",
+    note_fond_reperes: "The black marks are printed over it with overprint: the background stays under them too.",
     coupe_auto: "Cut on arrival", note_coupe_auto: "Unticked: each cut arrives on hold in the machine's queue and goes when the operator resumes it (\"Cut now\").", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
@@ -877,6 +901,8 @@ const textes = {
       mise_coupe_invalide: "Invalid cut placement: rotation 0, 90, 180 or 270; scale from 1 to 1000 %; 1 to 100 copies each way (1000 in all); gap from 0 to 1000 mm; offset from 0 to 5 mm.",
       mise_decoupe_seule: "Mirror, scale, copies and start from the origin: for cut only jobs (the cut would no longer follow the print).",
       etendre_invalide: "Add bleed near cuts: width from 0.1 to 10 mm, threshold from 0 to 10 mm.",
+      variante_invalide: "Invalid variant: it must copy a cutter of the catalogue that is not a variant itself.",
+      fond_reperes_invalide: "Background under marks: margin from 0.5 to 13 mm, CMYK from 0 to 100 %.",
       detourage_invalide: "Invalid auto contour: threshold from 1 to 255, minimum area from 0 to 10,000 mm², smoothing from 0 to 5, offset from 0 to 20 mm.",
       detourage_impossible: "Auto contour: only on a printed page of a rendered PDF (it needs an image to trace).",
       prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
@@ -1258,6 +1284,7 @@ function demandeDuFormulaire() {
     blanc: { mode: f.blanc.value, retraction_mm: +f.blanc_retraction_mm.value, seuil: +f.blanc_seuil.value },
     couches: f.couches.value,
     etendre_coupe: f.etendre.checked ? { largeur_mm: +f.etendre_largeur_mm.value, seuil_mm: +f.etendre_seuil_mm.value } : null,
+    fond_reperes: f.fond_reperes.checked ? { debord_mm: +f.fond_debord_mm.value, aplat: f.fond_aplat.checked, cmjn: f.fond_encre.value === "cmjn" ? cmjnDuChamp(f.fond_cmjn.value) : null } : null,
     edition: lireEdition($("edition-envoi")),
     auto: { imprimer: f.auto_imprimer.checked, decouper: f.auto_decouper.checked, suspendre: f.auto_suspendre.checked },
     support: f.support.value || null,
@@ -1268,6 +1295,9 @@ function demandeDuFormulaire() {
     rotation_auto: f.rotation_auto.checked,
   };
 }
+
+/** « 0 0 100 0 » (%) → [0, 0, 1, 0]. */
+const cmjnDuChamp = (v) => { const n = v.trim().split(/[\s;]+/).map((x) => +x.replace(",", ".") / 100); return n.length === 4 && n.every((x) => x >= 0 && x <= 1) ? n : [0, 0, 1, 0]; };
 
 /** Mosaïque du formulaire. Pour un travail reçu, ce qui se règle dans la visionneuse (lés
  *  inégaux, tuiles, ordre) est gardé tant que laize, hauteur et recouvrement ne changent pas. */
@@ -1399,6 +1429,11 @@ function appliquerDemande(d) {
   const b = d.blanc || { mode: "aucun", retraction_mm: 0.2, seuil: 5 };
   f.blanc.value = b.mode; f.blanc_retraction_mm.value = b.retraction_mm; f.blanc_seuil.value = b.seuil;
   f.couches.value = d.couches || "dessous";
+  f.fond_reperes.checked = !!d.fond_reperes;
+  if (d.fond_reperes) {
+    f.fond_debord_mm.value = d.fond_reperes.debord_mm; f.fond_aplat.checked = !!d.fond_reperes.aplat; f.fond_encre.value = d.fond_reperes.cmjn ? "cmjn" : "blanc";
+    if (d.fond_reperes.cmjn) f.fond_cmjn.value = d.fond_reperes.cmjn.map((v) => Math.round(v * 100)).join(" ");
+  }
   f.etendre.checked = !!d.etendre_coupe;
   if (d.etendre_coupe) { f.etendre_largeur_mm.value = d.etendre_coupe.largeur_mm; f.etendre_seuil_mm.value = d.etendre_coupe.seuil_mm; }
   champsEdition($("edition-envoi"), d.edition);
@@ -2607,10 +2642,10 @@ function panneauCouches(t) {
 }
 
 /** Mise en coupe par défaut (même forme que le serveur) et celle du travail. */
-const MISE_NEUTRE = { rotation: 0, miroir: false, echelle: [100, 100], copies: [1, 1], ecart_mm: [0, 0], depuis_origine: false, decalage_mm: 0 };
+const MISE_NEUTRE = { rotation: 0, miroir: false, echelle: [100, 100], copies: [1, 1], ecart_mm: [0, 0], depuis_origine: false, decalage_mm: 0, cintrage: null };
 const miseDe = (t) => ({ ...MISE_NEUTRE, ...(t.mise_coupe || {}) });
 /** Coupe posée comme l'impression : l'aperçu de coupe se superpose à l'image. */
-const miseSuitImpression = (t) => JSON.stringify({ ...miseDe(t), decalage_mm: 0 }) === JSON.stringify(MISE_NEUTRE);
+const miseSuitImpression = (t) => JSON.stringify({ ...miseDe(t), decalage_mm: 0, cintrage: null }) === JSON.stringify(MISE_NEUTRE);
 const brouillonsMise = new Map();
 /** Travaux dont l'échelle Y se règle à part (« Proportionnelle » décochée). */
 const echelleLibre = new Set();
@@ -2636,6 +2671,14 @@ function panneauMise(t) {
   const lignes = [el("p", { className: "meta", style: "margin: 0" }, T().note_mise_coupe), el("label", {}, T().mise_rotation, " ", rotation),
     champ(T().mise_decalage, m.decalage_mm, { min: 0, max: 5, step: 0.05, title: T().note_mise_decalage }, (v, x) => { v.decalage_mm = x; }),
     el("p", { className: "meta", style: "margin: 0" }, T().note_mise_decalage)];
+  if (!seule) {
+    const c = m.cintrage || { largeur_mm: 1600, debut_mm: 0, fleche_mm: 0 };
+    const cint = (texte, nom, attrs) => champ(texte, c[nom], attrs, (v, x) => { v.cintrage = { ...(v.cintrage || c), [nom]: x }; });
+    lignes.push(el("details", { className: "section", open: !!m.cintrage }, el("summary", {}, T().cintrage),
+      el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_cintrage),
+        caseM(T().cintrage_activer, !!m.cintrage, (v, x) => { v.cintrage = x ? c : null; }),
+        el("div", { className: "ligne" }, cint(T().cintrage_largeur, "largeur_mm", { min: 100, max: 5000 }), cint(T().cintrage_debut, "debut_mm", { min: 0, max: 100000 }), cint(T().cintrage_fleche, "fleche_mm", { min: -50, max: 50, step: 0.1 })))));
+  }
   if (seule) {
     lignes.push(el("p", { className: "meta", style: "margin: 0" }, T().note_mise_seule),
       caseM(T().mise_miroir, m.miroir, (v, c) => { v.miroir = c; }),
@@ -2989,11 +3032,13 @@ function afficherLateral() {
 /** Éditeur du catalogue (Système > Machines). */
 const MODELES = ["epson_sc_s80600", "mutoh_kona", "graphtec_fc7000", "roland_versacamm"];
 const CONNEXIONS = ["serie", "reseau", "fichier", "dossier"];
+const REPERAGES = ["aucun", "manuel", "cadre", "cadre_code", "cadre_multi"];
 function afficherEditeurMachines() {
   const f = $("editeur-machines");
   if (f.contains(document.activeElement)) return;
   const lignes = el("div", { id: "lignes-machines", style: "display: grid; gap: 10px" });
   const ligne = (m = { id: "", nom: "", modele: "graphtec_fc7000", laize_mm: 750, connexion: { type: "serie", port: "/dev/ttyUSB0", stty: "9600 cs8 -cstopb -parenb crtscts raw -echo" } }) => {
+    if (m.variante_de) { lignes.append(blocVariante(m)); return; }
     const c = m.connexion || { type: "dossier" };
     const champ = (n, v, attrs = {}) => el("input", { name: n, value: v ?? "", ...attrs });
     const choix = (n, valeurs, v, textes) => el("select", { name: n }, ...valeurs.map((x) => el("option", { value: x, selected: x === v }, textes[x] || x)));
@@ -3047,8 +3092,26 @@ function afficherEditeurMachines() {
       el("label", { className: "case", title: T().note_mono_couche }, el("input", { type: "checkbox", name: "mono_couche", checked: !!m.mono_couche }), " ", T().mono_couche),
       el("label", { className: "case", title: T().note_coupe_auto }, el("input", { type: "checkbox", name: "coupe_auto", checked: m.coupe_auto !== false }), " ", T().coupe_auto)), coupes);
     if (m.uuid) bloc.dataset.uuid = m.uuid;
-    bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
+    const valeur = (n) => bloc.querySelector(`[name=${n}]`).value.trim();
+    // Une variante ne se fait que d'une découpeuse (pas de l'Epson, qui n'en est pas une).
+    bloc.append(el("div", { className: "ligne" }, bouton(T().retirer_machine, () => bloc.remove(), "discret danger"),
+      m.modele_decoupe === false ? null : bouton(T().dupliquer_variante, () => ligne({ id: `${valeur("id")}-copie`.slice(0, 30), nom: `${valeur("nom")} (${T().copie})`, variante_de: valeur("id"), reperage: null }))));
     lignes.append(bloc);
+  };
+  /** Variante (roadmap 4.15) : nom et jeu de repères ; le reste vient de sa machine d'origine. */
+  const blocVariante = (m) => {
+    const champ = (n, v, attrs = {}) => el("input", { name: n, value: v ?? "", ...attrs });
+    const jeu = el("select", { name: "reperage" }, el("option", { value: "" }, T().jeu_du_travail), ...REPERAGES.map((r) => el("option", { value: r, selected: m.reperage === r }, T()[r])));
+    const bloc = el("div", { className: "page ligne-machine" },
+      el("div", { className: "ligne bas" },
+        el("label", {}, T().identifiant, champ("id", m.id, { style: "width: 9em" })),
+        el("label", { style: "flex: 2" }, T().nom_machine, champ("nom", m.nom)),
+        el("label", { title: T().note_variante }, T().jeu_reperes, jeu)),
+      el("p", { className: "meta", style: "margin: 0" }, T().variante_de(m.variante_de), " ", T().note_variante));
+    bloc.dataset.variante = m.variante_de;
+    if (m.uuid) bloc.dataset.uuid = m.uuid;
+    bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
+    return bloc;
   };
   catalogue.forEach((m) => ligne(m));
   f.replaceChildren(el("p", { className: "meta", style: "margin: 0" }, T().note_machines), lignes,
@@ -3056,8 +3119,11 @@ function afficherEditeurMachines() {
 }
 $("editeur-machines").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const liste = [...$("lignes-machines").querySelectorAll(".ligne-machine")].map((b) => {
+  const blocs = [...$("lignes-machines").querySelectorAll(".ligne-machine")];
+  const lues = blocs.map((b) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
+    // Variante : complétée plus bas depuis sa machine d'origine (le serveur la recopie aussi).
+    if (b.dataset.variante) return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), variante_de: b.dataset.variante, reperage: q("reperage") || null };
     const type = q("type");
     const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
     return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], origine_impression_mm: [+q("origine_x") || 0, +q("origine_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null, pool: q("pool") || null,
@@ -3069,6 +3135,11 @@ $("editeur-machines").addEventListener("submit", async (e) => {
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };
       }).filter((p) => p.nom),
       decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked, coupe_auto: b.querySelector("[name=coupe_auto]").checked };
+  });
+  const liste = lues.map((m) => {
+    if (!m.variante_de) return m;
+    const base = lues.find((x) => x.id === m.variante_de && !x.variante_de) || catalogue.find((x) => x.id === m.variante_de) || {};
+    return { ...base, ...m, pool: null, parametres_decoupe: (base.parametres_decoupe || []).map((p) => ({ ...p, uuid: null })) };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

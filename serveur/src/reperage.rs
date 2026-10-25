@@ -43,6 +43,29 @@ impl Reperage {
     }
 }
 
+/// Fond sous les repères (roadmap 4.15), pour un support sombre, transparent ou
+/// réfléchissant : une bande d'encre autour de chaque repère et code-barres, ou un aplat de
+/// toute la zone des repères (l'image exceptée). Les repères noirs sont posés dessus en
+/// surimpression : le fond reste aussi sous eux.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct FondReperes {
+    /// Débord du fond autour de chaque repère, en mm (0,5 à 13).
+    pub debord_mm: f64,
+    /// Aplat de toute la zone des repères, plutôt qu'une bande par repère.
+    #[serde(default)]
+    pub aplat: bool,
+    /// Encre CMJN (0 à 1) ; sans : le ton direct `White` de l'imprimante.
+    #[serde(default)]
+    pub cmjn: Option<[f64; 4]>,
+}
+
+impl FondReperes {
+    pub fn verifier(&self) -> Result<(), &'static str> {
+        let bon = (0.5..=13.0).contains(&self.debord_mm) && self.cmjn.is_none_or(|c| c.iter().all(|v| (0.0..=1.0).contains(v)));
+        if bon { Ok(()) } else { Err("fond_reperes_invalide") }
+    }
+}
+
 /// Numéro à 11 chiffres d'une page : 9 tirés du travail, 2 de la page (1 à 99).
 pub fn numero(travail: uuid::Uuid, page: usize) -> u64 {
     (travail.as_u128() % 1_000_000_000) as u64 * 100 + page as u64 % 100
@@ -281,7 +304,7 @@ fn chiffres(numero: u64, cx: f64, y: f64) -> Vec<[f64; 4]> {
 
 /// Réécrit chaque page du PDF : nouvelle MediaBox, contenu décalé, repères en noir.
 /// Rend une mise en page par page, dans l'ordre. `travail` donne le numéro des codes-barres.
-pub fn envelopper(pdf: &[u8], reperage: Reperage, travail: uuid::Uuid) -> Result<(Vec<u8>, Vec<Mise>), String> {
+pub fn envelopper(pdf: &[u8], reperage: Reperage, travail: uuid::Uuid, fond: Option<FondReperes>) -> Result<(Vec<u8>, Vec<Mise>), String> {
     let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
     let pages: Vec<_> = doc.get_pages().into_values().collect();
     if pages.is_empty() {
@@ -292,14 +315,14 @@ pub fn envelopper(pdf: &[u8], reperage: Reperage, travail: uuid::Uuid) -> Result
     }
     let mut mises = vec![];
     for (i, page) in pages.into_iter().enumerate() {
-        mises.push(envelopper_page(&mut doc, page, reperage, numero(travail, i + 1)).map_err(|e| format!("page {} : {e}", i + 1))?);
+        mises.push(envelopper_page(&mut doc, page, reperage, numero(travail, i + 1), fond).map_err(|e| format!("page {} : {e}", i + 1))?);
     }
     let mut sortie = vec![];
     doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
     Ok((sortie, mises))
 }
 
-fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage, numero: u64) -> Result<Mise, String> {
+fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage, numero: u64, fond: Option<FondReperes>) -> Result<Mise, String> {
     let dict = doc.get_dictionary(page).map_err(|e| e.to_string())?;
     let boite: Vec<f64> = dict
         .get(b"MediaBox")
@@ -323,7 +346,15 @@ fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage
         Err(_) => vec![],
     };
     let debut = doc.add_object(Stream::new(dictionary! {}, format!("q 1 0 0 1 {dx:.4} {dy:.4} cm\n").into_bytes()));
-    let mut fin = String::from("\nQ q 0 0 0 1 k\n");
+    let mut fin = String::from("\nQ ");
+    if let Some(f) = fond.filter(|_| !mise.rectangles.is_empty()) {
+        fin += &dessin_fond(&f, &mise, (boite[2] - boite[0], boite[3] - boite[1]));
+        ajouter_ressources(doc, page)?;
+        // Repères en surimpression (composantes nulles comprises) : le fond reste dessous.
+        fin += "q /GSRep gs 0 0 0 1 k\n";
+    } else {
+        fin += "q 0 0 0 1 k\n";
+    }
     for [x, y, l, h] in &mise.rectangles {
         fin += &format!("{x:.4} {y:.4} {l:.4} {h:.4} re f\n");
     }
@@ -340,6 +371,62 @@ fn envelopper_page(doc: &mut Document, page: lopdf::ObjectId, reperage: Reperage
         dict.remove(boite);
     }
     Ok(mise)
+}
+
+/// Fond sous les repères : une bande par repère (rectangle grossi du débord), ou un aplat de
+/// leur zone en pair-impair, l'image (et le débord autour) laissée vierge.
+fn dessin_fond(f: &FondReperes, mise: &Mise, (l, h): (f64, f64)) -> String {
+    let d = f.debord_mm * PT_PAR_MM;
+    let couleur = match f.cmjn {
+        Some([c, m, j, k]) => format!("{c:.4} {m:.4} {j:.4} {k:.4} k"),
+        None => "/FondRep cs 1 scn".into(),
+    };
+    let mut s = format!("q {couleur}\n");
+    if f.aplat {
+        let b = mise.rectangles.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, r| [b[0].min(r[0]), b[1].min(r[1]), b[2].max(r[0] + r[2]), b[3].max(r[1] + r[3])]);
+        let (x0, y0) = (b[0] - d, b[1] - d);
+        s += &format!("{x0:.4} {y0:.4} {:.4} {:.4} re ", b[2] - b[0] + 2.0 * d, b[3] - b[1] + 2.0 * d);
+        s += &format!("{:.4} {:.4} {:.4} {:.4} re f*\n", mise.decalage.0 - d, mise.decalage.1 - d, l + 2.0 * d, h + 2.0 * d);
+    } else {
+        for [x, y, rl, rh] in &mise.rectangles {
+            s += &format!("{:.4} {:.4} {:.4} {:.4} re f\n", x - d, y - d, rl + 2.0 * d, rh + 2.0 * d);
+        }
+    }
+    s + "Q\n"
+}
+
+/// Ressources de la page (les siennes, sinon celles héritées) recopiées sur elle, avec le ton
+/// `White` du fond (`/FondRep`) et l'état graphique de surimpression des repères (`/GSRep`).
+fn ajouter_ressources(doc: &mut Document, page: lopdf::ObjectId) -> Result<(), String> {
+    let (direct, ids) = doc.get_page_resources(page).map_err(|e| e.to_string())?;
+    let mut res = match (direct, ids.first()) {
+        (Some(d), _) => d.clone(),
+        (None, Some(id)) => doc.get_dictionary(*id).map_err(|e| e.to_string())?.clone(),
+        (None, None) => lopdf::Dictionary::new(),
+    };
+    let sous = |doc: &Document, res: &lopdf::Dictionary, cle: &[u8]| -> lopdf::Dictionary {
+        match res.get(cle) {
+            Ok(Object::Reference(id)) => doc.get_dictionary(*id).cloned().unwrap_or_default(),
+            Ok(Object::Dictionary(d)) => d.clone(),
+            _ => lopdf::Dictionary::new(),
+        }
+    };
+    let mut espaces = sous(doc, &res, b"ColorSpace");
+    espaces.set(
+        "FondRep",
+        Object::Array(vec![
+            "Separation".into(),
+            "White".into(),
+            "DeviceCMYK".into(),
+            Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![Object::Real(0.2), 0.into(), 0.into(), 0.into()], "N" => 1 }),
+        ]),
+    );
+    let mut etats = sous(doc, &res, b"ExtGState");
+    etats.set("GSRep", dictionary! { "Type" => "ExtGState", "OP" => true, "op" => true, "OPM" => 1 });
+    res.set("ColorSpace", espaces);
+    res.set("ExtGState", etats);
+    doc.get_dictionary_mut(page).map_err(|e| e.to_string())?.set("Resources", res);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -456,6 +543,66 @@ mod tests {
         assert!((l - 120.0).abs() < 1e-9 && (h - 70.0).abs() < 1e-9, "{l} × {h}");
     }
 
+    /// 4.15 : fond blanc sous les repères, débord de 3 mm : sous le cadre (le noir reste
+    /// plein, posé en surimpression) et jusqu'à 3 mm autour, rien au-delà ni dans l'image ;
+    /// en aplat, toute la zone des repères hors de l'image (et de 3 mm autour) ; en CMJN, sur
+    /// la plaque Yellow.
+    #[test]
+    fn fond_sous_les_reperes() {
+        let dossier = std::env::temp_dir().join(format!("eko-rip-fond-reperes-{}", std::process::id()));
+        std::fs::create_dir_all(&dossier).unwrap();
+        let mut doc = Document::with_version("1.4");
+        let contenu = doc.add_object(Stream::new(dictionary! {}, b"1 0 0 0 k 0 0 100 100 re f".to_vec()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), 100.into(), 100.into()], "Contents" => contenu });
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+        let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", cat);
+        let mut octets = vec![];
+        doc.save_to(&mut octets).unwrap();
+        let dpi = 72.0;
+        let rendre = |fond: FondReperes, nom: &str| {
+            let (pdf, mut mises) = envelopper(&octets, Reperage::Cadre, uuid::Uuid::nil(), Some(fond)).unwrap();
+            std::fs::write(dossier.join(format!("{nom}.pdf")), &pdf).unwrap();
+            let st = std::process::Command::new("gs")
+                .args(["-q", "-dSAFER", "-dBATCH", "-dNOPAUSE", "-sDEVICE=tiffsep", "-r72"])
+                .arg(format!("-sOutputFile={}", dossier.join(format!("{nom}.tif")).display()))
+                .arg(dossier.join(format!("{nom}.pdf")))
+                .status()
+                .unwrap();
+            assert!(st.success());
+            mises.remove(0)
+        };
+        let lire = |nom: &str, plaque: &str, x: f64, y: f64| {
+            let img = image::open(dossier.join(format!("{nom}({plaque}).tif"))).unwrap().to_luma8();
+            img.get_pixel((x * dpi / 72.0) as u32, img.height() - 1 - (y * dpi / 72.0) as u32)[0]
+        };
+        let mm = PT_PAR_MM;
+        let bande = FondReperes { debord_mm: 3.0, aplat: false, cmjn: None };
+        let mise = rendre(bande, "bande");
+        // Trait bas du cadre : x0, y0, l, e.
+        let [x0, y0, l, e] = mise.rectangles[0];
+        let cx = x0 + l / 2.0;
+        assert_eq!(lire("bande", "White", cx, y0 + e / 2.0), 0, "blanc sous le cadre");
+        assert_eq!(lire("bande", "Black", cx, y0 + e / 2.0), 0, "cadre toujours en noir plein");
+        assert_eq!(lire("bande", "White", cx, y0 - 1.5 * mm), 0, "blanc à 1,5 mm du cadre");
+        assert_eq!(lire("bande", "White", cx, y0 - 4.5 * mm), 255, "rien au-delà du débord");
+        let (ix, iy) = (mise.decalage.0 + 50.0, mise.decalage.1 + 50.0);
+        assert_eq!(lire("bande", "White", ix, iy), 255, "rien dans l'image");
+        assert_eq!(lire("bande", "Cyan", ix, iy), 0);
+        // Aplat : entre l'image et le cadre (marge de 10 mm), à 6 mm de l'image.
+        rendre(FondReperes { aplat: true, ..bande }, "aplat");
+        assert_eq!(lire("aplat", "White", mise.decalage.0 - 6.0 * mm, iy), 0, "aplat entre l'image et le cadre");
+        assert_eq!(lire("aplat", "White", mise.decalage.0 - 1.5 * mm, iy), 255, "l'image et 3 mm autour restent vierges");
+        assert_eq!(lire("aplat", "White", ix, iy), 255);
+        // CMJN : jaune, aucune plaque White.
+        rendre(FondReperes { cmjn: Some([0.0, 0.0, 1.0, 0.0]), ..bande }, "jaune");
+        assert_eq!(lire("jaune", "Yellow", cx, y0 + e / 2.0), 0, "jaune sous le cadre (surimpression)");
+        assert!(!dossier.join("jaune(White).tif").exists());
+        assert_eq!(FondReperes { debord_mm: 20.0, ..bande }.verifier(), Err("fond_reperes_invalide"));
+        std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
     /// Le cadre sort sur la seule plaque noire, et l'image d'origine est décalée d'autant.
     #[test]
     fn rendu_du_cadre_par_ghostscript() {
@@ -472,7 +619,7 @@ mod tests {
         let mut octets = vec![];
         doc.save_to(&mut octets).unwrap();
 
-        let (pdf, mut mises) = envelopper(&octets, Reperage::Cadre, uuid::Uuid::nil()).unwrap();
+        let (pdf, mut mises) = envelopper(&octets, Reperage::Cadre, uuid::Uuid::nil(), None).unwrap();
         let mise = mises.remove(0);
         let chemin = dossier.join("p.pdf");
         std::fs::write(&chemin, &pdf).unwrap();

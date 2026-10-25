@@ -8,6 +8,7 @@
 //!   écarts, départ depuis l'origine de la machine. Sans impression seulement : sur un
 //!   travail imprimé, la coupe ne suivrait plus l'encre.
 //! - Décaler la coupe vers l'extérieur (roadmap 4.10) : la pièce grandit d'autant.
+//! - Compensation de cintrage (roadmap 4.15) : la coupe suit l'impression courbée.
 //!
 //! Et, au rendu (roadmap 4.10), « étendre l'image près des tracés » : l'encre proche d'un
 //! contour fermé est prolongée au-delà, sur une largeur donnée. Ni l'un ni l'autre ne
@@ -50,11 +51,71 @@ pub struct Mise {
     /// extérieur s'élargit, un trou se resserre. Les tracés ouverts ne bougent pas.
     #[serde(default)]
     pub decalage_mm: f64,
+    /// Compensation du cintrage de l'impression (roadmap 4.15).
+    #[serde(default)]
+    pub cintrage: Option<Cintrage>,
 }
 
 impl Default for Mise {
     fn default() -> Self {
-        Mise { rotation: 0, miroir: false, echelle: cent(), copies: un(), ecart_mm: [0.0; 2], depuis_origine: false, decalage_mm: 0.0 }
+        Mise { rotation: 0, miroir: false, echelle: cent(), copies: un(), ecart_mm: [0.0; 2], depuis_origine: false, decalage_mm: 0.0, cintrage: None }
+    }
+}
+
+/// Cintrage de l'impression : une ligne droite en travers du support sort courbée, son
+/// milieu en retard (flèche) sur ses bords, une fois les sécheurs chauds. La coupe est
+/// courbée pareil : chaque point descend (vers le bas de la page, le bord qui sort le dernier)
+/// de `fleche_mm × (1 − (2u/l − 1)²)`, u sa distance au bord gauche du support (celui de la
+/// page), l la largeur du support. Rien avant `debut_mm` d'avance (comptée depuis le haut de
+/// la page, le bord qui sort le premier) ; la flèche s'installe sur les `RAMPE_MM` suivants.
+/// Une flèche négative courbe dans l'autre sens.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Cintrage {
+    pub largeur_mm: f64,
+    #[serde(default)]
+    pub debut_mm: f64,
+    pub fleche_mm: f64,
+}
+
+/// Longueur sur laquelle le cintrage s'installe après son début, en mm.
+// ponytail: transition linéaire fixe (l'aide d'ONYX ne dit rien du passage) ; à éprouver à
+// l'atelier, un réglage si l'essai le demande.
+pub const RAMPE_MM: f64 = 50.0;
+
+impl Cintrage {
+    fn valide(&self) -> bool {
+        (100.0..=5000.0).contains(&self.largeur_mm) && (0.0..=100_000.0).contains(&self.debut_mm) && (-50.0..=50.0).contains(&self.fleche_mm)
+    }
+
+    /// Tracés courbés, la page faisant `hauteur` points ; les segments sont d'abord recoupés
+    /// tous les 5 mm pour suivre la courbe.
+    pub fn appliquer(&self, traces: &[Trace], hauteur: f64) -> Vec<Trace> {
+        let mm = PT_PAR_MM;
+        let (l, debut, fleche, rampe) = (self.largeur_mm * mm, self.debut_mm * mm, self.fleche_mm * mm, RAMPE_MM * mm);
+        let deplacer = |(x, y): (f64, f64)| {
+            let avance = hauteur - y;
+            let part = ((avance - debut) / rampe).clamp(0.0, 1.0);
+            let u = (2.0 * x / l - 1.0).clamp(-1.0, 1.0);
+            (x, y - part * fleche * (1.0 - u * u))
+        };
+        traces
+            .iter()
+            .map(|t| {
+                let mut points = t.points.clone();
+                if t.ferme {
+                    points.push(t.points[0]);
+                }
+                let mut fins = vec![points[0]];
+                for w in points.windows(2) {
+                    let n = ((w[1].0 - w[0].0).hypot(w[1].1 - w[0].1) / (5.0 * mm)).ceil().max(1.0) as usize;
+                    fins.extend((1..=n).map(|i| (w[0].0 + (w[1].0 - w[0].0) * i as f64 / n as f64, w[0].1 + (w[1].1 - w[0].1) * i as f64 / n as f64)));
+                }
+                if t.ferme {
+                    fins.pop();
+                }
+                Trace { points: fins.into_iter().map(deplacer).collect(), ..t.clone() }
+            })
+            .collect()
     }
 }
 
@@ -78,7 +139,8 @@ impl Mise {
             && self.copies.iter().all(|c| (1..=100).contains(c))
             && self.copies[0] * self.copies[1] <= 1000
             && self.ecart_mm.iter().all(|e| (0.0..=1000.0).contains(e))
-            && (0.0..=5.0).contains(&self.decalage_mm);
+            && (0.0..=5.0).contains(&self.decalage_mm)
+            && self.cintrage.is_none_or(|c| c.valide());
         if !bon {
             return Err("mise_coupe_invalide");
         }
@@ -104,13 +166,10 @@ impl Mise {
 
     /// Tracés de la page `taille` (et le cadre de repérage) posés pour la machine.
     pub fn appliquer(&self, traces: &[Trace], taille: (f64, f64), cadre: Option<[f64; 4]>) -> Posee {
-        let decales;
-        let traces = if self.decalage_mm > 0.0 {
-            decales = decaler(traces, self.decalage_mm * PT_PAR_MM);
-            &decales[..]
-        } else {
-            traces
-        };
+        let mut traces = if self.decalage_mm > 0.0 { decaler(traces, self.decalage_mm * PT_PAR_MM) } else { traces.to_vec() };
+        if let Some(c) = &self.cintrage {
+            traces = c.appliquer(&traces, taille.1);
+        }
         let (kx, ky) = (self.echelle[0] / 100.0, self.echelle[1] / 100.0);
         let (l, h) = (taille.0 * kx, taille.1 * ky);
         let mut taille_posee = if self.rotation % 180 == 90 { (h, l) } else { (l, h) };
@@ -404,6 +463,28 @@ mod tests {
         assert_eq!(p.traces[3], ouvert);
         assert_eq!(Mise { decalage_mm: 6.0, ..Default::default() }.verifier(true), Err("mise_coupe_invalide"));
         assert_eq!(Mise { decalage_mm: 0.5, ..Default::default() }.verifier(true), Ok(()), "permis en impression et coupe");
+    }
+
+    /// 4.15 : support de 1000 mm, cintrage dès 100 mm d'avance, flèche de 2 mm. Un trait en
+    /// travers à 500 mm du haut descend de 2 mm au milieu, 1,5 mm au quart, rien aux bords ;
+    /// au-dessus du début, rien ; dans la rampe, la moitié à mi-chemin.
+    #[test]
+    fn compensation_de_cintrage() {
+        let mm = PT_PAR_MM;
+        let h = 1000.0 * mm;
+        let trait_ = |avance: f64| Trace { ton: "CutContour".into(), points: vec![(0.0, h - avance * mm), (1000.0 * mm, h - avance * mm)], ferme: false };
+        let m = Mise { cintrage: Some(Cintrage { largeur_mm: 1000.0, debut_mm: 100.0, fleche_mm: 2.0 }), ..Default::default() };
+        let p = m.appliquer(&[trait_(500.0), trait_(50.0), trait_(125.0)], (1000.0 * mm, h), None);
+        let ecart = |t: &Trace, x_mm: f64| {
+            let q = t.points.iter().find(|q| (q.0 / mm - x_mm).abs() < 1e-6).unwrap_or_else(|| panic!("pas de point en {x_mm} mm"));
+            (q.1 - t.points[0].1) / mm
+        };
+        let t = &p.traces[0];
+        assert_eq!(t.points.len(), 201, "recoupé tous les 5 mm");
+        assert!((ecart(t, 500.0) + 2.0).abs() < 1e-9 && (ecart(t, 250.0) + 1.5).abs() < 1e-9 && ecart(t, 1000.0).abs() < 1e-9, "flèche");
+        assert!(p.traces[1].points.iter().all(|q| (q.1 - (h - 50.0 * mm)).abs() < 1e-9), "avant le début : rien");
+        assert!((ecart(&p.traces[2], 500.0) + 1.0).abs() < 1e-9, "rampe : moitié de la flèche à 25 mm du début");
+        assert_eq!(Mise { cintrage: Some(Cintrage { largeur_mm: 1000.0, debut_mm: 0.0, fleche_mm: 60.0 }), ..Default::default() }.verifier(true), Err("mise_coupe_invalide"));
     }
 
     /// Plaque de 40 × 40 mm à 254 dpi (10 px/mm), contour carré de 10 à 30 mm. Encre jusqu'au

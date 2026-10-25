@@ -103,6 +103,14 @@ pub struct Machine {
     /// sinon chaque découpe arrive suspendue et part quand l'opérateur la reprend.
     #[serde(default = "vrai")]
     pub coupe_auto: bool,
+    /// Variante d'une autre machine (roadmap 4.15) : la même machine physique, son propre
+    /// jeu de repères. Connexion, modèle et réglages sont repris de la machine d'origine
+    /// (`accorder_variantes`) ; ses sorties passent par elle, l'une après l'autre.
+    #[serde(default)]
+    pub variante_de: Option<String>,
+    /// Jeu de repères imposé aux travaux affectés à cette découpeuse.
+    #[serde(default)]
+    pub reperage: Option<crate::reperage::Reperage>,
 }
 
 fn vrai() -> bool {
@@ -277,8 +285,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None },
     ]
 }
 
@@ -334,7 +342,30 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
     let pool_bon = machines.iter().filter_map(|m| m.pool.as_deref().map(|p| (m, p))).all(|(m, p)| {
         id_valide(p) && !machines.iter().any(|x| x.id == p) && machines.iter().filter(|x| x.pool.as_deref() == Some(p)).all(|x| x.modele == m.modele && (x.laize_mm - m.laize_mm).abs() < 0.5)
     });
-    if pool_bon { Ok(()) } else { Err("pool_incoherent") }
+    if !pool_bon {
+        return Err("pool_incoherent");
+    }
+    // Variante : d'une machine du catalogue qui n'en est pas une elle-même, qui découpe.
+    let variantes_bonnes = machines.iter().filter_map(|m| m.variante_de.as_deref().map(|b| (m, b))).all(|(m, b)| b != m.id && machines.iter().any(|x| x.id == b && x.variante_de.is_none() && x.modele.decoupe()));
+    if variantes_bonnes { Ok(()) } else { Err("variante_invalide") }
+}
+
+/// Chaque variante reprend de sa machine d'origine ce qui fait la machine physique :
+/// modèle, laize, connexion, pas, décalages, réglages de coupe (sous ses propres
+/// identifiants), retournement, mono-couche, coupe à l'arrivée. Elle garde son identifiant,
+/// son nom et son jeu de repères ; une variante n'est d'aucun pool.
+pub fn accorder_variantes(machines: &mut [Machine]) {
+    let originaux: Vec<Machine> = machines.to_vec();
+    for m in machines.iter_mut() {
+        let Some(base) = m.variante_de.as_ref().and_then(|b| originaux.iter().find(|x| &x.id == b && x.variante_de.is_none())) else { continue };
+        let reglages = base.parametres_decoupe.iter().map(|p| ParametreDecoupe { uuid: m.parametres_decoupe.iter().find(|q| q.nom == p.nom).and_then(|q| q.uuid), ..p.clone() }).collect();
+        *m = Machine { id: m.id.clone(), uuid: m.uuid, nom: m.nom.clone(), variante_de: m.variante_de.clone(), reperage: m.reperage, pool: None, parametres_decoupe: reglages, snmp: None, ..base.clone() };
+    }
+}
+
+/// Variantes d'une machine (identifiants).
+pub fn variantes<'a>(machines: &'a [Machine], id: &str) -> Vec<&'a str> {
+    machines.iter().filter(|m| m.variante_de.as_deref() == Some(id)).map(|m| m.id.as_str()).collect()
 }
 
 /// Machines d'un pool.

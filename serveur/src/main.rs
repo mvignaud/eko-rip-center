@@ -266,8 +266,10 @@ async fn main() {
     let file = file::File::lire(&config.donnees);
     file.ecrire(&config.donnees).expect("file d'attente");
     let mut catalogue = machines::lire(&config.donnees).unwrap_or_else(|| machines::catalogue_initial(&config.plotter, &config.plotter_stty, config.epson_snmp.clone()));
-    // Identifiants immuables (pont ERP) : attribués une fois, puis gardés.
+    // Identifiants immuables (pont ERP) : attribués une fois, puis gardés. Les variantes suivent
+    // leur machine d'origine.
     let avant = catalogue.clone();
+    machines::accorder_variantes(&mut catalogue);
     machines::identifier(&mut catalogue, &avant).expect("identifiants des machines");
     if catalogue != avant {
         machines::ecrire(&config.donnees, &catalogue).expect("machines.json");
@@ -483,6 +485,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let (mut mosaique, mut laize_mm, mut recouvrement_mm, mut reperes_les) = (false, 1600.0f64, 20.0f64, false);
     let (mut hauteur_max_mm, mut soudure, mut coupe_milieu) = (None, false, false);
     let (mut etendre, mut etendre_largeur, mut etendre_seuil) = (false, 1.0f64, 0.5f64);
+    let mut fond = (false, reperage::FondReperes { debord_mm: 3.0, aplat: false, cmjn: None }, false, None::<[f64; 4]>);
 
     loop {
         let champ = match form.next_field().await {
@@ -619,6 +622,25 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
             }
             "etendre_largeur_mm" => valeur.parse().map(|v| etendre_largeur = v).map_err(|_| erreur("etendre_invalide")),
             "etendre_seuil_mm" => valeur.parse().map(|v| etendre_seuil = v).map_err(|_| erreur("etendre_invalide")),
+            "fond_reperes" => {
+                fond.0 = valeur == "oui";
+                Ok(())
+            }
+            "fond_debord_mm" => valeur.parse().map(|v| fond.1.debord_mm = v).map_err(|_| erreur("fond_reperes_invalide")),
+            "fond_aplat" => {
+                fond.1.aplat = valeur == "oui";
+                Ok(())
+            }
+            "fond_encre" => {
+                fond.2 = valeur == "cmjn";
+                Ok(())
+            }
+            // « 0 0 100 0 » : CMJN en %.
+            "fond_cmjn" => {
+                let v: Vec<f64> = valeur.split([' ', ';']).filter(|x| !x.is_empty()).filter_map(|x| x.replace(',', ".").parse::<f64>().ok()).map(|x| x / 100.0).collect();
+                fond.3 = v.try_into().ok();
+                Ok(())
+            }
             _ => Ok(()),
         };
         if let Err(r) = r {
@@ -630,6 +652,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     };
     d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les, hauteur_max_mm, soudure, coupe_milieu, ..Default::default() });
     d.etendre_coupe = etendre.then_some(coupe::Etendre { largeur_mm: etendre_largeur, seuil_mm: etendre_seuil });
+    if fond.2 && fond.3.is_none() {
+        return abandon(&rep, StatusCode::BAD_REQUEST, ("fond_reperes_invalide", None)).await;
+    }
+    d.fond_reperes = fond.0.then_some(reperage::FondReperes { cmjn: fond.3.filter(|_| fond.2), ..fond.1 });
     match creer_travail(&etat, id, nom, format, d).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
@@ -682,7 +708,8 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     let mut alertes = alertes;
     let infos = infos_travail(etat, id, &nom, &d);
-    let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), ..d.clone() }, laize_imprimante(etat), infos).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
+    let reperage = reperage_voulu(&etat.machines.read().unwrap(), &d);
+    let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), reperage, ..d.clone() }, laize_imprimante(etat), infos).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
     alertes.extend(tourne);
     let travail = Travail {
         id,
@@ -917,8 +944,9 @@ async fn traiter(etat: Partage, mut t: Travail) {
     let _ = ecrire(donnees, &t);
 
     let rep = dossier(donnees, t.id);
+    let reperage = reperage_voulu(&etat.machines.read().unwrap(), &t.demande);
     let rendu = match t.demande.mode {
-        Mode::Imprimer => match preparer_impression(&rep, t.demande.reperage, t.id).await {
+        Mode::Imprimer => match preparer_impression(&rep, reperage, t.demande.fond_reperes, t.id).await {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
                 match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await {
@@ -1178,7 +1206,10 @@ async fn lister_machines(State(etat): State<Partage>) -> Json<Vec<machines::Mach
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
 async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
     let connues = etat.machines.read().unwrap().clone();
-    if let Err(code) = machines::identifier(&mut liste, &connues).and(machines::verifier(&liste)) {
+    if let Err(code) = machines::verifier(&liste).and_then(|()| {
+        machines::accorder_variantes(&mut liste);
+        machines::identifier(&mut liste, &connues)
+    }) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     let a_passer = etat.file.lock().unwrap().sorties.iter().any(|s| s.active() && !liste.iter().any(|m| m.id == s.machine));
@@ -1234,7 +1265,10 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     // Une sauvegarde porte ses identifiants : ils sont repris tels quels sur un serveur neuf.
     let mut connues_et_sauvees = connues.clone();
     connues_et_sauvees.extend(s.machines.iter().filter(|m| m.uuid.is_some()).cloned());
-    if let Err(code) = machines::identifier(&mut s.machines, &connues_et_sauvees).and(machines::verifier(&s.machines)).and(s.tarifs.verifier()) {
+    if let Err(code) = machines::verifier(&s.machines).and_then(|()| {
+        machines::accorder_variantes(&mut s.machines);
+        machines::identifier(&mut s.machines, &connues_et_sauvees)
+    }).and(s.tarifs.verifier()) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
     if let Some(c) = &s.supports {
@@ -2187,7 +2221,13 @@ async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: bl
     Ok(pages)
 }
 
-async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage, id: Uuid) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
+/// Repérage du travail : le jeu de repères de sa découpeuse s'il en impose un (variante,
+/// roadmap 4.15), sinon celui choisi.
+fn reperage_voulu(catalogue: &[machines::Machine], d: &Demande) -> reperage::Reperage {
+    d.decoupeuse.as_ref().and_then(|id| catalogue.iter().find(|m| &m.id == id)).and_then(|m| m.reperage).unwrap_or(d.reperage)
+}
+
+async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage, fond: Option<reperage::FondReperes>, id: Uuid) -> Result<(PathBuf, Vec<reperage::Mise>), String> {
     let source = rep.join(Format::Pdf.fichier());
     let pdf = tokio::fs::read(&source).await.map_err(|e| e.to_string())?;
     // Les tons de découpe ne marquent jamais le support : neutralisés avant le rendu.
@@ -2198,7 +2238,7 @@ async fn preparer_impression(rep: &std::path::Path, choix: reperage::Reperage, i
     let (imprime, mises) = if choix == reperage::Reperage::Aucun {
         (pdf, vec![])
     } else {
-        tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix, id)).await.map_err(|e| e.to_string())??
+        tokio::task::spawn_blocking(move || reperage::envelopper(&pdf, choix, id, fond)).await.map_err(|e| e.to_string())??
     };
     let chemin = rep.join("imprime.pdf");
     tokio::fs::write(&chemin, imprime).await.map_err(|e| e.to_string())?;
@@ -2696,7 +2736,8 @@ async fn enregistrer_decoupe(State(etat): State<Partage>, Json(r): Json<decoupe:
 /// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
 async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
     let infos = infos_travail(etat, t.id, &t.nom, &t.demande);
-    match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &t.demande, laize_imprimante(etat), infos).await {
+    let reperage = reperage_voulu(&etat.machines.read().unwrap(), &t.demande);
+    match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &Demande { reperage, ..t.demande.clone() }, laize_imprimante(etat), infos).await {
         Ok(alertes) => {
             t.alertes.retain(|a| !ALERTES_CONSTRUCTION.contains(&a.code.as_str()));
             t.alertes.extend(alertes);
@@ -2935,20 +2976,22 @@ async fn retirer_de_la_file(State(etat): State<Partage>, Chemin(id): Chemin<Uuid
 }
 
 /// Répartiteur : chaque seconde, pour chaque machine du catalogue qui n'a rien en cours,
-/// lance la première sortie en attente qui la vise. Une sortie à la fois par machine.
+/// lance la première sortie en attente qui la vise. Une sortie à la fois par machine. Une
+/// variante (roadmap 4.15) ne part pas seule : sa machine d'origine prend ses sorties.
 async fn repartir(etat: Partage) {
     loop {
-        let ids: Vec<String> = etat.machines.read().unwrap().iter().map(|m| m.id.clone()).collect();
+        let ids: Vec<String> = etat.machines.read().unwrap().iter().filter(|m| m.variante_de.is_none()).map(|m| m.id.clone()).collect();
         for id in ids {
             let suivante = {
                 let mut f = etat.file.lock().unwrap();
                 let catalogue = etat.machines.read().unwrap().clone();
                 let m = catalogue.iter().find(|m| m.id == id).cloned();
                 let charge = supports::lire_charges(&etat.config.donnees).remove(&id);
-                let pool = m.as_ref().and_then(|m| m.pool.clone());
-                f.prochaine_dans(&id, pool.as_deref(), |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref(), &f.sorties, &catalogue).is_none()).map(|i| {
+                let mut aussi: Vec<&str> = machines::variantes(&catalogue, &id);
+                aussi.extend(m.as_ref().and_then(|m| m.pool.as_deref()));
+                f.prochaine_dans(&id, &aussi, |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref(), &f.sorties, &catalogue).is_none()).map(|i| {
                     let s = &mut f.sorties[i];
-                    // Envoyée au pool : elle revient à la machine qui la prend.
+                    // Envoyée au pool ou à une variante : elle revient à la machine qui la prend.
                     s.machine = id.clone();
                     (s.etat, s.debut) = (file::Etat::EnCours, Some(maintenant()));
                     let s = s.clone();
@@ -3268,7 +3311,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -3663,12 +3706,12 @@ mod tests {
             for n in 0..2 {
                 f.sorties.push(file::Sortie::nouvelle("epsons", machines::Operation::Impression, Uuid::new_v4(), &format!("t{n}"), 1, 0));
             }
-            let i1 = f.prochaine_dans("epson-1", Some("epsons"), |_| true).unwrap();
+            let i1 = f.prochaine_dans("epson-1", &["epsons"], |_| true).unwrap();
             (f.sorties[i1].etat, f.sorties[i1].machine) = (file::Etat::EnCours, "epson-1".into());
-            assert_eq!(f.prochaine_dans("epson-1", Some("epsons"), |_| true), None, "une à la fois par machine");
-            let i2 = f.prochaine_dans("epson-2", Some("epsons"), |_| true).unwrap();
+            assert_eq!(f.prochaine_dans("epson-1", &["epsons"], |_| true), None, "une à la fois par machine");
+            let i2 = f.prochaine_dans("epson-2", &["epsons"], |_| true).unwrap();
             assert_ne!(i1, i2, "la seconde part sur l'autre machine");
-            assert_eq!(f.prochaine_dans("autre", None, |_| true), None, "hors du pool : rien");
+            assert_eq!(f.prochaine_dans("autre", &[], |_| true), None, "hors du pool : rien");
             // Supports chargés différents : refus d'entrer dans le pool.
             let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
             for (m, u) in [("epson-1", a), ("epson-2", b)] {
@@ -3956,6 +3999,8 @@ mod tests {
                 pool: None,
                 mono_couche: false,
                 coupe_auto: true,
+                variante_de: None,
+                reperage: None,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
@@ -5205,7 +5250,7 @@ mod tests {
             serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap()).unwrap()
         }
 
-        fn reglage(nom: &str, force_g: f64) -> machines::ParametreDecoupe {
+        pub(super) fn reglage(nom: &str, force_g: f64) -> machines::ParametreDecoupe {
             machines::ParametreDecoupe { uuid: None, nom: nom.into(), vitesse_cm_s: 15.0, force_g, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false }
         }
 
@@ -5626,6 +5671,44 @@ mod tests {
             let seule = rendre(&e, pdf_tons(&["CutContour"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
             let r = appel(&e, "POST", &format!("/api/travaux/{}/pages/1/detourage", seule.id), None, Some(reglage)).await;
             assert_eq!(json(r).await["code"], "detourage_impossible");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 4.15 : variante d'une découpeuse (jeu de repères dupliqué). Elle reprend la machine
+        /// d'origine (connexion, réglages) ; un travail qui lui est affecté prend son jeu de
+        /// repères ; sa découpe passe par la machine d'origine. Variante d'une machine absente :
+        /// refusée.
+        #[tokio::test]
+        async fn variante_de_machine() {
+            let e = etat("variante");
+            let mut catalogue = e.machines.read().unwrap().clone();
+            let base = machines::Machine { id: "graphtec".into(), uuid: None, modele: machines::Modele::GraphtecFc7000, connexion: machines::Connexion::Dossier, parametres_decoupe: vec![super::couches_decoupe::reglage("Vinyle", 120.0)], ..catalogue[1].clone() };
+            // La variante arrive avec une autre connexion et sans réglage : on n'en tient pas compte.
+            let variante = machines::Machine { id: "graphtec-croix".into(), uuid: None, nom: "Graphtec (croix)".into(), variante_de: Some("graphtec".into()), reperage: Some(reperage::Reperage::Manuel), parametres_decoupe: vec![], ..catalogue[1].clone() };
+            catalogue.extend([base, variante.clone()]);
+            let mauvaise = [catalogue.clone(), vec![machines::Machine { id: "orpheline".into(), variante_de: Some("inconnue".into()), ..variante.clone() }]].concat();
+            let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&mauvaise).unwrap())).await;
+            assert_eq!(json(r).await["code"], "variante_invalide");
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await.status(), StatusCode::OK);
+            let lu = e.machines.read().unwrap().iter().find(|m| m.id == "graphtec-croix").cloned().unwrap();
+            assert_eq!((&lu.connexion, lu.modele, lu.parametres_decoupe.len(), lu.reperage), (&machines::Connexion::Dossier, machines::Modele::GraphtecFc7000, 1, Some(reperage::Reperage::Manuel)), "reprise de la machine d'origine");
+            let origine = e.machines.read().unwrap().iter().find(|m| m.id == "graphtec").unwrap().parametres_decoupe[0].uuid;
+            assert_ne!(lu.parametres_decoupe[0].uuid, origine, "ses réglages ont leurs propres identifiants");
+            // Travail affecté à la variante, sans repérage choisi : il prend les croix.
+            let t = rendre(&e, pdf_tons(&["CutContour"]), Demande { decoupeuse: Some("graphtec-croix".into()), ..Default::default() }).await;
+            assert_eq!(t.pages[0].reperage, Some(reperage::Reperage::Manuel), "jeu de repères de la variante");
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "graphtec-croix", "operation": "decoupe" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            tokio::spawn(repartir(e.clone()));
+            for _ in 0..100 {
+                if e.file.lock().unwrap().sorties[0].etat == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let s = e.file.lock().unwrap().sorties[0].clone();
+            assert_eq!((s.etat, s.machine.as_str()), (file::Etat::Terminee, "graphtec"), "coupée par la machine d'origine");
+            assert_eq!(std::fs::read_dir(e.config.donnees.join("sorties").join("graphtec")).unwrap().count(), 1);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
