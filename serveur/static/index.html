@@ -344,6 +344,7 @@
         <label data-t-title="note_support_mode"><span data-t="support_mode"></span> <select name="support_mode"></select></label>
         <label><span data-t="support_choix"></span> <select name="support"></select></label>
         <label data-t-title="note_decoupeuse"><span data-t="decoupeuse"></span> <select name="decoupeuse"></select></label>
+        <input type="hidden" name="parametre_decoupe"><p class="meta erreur" id="ancien-reglage-coupe" hidden></p>
         <label class="case" data-t-title="note_rotation_auto"><input type="checkbox" name="rotation_auto" checked> <span data-t="rotation_auto"></span></label>
         <label><span data-t="reperage"></span>
           <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option><option value="cadre_code" data-t="cadre_code"></option><option value="cadre_multi" data-t="cadre_multi"></option></select>
@@ -563,6 +564,7 @@ const textes = {
     decoupeuse: "Découpeuse", decoupeuse_aucune: "— aucune —", note_decoupeuse: "La découpe automatique y va ; l'impression attend tant qu'elle n'est pas utilisable (pas d'encre gâchée).",
     mono_couche: "Une couche à la fois", note_mono_couche: "Machine sans changement d'outil ni de réglage en cours de coupe : une sortie par couche, la suivante retenue jusqu'à « Reprendre ».", couche_de_sortie: (n) => `couche ${n}`,
     systeme_decoupe: "Découpe", prefixes_decoupe: "Préfixes de découpe (séparés par ;)", note_prefixes: "Un ton est de découpe si son nom commence par un préfixe (CutContour reconnaît CutContour1 et CutContourKissCut, pas 1CutContour ; sans casse, espaces ni tirets). Pris aux rendus suivants : relancer un travail déjà rendu.",
+    ancien_reglage_coupe: (n) => `Ancien réglage de coupe du travail entier : « ${n} ». Il va à la couche du même nom, ou à la seule couche ; sinon, le choisir couche par couche puis enregistrer.`,
     calques_non_imprimables: "Couper aussi les tracés des calques non imprimables", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
@@ -746,6 +748,7 @@ const textes = {
     decoupeuse: "Cutter", decoupeuse_aucune: "— none —", note_decoupeuse: "The automatic cut goes there; printing waits while it is not usable (no wasted ink).",
     mono_couche: "One layer at a time", note_mono_couche: "Machine that cannot change tool or setting during a cut: one output per layer, the next one held until \"Resume\".", couche_de_sortie: (n) => `layer ${n}`,
     systeme_decoupe: "Cutting", prefixes_decoupe: "Cut prefixes (separated by ;)", note_prefixes: "A spot colour is a cut one if its name starts with a prefix (CutContour matches CutContour1 and CutContourKissCut, not 1CutContour; case, spaces and dashes ignored). Used by the next renderings: restart a job already rendered.",
+    ancien_reglage_coupe: (n) => `Former cut setting of the whole job: “${n}”. It goes to the layer of the same name, or to the only layer; otherwise choose it layer by layer, then save.`,
     calques_non_imprimables: "Also cut the paths of non-printing layers", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
@@ -1206,6 +1209,7 @@ function demandeDuFormulaire() {
     support_uuid: f.support_mode.value ? f.support_mode.value.split("|")[0] : null,
     mode_uuid: f.support_mode.value ? f.support_mode.value.split("|")[1] : null,
     decoupeuse: f.decoupeuse.value || null,
+    parametre_decoupe: f.parametre_decoupe.value || null,
     rotation_auto: f.rotation_auto.checked,
   };
 }
@@ -1346,6 +1350,10 @@ function appliquerDemande(d) {
   f.support_mode.value = d.support_uuid && d.mode_uuid ? `${d.support_uuid}|${d.mode_uuid}` : "";
   if (d.decoupeuse && ![...f.decoupeuse.options].some((o) => o.value === d.decoupeuse)) f.decoupeuse.append(new Option(d.decoupeuse, d.decoupeuse));
   f.decoupeuse.value = d.decoupeuse || "";
+  // Réglage d'avant les couches : gardé tel quel et montré, jamais perdu en silence.
+  f.parametre_decoupe.value = d.parametre_decoupe || "";
+  $("ancien-reglage-coupe").hidden = !d.parametre_decoupe;
+  $("ancien-reglage-coupe").textContent = d.parametre_decoupe ? T().ancien_reglage_coupe(d.parametre_decoupe) : "";
   f.rotation_auto.checked = d.rotation_auto !== false;
 }
 choixReglage.addEventListener("change", () => {
@@ -2529,7 +2537,8 @@ function panneauCouches(t) {
       bouton(T().couches_annuler, () => { brouillonsCouches.delete(t.id); afficherInspecteur(); }));
   }
   return el("details", { className: "section couches-decoupe", open: true }, el("summary", {}, T().couches_decoupe),
-    el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_couches_decoupe), ...lignes, actions));
+    el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_couches_decoupe),
+      t.parametre_decoupe ? el("p", { className: "meta erreur", style: "margin: 0" }, T().ancien_reglage_coupe(t.parametre_decoupe)) : null, ...lignes, actions));
 }
 
 /** Barre d'outils : actions sur le travail choisi. */

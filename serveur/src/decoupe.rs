@@ -839,6 +839,20 @@ pub fn accorder(couches: &mut Vec<Couche>, tons: &[&str]) {
     }
 }
 
+/// Ancien réglage de coupe du travail entier (avant les couches) porté sur une couche, si
+/// c'est sans ambiguïté : la couche du même nom, sinon la seule couche. Une couche déjà
+/// réglée à la main n'est pas touchée. Rend vrai s'il est placé (alors il n'a plus lieu
+/// d'être gardé à part) ; faux : plusieurs couches possibles, à montrer à l'opérateur.
+pub fn reprendre_ancien_reglage(couches: &mut [Couche], reglage: &str) -> bool {
+    let cible = match couches.iter().position(|c| meme_couche(&c.nom, reglage)) {
+        Some(i) => i,
+        None if couches.len() == 1 => 0,
+        None => return false,
+    };
+    couches[cible].reglage.get_or_insert_with(|| reglage.to_string());
+    true
+}
+
 /// HP-GL de chaque couche active qui a des tracés, dans l'ordre des couches : `SPn;` puis
 /// ses tracés (intérieurs d'abord, plus proche voisin), unités 1/100 mm, sans `IN;` ni fin.
 pub fn blocs(traces: &[Trace], couches: &[Couche]) -> Vec<(Couche, String)> {
@@ -867,6 +881,49 @@ pub fn blocs(traces: &[Trace], couches: &[Couche]) -> Vec<(Couche, String)> {
             Some((c, sortie))
         })
         .collect()
+}
+
+/// Tracés relus d'un HP-GL du RIP (`SPn;PUx,y;PD…`, 1/100 mm) : un tracé par `PU`, fermé
+/// quand il revient à son départ ; le ton est celui de l'outil (1 CutContour, 2 Creasing,
+/// 3 Perforation, 4 VCut). Pour les travaux rendus avant les couches, dont seul le `.plt`
+/// est gardé : relu ainsi puis réécrit par `hpgl`, il redonne les mêmes coordonnées.
+pub fn depuis_hpgl(texte: &str) -> Vec<Trace> {
+    let ton = |o: u8| match o {
+        2 => "Creasing",
+        3 => "Perforation",
+        4 => "VCut",
+        _ => "CutContour",
+    };
+    let mut traces = vec![];
+    let mut outil = 1;
+    let mut courant: Vec<(f64, f64)> = vec![];
+    let vider = |courant: &mut Vec<(f64, f64)>, outil: u8, traces: &mut Vec<Trace>| {
+        let mut points = std::mem::take(courant);
+        if points.len() >= 2 {
+            let ferme = points.len() >= 4 && points.first() == points.last();
+            if ferme {
+                points.pop();
+            }
+            traces.push(Trace { ton: ton(outil).into(), points, ferme });
+        }
+    };
+    for cmd in texte.split(';').map(str::trim) {
+        let points: Vec<(f64, f64)> = cmd.get(2..).unwrap_or("").split(',').filter_map(|n| n.trim().parse::<f64>().ok()).collect::<Vec<_>>().as_chunks::<2>().0.iter().map(|&[x, y]| (x / UNITES_PAR_PT, y / UNITES_PAR_PT)).collect();
+        match cmd.get(..2) {
+            Some("SP") => {
+                vider(&mut courant, outil, &mut traces);
+                outil = cmd[2..].trim().parse().unwrap_or(1);
+            }
+            Some("PU") => {
+                vider(&mut courant, outil, &mut traces);
+                courant.extend(points.last());
+            }
+            Some("PD") => courant.extend(points),
+            _ => {}
+        }
+    }
+    vider(&mut courant, outil, &mut traces);
+    traces
 }
 
 /// Fichier HP-GL : les couches actives dans leur ordre, un `SP` par couche.
@@ -1252,5 +1309,27 @@ mod tests {
         assert_eq!(codes(&octets, &r), (vec![], 1));
         // Mode « tous les tracés » : pas de contrôle des tons.
         assert!(extraire_avec(&pdf_controle(cas[1].1, false), true, &r).unwrap()[0].signaux.is_empty());
+    }
+
+    #[test]
+    fn hpgl_d_avant_les_couches_relu_a_l_identique() {
+        let ancien = "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU5000,0;PD6000,0;PU;SP0;";
+        let traces = depuis_hpgl(ancien);
+        assert_eq!(traces.iter().map(|t| (t.ton.as_str(), t.ferme)).collect::<Vec<_>>(), [("Creasing", false), ("CutContour", true), ("CutContour", false)]);
+        assert_eq!(hpgl(&traces, &[]), ancien, "mêmes coordonnées, même ordre");
+    }
+
+    #[test]
+    fn ancien_reglage_de_coupe_porte_sur_une_couche() {
+        let couche = |nom: &str| Couche { nom: nom.into(), active: true, reglage: None };
+        let mut une = vec![couche("CutContour")];
+        assert!(reprendre_ancien_reglage(&mut une, "Mi-chair V3000"));
+        assert_eq!(une[0].reglage.as_deref(), Some("Mi-chair V3000"), "seule couche");
+        let mut deux = vec![couche("Kisscut"), couche("Thrucut")];
+        assert!(reprendre_ancien_reglage(&mut deux, "Thru-cut"));
+        assert_eq!((deux[0].reglage.as_deref(), deux[1].reglage.as_deref()), (None, Some("Thru-cut")), "couche du même nom");
+        let mut ambigu = vec![couche("Kisscut"), couche("Thrucut")];
+        assert!(!reprendre_ancien_reglage(&mut ambigu, "Mi-chair V3000"), "deux couches, aucun nom commun : rien n'est deviné");
+        assert!(ambigu.iter().all(|c| c.reglage.is_none()));
     }
 }

@@ -126,6 +126,11 @@ pub struct Demande {
     /// se choisit désormais par couche (`Travail::couches`).
     #[serde(default)]
     pub decoupeuse: Option<String>,
+    /// Réglage de coupe choisi pour tout le travail avant les couches (avant la 0.20) : lu
+    /// pour ne rien perdre, puis porté au rendu sur la couche qu'il désigne sans ambiguïté
+    /// (`decoupe::reprendre_ancien_reglage`) ; sinon gardé et montré à l'écran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parametre_decoupe: Option<String>,
     /// Tourner de 90° une page trop large pour la laize de l'imprimante, si elle y tient
     /// alors (repérage compris). Sans effet avec une rotation choisie ou une mosaïque.
     #[serde(default = "vrai")]
@@ -156,7 +161,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, rotation_auto: true }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true }
     }
 }
 
@@ -174,7 +179,7 @@ impl Demande {
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
         }
-        if self.decoupeuse.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) {
+        if self.decoupeuse.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) || self.parametre_decoupe.as_ref().is_some_and(|n| n.chars().count() > 40) {
             return Err("decoupeuse_invalide");
         }
         couleur::verifier(&self.couleur, profils)
@@ -313,5 +318,24 @@ mod tests {
         assert!(stables(&mut vu, vec![(p.clone(), 250)]).is_empty(), "il grossit encore");
         assert_eq!(stables(&mut vu, vec![(p.clone(), 250)]), [p], "taille stable : prêt");
         assert!(stables(&mut vu, vec![(PathBuf::from("/e/vide.pdf"), 0), (PathBuf::from("/e/vide.pdf"), 0)]).is_empty(), "fichier vide jamais prêt");
+    }
+
+    /// `reglages.json` d'avant les couches : `parametre_decoupe` se lit et se garde (il sera
+    /// porté sur une couche au rendu, ou montré à l'écran), rien ne tombe en silence.
+    #[test]
+    fn ancien_reglages_json_avec_parametre_decoupe() {
+        let d = std::env::temp_dir().join(format!("eko-rip-reglages-anciens-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(fichier(&d), r#"[{ "nom": "Vinyle découpe", "demande": { "mode": "imprimer", "dpi": 720, "parametre_decoupe": "Mi-chair V3000" } }]"#).unwrap();
+        let lus = lire(&d);
+        assert_eq!(lus.len(), 1, "l'ancien fichier se lit");
+        assert_eq!(lus[0].demande.parametre_decoupe.as_deref(), Some("Mi-chair V3000"));
+        assert!(lus[0].demande.verifier(&[]).is_ok());
+        // Réécrit puis relu : toujours là.
+        crate::etat::ecrire(&fichier(&d), &lus, false).unwrap();
+        assert_eq!(lire(&d)[0].demande.parametre_decoupe.as_deref(), Some("Mi-chair V3000"));
+        // Un réglage récent ne l'écrit pas.
+        assert!(!serde_json::to_string(&Demande::default()).unwrap().contains("parametre_decoupe"));
+        std::fs::remove_dir_all(&d).unwrap();
     }
 }

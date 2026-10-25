@@ -589,6 +589,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
+            "parametre_decoupe" => {
+                d.parametre_decoupe = Some(valeur).filter(|v| !v.is_empty());
+                Ok(())
+            }
             "decoupeuse" => {
                 d.decoupeuse = Some(valeur).filter(|v| !v.is_empty());
                 Ok(())
@@ -911,6 +915,12 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 // Couches : celles connues gardent ordre et réglages, les nouvelles prennent leur rang.
                 for d in &decoupes {
                     decoupe::accorder(&mut t.couches_decoupe, &decoupe::tons(&d.traces));
+                }
+                // Ancien réglage de coupe du travail entier : sur sa couche, sinon gardé et montré.
+                if let Some(n) = t.demande.parametre_decoupe.clone()
+                    && decoupe::reprendre_ancien_reglage(&mut t.couches_decoupe, &n)
+                {
+                    t.demande.parametre_decoupe = None;
                 }
                 let traces: Vec<usize> = decoupes.iter().map(|d| d.traces.len()).collect();
                 let par_couche: Vec<std::collections::BTreeMap<String, usize>> = decoupes.iter().map(|d| t.couches_decoupe.iter().map(|c| (c.nom.clone(), d.traces.iter().filter(|x| decoupe::meme_couche(&x.ton, &c.nom)).count())).filter(|(_, n)| *n > 0).collect()).collect();
@@ -2171,7 +2181,22 @@ fn fichier_traces(rep: &std::path::Path, page: usize) -> PathBuf {
 }
 
 fn lire_traces(rep: &std::path::Path, page: usize) -> Option<Vec<decoupe::Trace>> {
-    serde_json::from_slice(&std::fs::read(fichier_traces(rep, page)).ok()?).ok()
+    if let Ok(o) = std::fs::read(fichier_traces(rep, page)) {
+        return serde_json::from_slice(&o).ok();
+    }
+    // Travail rendu avant les couches (sans ce JSON) : son `.plt` est exactement ce que
+    // l'ancienne version envoyait ; relu en tracés (une couche par outil), il redonne les
+    // mêmes coordonnées. Plus sûr qu'extraire de nouveau la source : ni les préfixes
+    // actuels, ni le repérage ou l'édition recalculés ne peuvent le changer. Le JSON est
+    // écrit pour la fois suivante.
+    let traces = decoupe::depuis_hpgl(&std::fs::read_to_string(fichier_plt(rep, page)).ok()?);
+    if traces.is_empty() {
+        return None;
+    }
+    if let Err(e) = serde_json::to_vec(&traces).map_err(|e| e.to_string()).and_then(|o| machines::ecrire_atomique(&fichier_traces(rep, page), &o)) {
+        eprintln!("{} : tracés repris du .plt, non enregistrés : {e}", rep.display());
+    }
+    Some(traces)
 }
 
 /// Extrait les tracés à découper de chaque page ; pour une page qui en a, écrit
@@ -2367,6 +2392,8 @@ async fn enregistrer_couches(State(etat): State<Partage>, Chemin(id): Chemin<Uui
         return refus(StatusCode::BAD_REQUEST, "couches_invalides", None);
     }
     t.couches_decoupe = couches;
+    // Les couches sont réglées à la main : l'ancien réglage du travail entier est tranché.
+    t.demande.parametre_decoupe = None;
     let rep = dossier(donnees, id);
     if let Err(e) = ecrire(donnees, &t).and_then(|()| ecrire_coupes(&rep, &t.couches_decoupe, t.pages.len())) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
@@ -2454,7 +2481,8 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
     }
     let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
     if s.operation() == machines::Operation::Decoupe {
-        if !fichier_traces(&dossier(donnees, s.travail), s.page).exists() {
+        let rep = dossier(donnees, s.travail);
+        if !fichier_traces(&rep, s.page).exists() && lire_traces(&rep, s.page).is_none() {
             return Some("source_absente");
         }
         // Coupe seulement sur une impression finie à 100 % (roadmap 4.6) : la dernière
@@ -5064,5 +5092,63 @@ mod tests {
             decoupe::installer(decoupe::Reglages::default());
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
-    }
+    
+        /// Travail rendu avant les couches : ni JSON des tracés ni couches, seulement son
+        /// `.plt`. Sa découpe mise en file part (pas de « Fichier manquant ») et la machine
+        /// reçoit le HP-GL qu'envoyait l'ancienne version ; le JSON est écrit au passage.
+        #[tokio::test]
+        async fn travail_d_avant_les_couches_se_decoupe_encore() {
+            let e = etat("ancien-format");
+            let donnees = e.config.donnees.clone();
+            let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = ecoute.local_addr().unwrap().port();
+            let recu = std::thread::spawn(move || {
+                let (mut f, _) = ecoute.accept().unwrap();
+                let mut o = String::new();
+                std::io::Read::read_to_string(&mut f, &mut o).unwrap();
+                o
+            });
+            let mut catalogue = e.machines.read().unwrap().clone();
+            catalogue.push(machines::Machine { id: "fc7000".into(), uuid: None, modele: machines::Modele::GraphtecFc7000, connexion: machines::Connexion::Reseau { hote: "127.0.0.1".into(), port }, parametres_decoupe: vec![], ..catalogue[1].clone() });
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await.status(), StatusCode::OK);
+            // job.json tel que l'écrivait la 0.19 : pas de couches, pas de tracés par couche.
+            let id = Uuid::new_v4();
+            let rep = dossier(&donnees, id);
+            std::fs::create_dir_all(rep.join("prod")).unwrap();
+            let ancien = serde_json::json!({ "id": id, "nom": "ancien.pdf", "mode": "decouper", "statut": "termine", "erreur": null, "cree_le": 0, "parametre_decoupe": null,
+                "pages": [{ "plaques": [], "traces_decoupe": 2, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] });
+            std::fs::write(rep.join("job.json"), ancien.to_string()).unwrap();
+            std::fs::write(fichier_plt(&rep, 1), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;").unwrap();
+            assert!(!fichier_traces(&rep, 1).exists());
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": id, "page": 1, "machine": "fc7000" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let file_ = json(appel(&e, "GET", "/api/file", None, None).await).await;
+            assert_eq!(file_[0]["raison_attente"], serde_json::Value::Null, "pas de « Fichier manquant » : {file_}");
+            tokio::spawn(repartir(e.clone()));
+            let recu = tokio::time::timeout(Duration::from_secs(10), tokio::task::spawn_blocking(move || recu.join().unwrap())).await.expect("rien reçu en 10 s").unwrap();
+            // Au pas de 0,025 mm, comme l'ancienne version : rainage puis coupe.
+            assert_eq!(recu, "IN;SP2;PU0,0;PD0,1016;SP1;PU0,0;PD1016,0,1016,1016,0,0;PU;SP0;");
+            assert_eq!(lire_traces(&rep, 1).unwrap().len(), 2);
+            assert!(fichier_traces(&rep, 1).exists(), "JSON écrit pour la fois suivante");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Ancien réglage du travail entier : porté sur la couche du même nom au rendu ;
+        /// ambigu, il reste dans le travail (montré à l'écran) jusqu'au choix des couches.
+        #[tokio::test]
+        async fn ancien_reglage_de_coupe_au_rendu() {
+            let e = etat("ancien-reglage");
+            let d = |n: &str| Demande { mode: Mode::Decouper, parametre_decoupe: Some(n.into()), ..Default::default() };
+            let t = rendre(&e, pdf_tons(&["Thrucut", "Kisscut"]), d("Kisscut")).await;
+            assert_eq!(t.couches_decoupe[0].reglage.as_deref(), Some("Kisscut"));
+            assert_eq!(t.demande.parametre_decoupe, None, "placé : plus gardé à part");
+            let t = rendre(&e, pdf_tons(&["Thrucut", "Kisscut"]), d("Mi-chair V3000")).await;
+            assert!(t.couches_decoupe.iter().all(|c| c.reglage.is_none()));
+            assert_eq!(t.demande.parametre_decoupe.as_deref(), Some("Mi-chair V3000"), "ambigu : gardé");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/couches", t.id), None, Some(serde_json::to_value(&t.couches_decoupe).unwrap())).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(lire_travail(&e.config.donnees, t.id).unwrap().demande.parametre_decoupe, None, "tranché par l'enregistrement des couches");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+}
 }
