@@ -15,6 +15,34 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.21.0] — 2026-10-25
+
+Pont ERP (canal sortant) et tons directs. Publiée sans la CI ; le client macOS 0.19.0 et les
+clients 0.16.0 restent valables (l'écran est servi par le serveur).
+
+### Ajouté
+- **Pont ERP, lot R2** : journal des événements numérotés (rejouables après coupure), canal
+  sortant HTTPS vers l'ERP (une requête par seconde au plus, `429` suivi de `Retry-After`),
+  catalogue (machines, supports, modes, préréglages, découpeuses), états des travaux et des
+  sorties, consommation réelle en fin d'impression et de découpe, et **état des machines**
+  (`machine.etat` : encres, rouleau, support chargé, chauffages, alertes). Aucun montant.
+- **Table des tons directs** (Système > Tons directs) : nom exact, alias, couleur Lab ; import
+  du nuancier Lab d'un fournisseur (CSV `nom;L;a;b`). Un ton de la table est imprimé en CMJN
+  d'après sa couleur Lab (profil de sortie du travail), l'aperçu la montre et le travail le
+  signale. **Intention propre aux tons directs** : celle du serveur, ou celle du réglage ou du
+  travail.
+- Un ton direct ni encre, ni découpe, ni dans la table est signalé dès le rendu, page par
+  page, et noté dans Système (« Ajouter » le fait entrer dans la table).
+
+### Corrigé
+- Contrat du pont : après une coupure, un travail en cours passe en échec (`interrompu`).
+- Deux tests instables stabilisés (rafale du pont sous charge, réglages de découpe globaux).
+
+*Added: ERP bridge outbound channel (numbered events, catalogue, job/output states, real
+consumption, machine state; rate-limited), spot colour table (exact names, aliases, Lab, CSV
+import) printed in CMYK from Lab with its own rendering intent, missing spot colours flagged
+per page and logged. Fixed: interrupted jobs reported as failed; two flaky tests.*
+
 ## [0.20.0] — 2026-10-25
 
 Finitions de l'éditeur, découpe complète, imbrication automatique, consommation réelle.
