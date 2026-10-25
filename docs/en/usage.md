@@ -214,6 +214,19 @@ embedded (another one will be used at rendering: outline the text or embed the f
 images under 100 ppi at their printed size. The cut preflight adds its own (see
 [Cutting](#cutting)). The job still goes through: the operator decides.
 
+**Job ticket** (inspector, folded under its title, with its summary): **Order no.**,
+**Customer**, **Company**, **Quantity due**, **Due date** (tick box, then the date),
+**Operator** and **Notes**; **Save the ticket**. 200 characters per field, 2000 for the
+notes, quantity 100,000 at most. The quantity due is the number of **copies** placed on
+the nesting sheet and is printed on the label with the order no.; the **due date** is the
+nesting priority (nearest first, then jobs without one, then order of arrival). The table
+has a **Due** column, and the **Sort** choice (**Arrival** or **Due date**) above it.
+
+**Print this page** (tick box on each page of the inspector, ticked by default):
+unticked, the page goes into neither the queue nor a nesting sheet (**Not printed**
+badge); an output already queued waits with the reason **Page excluded**. Ticked again,
+it comes back. An unticked page cannot be queued by hand either.
+
 The search bar filters by name; the **All**, **In progress**, **Ready** and **Failed**
 chips filter by state. **Retry** redoes a failed job; **Delete** removes a finished job
 (refused while an output is waiting for it in the queue).
@@ -263,7 +276,14 @@ and lets the next ones pass (an output held by an operator simply stays *On hold
   the right one is loaded;
 - **Print not finished**: a cut waits until its page is printed;
 - **Cutter unavailable**: a print waits until the assigned cutter is usable (no wasted
-  ink).
+  ink);
+- **Nesting**: the print waits for its sheet (see [Nesting in the
+  queue](#nesting-in-the-queue));
+- **Page excluded**: the page is unticked (**Print this page**).
+
+A print placed on a sheet becomes **Nested** ("on" the sheet's name): it no longer leaves
+alone, the sheet prints it. It cannot be **Redone** until its sheet is printed (that would
+print it twice); **Remove** is still possible.
 
 An output cut short by a server shutdown does not restart by itself (a cut cannot
 resume halfway): it becomes *Failed*, and **Redo** runs it again.
@@ -551,6 +571,15 @@ the roll is kept; an item wider than the roll only fits rotated. The resolution 
 registration of the New job panel apply. Items are placed tallest first, left to right;
 the sheet is a new job, with all contours cut.
 
+**Outline of the whole sheet (NestTrimBox layer)** adds a cut rectangle around the placed
+items, in its own `NestTrimBox` layer, cut last and never printed. **Top margin (mm)** and
+**Bottom margin (mm)** (0 to 200) leave blank above and below the items, for the cutting
+table.
+
+A page that carries cutter marks (Kona registration, frame…) but no cut path at all gets
+the warning: *Cutter marks are printed, but the page has no cut path: ink and media for
+nothing.*
+
 With **Nest on the shape of the cut contours**, each item takes the room of its cut
 contour plus the spacing instead of its rectangle: circles staggered, triangles head to
 tail (with rotation, angles 0, 90, 180 and 270° are tried). An item without a closed
@@ -563,6 +592,102 @@ area used counts the area of the cut contours, in both modes.
 chosen spacing. With **Half drop**, every other column moves down half a height
 (wallpaper repeat). The ticked number of copies is ignored; the grid must fit the roll
 width (100 columns, 500 rows and 2000 copies at most). The cut follows every copy.
+
+## Nesting in the queue
+
+Instead of leaving one by one, the prints waiting for the same printer can leave
+together on a **sheet**: they are placed side by side across the roll width, and the
+sheet leaves when its **trigger** is reached, or on **Print now**.
+
+### Setting (System > Machines)
+
+For each printer, under its settings (hover the rows for help):
+
+- **Nesting** (strategy):
+  - **One by one** (default): each print leaves alone, nothing is nested;
+  - **Grouped in order**: side by side, by priority (nearest due date first), with no
+    rotation or reordering;
+  - **Media saving**: the whole sheet is recomputed at each arrival, tallest first, with
+    the quarter turn when it shortens the sheet.
+- **Triggers** (empty: no trigger; several: the first one reached):
+  - **Start after (min)**: minutes since the **first** job of the sheet arrived;
+  - **Start with no arrival for (min)**: minutes without a **new** job (counted from the
+    last one in);
+  - **Start at (m²)**: area of the placed jobs, copies included;
+  - **Target length (mm)**: jobs that would make the sheet longer wait for the next one
+    (badge *waits for the next sheet*), and a full sheet leaves by itself; a single job
+    longer than the target still leaves, alone;
+  - **Start at (% of target)**: the sheet leaves when it reaches this percentage of the
+    target length (needs a target length);
+  - **Start at length (mm)**: the sheet leaves as soon as it reaches this length; nothing
+    is held back (the job that crosses it leaves with it);
+  - **Full row leaves alone**: the job that would open a second row waits, and the full
+    row leaves alone.
+
+  With no trigger at all, the sheet waits for **Print now**.
+- **Loading**: **Free (roll width)**, the sheet takes the width of the loaded roll (else
+  the machine's), whatever the jobs' formats; **Strict (one sheet per format)**, jobs of
+  different formats never share a sheet, and each sheet is laid on its format (capped by
+  the roll). A job's format is the roll width of its media in the catalogue, else the one
+  its tiling was made for; with no known format, the roll.
+- **Space between copies (mm)** (5 by default): blank between two items side by side,
+  and between rows; **Space between rows (mm)** replaces it between rows (empty: the
+  same).
+- **Justification**: **Left**, **Centre** or **Right**: where the group of items sits
+  across the roll width. Centred or right, the sheet takes the whole roll width.
+- **Origin offset X (mm)** (0 to 1000): blank on the left of the sheet, before anything
+  else.
+- **Purge strip**: **None**, **Left**, **Right** or **Both sides**; **Purge width (mm)**
+  (1 to 100, 10 by default). The strip runs along the whole sheet on the chosen edge (on
+  the left, after the origin offset), as four equal bands cyan, magenta, yellow, black,
+  to clear each head; the space between copies separates it from the items.
+- **Flip every other panel**: the even panels of a tiling (2, 4…) are laid upside down
+  (half turn, same place), for a colour match between neighbouring panels.
+- **Top margin (mm)** and **Bottom margin (mm)** (0 to 200): blank above and below the
+  items, for the cutting table.
+- **Outline of the whole sheet (NestTrimBox layer)**: cut rectangle around the placed
+  items (without the offset or the purge), in the `NestTrimBox` layer, cut last, never
+  printed.
+
+### What nests together
+
+Only jobs with the same **media**, the same **print mode**, the same **cutter** ("none"
+included: a job to cut on the Kona and a job without a cut make two sheets) and the same
+**mirror** share a sheet; and what the sheet has only once: the **resolution**, the
+**registration**, the **colour** (profiles, intent), the **white**, the ink layers, the
+**Background under marks**, the **Paths to cut** and the **Cutting tolerance**; finally
+the **cut settings chosen per layer** (two jobs that choose two different settings for the
+same layer do not nest together). A layer unticked on a job is not cut on the sheet. Only
+PDFs nest; a page wider than the roll enters no sheet.
+
+### Queue > nest in progress
+
+In the **Queue** view, the column of a printer that nests shows "Nesting: *strategy*"
+and, above its outputs, each **Nest in progress — n pages**:
+
+- the sheet's media, cutter ("none") and mirror, and **NestTrimBox outline** when asked;
+- the drawing of the imposition (the roll width, each item in place);
+- **Length … mm · fill … %**: roll length used (margins included) and the share of that
+  roll covered by the items; *Trigger reached: the sheet is leaving.* when it is;
+- the list of pages: name, page, copies, order and due date; one tick box per page
+  (**Print this page**): unticked, the page leaves the sheet and the queue until it is
+  ticked again;
+- **Print now**: the sheet leaves without waiting for its trigger;
+- **Sheet PDF**: the exact PDF that will be printed (the preview is the PDF produced).
+
+When the sheet leaves, it becomes a job "Imbrication *machine* — n page(s)", rendered then
+queued on the printer (and on the group's cutter if it has one). Its ticket carries the
+orders placed, the nearest due date and, in the notes, each page with its copies. The
+placed prints (and the queued cut of those pages) become **Nested**.
+
+**Abandoned sheet**: rendering failed, sheet job deleted, or the sheet's print cancelled,
+failed or removed before being printed. Its jobs go back to the queue by themselves, in
+their previous state (a held cut comes back held), and into the nest in progress.
+Nothing comes back from a printed sheet. An abandoned sheet can no longer be redone:
+**Redo** on its output, **Retry** on its job or queuing it again is refused (*Abandoned
+sheet: its jobs went back to the queue…*), otherwise its jobs would print twice; **Print
+now** on the nest in progress makes a correct new one. A printed sheet, on the other
+hand, can be **Redone** (a wanted reprint).
 
 ## Colour
 
@@ -595,7 +720,8 @@ step (0.01 mm for the Kona, 0.025 mm by default elsewhere) and the cut **offset 
 (−20 to 20 mm): the gap measured on a test cut between cut and print, added to every cut
 sent to that machine. Also: the **Print origin X / Y** (Epson, direct driver), the
 **Speed (m²/h)**, the **Pool**, and for a cutter its cut settings, **Cut turned (180°)**,
-**One layer at a time**, **Cut on arrival** and **Duplicate (other set of marks)**.
+**One layer at a time**, **Cut on arrival** and **Duplicate (other set of marks)**, and
+for a printer its **Nesting** (see [Nesting in the queue](#nesting-in-the-queue)).
 **Save** applies at once: the print and cut buttons, the queue and the sidebar follow. A
 machine with an output still to run cannot be removed.
 

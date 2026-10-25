@@ -226,6 +226,20 @@ incorporer la police) et les images de moins de 100 ppi à leur taille imprimée
 contrôle préalable de la découpe ajoute les siennes (voir [Découpe](#découpe)). Le
 travail part quand même : c'est à l'opérateur de juger.
 
+**Fiche travail** (inspecteur, repliée sous son titre, avec son résumé) : **N° de
+commande**, **Client**, **Société**, **Quantité due**, **Échéance** (case à cocher, puis
+la date), **Opérateur** et **Notes** ; **Enregistrer la fiche**. 200 caractères par champ,
+2000 pour les notes, quantité 100 000 au plus. La quantité due est le nombre de **copies**
+posées sur la planche d'imbrication et s'imprime sur l'étiquette avec le n° de commande ;
+l'**échéance** est la priorité de l'imbrication (la plus proche passe d'abord, sans
+échéance ensuite, puis l'ordre d'arrivée). Le tableau a une colonne **Échéance**, et le
+choix **Tri** (**Arrivée** ou **Échéance**) au-dessus.
+
+**Imprimer cette page** (case sur chaque page de l'inspecteur, cochée par défaut) :
+décochée, la page n'entre ni dans la file ni dans une planche d'imbrication (badge **Non
+imprimée**) ; une sortie déjà en file attend avec la raison **Page exclue**. Recochée, elle
+revient. Une page décochée ne se met pas en file à la main non plus.
+
 La barre de recherche filtre par nom ; les pastilles **Tous**, **En cours**,
 **Prêt** et **Échec** filtrent par état. **Relancer** refait un travail en échec ;
 **Supprimer** efface un travail fini (refusé tant qu'une sortie l'attend dans la file).
@@ -279,7 +293,14 @@ opérateur reste simplement *Suspendue*) :
   d'elle-même quand le bon est chargé ;
 - **Impression pas finie** : une découpe attend que l'impression de sa page soit finie ;
 - **Découpeuse indisponible** : une impression attend que la découpeuse affectée soit
-  utilisable (pas d'encre gâchée).
+  utilisable (pas d'encre gâchée) ;
+- **En imbrication** : l'impression attend sa planche (voir [Imbrication dans la
+  file](#imbrication-dans-la-file)) ;
+- **Page exclue** : la page est décochée (**Imprimer cette page**).
+
+Une impression posée sur une planche passe **Imbriquée** (« sur » le nom de la planche) : elle ne
+part plus seule, la planche l'imprime. Elle ne se **Refait** pas tant que sa planche n'est
+pas imprimée (ce serait l'imprimer deux fois) ; **Retirer** reste possible.
 
 Une sortie coupée par un arrêt du serveur ne repart pas seule (une découpe ne se
 reprend pas au milieu) : elle passe en *Échec*, et **Refaire** la relance.
@@ -581,6 +602,15 @@ résolution et le repérage du panneau Nouveau travail s'appliquent. Les
 éléments sont rangés du plus haut au plus bas, de gauche à droite ; la planche est un
 nouveau travail, avec la découpe de tous les contours.
 
+**Contour de toute la planche (couche NestTrimBox)** ajoute un rectangle de découpe autour
+des éléments posés, dans sa propre couche `NestTrimBox`, coupée en dernier et jamais
+imprimée. **Marge haute (mm)** et **Marge basse (mm)** (0 à 200) laissent du blanc
+au-dessus et au-dessous des éléments, pour la table de découpe.
+
+Une page qui porte des repères de découpe (repérage Kona, cadre…) sans aucun tracé de
+coupe reçoit l'alerte : *Des repères de découpe sont imprimés, mais la page n'a aucun
+tracé de coupe : encre et support pour rien.*
+
 Avec **Imbriquer sur la forme des contours de découpe**, chaque élément occupe la place de
 son contour de découpe, plus l'espacement, au lieu de son rectangle : ronds en quinconce,
 triangles tête-bêche (avec la rotation, les angles 0, 90, 180 et 270° sont essayés). Un
@@ -593,6 +623,110 @@ de surface utilisée compte l'aire des contours de découpe, dans les deux modes
 l'espacement choisi. Avec **Demi-saut**, une colonne sur deux descend d'une demi-hauteur
 (raccord papier peint). Le nombre de copies coché est ignoré ; la grille doit tenir dans
 la laize (100 colonnes, 500 rangées et 2000 copies au plus). La découpe suit chaque copie.
+
+## Imbrication dans la file
+
+Au lieu de sortir une à une, les impressions en attente d'une même imprimante peuvent
+partir ensemble sur une **planche** : elles sont posées côte à côte sur la laize, et la
+planche part quand son **déclencheur** est atteint, ou sur **Imprimer maintenant**.
+
+### Réglage (Système > Machines)
+
+Pour chaque imprimante, sous ses réglages (le survol des lignes donne l'aide) :
+
+- **Imbrication** (stratégie) :
+  - **Un par un** (défaut) : chaque impression sort seule, rien n'est imbriqué ;
+  - **Groupé dans l'ordre** : côte à côte, par priorité (échéance la plus proche
+    d'abord), sans rotation ni réordonnancement ;
+  - **Économie de support** : toute la planche est recalculée à chaque arrivée, les plus
+    hauts d'abord, avec le quart de tour quand il raccourcit la planche.
+- **Déclencheurs** (vides : pas de déclencheur ; plusieurs : le premier atteint) :
+  - **Départ après (min)** : minutes depuis l'arrivée du **premier** travail de la
+    planche ;
+  - **Départ sans arrivée depuis (min)** : minutes sans **nouveau** travail (comptées
+    depuis le dernier arrivé) ;
+  - **Départ à (m²)** : surface des travaux posés, copies comprises ;
+  - **Longueur cible (mm)** : les travaux qui la feraient dépasser attendent la planche
+    suivante (badge *attend la planche suivante*), et une planche pleine part d'elle-même ;
+    un travail seul plus long que la cible part quand même, seul ;
+  - **Départ à (% de la cible)** : la planche part quand elle atteint ce pourcentage de
+    la longueur cible (demande une longueur cible) ;
+  - **Départ à la longueur (mm)** : la planche part dès qu'elle atteint cette longueur ;
+    rien n'est reporté (le travail qui la franchit part avec elle) ;
+  - **Rangée pleine sortie seule** : le travail qui ouvrirait une deuxième rangée attend,
+    et la rangée pleine part seule.
+
+  Sans aucun déclencheur, la planche attend **Imprimer maintenant**.
+- **Chargement** : **Libre (laize du rouleau)**, la planche prend la laize du rouleau
+  chargé (sinon celle de la machine), quel que soit le format des travaux ; **Strict (une
+  planche par format)**, les travaux de formats différents ne partagent pas une planche, et
+  chacune est posée sur son format (borné par le rouleau). Le format d'un travail est la
+  laize de son support au catalogue, sinon celle pour laquelle sa mosaïque est faite ; sans
+  format connu, le rouleau.
+- **Espace entre copies (mm)** (5 par défaut) : blanc entre deux éléments côte à côte,
+  et entre rangées ; **Espace entre rangées (mm)** le remplace entre rangées (vide : le
+  même).
+- **Justification** : **Gauche**, **Centre** ou **Droite** : place du groupe d'éléments
+  sur la laize. Centré ou à droite, la planche fait toute la laize.
+- **Décalage d'origine X (mm)** (0 à 1000) : blanc à gauche de la planche, avant tout le
+  reste.
+- **Bande de purge** : **Aucune**, **À gauche**, **À droite** ou **Des deux côtés** ;
+  **Largeur de purge (mm)** (1 à 100, 10 par défaut). La bande court le long de toute la
+  planche, au bord choisi (à gauche, après le décalage d'origine), en quatre bandes égales
+  cyan, magenta, jaune, noir, pour dégorger chaque tête ; l'espace entre copies la sépare
+  des éléments.
+- **Retourner un lé sur deux** : les lés pairs d'une mosaïque (2, 4…) sont posés à
+  l'envers (demi-tour, même place), pour un raccord de teinte entre lés voisins.
+- **Marge haute (mm)** et **Marge basse (mm)** (0 à 200) : blanc au-dessus et au-dessous
+  des éléments, pour la table de découpe.
+- **Contour de toute la planche (couche NestTrimBox)** : rectangle de découpe autour des
+  éléments posés (sans le décalage ni la purge), dans la couche `NestTrimBox`, coupée en
+  dernier, jamais imprimée.
+
+### Ce qui s'imbrique ensemble
+
+Seuls partagent une planche les travaux qui ont le même **support**, le même **mode
+d'impression**, la même **découpeuse** (« aucune » comprise : un travail à couper au Kona
+et un travail sans découpe font deux planches) et le même **miroir** ; et ce que la planche
+n'a qu'une fois : la **résolution**, le **repérage**, la **couleur** (profils, intention),
+le **blanc**, les couches d'encre, le **Fond sous les repères**, les **Tracés à
+découper** et la **Tolérance de découpe** ; enfin les **réglages de coupe choisis par couche** (deux travaux qui
+choisissent deux réglages différents pour une même couche ne s'imbriquent pas). Une couche
+décochée sur un travail n'est pas coupée sur la planche. Seuls les PDF s'imbriquent ; une
+page plus large que la laize n'entre dans aucune planche.
+
+### File > planche en préparation
+
+Dans la vue **File d'attente**, la colonne d'une imprimante qui imbrique affiche
+« Imbrication : *stratégie* » et, au-dessus de ses sorties, chaque **Planche en
+préparation — n pages** :
+
+- le support, la découpeuse (« aucune ») et le miroir de la planche, et **contour
+  NestTrimBox** s'il est demandé ;
+- le dessin de l'imposition (la laize, chaque élément à sa place) ;
+- **Longueur … mm · remplissage … %** : longueur de rouleau consommée (marges
+  comprises) et part de ce rouleau couverte par les éléments ; *Déclencheur atteint : la
+  planche part.* quand c'est le cas ;
+- la liste des pages : nom, page, copies, commande et échéance ; une case par page
+  (**Imprimer cette page**) : décochée, la page sort de la planche et de la file, jusqu'à
+  ce qu'elle soit recochée ;
+- **Imprimer maintenant** : la planche part sans attendre son déclencheur ;
+- **PDF de la planche** : le PDF exact qui sera imprimé (l'aperçu est le PDF produit).
+
+Quand la planche part, elle devient un travail « Imbrication *machine* — n page(s) »,
+rendu puis mis en file sur l'imprimante (et sur la découpeuse du groupe s'il en a une).
+Sa fiche reprend les commandes posées, l'échéance la plus proche et, en notes, chaque page
+avec ses copies. Les impressions posées (et la découpe en file de ces pages) passent
+**Imbriquée**.
+
+**Planche abandonnée** : rendu en échec, travail de planche supprimé, ou impression de la
+planche annulée, en échec ou retirée avant d'être imprimée. Ses travaux reviennent d'eux-
+mêmes en file, dans leur état d'avant (une découpe suspendue revient suspendue), et dans
+la planche en préparation. Rien ne revient d'une planche imprimée. Une planche abandonnée
+ne se refait plus : **Refaire** sa sortie, **Relancer** son travail ou le remettre en file
+est refusé (*Planche abandonnée : ses travaux sont revenus en file…*), sinon ses travaux
+s'imprimeraient deux fois ; **Imprimer maintenant** sur la planche en préparation en refait
+une juste. Une planche imprimée, elle, se **Refait** (réimpression voulue).
 
 ## Couleur
 
@@ -628,7 +762,8 @@ entre la découpe et l'impression, ajouté à chaque découpe envoyée à cette 
 Aussi : l'**Origine X / Y impression** (Epson, pilote direct), la **Cadence (m²/h)**, le
 **Pool**, et pour une découpeuse ses réglages de coupe, **Découpe retournée (180°)**,
 **Une couche à la fois**, **Couper dès l'arrivée** et **Dupliquer (autre jeu de
-repères)**. **Enregistrer** applique tout de suite : les boutons d'impression et de
+repères)**, et pour une imprimante son **Imbrication** (voir [Imbrication dans la
+file](#imbrication-dans-la-file)). **Enregistrer** applique tout de suite : les boutons d'impression et de
 découpe, la file et la barre latérale suivent. Une machine qui a encore une sortie à
 passer ne peut pas être retirée.
 
