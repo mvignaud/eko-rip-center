@@ -16,6 +16,9 @@ pub enum Etat {
     Terminee,
     Echec,
     Annulee,
+    /// Posée sur une planche d'imbrication (roadmap 5.1) : la planche, un travail à part,
+    /// l'imprime à sa place.
+    Imbriquee,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -49,6 +52,9 @@ pub struct Sortie {
     /// restaurable.
     #[serde(default)]
     pub archivee: bool,
+    /// Planche d'imbrication (travail) qui l'imprime, une fois `Imbriquee`.
+    #[serde(default)]
+    pub planche: Option<Uuid>,
 }
 
 /// Ce que devient une découpe terminée (roadmap 4.12) : réglage de découpe du serveur.
@@ -66,7 +72,7 @@ pub enum ApresCoupe {
 
 impl Sortie {
     pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false }
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false, planche: None }
     }
 
     pub fn operation(&self) -> Operation {

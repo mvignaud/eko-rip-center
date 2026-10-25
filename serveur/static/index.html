@@ -437,6 +437,9 @@
           <label><span data-t="colonnes"></span> <input type="number" id="colonnes" value="2" min="1" max="100" step="1"></label>
           <label><span data-t="rangees"></span> <input type="number" id="rangees" value="2" min="1" max="500" step="1"></label>
           <label class="case"><input type="checkbox" id="demi-saut"> <span data-t="demi_saut"></span></label>
+          <label class="case"><input type="checkbox" id="contour-planche"> <span data-t="contour_planche"></span></label>
+          <label><span data-t="marge_haut"></span> <input type="number" id="marge-haut" value="0" min="0" max="200" step="1"></label>
+          <label><span data-t="marge_bas"></span> <input type="number" id="marge-bas" value="0" min="0" max="200" step="1"></label>
           <button type="button" id="creer-planche"></button>
         </div>
         <div id="imposition" style="padding: 0 16px 16px"></div>
@@ -446,6 +449,7 @@
         <button type="button" class="puce" data-filtre="actif" aria-pressed="false" data-t="filtre_actifs"></button>
         <button type="button" class="puce" data-filtre="termine" aria-pressed="false" data-t="termine"></button>
         <button type="button" class="puce" data-filtre="echec" aria-pressed="false" data-t="echec"></button>
+        <label class="meta"><span data-t="tri"></span> <select id="tri"><option value="date" data-t="tri_date"></option><option value="echeance" data-t="tri_echeance"></option></select></label>
       </div>
       <section id="travaux" class="panneau" aria-live="polite"></section>
     </div>
@@ -573,6 +577,17 @@ const textes = {
     les_resume: (c, r, n) => `${c} × ${r} = ${n} tuile${n > 1 ? "s" : ""}`, les_imprimer: "Imprimer cette tuile",
     planche: "Planche", laize: "Laize (mm)", espacement: "Espacement (mm)", creer_planche: (n) => `Créer la planche (${n} élément${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Longueur de rouleau : ${l} mm · surface utilisée : ${u} %`,
+    contour_planche: "Contour de toute la planche (couche NestTrimBox)", marge_haut: "Marge haute (mm)", marge_bas: "Marge basse (mm)",
+    nid_titre: (n) => `Planche en préparation — ${n} ${n > 1 ? "travaux" : "travail"}`, nid_mesure: (l, r) => `Longueur ${l} mm · remplissage ${r} %`,
+    nid_groupe: (s, d, m) => `Support : ${s || "—"} · découpeuse : ${d || "aucune"}${m ? " · miroir" : ""}`, nid_pret: "Déclencheur atteint : la planche part.",
+    nid_reporte: "attend la planche suivante", imprimer_maintenant: "Imprimer maintenant", pdf_planche: "PDF de la planche", nid_lancee: "Planche lancée.", nid_contour: "contour NestTrimBox",
+    strategie: "Imbrication", strategies: { un_par_un: "Un par un", groupe: "Groupé dans l'ordre", economie: "Économie de support" },
+    nid_delai: "Départ après (min)", nid_surface: "Départ à (m²)", nid_longueur: "Longueur cible (mm)", nid_pct: "Départ à (% de la cible)", nid_espace: "Espacement (mm)",
+    note_imbrication: "Un par un : chaque impression sort seule. Groupé : côte à côte dans l'ordre (échéance la plus proche d'abord). Économie : planche recalculée à chaque arrivée, quart de tour permis. Seuls s'imbriquent les travaux de même support, mode, découpeuse et miroir. Sans déclencheur, la planche attend « Imprimer maintenant » ; une longueur cible atteinte la fait partir.",
+    fiche_titre: "Fiche travail", fiche_commande: "N° de commande", fiche_client: "Client", fiche_societe: "Société", fiche_quantite: "Quantité due", fiche_echeance: "Échéance", fiche_notes: "Notes", fiche_operateur: "Opérateur",
+    fiche_enregistrer: "Enregistrer la fiche", fiche_enregistree: "Fiche enregistrée.", note_fiche: "La quantité due fixe les copies posées sur la planche d'imbrication et s'imprime sur l'étiquette avec le n° de commande ; l'échéance la plus proche passe d'abord.",
+    imprimer_page: "Imprimer cette page", page_non_imprimee: "Non imprimée", col_echeance: "Échéance", tri: "Tri", tri_date: "Arrivée", tri_echeance: "Échéance",
+    sur_planche: (n) => `sur ${n}`, echeance_le: (d) => `Échéance ${d}`, cde: (c) => `Cde ${c}`,
     rotation: "Tourner de 90° si la planche est plus courte", forme: "Imbriquer sur la forme des contours de découpe", motif: "Motif step & repeat (une page en grille)", colonnes: "Colonnes", rangees: "Rangées", demi_saut: "Demi-saut (papier peint)", ajouter: "Ajouter à la planche", copies: "copies", planche_creee: "Planche créée.",
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
@@ -617,6 +632,7 @@ const textes = {
       decoupe_traces_ouverts: (d, p) => `Page ${p} : ${d} tracé(s) ouvert(s) non coupé(s) — les tracés ouverts ne sont pas tolérés (Système, Découpe).`,
       decoupe_pas_au_premier_plan: (d, p) => `Page ${p} : un tracé ${d} est recouvert par l'image ; le mettre sur le calque du dessus.`,
       decoupe_contour_vectorise: (d, p) => `Page ${p} : le tracé ${d} est un contour vectorisé (filet devenu surface) : il serait coupé deux fois. Garder le filet.`,
+      decoupe_reperes_sans_trace: () => "Des repères de découpe sont imprimés, mais la page n'a aucun tracé de coupe : encre et support pour rien.",
       decoupe_sans_prefixe: (d) => `Une découpeuse est choisie, mais aucun ton de découpe n'est reconnu (tons du fichier : ${d}). Le nom doit commencer par un préfixe de découpe (Système > Découpe).`,
       decoupe_calque_non_imprimable: (d, p) => `Page ${p} : un tracé ${d} est sur un calque non imprimable : il n'est pas coupé (Système > Découpe pour le prendre).`,
       decoupe_trait_non_centre: (d, p) => `Page ${p} : le filet ${d} est aligné à l'intérieur ou à l'extérieur du tracé ; l'aligner au centre.`,
@@ -627,8 +643,8 @@ const textes = {
     vers_kona: "Découper (Kona)", vers_epson: "Imprimer (Epson)", mis_en_file: "Ajouté à la file d'attente.",
     machines: { kona: "Mutoh Kona 1650 — découpe", epson: "Epson SC-S80600 — impression" },
     note_epson: "Connexion Dossier : les plaques sont copiées dans sorties/epson/ sur le serveur (pas imprimées). Pour imprimer en direct : connexion Réseau, port 9100.",
-    raisons: { attente_impression: ["Impression pas finie", "La découpe part quand l'impression de la page est terminée à 100 %."], decoupeuse_indisponible: ["Découpeuse indisponible", "La découpeuse affectée est absente, hors ligne, mal connectée, ou une couche n'y trouve pas son réglage : rien ne part, pour ne pas gâcher d'encre ni de support."], attente_operateur: ["Retenue", "Suspendue par un opérateur : « Reprendre » pour la relancer."], machine_hors_ligne: ["Machine injoignable", "La machine n'est pas branchée ou absente du catalogue : la sortie partira dès qu'elle répond."], source_absente: ["Fichier manquant", "Le rendu ou le tracé de cette page est introuvable : relancer le travail."], format_trop_petit: ["Trop large", "La page (repères compris) dépasse la laize de la machine : tourner, réduire ou changer de support."], attente_support: ["Autre support", "Le support chargé n'est pas celui du travail."] },
-    etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
+    raisons: { attente_impression: ["Impression pas finie", "La découpe part quand l'impression de la page est terminée à 100 %."], decoupeuse_indisponible: ["Découpeuse indisponible", "La découpeuse affectée est absente, hors ligne, mal connectée, ou une couche n'y trouve pas son réglage : rien ne part, pour ne pas gâcher d'encre ni de support."], attente_operateur: ["Retenue", "Suspendue par un opérateur : « Reprendre » pour la relancer."], machine_hors_ligne: ["Machine injoignable", "La machine n'est pas branchée ou absente du catalogue : la sortie partira dès qu'elle répond."], source_absente: ["Fichier manquant", "Le rendu ou le tracé de cette page est introuvable : relancer le travail."], format_trop_petit: ["Trop large", "La page (repères compris) dépasse la laize de la machine : tourner, réduire ou changer de support."], attente_support: ["Autre support", "Le support chargé n'est pas celui du travail."], attente_imbrication: ["En imbrication", "L'impression attend sa planche : elle part avec les autres au déclencheur, ou sur « Imprimer maintenant »."], page_exclue: ["Page exclue", "Cette page est décochée : elle ne part pas tant qu'elle n'est pas recochée."] },
+    etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée", imbriquee: "Imbriquée" }, deposee: "Déposée dans le dossier (pas imprimée)",
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer", restaurer: "Restaurer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `Reste ${m} m de rouleau`, fichiers_etat: "Fichiers et dossiers", dossier_absent: (d, r) => r ? `dossier ${d} absent : recréé` : `dossier ${d} absent et impossible à recréer (droits ?)`, fichier_illisible: (f, r) => r ? `${f} illisible (coupure ?) : version précédente reprise` : `${f} illisible, sans version précédente : à restaurer (copie dans ${f}.illisible)`, conso_7j: (m, e) => `Relevé sur 7 jours : ${m} m de support${e ? ", encre " + e : ""} (au % près)`, support_n: (n) => `support n° ${n}`, chauffages: (t) => `chauffages ${t}`, alertes_imprimante: (a) => `Imprimante : ${a}`, utiliser_laize: "Utiliser comme laize", relire: "Relire", laize_reglee: (l) => `Laize réglée sur ${l} mm.`,
@@ -660,6 +676,8 @@ const textes = {
       profil_invalide: "Ce fichier n'est pas un profil ICC (.icc ou .icm).", planche_invalide: "Planche impossible.", mosaique_invalide: "Mosaïque impossible.", les_incoherents: "Lés incohérents : largeurs, recouvrements, ordre ou tuiles à imprimer.", soudure_invalide: "Soudure : il faut au moins 12,7 mm de recouvrement sur chaque tuile.", reglage_invalide: "Nom de réglage invalide (lettres, chiffres, espaces, - _ +).",
       rien_a_decouper: "Ce travail n'a aucun tracé de découpe.", rien_a_imprimer: "Cette page n'a rien à imprimer.", envoi_impossible: "Envoi à l'imprimante impossible.", imprimante_en_alerte: "L'imprimante signale une alerte : impression arrêtée.",
       travail_occupe: "Ce travail est en cours de rendu, ou une sortie l'attend dans la file.",
+      fiche_invalide: "Fiche invalide : 200 caractères par champ, 2000 pour les notes, quantité 100 000 au plus.", page_exclue: "Cette page est exclue de l'impression : recochez-la d'abord.",
+      rien_a_imbriquer: "Rien à imbriquer sur cette planche.", imbrication_changee: "La file a changé depuis l'aperçu : planche recalculée, réessayez.",
       tarifs_invalides: "Tarifs invalides : nombres positifs attendus.",
       pool_incoherent: "Pool incohérent : nom d'identifiant libre, machines de même modèle et même laize.",
       support_different: "Les machines du pool n'ont pas le même support chargé : charger le même support, ou dupliquer la machine.",
@@ -785,6 +803,17 @@ const textes = {
     les_resume: (c, r, n) => `${c} × ${r} = ${n} tile${n > 1 ? "s" : ""}`, les_imprimer: "Print this tile",
     planche: "Sheet", laize: "Roll width (mm)", espacement: "Spacing (mm)", creer_planche: (n) => `Build the sheet (${n} item${n > 1 ? "s" : ""})`,
     imposition: (l, u) => `Roll length: ${l} mm · area used: ${u} %`,
+    contour_planche: "Outline of the whole sheet (NestTrimBox layer)", marge_haut: "Top margin (mm)", marge_bas: "Bottom margin (mm)",
+    nid_titre: (n) => `Nest in progress — ${n} job${n > 1 ? "s" : ""}`, nid_mesure: (l, r) => `Length ${l} mm · fill ${r} %`,
+    nid_groupe: (s, d, m) => `Media: ${s || "—"} · cutter: ${d || "none"}${m ? " · mirrored" : ""}`, nid_pret: "Trigger reached: the sheet is leaving.",
+    nid_reporte: "waits for the next sheet", imprimer_maintenant: "Print now", pdf_planche: "Sheet PDF", nid_lancee: "Sheet started.", nid_contour: "NestTrimBox outline",
+    strategie: "Nesting", strategies: { un_par_un: "One by one", groupe: "Grouped in order", economie: "Media saving" },
+    nid_delai: "Start after (min)", nid_surface: "Start at (m²)", nid_longueur: "Target length (mm)", nid_pct: "Start at (% of target)", nid_espace: "Spacing (mm)",
+    note_imbrication: "One by one: each print leaves alone. Grouped: side by side in order (nearest due date first). Media saving: the sheet is recomputed at each arrival, quarter turn allowed. Only jobs with the same media, mode, cutter and mirror nest together. Without a trigger, the sheet waits for \"Print now\"; a reached target length makes it leave.",
+    fiche_titre: "Job ticket", fiche_commande: "Order no.", fiche_client: "Customer", fiche_societe: "Company", fiche_quantite: "Quantity due", fiche_echeance: "Due date", fiche_notes: "Notes", fiche_operateur: "Operator",
+    fiche_enregistrer: "Save the ticket", fiche_enregistree: "Ticket saved.", note_fiche: "The quantity due sets the copies placed on the nesting sheet and is printed on the label with the order no.; the nearest due date goes first.",
+    imprimer_page: "Print this page", page_non_imprimee: "Not printed", col_echeance: "Due", tri: "Sort", tri_date: "Arrival", tri_echeance: "Due date",
+    sur_planche: (n) => `on ${n}`, echeance_le: (d) => `Due ${d}`, cde: (c) => `Order ${c}`,
     rotation: "Rotate 90° when the sheet gets shorter", forme: "Nest on the shape of the cut contours", motif: "Step & repeat pattern (one page in a grid)", colonnes: "Columns", rangees: "Rows", demi_saut: "Half drop (wallpaper)", ajouter: "Add to sheet", copies: "copies", planche_creee: "Sheet created.",
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
@@ -829,6 +858,7 @@ const textes = {
       decoupe_traces_ouverts: (d, p) => `Page ${p}: ${d} open path(s) not cut — open paths are not allowed (System, Cutting).`,
       decoupe_pas_au_premier_plan: (d, p) => `Page ${p}: a ${d} path is covered by the artwork; put it on the top layer.`,
       decoupe_contour_vectorise: (d, p) => `Page ${p}: the ${d} path is an outlined stroke (a stroke turned into a shape): it would be cut twice. Keep the stroke.`,
+      decoupe_reperes_sans_trace: () => "Cutter marks are printed, but the page has no cut path: ink and media for nothing.",
       decoupe_sans_prefixe: (d) => `A cutter is chosen, but no cut spot colour is recognised (colours in the file: ${d}). The name must start with a cut prefix (System > Cutting).`,
       decoupe_calque_non_imprimable: (d, p) => `Page ${p}: a ${d} path is on a non-printing layer: it is not cut (System > Cutting to take it).`,
       decoupe_trait_non_centre: (d, p) => `Page ${p}: the ${d} stroke is aligned inside or outside the path; align it to the centre.`,
@@ -839,8 +869,8 @@ const textes = {
     vers_kona: "Cut (Kona)", vers_epson: "Print (Epson)", mis_en_file: "Added to the queue.",
     machines: { kona: "Mutoh Kona 1650 — cutting", epson: "Epson SC-S80600 — printing" },
     note_epson: "Folder connection: plates are copied to sorties/epson/ on the server (not printed). To print directly: Network connection, port 9100.",
-    raisons: { attente_impression: ["Print not finished", "The cut starts once the page is 100 % printed."], decoupeuse_indisponible: ["Cutter unavailable", "The assigned cutter is missing, offline, badly connected, or a layer finds no setting on it: nothing goes out, so no ink or media is wasted."], attente_operateur: ["Held", "Held by an operator: \"Resume\" to restart it."], machine_hors_ligne: ["Machine unreachable", "The machine is unplugged or missing from the catalogue: the output leaves as soon as it answers."], source_absente: ["File missing", "This page's rendering or cut path cannot be found: re-run the job."], format_trop_petit: ["Too wide", "The page (marks included) is wider than the machine's roll: rotate, scale down or change media."], attente_support: ["Other media", "The loaded media is not the job's."] },
-    etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
+    raisons: { attente_impression: ["Print not finished", "The cut starts once the page is 100 % printed."], decoupeuse_indisponible: ["Cutter unavailable", "The assigned cutter is missing, offline, badly connected, or a layer finds no setting on it: nothing goes out, so no ink or media is wasted."], attente_operateur: ["Held", "Held by an operator: \"Resume\" to restart it."], machine_hors_ligne: ["Machine unreachable", "The machine is unplugged or missing from the catalogue: the output leaves as soon as it answers."], source_absente: ["File missing", "This page's rendering or cut path cannot be found: re-run the job."], format_trop_petit: ["Too wide", "The page (marks included) is wider than the machine's roll: rotate, scale down or change media."], attente_support: ["Other media", "The loaded media is not the job's."], attente_imbrication: ["Nesting", "The print waits for its sheet: it leaves with the others at the trigger, or on \"Print now\"."], page_exclue: ["Page excluded", "This page is unticked: it does not leave until it is ticked again."] },
+    etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled", imbriquee: "Nested" }, deposee: "Left in the folder (not printed)",
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove", restaurer: "Restore" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
     longueur_restante: (m) => `${m} m of roll left`, fichiers_etat: "Files and folders", dossier_absent: (d, r) => r ? `folder ${d} missing: recreated` : `folder ${d} missing and could not be recreated (permissions?)`, fichier_illisible: (f, r) => r ? `${f} unreadable (power cut?): previous version restored` : `${f} unreadable, no previous version: restore it (copy in ${f}.illisible)`, conso_7j: (m, e) => `Measured over 7 days: ${m} m of media${e ? ", ink " + e : ""} (to the nearest %)`, support_n: (n) => `media no. ${n}`, chauffages: (t) => `heaters ${t}`, alertes_imprimante: (a) => `Printer: ${a}`, utiliser_laize: "Use as roll width", relire: "Read again", laize_reglee: (l) => `Roll width set to ${l} mm.`,
@@ -872,6 +902,8 @@ const textes = {
       profil_invalide: "This file is not an ICC profile (.icc or .icm).", planche_invalide: "Cannot build the sheet.", mosaique_invalide: "Cannot tile this file.", les_incoherents: "Inconsistent panels: widths, overlaps, order or tiles to print.", soudure_invalide: "Weld: every tile needs an overlap of at least 12.7 mm.", reglage_invalide: "Invalid preset name (letters, digits, spaces, - _ +).",
       rien_a_decouper: "This job has no cut path.", rien_a_imprimer: "This page has nothing to print.", envoi_impossible: "Cannot send to the printer.", imprimante_en_alerte: "The printer reports an alert: printing stopped.",
       travail_occupe: "This job is being rendered, or an output is waiting for it in the queue.",
+      fiche_invalide: "Invalid ticket: 200 characters per field, 2000 for notes, quantity 100,000 at most.", page_exclue: "This page is excluded from printing: tick it again first.",
+      rien_a_imbriquer: "Nothing to nest on this sheet.", imbrication_changee: "The queue changed since the preview: sheet recomputed, try again.",
       tarifs_invalides: "Invalid rates: positive numbers expected.",
       pool_incoherent: "Inconsistent pool: free id-like name, machines of the same model and roll width.",
       support_different: "The pool machines do not have the same loaded media: load the same media, or duplicate the machine.",
@@ -2488,7 +2520,7 @@ function glisserLes(pt) {
 }
 
 // --- Travaux ---
-let travaux = [], sorties = [], filtre = "";
+let travaux = [], sorties = [], filtre = "", imbrications = [];
 $("recherche").addEventListener("input", () => afficherTravaux());
 document.querySelectorAll("[data-filtre]").forEach((b) => b.addEventListener("click", () => {
   filtre = b.dataset.filtre;
@@ -2499,8 +2531,11 @@ const saisieDansListe = () => $("inspecteur").contains(document.activeElement) &
 
 async function rafraichir() {
   const lire = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const [t, s] = await Promise.all([lire("/api/travaux"), lire("/api/file")]);
+  // Planches en préparation (roadmap 5.4) : lues seulement pour la file, s'il y a lieu.
+  const avecNid = vueCourante() === "file" && catalogue.some((m) => (m.imbrication?.strategie || "un_par_un") !== "un_par_un");
+  const [t, s, n] = await Promise.all([lire("/api/travaux"), lire("/api/file"), avecNid ? lire("/api/imbrications") : Promise.resolve([])]);
   if (t) travaux = t;
+  if (n) imbrications = n;
   if (s) { signalerFins(sorties, s); sorties = s; }
   const aPasser = sorties.filter((x) => ["en_attente", "en_cours", "suspendue"].includes(x.etat)).length;
   $("compte-file").hidden = !aPasser; $("compte-file").textContent = aPasser;
@@ -2508,7 +2543,7 @@ async function rafraichir() {
   afficherLateral();
   // Reconstruire seulement si quelque chose a changé : un clic en cours ne doit pas tomber
   // sur un bouton remplacé entre l'appui et le relâchement.
-  const empreinte = JSON.stringify([t, s, vueCourante()]);
+  const empreinte = JSON.stringify([t, s, n, vueCourante()]);
   if (empreinte === derniereEmpreinte) return;
   derniereEmpreinte = empreinte;
   afficherVue();
@@ -2547,12 +2582,14 @@ function afficherTravaux() {
   // Pas de reconstruction pendant une saisie dans l'inspecteur (nombre de copies…).
   if (saisieDansListe()) return;
   const q = $("recherche").value.trim().toLowerCase();
-  const visibles = travaux.filter((t) => (!q || t.nom.toLowerCase().includes(q))
+  const visibles = travaux.filter((t) => (!q || [t.nom, t.fiche?.commande, t.fiche?.client, t.fiche?.societe].some((x) => x && x.toLowerCase().includes(q)))
     && (!filtre || (filtre === "actif" ? ["en_attente", "en_cours"].includes(t.statut) : t.statut === filtre)));
+  // Tri par échéance (roadmap 5.6) : la plus proche d'abord, sans échéance ensuite.
+  if ($("tri").value === "echeance") visibles.sort((a, b) => (a.fiche?.echeance ?? Infinity) - (b.fiche?.echeance ?? Infinity));
   if (!visibles.length) {
     liste.replaceChildren(el("p", { className: "vide-liste" }, T().aucun_travail));
   } else {
-    const tete = el("tr", {}, ...["", T().col_nom, T().col_etat, T().col_format, T().col_pages, T().col_support, T().col_prix, T().col_date].map((x, k) => el("th", { className: k >= 4 && k !== 5 ? "num" : "" }, x)));
+    const tete = el("tr", {}, ...["", T().col_nom, T().col_etat, T().col_format, T().col_pages, T().col_support, T().col_prix, T().col_echeance, T().col_date].map((x, k) => el("th", { className: k >= 4 && k !== 5 ? "num" : "" }, x)));
     liste.replaceChildren(el("table", { className: "tableau" }, el("thead", {}, tete), el("tbody", {}, ...visibles.map(ligneTravail))));
   }
   afficherInspecteur();
@@ -2569,9 +2606,9 @@ function ligneTravail(t) {
   const prix = t.prix_de_revient > 0 ? `${nombre(t.prix_de_revient, 2)} €` : "—";
   const etat = el("td", {}, el("span", { className: `badge ${t.statut}` }, T()[t.statut]), t.alertes?.length ? el("span", { className: "badge alerte", style: "margin-left: 4px" }, "⚠") : null);
   const ligne = el("tr", { ariaSelected: String(t.id === selectionne) },
-    el("td", {}, mini), el("td", {}, el("div", { className: "nom" }, t.nom), el("div", { className: "meta" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`)),
+    el("td", {}, mini), el("td", {}, el("div", { className: "nom" }, t.nom), el("div", { className: "meta" }, t.mode === "decouper" ? T().decouper : `${t.dpi} dpi`, ...ficheEnBref(t.fiche).map((x) => ` · ${x}`))),
     etat, el("td", { className: "num" }, format), el("td", { className: "num" }, String(t.pages.length || "—")),
-    el("td", {}, t.support || "—"), el("td", { className: "num" }, prix), el("td", { className: "num" }, date(t.cree_le)));
+    el("td", {}, t.support || "—"), el("td", { className: "num" }, prix), el("td", { className: "num" + (echue(t.fiche) ? " erreur" : "") }, t.fiche?.echeance ? jour(t.fiche.echeance) : "—"), el("td", { className: "num" }, date(t.cree_le)));
   ligne.setAttribute("aria-selected", String(t.id === selectionne));
   ligne.addEventListener("click", () => { selectionne = t.id; afficherTravaux(); });
   ligne.addEventListener("dblclick", () => { selectionne = t.id; if (t.format === "pdf" && t.statut !== "en_cours") ouvrirEdition(t); });
@@ -2581,7 +2618,7 @@ function ligneTravail(t) {
 /** Panneau d'inspection : le travail choisi dans le tableau, en détail. */
 function afficherInspecteur() {
   const z = $("inspecteur"), t = travailSelectionne();
-  if (z.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
+  if (z.contains(document.activeElement) && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
   if (!t) { z.replaceChildren(el("p", { className: "vide-liste" }, T().aucune_selection)); return; }
   const badges = el("div", { className: "badges" },
     el("span", { className: `badge ${t.statut}` }, T()[t.statut]),
@@ -2596,11 +2633,53 @@ function afficherInspecteur() {
   if (t.alertes && t.alertes.length) {
     corps.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
   }
+  corps.append(panneauFiche(t));
   if (t.statut === "termine" && t.couches_decoupe?.length) corps.append(panneauCouches(t));
   if (t.statut === "termine" && t.pages.some((p) => p.traces_decoupe)) corps.append(panneauMise(t));
   if (t.statut === "termine") t.pages.forEach((page, i) => corps.append(vuePage(t, page, i + 1)));
   z.replaceChildren(corps);
 }
+
+/** Jour d'une échéance (secondes Unix), et « AAAA-MM-JJ » pour le champ date. */
+const jour = (s) => new Date(s * 1000).toLocaleDateString(locale(), { dateStyle: "short" });
+const isoJour = (s) => { const d = new Date(s * 1000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const echue = (f) => !!f?.echeance && f.echeance * 1000 < Date.now();
+/** Commande, client et société d'une fiche, pour une ligne de liste. */
+const ficheEnBref = (f) => (f ? [f.commande ? T().cde(f.commande) : null, f.client || null, f.societe || null].filter(Boolean) : []);
+/** Fiche modifiée pas encore enregistrée, par travail : gardée d'un rafraîchissement à l'autre. */
+const brouillonsFiche = new Map();
+/** Fiche travail (roadmap 5.6) : n° de commande, client, société, quantité due, échéance,
+ *  notes, opérateur. */
+function panneauFiche(t) {
+  const f = brouillonsFiche.get(t.id) || { ...(t.fiche || {}) };
+  const noter = () => brouillonsFiche.set(t.id, f);
+  const champ = (cle, texte, attrs = {}) => {
+    const i = el(attrs.multiligne ? "textarea" : "input", { value: f[cle] ?? "", ...attrs, multiligne: undefined });
+    if (attrs.multiligne) i.value = f[cle] ?? "";
+    i.addEventListener("input", () => { f[cle] = attrs.type === "number" ? Math.max(0, Math.round(+i.value || 0)) : i.value; noter(); });
+    return el("label", {}, texte, " ", i);
+  };
+  const caseE = el("input", { type: "checkbox", checked: f.echeance != null, ariaLabel: T().fiche_echeance });
+  const dateE = el("input", { type: "date", value: f.echeance ? isoJour(f.echeance) : "", disabled: f.echeance == null });
+  const majE = () => { dateE.disabled = !caseE.checked; f.echeance = caseE.checked && dateE.value ? Math.floor(new Date(`${dateE.value}T23:59:59`).getTime() / 1000) : null; noter(); };
+  caseE.addEventListener("change", majE); dateE.addEventListener("change", majE);
+  const enregistrer = bouton(T().fiche_enregistrer, async (b) => {
+    b.disabled = true;
+    if (await api(`/api/travaux/${t.id}/fiche`, json("POST", f))) { brouillonsFiche.delete(t.id); dire(T().fiche_enregistree); }
+    b.disabled = false;
+    rafraichir();
+  }, "");
+  const panneau = el("details", { className: "section fiche", open: brouillonsFiche.has(t.id) || !!ficheOuverte },
+    el("summary", {}, T().fiche_titre, ...ficheEnBref(t.fiche).map((x) => el("span", { className: "meta" }, ` · ${x}`))),
+    el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_fiche),
+      el("div", { className: "ligne" }, champ("commande", T().fiche_commande, { maxLength: 200 }), champ("client", T().fiche_client, { maxLength: 200 }), champ("societe", T().fiche_societe, { maxLength: 200 })),
+      el("div", { className: "ligne" }, champ("quantite", T().fiche_quantite, { type: "number", min: 0, max: 100000, style: "width: 7em" }),
+        el("label", { className: "case" }, caseE, " ", T().fiche_echeance, " ", dateE), champ("operateur", T().fiche_operateur, { maxLength: 200 })),
+      champ("notes", T().fiche_notes, { multiligne: true, maxLength: 2000, rows: 2, style: "width: 100%" }), el("div", { className: "ligne" }, enregistrer)));
+  panneau.addEventListener("toggle", () => { ficheOuverte = panneau.open; });
+  return panneau;
+}
+let ficheOuverte = false;
 
 /** Couches modifiées et pas encore enregistrées, par travail : gardées d'un rafraîchissement
  *  à l'autre, jamais envoyées sans « Enregistrer » (roadmap 4.4). */
@@ -2727,6 +2806,7 @@ async function versFile(operation) {
   rafraichir();
 }
 $("o-imprimer").addEventListener("click", () => versFile("impression"));
+$("tri").addEventListener("change", () => afficherTravaux());
 $("o-decouper").addEventListener("click", () => versFile("decoupe"));
 $("o-editer").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirEdition(t); });
 $("o-reglages").addEventListener("click", () => { const t = travailSelectionne(); if (t) ouvrirReglages(t); });
@@ -2775,10 +2855,16 @@ function vuePage(t, page, n) {
     if (s) sortiesPage.append(el("span", { className: `badge ${s.etat}` }, etatSortie(s)));
   };
   const imprimables = page.plaques.filter((p) => !(page.plaques_decoupe || []).includes(p));
+  // Page décochée (roadmap 5.12) : ni file ni planche, jusqu'à ce qu'elle soit recochée.
+  const exclue = (t.pages_exclues || []).includes(n);
+  const caseImp = el("input", { type: "checkbox", checked: !exclue });
+  caseImp.addEventListener("change", async () => { caseImp.disabled = true; await api(`/api/travaux/${t.id}/pages/${n}/exclure`, json("POST", { exclue: !caseImp.checked })); rafraichir(); });
+  sortiesPage.append(el("label", { className: "case" }, caseImp, " ", T().imprimer_page));
+  if (exclue) sortiesPage.append(el("span", { className: "badge echec" }, T().page_non_imprimee));
   // Pools (roadmap 1.7) : une destination de plus, la machine prête la prend.
   const pools = [...new Set(catalogue.filter((m) => m.modele_imprime && m.pool).map((m) => m.pool))];
-  if (t.mode === "imprimer" && imprimables.length) [...catalogue.filter((m) => m.modele_imprime), ...pools.map((p) => ({ id: p, nom: T().pool_nom(p) }))].forEach((m) => versMachine(m, "impression", T().imprimer_sur(m.nom)));
-  if (page.traces_decoupe) {
+  if (!exclue && t.mode === "imprimer" && imprimables.length) [...catalogue.filter((m) => m.modele_imprime), ...pools.map((p) => ({ id: p, nom: T().pool_nom(p) }))].forEach((m) => versMachine(m, "impression", T().imprimer_sur(m.nom)));
+  if (page.traces_decoupe && !exclue) {
     catalogue.filter((m) => m.modele_decoupe).forEach((m) => versMachine(m, "decoupe", T().decouper_sur(m.nom)));
     sortiesPage.append(el("a", { href: `${base}/decoupe.plt`, download: `decoupe-${String(n).padStart(3, "0")}.plt`, className: "meta" }, T().telecharger));
   }
@@ -2792,7 +2878,7 @@ function vuePage(t, page, n) {
     bloc.append(el("div", { className: "meta" }, T().estimation(nombre(e.surface_m2, 3), nombre(e.ml, 1), nombre(e.total, 2), nombre(e.cout_encres, 2), nombre(e.cout_support, 2)),
       e.support ? ` · ${T().matiere(e.support, nombre(e.surface_support_m2, 3))}` : "", ` · ${e.ttc ? T().ttc : T().ht}`));
   }
-  if (t.mode === "imprimer") {
+  if (t.mode === "imprimer" && !exclue) {
     const cle = `${t.id}:${n}`;
     const caseP = el("input", { type: "checkbox", checked: selection.has(cle) });
     const copies = el("input", { type: "number", min: 1, max: 500, value: selection.get(cle) || 1, style: "width: 6em" });
@@ -2877,6 +2963,11 @@ async function dessinerImposition() {
   if (n !== imposition || !r) return;
   const c = await r.json().catch(() => ({}));
   if (!r.ok) { $("imposition").replaceChildren(el("p", { className: "erreur meta" }, texteErreur(c.code, c.detail))); return; }
+  $("imposition").replaceChildren(svgImposition(c), el("p", { className: "meta", style: "margin: 6px 0 0" }, T().imposition(Math.round(c.longueur_mm), Math.round(c.utilisation * 100))));
+}
+/** Dessin d'une imposition (planche manuelle ou imbrication de la file) : la laize × la
+ *  longueur, chaque élément à sa place (mm, origine en bas à gauche), le rouleau vers le bas. */
+function svgImposition(c) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   const [l, h] = [c.laize_mm, Math.max(c.longueur_mm, 1)];
@@ -2906,11 +2997,12 @@ async function dessinerImposition() {
     g.append(...formes, titre);
     svg.append(g);
   });
-  $("imposition").replaceChildren(svg, el("p", { className: "meta", style: "margin: 6px 0 0" }, T().imposition(Math.round(c.longueur_mm), Math.round(c.utilisation * 100))));
+  return svg;
 }
 $("creer-planche").addEventListener("click", async () => {
   const elements = elementsPlanche();
-  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, forme: $("forme").checked, motif: motifPlanche(), elements };
+  const corps = { laize_mm: +$("laize").value, espacement_mm: +$("espacement").value, dpi: +form.dpi.value, reperage: form.reperage.value, rotation: $("rotation").checked, forme: $("forme").checked, motif: motifPlanche(), elements,
+    contour: $("contour-planche").checked, marge_haut_mm: +$("marge-haut").value || 0, marge_bas_mm: +$("marge-bas").value || 0 };
   if (await api("/api/planches", json("POST", corps))) { selection.clear(); majPlanche(); dire(T().planche_creee); rafraichir(); }
 });
 
@@ -2918,7 +3010,7 @@ $("creer-planche").addEventListener("click", async () => {
 const actionsPossibles = {
   en_attente: ["en_tete", "monter", "descendre", "suspendre", "annuler"],
   suspendue: ["en_tete", "monter", "descendre", "reprendre", "annuler"],
-  en_cours: [], terminee: ["refaire", "retirer"], echec: ["refaire", "retirer"], annulee: ["refaire", "retirer"],
+  en_cours: [], terminee: ["refaire", "retirer"], echec: ["refaire", "retirer"], annulee: ["refaire", "retirer"], imbriquee: ["refaire", "retirer"],
 };
 /** Découpe archivée (roadmap 4.12) : se restaure, ou se supprime. */
 const actionsArchive = ["restaurer", "retirer"];
@@ -2938,6 +3030,9 @@ function afficherFile() {
           // Travail miroité (roadmap 3.B3) : se voit dans la file avant d'imprimer.
           travaux.find((x) => x.id === s.travail)?.edition?.miroir ? el("span", { className: "badge", title: T().note_miroir_file }, T().miroir_file) : null,
           s.raison_attente && s.raison_attente !== "attente_operateur" && T().raisons[s.raison_attente] ? el("span", { className: "badge echec", title: T().raisons[s.raison_attente][1] }, T().raisons[s.raison_attente][0]) : null,
+          s.planche_nom ? el("span", { className: "meta" }, T().sur_planche(s.planche_nom)) : null,
+          ...ficheEnBref(s.fiche).map((x) => el("span", { className: "meta" }, x)),
+          s.fiche?.echeance ? el("span", { className: `badge${echue(s.fiche) ? " echec" : ""}` }, T().echeance_le(jour(s.fiche.echeance))) : null,
           el("span", { className: "meta" }, s.fin ? T().finie(date(s.fin)) : T().ajoutee(date(s.cree_le))),
           s.duree_min > 0 && aPasser(s) ? el("span", { className: "meta", title: T().duree_estimee }, duree(s.duree_min)) : null),
         s.code_erreur ? el("div", { className: "erreur meta" }, texteErreur(s.code_erreur, s.erreur)) : null),
@@ -2945,14 +3040,38 @@ function afficherFile() {
         (a === "retirer" ? agir(`/api/file/${s.id}`, "DELETE") : agir(`/api/file/${s.id}/${a}`, "POST")), a === "annuler" || a === "retirer" ? "discret danger" : "discret"))));
     const enCours = miennes.filter(aPasser);
     const reste = enCours.reduce((a, s) => a + (s.duree_min || 0), 0);
+    const nids = imbrications.filter((g) => g.machine === machine);
     return el("section", { className: "panneau" },
-      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), reste > 0 ? el("span", { className: "meta" }, ` · ${T().reste(duree(reste))}`) : null, m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
+      el("header", { id: `file-${machine}` }, el("strong", {}, m.nom), reste > 0 ? el("span", { className: "meta" }, ` · ${T().reste(duree(reste))}`) : null,
+        m.imbrication && m.imbrication.strategie !== "un_par_un" ? el("span", { className: "meta" }, ` · ${T().strategie} : ${T().strategies[m.imbrication.strategie]}`) : null,
+        m.modele_imprime && m.connexion?.type === "dossier" ? el("div", { className: "meta" }, T().note_epson) : null),
+      ...nids.map(panneauNid),
       el("div", {}, ...(enCours.length ? enCours.map(ligne) : [el("p", { className: "vide-liste" }, T().aucune_sortie)])),
       finies.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().historique), el("div", {}, ...finies.map(ligne))) : null,
       archive.length ? el("details", { className: "section", style: "margin: 12px" }, el("summary", {}, T().archive(archive.length)), el("div", {}, ...archive.map(ligne))) : null);
   });
   $("vue-file").replaceChildren(...colonnes);
   $("vue-file").querySelectorAll("details").forEach((d, i) => { d.open = !!ouvert[i]; });
+}
+
+/** Planche en préparation dans la file (roadmap 5.4) : aperçu (le PDF produit, en lien),
+ *  compteur de travaux, longueur et remplissage ; chaque page se décoche (roadmap 5.12). */
+function panneauNid(g) {
+  const elements = g.elements.map((x) => {
+    const c = el("input", { type: "checkbox", checked: true });
+    c.addEventListener("change", async () => { c.disabled = true; await api(`/api/travaux/${x.travail}/pages/${x.page}/exclure`, json("POST", { exclue: !c.checked })); rafraichir(); });
+    return el("li", {}, el("label", { className: "case", title: T().imprimer_page }, c, " ", `${x.nom} · ${T().page(x.page)} × ${x.copies}`,
+      x.commande ? ` · ${T().cde(x.commande)}` : "", x.echeance ? ` · ${T().echeance_le(jour(x.echeance))}` : "", x.retenu ? "" : ` · ${T().nid_reporte}`));
+  });
+  const base = `/api/imbrications/${encodeURIComponent(g.machine)}/${g.code}`;
+  return el("div", { className: "nid", style: "padding: 0 16px 12px; border-bottom: 1px solid var(--bord, #ccc)" },
+    el("div", { className: "nom" }, T().nid_titre(g.travaux)),
+    el("div", { className: "meta" }, T().nid_groupe(g.support, g.decoupeuse, g.miroir), g.contour ? ` · ${T().nid_contour}` : ""),
+    g.places.length ? svgImposition(g) : null,
+    el("div", { className: "meta" }, T().nid_mesure(Math.round(g.longueur_mm), Math.round(g.remplissage * 100)), g.pret ? ` · ${T().nid_pret}` : ""),
+    el("ul", { className: "nid-elements", style: "margin: 4px 0; padding-left: 18px" }, ...elements),
+    el("div", { className: "ligne" }, bouton(T().imprimer_maintenant, async (b) => { b.disabled = true; if (await api(`${base}/imprimer`, { method: "POST" })) dire(T().nid_lancee); rafraichir(); }, ""),
+      el("a", { href: `${base}/planche.pdf`, target: "_blank", rel: "noopener", className: "meta" }, T().pdf_planche)));
 }
 
 /** Média chargé dans l'Epson : sa largeur devient la laize des panneaux (planche, mosaïque). */
@@ -3091,6 +3210,21 @@ function afficherEditeurMachines() {
       el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee),
       el("label", { className: "case", title: T().note_mono_couche }, el("input", { type: "checkbox", name: "mono_couche", checked: !!m.mono_couche }), " ", T().mono_couche),
       el("label", { className: "case", title: T().note_coupe_auto }, el("input", { type: "checkbox", name: "coupe_auto", checked: m.coupe_auto !== false }), " ", T().coupe_auto)), coupes);
+    // Imbrication des impressions en file (roadmap 5.1 à 5.5), pour une machine qui imprime.
+    if (m.modele_imprime !== false) {
+      const n = m.imbrication || {};
+      const nb = (nom, v, attrs) => champ(nom, v ?? "", { type: "number", step: "any", style: "width: 7em", ...attrs });
+      bloc.append(el("div", { className: "ligne bas", title: T().note_imbrication },
+        el("label", {}, T().strategie, choix("n_strategie", ["un_par_un", "groupe", "economie"], n.strategie || "un_par_un", T().strategies)),
+        el("label", {}, T().nid_delai, nb("n_delai", n.delai_min, { min: 1, max: 1440, step: 1 })),
+        el("label", {}, T().nid_surface, nb("n_surface", n.surface_m2, { min: 0.01, max: 1000 })),
+        el("label", {}, T().nid_longueur, nb("n_longueur", n.longueur_cible_mm, { min: 100, max: 100000 })),
+        el("label", {}, T().nid_pct, nb("n_pct", n.remplissage_pct, { min: 1, max: 100 })),
+        el("label", {}, T().nid_espace, nb("n_espace", n.espace_mm ?? 5, { min: 0, max: 100 })),
+        el("label", {}, T().marge_haut, nb("n_haut", n.marge_haut_mm ?? 0, { min: 0, max: 200 })),
+        el("label", {}, T().marge_bas, nb("n_bas", n.marge_bas_mm ?? 0, { min: 0, max: 200 })),
+        el("label", { className: "case" }, el("input", { type: "checkbox", name: "n_contour", checked: !!n.contour }), " ", T().contour_planche)));
+    }
     if (m.uuid) bloc.dataset.uuid = m.uuid;
     const valeur = (n) => bloc.querySelector(`[name=${n}]`).value.trim();
     // Une variante ne se fait que d'une découpeuse (pas de l'Epson, qui n'en est pas une).
@@ -3122,6 +3256,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
   const blocs = [...$("lignes-machines").querySelectorAll(".ligne-machine")];
   const lues = blocs.map((b) => {
     const q = (n) => b.querySelector(`[name=${n}]`)?.value?.trim() ?? "";
+    const nv = (n) => (q(n) === "" ? null : +q(n));
     // Variante : complétée plus bas depuis sa machine d'origine (le serveur la recopie aussi).
     if (b.dataset.variante) return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), variante_de: b.dataset.variante, reperage: q("reperage") || null };
     const type = q("type");
@@ -3134,7 +3269,8 @@ $("editeur-machines").addEventListener("submit", async (e) => {
           // « 8/2 8/2 4/1 » : paires coupé/relevé en mm (virgule décimale acceptée).
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };
       }).filter((p) => p.nom),
-      decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked, coupe_auto: b.querySelector("[name=coupe_auto]").checked };
+      decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked, coupe_auto: b.querySelector("[name=coupe_auto]").checked,
+      imbrication: b.querySelector("[name=n_strategie]") ? { strategie: q("n_strategie"), delai_min: nv("n_delai"), surface_m2: nv("n_surface"), longueur_cible_mm: nv("n_longueur"), remplissage_pct: nv("n_pct"), espace_mm: nv("n_espace") ?? 5, marge_haut_mm: nv("n_haut") ?? 0, marge_bas_mm: nv("n_bas") ?? 0, contour: b.querySelector("[name=n_contour]").checked } : undefined };
   });
   const liste = lues.map((m) => {
     if (!m.variante_de) return m;

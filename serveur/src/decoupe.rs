@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
+/// Ton du contour de toute la planche imbriquée (roadmap 5.5) : sa propre couche, coupée
+/// en dernier.
+pub const NEST_TRIM_BOX: &str = "NestTrimBox";
+
 /// Préfixes de découpe d'origine (ceux reconnus avant la 0.20), comparés sans casse,
 /// espaces, tirets ni soulignés.
 pub const PREFIXES_DEFAUT: [&str; 8] = ["CutContour", "Thrucut", "Kisscut", "InsideCut", "Perforation", "Creasing", "Score", "VCut"];
@@ -53,10 +57,11 @@ impl Reglages {
         if bon { Ok(()) } else { Err("prefixes_invalides") }
     }
 
-    /// Le nom commence-t-il par un des préfixes ?
+    /// Le nom commence-t-il par un des préfixes ? Le contour de planche (`NestTrimBox`,
+    /// roadmap 5.5), que le RIP trace lui-même, est toujours reconnu.
     pub fn reconnait(&self, nom: &str) -> bool {
         let c = cle(nom);
-        self.prefixes.iter().any(|p| c.starts_with(&cle(p)))
+        c == cle(NEST_TRIM_BOX) || self.prefixes.iter().any(|p| c.starts_with(&cle(p)))
     }
 }
 
@@ -802,6 +807,10 @@ fn outil(ton: &str) -> u8 {
 /// dernier, quand la matière tient encore.
 fn rang(ton: &str) -> u8 {
     let c = cle(ton);
+    if c == cle(NEST_TRIM_BOX) {
+        // La planche détachée du rouleau en tout dernier : les pièces tiennent encore.
+        return 6;
+    }
     match outil(ton) {
         2 => 0,
         3 => 1,

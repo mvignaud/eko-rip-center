@@ -23,6 +23,7 @@ mod file;
 mod forme;
 mod imbrication;
 mod mosaique;
+mod nid;
 mod plotter;
 mod render;
 mod reglages;
@@ -105,6 +106,58 @@ struct Travail {
     /// copies, origine ; appliquée aux tracés à chaque fichier de coupe, sans nouveau rendu.
     #[serde(default)]
     mise_coupe: coupe::Mise,
+    /// Fiche travail (roadmap 5.6).
+    #[serde(default)]
+    fiche: Fiche,
+    /// Pages à ne pas imprimer (roadmap 5.12), numérotées de 1 : ni planche ni file, tant
+    /// qu'elles ne sont pas recochées.
+    #[serde(default)]
+    pages_exclues: Vec<usize>,
+    /// Planche d'imbrication de la file (roadmap 5.1) : sa machine et les sorties qu'elle
+    /// remplace.
+    #[serde(default)]
+    imbrication: Option<Imbriquee>,
+}
+
+/// Fiche travail (roadmap 5.6) : ce que l'atelier sait de la commande. Champs vides : non
+/// renseignés.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+struct Fiche {
+    #[serde(default)]
+    commande: String,
+    #[serde(default)]
+    client: String,
+    #[serde(default)]
+    societe: String,
+    /// Quantité due : copies posées sur la planche d'imbrication et imprimées sur
+    /// l'étiquette (0 : non renseignée, une copie).
+    #[serde(default)]
+    quantite: u32,
+    /// Échéance (secondes Unix) : la plus proche passe d'abord dans l'imbrication.
+    #[serde(default)]
+    echeance: Option<u64>,
+    #[serde(default)]
+    notes: String,
+    #[serde(default)]
+    operateur: String,
+}
+
+impl Fiche {
+    fn valide(&self) -> bool {
+        [&self.commande, &self.client, &self.societe, &self.operateur].iter().all(|c| c.chars().count() <= 200) && self.notes.chars().count() <= 2000 && self.quantite <= 100_000
+    }
+
+    /// Copies à poser : la quantité due, une au moins.
+    fn copies(&self) -> usize {
+        self.quantite.max(1) as usize
+    }
+}
+
+/// Une planche d'imbrication : la machine qui l'imprime, les sorties qu'elle remplace.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct Imbriquee {
+    machine: String,
+    sorties: Vec<Uuid>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -347,6 +400,11 @@ fn routes(etat: Partage) -> Router {
         .route("/api/tarifs", get(lire_tarifs).post(enregistrer_tarifs))
         .route("/api/rapports/consommation.csv", get(rapport_consommation))
         .route("/api/file", get(lister_file).post(mettre_en_file))
+        .route("/api/imbrications", get(lister_imbrications))
+        .route("/api/imbrications/{machine}/{code}/imprimer", axum::routing::post(imprimer_imbrication))
+        .route("/api/imbrications/{machine}/{code}/planche.pdf", get(pdf_imbrication))
+        .route("/api/travaux/{id}/fiche", axum::routing::post(enregistrer_fiche))
+        .route("/api/travaux/{id}/pages/{page}/exclure", axum::routing::post(exclure_page))
         .route("/api/file/{id}", axum::routing::delete(retirer_de_la_file))
         .route("/api/file/{id}/{action}", axum::routing::post(agir_sur_la_file))
         .route("/api/erp/contrat", get(contrat_erp))
@@ -486,6 +544,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let (mut hauteur_max_mm, mut soudure, mut coupe_milieu) = (None, false, false);
     let (mut etendre, mut etendre_largeur, mut etendre_seuil) = (false, 1.0f64, 0.5f64);
     let mut fond = (false, reperage::FondReperes { debord_mm: 3.0, aplat: false, cmjn: None }, false, None::<[f64; 4]>);
+    let mut fiche = Fiche::default();
 
     loop {
         let champ = match form.next_field().await {
@@ -641,6 +700,31 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 fond.3 = v.try_into().ok();
                 Ok(())
             }
+            // Fiche travail (roadmap 5.6) ; échéance en secondes Unix.
+            "commande" => {
+                fiche.commande = valeur;
+                Ok(())
+            }
+            "client" => {
+                fiche.client = valeur;
+                Ok(())
+            }
+            "societe" => {
+                fiche.societe = valeur;
+                Ok(())
+            }
+            "notes" => {
+                fiche.notes = valeur;
+                Ok(())
+            }
+            "operateur" => {
+                fiche.operateur = valeur;
+                Ok(())
+            }
+            "quantite" if valeur.is_empty() => Ok(()),
+            "quantite" => valeur.parse().map(|v| fiche.quantite = v).map_err(|_| erreur("fiche_invalide")),
+            "echeance" if valeur.is_empty() => Ok(()),
+            "echeance" => valeur.parse().map(|v| fiche.echeance = Some(v)).map_err(|_| erreur("fiche_invalide")),
             _ => Ok(()),
         };
         if let Err(r) = r {
@@ -656,7 +740,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("fond_reperes_invalide", None)).await;
     }
     d.fond_reperes = fond.0.then_some(reperage::FondReperes { cmjn: fond.3.filter(|_| fond.2), ..fond.1 });
-    match creer_travail(&etat, id, nom, format, d).await {
+    match creer_travail_avec(&etat, id, nom, format, d, fiche, None).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
     }
@@ -666,6 +750,12 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
 /// mosaïque, `job.json`, puis traitement en tâche de fond. Commun à l'écran, aux planches
 /// et aux dossiers surveillés. En cas de refus, le dossier reste à effacer par l'appelant.
 async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande) -> Result<Travail, (StatusCode, Refus)> {
+    creer_travail_avec(etat, id, nom, format, d, Fiche::default(), None).await
+}
+
+/// `creer_travail` avec sa fiche (roadmap 5.6) et, pour une planche de la file, ce qu'elle
+/// imbrique.
+async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, imbrication: Option<Imbriquee>) -> Result<Travail, (StatusCode, Refus)> {
     let rep = dossier(&etat.config.donnees, id);
     let mauvais = |code: &'static str, detail: Option<String>| (StatusCode::BAD_REQUEST, (code, detail));
     let interne = |e: String| (StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e)));
@@ -707,7 +797,10 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
     };
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     let mut alertes = alertes;
-    let infos = infos_travail(etat, id, &nom, &d);
+    if !fiche.valide() {
+        return Err(mauvais("fiche_invalide", None));
+    }
+    let infos = infos_travail(etat, id, &nom, &d, &fiche);
     let reperage = reperage_voulu(&etat.machines.read().unwrap(), &d);
     let tourne = construire_source(&rep, format, &Demande { mosaique: mosaique.clone(), reperage, ..d.clone() }, laize_imprimante(etat), infos).await.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
     alertes.extend(tourne);
@@ -724,6 +817,9 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         cree_le: maintenant(),
         couches_decoupe: vec![],
         mise_coupe: Default::default(),
+        fiche,
+        pages_exclues: vec![],
+        imbrication,
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -855,13 +951,13 @@ fn alertes_kona(pdf: &[u8], reperage: reperage::Reperage) -> Vec<controle::Alert
 }
 
 /// Ce que l'étiquette et le code impriment d'un travail.
-fn infos_travail(etat: &Etat, id: Uuid, nom: &str, d: &Demande) -> etiquette::Infos {
+fn infos_travail(etat: &Etat, id: Uuid, nom: &str, d: &Demande, fiche: &Fiche) -> etiquette::Infos {
     let machine = etat.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).map(|m| m.nom.clone()).unwrap_or_default();
     let mode = match &d.support {
         Some(s) => format!("{} dpi · {s}", d.dpi),
         None => format!("{} dpi", d.dpi),
     };
-    etiquette::Infos { nom: nom.to_string(), date: format!("{} UTC", date_utc(maintenant())), travail: id, machine, mode, commande: None, copies: None }
+    etiquette::Infos { nom: nom.to_string(), date: format!("{} UTC", date_utc(maintenant())), travail: id, machine, mode, commande: Some(fiche.commande.clone()).filter(|c| !c.is_empty()), copies: (fiche.quantite > 0).then_some(fiche.quantite) }
 }
 
 /// Une page plus large que la laize (repérage compris) qui y tient tournée de 90° : rend
@@ -1027,7 +1123,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 match ecrire_coupes(&rep, &t) {
                     Ok(()) => {
                         t.statut = Statut::Termine;
-                        mettre_en_file_auto(&etat, &t);
+                        mettre_en_file_auto(&etat, &t, None);
                     }
                     Err(e) => (t.statut, t.code_erreur, t.erreur) = (Statut::Echec, Some("decoupe_illisible".into()), Some(e.to_string())),
                 }
@@ -1069,6 +1165,14 @@ struct DemandePlanche {
     /// Step & repeat d'une seule page (colonnes × rangées, demi-saut).
     #[serde(default)]
     motif: Option<imbrication::Motif>,
+    /// Contour de toute la planche (`NestTrimBox`) et marges pour la table de découpe
+    /// (roadmap 5.5).
+    #[serde(default)]
+    contour: bool,
+    #[serde(default)]
+    marge_haut_mm: f64,
+    #[serde(default)]
+    marge_bas_mm: f64,
     elements: Vec<ElementPlanche>,
 }
 
@@ -1533,6 +1637,9 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
     let mut noms = vec![];
     for e in &d.elements {
         let Some((t, _)) = lire_page(donnees, e.id, e.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+        if t.pages_exclues.contains(&e.page) {
+            return refus(StatusCode::CONFLICT, "page_exclue", None);
+        }
         match tokio::fs::read(dossier(donnees, e.id).join(Format::Pdf.fichier())).await {
             Ok(o) => pdfs.push(o),
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
@@ -1601,6 +1708,9 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     let mut pdfs = vec![];
     for e in &d.elements {
         let Some((t, _)) = lire_page(donnees, e.id, e.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+        if t.pages_exclues.contains(&e.page) {
+            return refus(StatusCode::CONFLICT, "page_exclue", None);
+        }
         if t.format != Format::Pdf {
             return mauvais("seules des pages PDF s'imbriquent");
         }
@@ -1609,11 +1719,15 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
             Err(err) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
         }
     }
+    if !(0.0..=200.0).contains(&d.marge_haut_mm) || !(0.0..=200.0).contains(&d.marge_bas_mm) {
+        return mauvais("marges 0–200 mm");
+    }
     let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
+    let finition = imbrication::Finition { marge_bas: d.marge_bas_mm * imbrication::PT_PAR_MM, marge_haut: d.marge_haut_mm * imbrication::PT_PAR_MM, contour: d.contour };
     let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::composer(&sources, laize, espace, rotation, forme, motif)
+        imbrication::composer(&sources, laize, espace, rotation, forme, motif, finition)
     })
     .await;
     let planche = match compose {
@@ -2134,7 +2248,9 @@ fn png(octets: Vec<u8>) -> Response {
 /// (une mise en page par page).
 /// Sorties ajoutées d'office après le rendu (réglage `auto`). Une découpe qui suit une
 /// impression part toujours suspendue : le support doit d'abord passer de l'Epson au Kona.
-fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
+/// `seule` : cette page seulement (page recochée, roadmap 5.12). Les pages exclues n'y vont
+/// pas ; une planche d'imbrication va sur sa machine.
+fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
     let a = t.demande.auto;
     if !a.imprimer && !a.decouper {
         return;
@@ -2144,13 +2260,16 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
     // La découpeuse affectée au travail, si elle est au catalogue.
     let (imprimante, decoupeuse) = {
         let c = etat.machines.read().unwrap();
-        let i = c.iter().find(|m| m.fait(machines::Operation::Impression));
+        let i = match &t.imbrication {
+            Some(b) => c.iter().find(|m| m.id == b.machine),
+            None => c.iter().find(|m| m.fait(machines::Operation::Impression)),
+        };
         let choisie = t.demande.decoupeuse.as_ref().and_then(|id| c.iter().find(|m| &m.id == id && m.fait(machines::Operation::Decoupe)));
         let d = choisie.or_else(|| i.filter(|m| m.fait(machines::Operation::Decoupe))).or_else(|| c.iter().find(|m| m.fait(machines::Operation::Decoupe)));
         (i.map(|m| m.id.clone()), d.cloned())
     };
     let mut f = etat.file.lock().unwrap();
-    for (i, p) in t.pages.iter().enumerate() {
+    for (i, p) in t.pages.iter().enumerate().filter(|(i, _)| seule.is_none_or(|n| n == i + 1) && !t.pages_exclues.contains(&(i + 1))) {
         let imprime = a.imprimer && t.demande.mode == Mode::Imprimer && p.plaques.iter().any(|x| !p.plaques_decoupe.contains(x));
         let mut ajouter = |machine: &str, operation, suspendue: bool| {
             let mut s = file::Sortie::nouvelle(machine, operation, t.id, &t.nom, i + 1, maintenant());
@@ -2434,6 +2553,11 @@ async fn alertes_decoupe(rep: &std::path::Path, t: &Travail, traces: usize) -> V
     if traces == 0 && !t.demande.tous_les_traces && (t.demande.decoupeuse.is_some() || t.demande.auto.decouper) {
         let tons = pdf.map(|p| decoupe::tons_du_pdf(&p)).unwrap_or_default();
         alertes.push(controle::Alerte { code: "decoupe_sans_prefixe".into(), page: None, detail: if tons.is_empty() { "—".into() } else { tons.join(", ") } });
+    }
+    // Repères de découpeuse imprimés sans rien à découper (roadmap 5.5, comme l'alerte
+    // « pas de données de découpe » d'ONYX) : de l'encre et du support pour rien.
+    if traces == 0 && t.demande.mode == Mode::Imprimer && t.demande.reperage != reperage::Reperage::Aucun {
+        alertes.push(controle::Alerte { code: "decoupe_reperes_sans_trace".into(), page: None, detail: String::new() });
     }
     alertes
 }
@@ -2740,7 +2864,7 @@ async fn enregistrer_decoupe(State(etat): State<Partage>, Json(r): Json<decoupe:
 
 /// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
 async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
-    let infos = infos_travail(etat, t.id, &t.nom, &t.demande);
+    let infos = infos_travail(etat, t.id, &t.nom, &t.demande, &t.fiche);
     let reperage = reperage_voulu(&etat.machines.read().unwrap(), &t.demande);
     match construire_source(&dossier(&etat.config.donnees, t.id), t.format, &Demande { reperage, ..t.demande.clone() }, laize_imprimante(etat), infos).await {
         Ok(alertes) => {
@@ -2800,6 +2924,9 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
         return Some("machine_hors_ligne");
     }
     let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
+    if t.pages_exclues.contains(&s.page) {
+        return Some("page_exclue");
+    }
     if s.operation() == machines::Operation::Decoupe {
         let rep = dossier(donnees, s.travail);
         if !fichier_traces(&rep, s.page).exists() && lire_traces(&rep, s.page).is_none() {
@@ -2843,6 +2970,10 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
     if p.largeur_mm > laize + 0.5 {
         return Some("format_trop_petit");
     }
+    // Imbrication (roadmap 5.1) : l'impression attend sa planche, sauf la planche elle-même.
+    if impression && m.imbrication.strategie != nid::Strategie::UnParUn && t.imbrication.is_none() {
+        return Some("attente_imbrication");
+    }
     None
 }
 
@@ -2863,6 +2994,11 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
+                // Fiche travail (roadmap 5.6) visible dans la file ; planche d'une imbriquée.
+                if let Some(t) = lire_travail(&donnees, s.travail) {
+                    v["fiche"] = serde_json::to_value(&t.fiche).unwrap();
+                }
+                v["planche_nom"] = serde_json::json!(s.planche.and_then(|p| lire_travail(&donnees, p)).map(|p| p.nom));
                 let raison = match catalogue.iter().find(|m| m.id == s.machine) {
                     Some(m) => raison_attente(&donnees, &s, Some(m), charges.get(&m.id), &tout, &catalogue),
                     // Envoyée à un pool : en attente seulement si aucun membre ne peut la prendre.
@@ -2900,6 +3036,9 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
     let Some((t, p)) = lire_page(&etat.config.donnees, d.travail, d.page) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
     if !matches!(t.statut, Statut::Termine) {
         return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    if t.pages_exclues.contains(&d.page) {
+        return refus(StatusCode::CONFLICT, "page_exclue", None);
     }
     // Pool : contrôles faits sur un membre ; les supports chargés connus doivent concorder.
     let catalogue = etat.machines.read().unwrap().clone();
@@ -2980,11 +3119,349 @@ async fn retirer_de_la_file(State(etat): State<Partage>, Chemin(id): Chemin<Uuid
     }
 }
 
+// --- Imbrication dans la file (roadmap 5.1 à 5.5) ---
+
+/// Ce qui doit être commun aux travaux d'une même planche (roadmap 5.3) : support, mode,
+/// découpeuse (« aucune » comprise), miroir ; et ce qui décide du rendu de la planche
+/// (résolution, repérage, couleur, blanc, tracés), qu'elle n'a qu'une fois. Rend la clé et
+/// la découpeuse.
+fn cle_imbrication(t: &Travail, p: &Page, n: usize, sorties: &[file::Sortie]) -> (String, Option<String>) {
+    let decoupeuse = if a_couper(t, p) { decoupeuse_affectee(t, n, sorties) } else { None };
+    let d = &t.demande;
+    let cle = serde_json::json!([d.support_uuid, d.mode_uuid, decoupeuse, d.edition.miroir, d.dpi, d.reperage, d.couleur, d.blanc, d.couches, d.fond_reperes, d.tous_les_traces, d.etendre_coupe]).to_string();
+    (cle, decoupeuse)
+}
+
+/// Une planche en préparation : les impressions compatibles d'une machine et leur plan.
+struct Groupe {
+    /// Code court de la clé, pour l'écran et l'API.
+    code: String,
+    decoupeuse: Option<String>,
+    /// Sorties en attente, dans l'ordre de la file, avec leur travail (même rang que
+    /// `candidats`).
+    sorties: Vec<(file::Sortie, Travail)>,
+    candidats: Vec<nid::Candidat>,
+    plan: Option<nid::Plan>,
+    /// Laize du rouleau (machine, ou rouleau chargé plus étroit).
+    laize_mm: f64,
+}
+
+fn code_groupe(cle: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    cle.hash(&mut h);
+    format!("{:016x}", h.finish())
+}
+
+/// Planches en préparation sur `m` (aucune en « un par un ») : ses impressions en attente,
+/// pages PDF non exclues, regroupées par clé, chacune planifiée sur la laize moins ce que
+/// le repérage de la planche ajoute en largeur.
+fn groupes(etat: &Etat, catalogue: &[machines::Machine], m: &machines::Machine) -> Vec<Groupe> {
+    if m.imbrication.strategie == nid::Strategie::UnParUn {
+        return vec![];
+    }
+    let sorties = etat.file.lock().unwrap().sorties.clone();
+    let donnees = &etat.config.donnees;
+    let laize = supports::lire_charges(donnees).get(&m.id).and_then(|c| c.laize_mm).map_or(m.laize_mm, |l| l.min(m.laize_mm));
+    let mut groupes: Vec<(String, Groupe)> = vec![];
+    // Envoyées à la machine ou à son pool (roadmap 1.7) : la première planche lancée les prend.
+    let vise = |s: &file::Sortie| s.machine == m.id || m.pool.as_deref() == Some(s.machine.as_str());
+    for s in sorties.iter().filter(|s| vise(s) && s.etat == file::Etat::EnAttente && s.operation() == machines::Operation::Impression) {
+        let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { continue };
+        if t.imbrication.is_some() || t.format != Format::Pdf || t.pages_exclues.contains(&s.page) {
+            continue;
+        }
+        let Some(taille) = std::fs::read(dossier(donnees, t.id).join(Format::Pdf.fichier())).ok().and_then(|pdf| imbrication::taille_page(&pdf, s.page).ok()) else { continue };
+        let (cle, decoupeuse) = cle_imbrication(&t, &p, s.page, &sorties);
+        let candidat = nid::Candidat { taille, copies: t.fiche.copies(), echeance: t.fiche.echeance, arrivee: s.cree_le };
+        let i = groupes.iter().position(|(c, _)| *c == cle).unwrap_or_else(|| {
+            groupes.push((cle.clone(), Groupe { code: code_groupe(&cle), decoupeuse, sorties: vec![], candidats: vec![], plan: None, laize_mm: laize }));
+            groupes.len() - 1
+        });
+        groupes[i].1.sorties.push((s.clone(), t));
+        groupes[i].1.candidats.push(candidat);
+    }
+    let mm = imbrication::PT_PAR_MM;
+    groupes
+        .into_iter()
+        .map(|(_, mut g)| {
+            let reperage = reperage_voulu(catalogue, &demande_planche(&g));
+            let ajout = (reperage::mise_en_page(reperage, g.laize_mm * mm, 1000.0 * mm, 0).page.0 / mm - g.laize_mm).max(0.0);
+            g.plan = nid::planifier(&g.candidats, g.laize_mm - ajout, &m.imbrication);
+            g
+        })
+        .collect()
+}
+
+/// Réglages de la planche : ceux de rendu du premier travail (communs au groupe), sans ce
+/// qui est déjà dans chaque page posée (édition, mosaïque, étiquette) ; imprimée d'office,
+/// découpée sur la découpeuse du groupe s'il en a une.
+fn demande_planche(g: &Groupe) -> Demande {
+    let d = &g.sorties[0].1.demande;
+    Demande {
+        mode: Mode::Imprimer,
+        tous_les_traces: d.tous_les_traces,
+        reperage: d.reperage,
+        couleur: d.couleur.clone(),
+        dpi: d.dpi,
+        blanc: d.blanc,
+        couches: d.couches,
+        support: d.support.clone(),
+        support_uuid: d.support_uuid,
+        mode_uuid: d.mode_uuid,
+        decoupeuse: g.decoupeuse.clone(),
+        rotation_auto: false,
+        etendre_coupe: d.etendre_coupe,
+        fond_reperes: d.fond_reperes,
+        auto: reglages::Auto { imprimer: true, decouper: g.decoupeuse.is_some(), suspendre: false },
+        ..Default::default()
+    }
+}
+
+/// Fiche de la planche : les commandes posées, l'échéance la plus proche, les travaux.
+fn fiche_planche(g: &Groupe, plan: &nid::Plan) -> Fiche {
+    let travaux: Vec<&Travail> = plan.retenus.iter().map(|&i| &g.sorties[i].1).collect();
+    let mut commandes: Vec<&str> = travaux.iter().map(|t| t.fiche.commande.as_str()).filter(|c| !c.is_empty()).collect();
+    commandes.dedup();
+    let notes: Vec<String> = plan.retenus.iter().map(|&i| format!("{} p{} × {}", g.sorties[i].1.nom, g.sorties[i].0.page, g.candidats[i].copies)).collect();
+    Fiche {
+        commande: commandes.join(", ").chars().take(200).collect(),
+        echeance: travaux.iter().filter_map(|t| t.fiche.echeance).min(),
+        notes: notes.join("\n").chars().take(2000).collect(),
+        operateur: travaux.iter().map(|t| t.fiche.operateur.as_str()).find(|o| !o.is_empty()).unwrap_or_default().into(),
+        ..Default::default()
+    }
+}
+
+/// PDF de la planche (aperçu = PDF produit) : `sources` (travail, page) des candidats
+/// retenus, dans l'ordre de `plan.retenus`.
+fn pdf_planche(donnees: &std::path::Path, sources: &[(Uuid, usize)], plan: &nid::Plan, finition: imbrication::Finition) -> Result<Vec<u8>, String> {
+    let pdfs = sources.iter().map(|(id, _)| std::fs::read(dossier(donnees, *id).join(Format::Pdf.fichier())).map_err(|e| e.to_string())).collect::<Result<Vec<_>, _>>()?;
+    let sources: Vec<imbrication::Source> = sources.iter().zip(&pdfs).map(|(&(_, page), pdf)| imbrication::Source { pdf, page, copies: 1 }).collect();
+    // Copie k : candidat `plan.elements[k]`, source = son rang parmi les retenus.
+    let elements: Vec<usize> = plan.elements.iter().map(|c| plan.retenus.iter().position(|r| r == c).unwrap_or(0)).collect();
+    imbrication::composer_places(&sources, &plan.places, &elements, plan.planche, finition)
+}
+
+fn sources_planche(g: &Groupe, plan: &nid::Plan) -> Vec<(Uuid, usize)> {
+    plan.retenus.iter().map(|&i| (g.sorties[i].0.travail, g.sorties[i].0.page)).collect()
+}
+
+/// Lance la planche du groupe : ses impressions (et les découpes de ces pages) passent
+/// « imbriquées » sous le verrou de la file, puis la planche est composée et devient un
+/// travail, rendu et mis en file sur la machine. En cas d'échec, les sorties reviennent.
+async fn lancer_imbrication(etat: &Partage, m: &machines::Machine, g: Groupe) -> Result<Travail, (StatusCode, Refus)> {
+    let Some(plan) = g.plan.as_ref() else { return Err((StatusCode::CONFLICT, ("rien_a_imbriquer", None))) };
+    let id = Uuid::new_v4();
+    let sources = sources_planche(&g, plan);
+    let ids: Vec<Uuid> = plan.retenus.iter().map(|&i| g.sorties[i].0.id).collect();
+    let donnees = etat.config.donnees.clone();
+    let prises: Vec<(Uuid, file::Etat)> = {
+        let mut f = etat.file.lock().unwrap();
+        // Toutes encore en attente, sinon rien : la file a changé depuis le calcul.
+        if !ids.iter().all(|i| f.sorties.iter().any(|s| s.id == *i && s.etat == file::Etat::EnAttente)) {
+            return Err((StatusCode::CONFLICT, ("imbrication_changee", None)));
+        }
+        let mut prises = vec![];
+        let decoupe_de_la_page = |s: &file::Sortie| s.operation() == machines::Operation::Decoupe && matches!(s.etat, file::Etat::EnAttente | file::Etat::Suspendue) && sources.contains(&(s.travail, s.page));
+        for s in f.sorties.iter_mut().filter(|s| ids.contains(&s.id) || decoupe_de_la_page(s)) {
+            prises.push((s.id, s.etat));
+            (s.etat, s.planche) = (file::Etat::Imbriquee, Some(id));
+        }
+        let _ = f.ecrire(&donnees);
+        prises
+    };
+    let rendre = || {
+        let mut f = etat.file.lock().unwrap();
+        for (i, e) in &prises {
+            if let Some(s) = f.sorties.iter_mut().find(|s| s.id == *i) {
+                (s.etat, s.planche) = (*e, None);
+            }
+        }
+        let _ = f.ecrire(&donnees);
+    };
+    let (finition, plan_c, sources_c, donnees_c) = (m.imbrication.finition(), plan.clone(), sources.clone(), donnees.clone());
+    let pdf = match tokio::task::spawn_blocking(move || pdf_planche(&donnees_c, &sources_c, &plan_c, finition)).await {
+        Ok(Ok(p)) => p,
+        Ok(Err(e)) => {
+            rendre();
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e))));
+        }
+        Err(e) => {
+            rendre();
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))));
+        }
+    };
+    let rep = dossier(&donnees, id);
+    if let Err(e) = tokio::fs::create_dir_all(&rep).await.and(tokio::fs::write(rep.join("source.tmp"), pdf).await) {
+        let _ = tokio::fs::remove_dir_all(&rep).await;
+        rendre();
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))));
+    }
+    let nom = format!("Imbrication {} — {} travail(x)", m.nom, plan.retenus.len());
+    let imbriquee = Imbriquee { machine: m.id.clone(), sorties: prises.iter().map(|(i, _)| *i).collect() };
+    match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Some(imbriquee)).await {
+        Ok(t) => Ok(t),
+        Err(r) => {
+            let _ = tokio::fs::remove_dir_all(&rep).await;
+            rendre();
+            Err(r)
+        }
+    }
+}
+
+/// Planches dont le déclencheur est atteint (roadmap 5.2) : lancées.
+async fn imbriquer_les_pretes(etat: &Partage) {
+    let catalogue = etat.machines.read().unwrap().clone();
+    for m in catalogue.iter().filter(|m| m.variante_de.is_none()) {
+        for g in groupes(etat, &catalogue, m) {
+            let pret = g.plan.as_ref().is_some_and(|p| nid::pret(p, &g.candidats, &m.imbrication, maintenant()));
+            if pret && let Err((_, (code, detail))) = lancer_imbrication(etat, m, g).await {
+                eprintln!("imbrication sur {} : {code} {}", m.id, detail.unwrap_or_default());
+            }
+        }
+    }
+}
+
+/// Planches en préparation (roadmap 5.4) : par machine, les travaux, la longueur (marges
+/// comprises), le remplissage du rouleau consommé, les places (mm, origine en bas à gauche)
+/// et si le déclencheur est atteint.
+async fn lister_imbrications(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
+    let catalogue = etat.machines.read().unwrap().clone();
+    let mm = imbrication::PT_PAR_MM;
+    let mut liste = vec![];
+    for m in catalogue.iter().filter(|m| m.variante_de.is_none()) {
+        for g in groupes(&etat, &catalogue, m) {
+            let retenu = |i: usize| g.plan.as_ref().is_some_and(|p| p.retenus.contains(&i));
+            let elements: Vec<_> = g
+                .sorties
+                .iter()
+                .zip(&g.candidats)
+                .enumerate()
+                .map(|(i, ((s, t), c))| serde_json::json!({ "sortie": s.id, "travail": t.id, "page": s.page, "nom": t.nom, "copies": c.copies, "echeance": c.echeance, "commande": t.fiche.commande, "client": t.fiche.client, "retenu": retenu(i) }))
+                .collect();
+            let f = m.imbrication.finition();
+            let (longueur, remplissage, places, pret) = match &g.plan {
+                Some(p) => {
+                    let places: Vec<_> = p
+                        .places
+                        .iter()
+                        .map(|pl| {
+                            let i = p.elements[pl.indice];
+                            let t = g.candidats[i].taille;
+                            let (l, h) = if pl.tourne() { (t.hauteur, t.largeur) } else { (t.largeur, t.hauteur) };
+                            serde_json::json!({ "nom": format!("{} p{}", g.sorties[i].1.nom, g.sorties[i].0.page), "x": pl.x / mm, "y": (pl.y + f.marge_bas) / mm, "largeur": l / mm, "hauteur": h / mm, "angle": pl.angle })
+                        })
+                        .collect();
+                    let longueur = (p.planche.hauteur + f.marge_bas + f.marge_haut) / mm;
+                    (longueur, p.remplissage(&g.candidats, g.laize_mm, m.imbrication.marge_bas_mm + m.imbrication.marge_haut_mm), places, nid::pret(p, &g.candidats, &m.imbrication, maintenant()))
+                }
+                None => (0.0, 0.0, vec![], false),
+            };
+            let d = &g.sorties[0].1.demande;
+            liste.push(serde_json::json!({
+                "machine": m.id, "code": g.code, "strategie": m.imbrication.strategie,
+                "travaux": g.plan.as_ref().map_or(0, |p| p.retenus.len()), "laize_mm": g.laize_mm, "longueur_mm": longueur,
+                "remplissage": remplissage, "pret": pret, "contour": f.contour, "places": places, "elements": elements,
+                "support": d.support, "decoupeuse": g.decoupeuse, "miroir": d.edition.miroir,
+            }));
+        }
+    }
+    Json(liste)
+}
+
+/// Machine et planche en préparation désignées par l'écran.
+fn groupe_demande(etat: &Etat, machine: &str, code: &str) -> Option<(machines::Machine, Groupe)> {
+    let catalogue = etat.machines.read().unwrap().clone();
+    let m = catalogue.iter().find(|m| m.id == machine)?.clone();
+    let g = groupes(etat, &catalogue, &m).into_iter().find(|g| g.code == code)?;
+    Some((m, g))
+}
+
+/// « Imprimer maintenant » (roadmap 5.2) : la planche part sans attendre son déclencheur.
+async fn imprimer_imbrication(State(etat): State<Partage>, Chemin((machine, code)): Chemin<(String, String)>) -> Response {
+    let Some((m, g)) = groupe_demande(&etat, &machine, &code) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    match lancer_imbrication(&etat, &m, g).await {
+        Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
+        Err((statut, (code, detail))) => refus(statut, code, detail),
+    }
+}
+
+/// PDF de la planche en préparation, celui que « Imprimer maintenant » produirait.
+async fn pdf_imbrication(State(etat): State<Partage>, Chemin((machine, code)): Chemin<(String, String)>) -> Response {
+    let Some((m, g)) = groupe_demande(&etat, &machine, &code) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    let Some(plan) = g.plan.clone() else { return refus(StatusCode::CONFLICT, "rien_a_imbriquer", None) };
+    let (sources, donnees, finition) = (sources_planche(&g, &plan), etat.config.donnees.clone(), m.imbrication.finition());
+    match tokio::task::spawn_blocking(move || pdf_planche(&donnees, &sources, &plan, finition)).await {
+        Ok(Ok(pdf)) => ([(header::CONTENT_TYPE, "application/pdf")], pdf).into_response(),
+        Ok(Err(e)) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e)),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Fiche travail (roadmap 5.6) : enregistrée dans `job.json` ; l'étiquette ou le code
+/// imprimés la reprennent (rendu refait si le travail en porte un).
+async fn enregistrer_fiche(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(fiche): Json<Fiche>) -> Response {
+    if !fiche.valide() {
+        return refus(StatusCode::BAD_REQUEST, "fiche_invalide", None);
+    }
+    let Some(mut t) = lire_travail(&etat.config.donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    let imprimee = t.demande.edition.etiquette.is_some() || t.demande.edition.code.is_some();
+    let change = imprimee && (fiche.commande != t.fiche.commande || fiche.quantite != t.fiche.quantite);
+    t.fiche = fiche;
+    if change && matches!(t.statut, Statut::Termine | Statut::Echec) && !occupe(&etat, &t) {
+        return reconstruire(&etat, t).await;
+    }
+    match ecrire(&etat.config.donnees, &t) {
+        Ok(()) => Json(t).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+#[derive(Deserialize)]
+struct Exclusion {
+    exclue: bool,
+}
+
+/// Page à ne pas imprimer (roadmap 5.12) : décochée, elle quitte la file (sorties pas encore
+/// parties) et n'entre plus dans aucune planche ; recochée, elle y revient (mise en file
+/// automatique du travail, s'il en a une).
+async fn exclure_page(State(etat): State<Partage>, Chemin((id, n)): Chemin<(Uuid, usize)>, Json(e): Json<Exclusion>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    if n == 0 || n > t.pages.len() {
+        return refus(StatusCode::NOT_FOUND, "introuvable", None);
+    }
+    let avant = t.pages_exclues.contains(&n);
+    t.pages_exclues.retain(|&p| p != n);
+    if e.exclue {
+        t.pages_exclues.push(n);
+        t.pages_exclues.sort_unstable();
+    }
+    if let Err(err) = ecrire(donnees, &t) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string()));
+    }
+    if e.exclue {
+        let mut f = etat.file.lock().unwrap();
+        f.sorties.retain(|s| !(s.travail == id && s.page == n && matches!(s.etat, file::Etat::EnAttente | file::Etat::Suspendue)));
+        let _ = f.ecrire(donnees);
+    } else if avant && matches!(t.statut, Statut::Termine) && !etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == id && s.page == n && s.active()) {
+        mettre_en_file_auto(&etat, &t, Some(n));
+    }
+    Json(t).into_response()
+}
+
 /// Répartiteur : chaque seconde, pour chaque machine du catalogue qui n'a rien en cours,
 /// lance la première sortie en attente qui la vise. Une sortie à la fois par machine. Une
 /// variante (roadmap 4.15) ne part pas seule : sa machine d'origine prend ses sorties.
 async fn repartir(etat: Partage) {
+    let mut tour: u64 = 0;
     loop {
+        // Imbrication (roadmap 5.2) : toutes les 5 s, les planches prêtes partent.
+        tour += 1;
+        if tour.is_multiple_of(5) {
+            imbriquer_les_pretes(&etat).await;
+        }
         let ids: Vec<String> = etat.machines.read().unwrap().iter().filter(|m| m.variante_de.is_none()).map(|m| m.id.clone()).collect();
         for id in ids {
             let suivante = {
@@ -3297,6 +3774,9 @@ mod tests {
             cree_le: 100 * jour - age_jours * jour,
             couches_decoupe: vec![],
             mise_coupe: Default::default(),
+            fiche: Default::default(),
+            pages_exclues: vec![],
+            imbrication: None,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -3896,6 +4376,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -3958,6 +4441,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4010,6 +4496,7 @@ mod tests {
                 coupe_auto: true,
                 variante_de: None,
                 reperage: None,
+                imbrication: Default::default(),
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
@@ -4028,6 +4515,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -4075,6 +4565,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4193,6 +4686,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4252,6 +4748,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4290,6 +4789,9 @@ mod tests {
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4399,15 +4901,15 @@ mod tests {
         }
 
         /// Une page du PDF d'essai : MediaBox, CropBox éventuelle, /Rotate éventuel.
-        struct PageEssai {
-            media: [f64; 4],
-            crop: Option<[f64; 4]>,
-            rotate: i64,
+        pub(super) struct PageEssai {
+            pub(super) media: [f64; 4],
+            pub(super) crop: Option<[f64; 4]>,
+            pub(super) rotate: i64,
         }
 
         /// PDF de plusieurs pages, chacune remplie de cyan sur toute sa MediaBox, avec un
         /// contour `CutContour` à 5 pt du bord.
-        fn pdf_pages(pages: &[PageEssai]) -> Vec<u8> {
+        pub(super) fn pdf_pages(pages: &[PageEssai]) -> Vec<u8> {
             let mut doc = Document::with_version("1.4");
             let sep = doc.add_object(Object::Array(vec![
                 "Separation".into(),
@@ -5336,6 +5838,9 @@ mod tests {
                 cree_le: 0,
                 couches_decoupe: vec![decoupe::Couche { nom: "CutContour".into(), active: true, reglage: None }],
                 mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
             };
             let rep = dossier(d, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5785,6 +6290,280 @@ mod tests {
             assert_eq!(appel(&e, "POST", &format!("/api/file/{}/restaurer", ids[1]), None, None).await.status(), StatusCode::NO_CONTENT);
             let f = e.file.lock().unwrap().sorties.clone();
             assert_eq!((f[0].etat, f[0].archivee, f[1].etat), (file::Etat::Suspendue, false, file::Etat::EnAttente));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
+    /// Imbrication dans la file (roadmap 5.1 à 5.6, 5.12), de bout en bout : vrais rendus,
+    /// vraie file, planche composée puis rendue.
+    mod imbrication_file {
+        use super::controle_d_acces::{appel, etat};
+        use super::couches_decoupe::json;
+        use super::regression_geometrie::{PageEssai, pdf_pages, rendre};
+        use super::*;
+
+        const MM: f64 = imbrication::PT_PAR_MM;
+
+        fn regler(e: &Partage, r: nid::Reglage) {
+            e.machines.write().unwrap().iter_mut().find(|m| m.id == "epson").unwrap().imbrication = r;
+        }
+
+        async fn en_file(e: &Partage, t: &Travail, page: usize, machine: &str, operation: &str) {
+            let r = appel(e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": page, "machine": machine, "operation": operation }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+        }
+
+        async fn planches(e: &Partage) -> Vec<serde_json::Value> {
+            json(appel(e, "GET", "/api/imbrications", None, None).await).await.as_array().unwrap().clone()
+        }
+
+        async fn rendu(e: &Partage, id: Uuid) -> Travail {
+            for _ in 0..600 {
+                let t = lire_travail(&e.config.donnees, id).unwrap();
+                if !actif(&t.statut) {
+                    assert!(matches!(t.statut, Statut::Termine), "{:?}", t.erreur);
+                    return t;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            panic!("rendu trop long");
+        }
+
+        fn etiquette_200x100() -> Vec<u8> {
+            imbrication::tests::pdf(200.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0))
+        }
+
+        /// 5.1, 5.3, 5.4 : en économie, deux travaux sans découpe et un pour le Kona font deux
+        /// planches ; l'aperçu (longueur, remplissage) est celui du PDF produit ; « Imprimer
+        /// maintenant » remplace les impressions (et la découpe en file) par la planche, qui
+        /// part sur l'Epson et se découpe sur le Kona.
+        #[tokio::test]
+        async fn deux_planches_selon_la_decoupeuse_apercu_egal_pdf() {
+            let e = etat("nid-groupes");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Economie, espace_mm: 0.0, ..Default::default() });
+            let d = Demande { dpi: 36, ..Default::default() };
+            let a = rendre(&e, etiquette_200x100(), d.clone()).await;
+            let b = rendre(&e, etiquette_200x100(), d.clone()).await;
+            let k = rendre(&e, etiquette_200x100(), Demande { decoupeuse: Some("kona".into()), ..d }).await;
+            for t in [&a, &b, &k] {
+                en_file(&e, t, 1, "epson", "impression").await;
+            }
+            en_file(&e, &k, 1, "kona", "decoupe").await;
+            let file = json(appel(&e, "GET", "/api/file", None, None).await).await;
+            let raisons: Vec<_> = file.as_array().unwrap().iter().map(|s| s["raison_attente"].as_str().unwrap_or("")).collect();
+            assert_eq!(raisons, ["attente_imbrication"; 3].iter().copied().chain(["attente_impression"]).collect::<Vec<_>>());
+
+            let p = planches(&e).await;
+            assert_eq!(p.len(), 2, "sans découpeuse et Kona : deux planches");
+            let (libre, kona) = (&p[0], &p[1]);
+            assert_eq!((libre["travaux"].as_u64(), libre["decoupeuse"].as_str()), (Some(2), None));
+            assert_eq!((kona["travaux"].as_u64(), kona["decoupeuse"].as_str()), (Some(1), Some("kona")));
+            // Économie sur 1626 mm : les deux étiquettes côte à côte, 100 mm de long.
+            let longueur = libre["longueur_mm"].as_f64().unwrap();
+            assert!((longueur - 100.0).abs() < 1e-3, "{libre}");
+            let remplissage = libre["remplissage"].as_f64().unwrap();
+            assert!((remplissage - 2.0 * 0.02 / (1.626 * 0.1)).abs() < 1e-6, "{remplissage}");
+            assert_eq!(libre["places"].as_array().unwrap().len(), 2);
+
+            // L'aperçu est le PDF produit.
+            let url = |g: &serde_json::Value| format!("/api/imbrications/epson/{}", g["code"].as_str().unwrap());
+            let r = appel(&e, "GET", &format!("{}/planche.pdf", url(libre)), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let apercu = axum::body::to_bytes(r.into_body(), 1 << 24).await.unwrap().to_vec();
+            let taille = imbrication::taille_page(&apercu, 1).unwrap();
+            assert!((taille.hauteur / MM - longueur).abs() < 1e-3 && (taille.largeur / MM - 400.0).abs() < 1e-3, "{taille:?}");
+
+            let r = appel(&e, "POST", &format!("{}/imprimer", url(libre)), None, None).await;
+            assert_eq!(r.status(), StatusCode::ACCEPTED);
+            let planche = rendu(&e, Uuid::parse_str(json(r).await["id"].as_str().unwrap()).unwrap()).await;
+            let produit = std::fs::read(dossier(&e.config.donnees, planche.id).join("source.pdf")).unwrap();
+            assert_eq!(imbrication::taille_page(&produit, 1).unwrap(), taille, "planche produite = aperçu");
+            assert_eq!(decoupe::extraire(&produit, false).unwrap()[0].traces.len(), 2, "deux contours posés");
+            assert_eq!(planche.imbrication.as_ref().map(|i| i.machine.as_str()), Some("epson"));
+            {
+                let f = e.file.lock().unwrap();
+                for t in [&a, &b] {
+                    let s = f.sorties.iter().find(|s| s.travail == t.id).unwrap();
+                    assert_eq!((s.etat, s.planche), (file::Etat::Imbriquee, Some(planche.id)));
+                }
+                let s = f.sorties.iter().find(|s| s.travail == planche.id).unwrap();
+                assert_eq!((s.machine.as_str(), s.operation(), s.etat), ("epson", machines::Operation::Impression, file::Etat::EnAttente));
+                let catalogue = e.machines.read().unwrap().clone();
+                assert_eq!(raison_attente(&e.config.donnees, s, catalogue.iter().find(|m| m.id == "epson"), None, &f.sorties, &catalogue), None, "la planche, elle, part");
+            }
+            assert_eq!(planches(&e).await.len(), 1, "reste la planche Kona");
+
+            // Planche Kona : la découpe en file du travail est remplacée par celle de la planche.
+            let kona = &planches(&e).await[0];
+            let r = appel(&e, "POST", &format!("{}/imprimer", url(kona)), None, None).await;
+            assert_eq!(r.status(), StatusCode::ACCEPTED);
+            let planche_k = rendu(&e, Uuid::parse_str(json(r).await["id"].as_str().unwrap()).unwrap()).await;
+            assert_eq!(planche_k.demande.decoupeuse.as_deref(), Some("kona"));
+            let f = e.file.lock().unwrap();
+            assert!(f.sorties.iter().filter(|s| s.travail == k.id).all(|s| s.etat == file::Etat::Imbriquee), "impression et découpe du travail imbriquées");
+            let ops: Vec<_> = f.sorties.iter().filter(|s| s.travail == planche_k.id).map(|s| (s.machine.as_str(), s.etat)).collect();
+            assert_eq!(ops, [("epson", file::Etat::EnAttente), ("kona", file::Etat::Suspendue)]);
+            drop(f);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.2 : départ à la surface (0,05 m²) : deux étiquettes de 0,02 m² attendent, la
+        /// troisième fait partir la planche au passage du répartiteur.
+        #[tokio::test]
+        async fn depart_a_la_surface_par_le_repartiteur() {
+            let e = etat("nid-surface");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, surface_m2: Some(0.05), ..Default::default() });
+            let d = Demande { dpi: 36, ..Default::default() };
+            let mut travaux = vec![];
+            for _ in 0..3 {
+                travaux.push(rendre(&e, etiquette_200x100(), d.clone()).await);
+            }
+            for (n, t) in travaux.iter().enumerate() {
+                en_file(&e, t, 1, "epson", "impression").await;
+                imbriquer_les_pretes(&e).await;
+                let lancees = e.file.lock().unwrap().sorties.iter().filter(|s| s.etat == file::Etat::Imbriquee).count();
+                assert_eq!(lancees, if n == 2 { 3 } else { 0 }, "après le travail {}", n + 1);
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.5 : contour de toute la planche dans sa couche `NestTrimBox`, coupée en dernier,
+        /// présente dans le HP-GL ; marges haute et basse ; alerte des repères sans tracé.
+        #[tokio::test]
+        async fn contour_nest_trim_box_et_marges() {
+            let e = etat("nid-contour");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Economie, contour: true, marge_bas_mm: 20.0, marge_haut_mm: 30.0, espace_mm: 0.0, ..Default::default() });
+            let d = Demande { dpi: 36, decoupeuse: Some("kona".into()), ..Default::default() };
+            let t = rendre(&e, etiquette_200x100(), d).await;
+            en_file(&e, &t, 1, "epson", "impression").await;
+            let g = planches(&e).await.remove(0);
+            assert!((g["longueur_mm"].as_f64().unwrap() - 150.0).abs() < 1e-3, "100 + 20 + 30 : {g}");
+            let r = appel(&e, "POST", &format!("/api/imbrications/epson/{}/imprimer", g["code"].as_str().unwrap()), None, None).await;
+            let planche = rendu(&e, Uuid::parse_str(json(r).await["id"].as_str().unwrap()).unwrap()).await;
+            let noms: Vec<&str> = planche.couches_decoupe.iter().map(|c| c.nom.as_str()).collect();
+            assert_eq!(noms, ["CutContour", decoupe::NEST_TRIM_BOX], "le contour de planche, couché en dernier");
+            assert_eq!(planche.pages[0].traces_par_couche.get(decoupe::NEST_TRIM_BOX), Some(&1));
+            assert!(!planche.pages[0].plaques.iter().any(|p| p == decoupe::NEST_TRIM_BOX) || planche.pages[0].plaques_decoupe.iter().any(|p| p == decoupe::NEST_TRIM_BOX), "jamais imprimé");
+            let plt = std::fs::read_to_string(fichier_plt(&dossier(&e.config.donnees, planche.id), 1)).unwrap();
+            // Dernier tracé du HP-GL : le rectangle de 200 × 100 mm posé à 20 mm du bas.
+            let dernier = plt.rsplit("SP1;").next().unwrap().split(";PU;").next().unwrap();
+            let v: Vec<f64> = dernier.split(|c: char| !c.is_ascii_digit() && c != '.' && c != '-').filter_map(|x| x.parse().ok()).collect();
+            let (xs, ys): (Vec<f64>, Vec<f64>) = v.chunks(2).filter(|c| c.len() == 2).map(|c| (c[0] / 100.0, c[1] / 100.0)).unzip();
+            let borne = |v: &[f64]| (v.iter().copied().fold(f64::MAX, f64::min), v.iter().copied().fold(f64::MIN, f64::max));
+            let ((x0, x1), (y0, y1)) = (borne(&xs), borne(&ys));
+            assert!([x0, x1 - 200.0, y0 - 20.0, y1 - 120.0].iter().all(|e| e.abs() < 0.05), "{x0} {x1} {y0} {y1} dans {plt}");
+            assert!((planche.pages[0].hauteur_mm - 150.0).abs() < 1.0, "{}", planche.pages[0].hauteur_mm);
+
+            // Repères demandés sans aucun tracé : alerte.
+            let mut vide = lopdf::Document::with_version("1.4");
+            let c = vide.add_object(lopdf::Stream::new(lopdf::dictionary! {}, b"1 0 0 0 k 0 0 400 400 re f".to_vec()));
+            let pages = vide.new_object_id();
+            let page = vide.add_object(lopdf::dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), 800.into(), 800.into()], "Contents" => c });
+            vide.objects.insert(pages, lopdf::Object::Dictionary(lopdf::dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = vide.add_object(lopdf::dictionary! { "Type" => "Catalog", "Pages" => pages });
+            vide.trailer.set("Root", cat);
+            let mut o = vec![];
+            vide.save_to(&mut o).unwrap();
+            let t = rendre(&e, o, Demande { dpi: 36, reperage: reperage::Reperage::Cadre, ..Default::default() }).await;
+            assert!(t.alertes.iter().any(|a| a.code == "decoupe_reperes_sans_trace"), "{:?}", t.alertes.iter().map(|a| &a.code).collect::<Vec<_>>());
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.6 : fiche dans `job.json` (un job.json d'avant se lit), visible dans la file ;
+        /// quantité et n° de commande sur l'étiquette ; l'échéance la plus proche passe d'abord
+        /// et la quantité due donne les copies posées.
+        #[tokio::test]
+        async fn fiche_travail_echeance_et_quantite() {
+            let e = etat("nid-fiche");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Groupe, espace_mm: 0.0, ..Default::default() });
+            let d = Demande { dpi: 36, edition: edition::Edition { etiquette: Some(edition::Etiquette::default()), ..Default::default() }, ..Default::default() };
+            let tard = rendre(&e, etiquette_200x100(), d.clone()).await;
+            let tot = rendre(&e, imbrication::tests::pdf(150.0 * MM, 100.0 * MM, "1 0 0 0", (0.0, 0.0)), d).await;
+            let fiche = |commande: &str, echeance: u64, quantite: u32| serde_json::json!({ "commande": commande, "client": "Mairie", "societe": "Manciet", "quantite": quantite, "echeance": echeance, "notes": "vernis", "operateur": "Mathieu" });
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/fiche", tard.id), None, Some(fiche("C-1", 2_000_000_000, 1))).await;
+            assert_eq!(r.status(), StatusCode::ACCEPTED, "étiquette : rendu refait");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/fiche", tot.id), None, Some(fiche("C-42", 1_900_000_000, 3))).await;
+            assert_eq!(r.status(), StatusCode::ACCEPTED);
+            let tot = rendu(&e, tot.id).await;
+            rendu(&e, tard.id).await;
+            assert_eq!((tot.fiche.commande.as_str(), tot.fiche.quantite, tot.fiche.echeance, tot.fiche.client.as_str()), ("C-42", 3, Some(1_900_000_000), "Mairie"));
+            let source = std::fs::read(dossier(&e.config.donnees, tot.id).join("source.pdf")).unwrap();
+            let texte = etiquette::tests::textes(&source, 1);
+            assert!(texte.contains("copies 3") && texte.contains("cde C-42"), "{texte}");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/fiche", tot.id), None, Some(serde_json::json!({ "notes": "x".repeat(2001) }))).await;
+            assert_eq!(json(r).await["code"], "fiche_invalide");
+            // job.json d'avant la fiche : se lit, fiche vide.
+            let chemin = dossier(&e.config.donnees, tot.id).join("job.json");
+            let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+            for cle in ["fiche", "pages_exclues", "imbrication"] {
+                v.as_object_mut().unwrap().remove(cle);
+            }
+            let ancien: Travail = serde_json::from_value(v).unwrap();
+            assert_eq!((ancien.fiche, ancien.pages_exclues.len(), ancien.imbrication.is_none()), (Fiche::default(), 0, true));
+
+            en_file(&e, &tard, 1, "epson", "impression").await;
+            en_file(&e, &tot, 1, "epson", "impression").await;
+            let file = json(appel(&e, "GET", "/api/file", None, None).await).await;
+            assert_eq!(file[1]["fiche"]["commande"], "C-42", "fiche visible dans la file");
+            let g = planches(&e).await.remove(0);
+            let noms: Vec<_> = g["places"].as_array().unwrap().iter().map(|p| p["nom"].as_str().unwrap().to_string()).collect();
+            assert_eq!(noms.len(), 4, "3 copies dues + 1");
+            let pos = |x: &serde_json::Value| (x["y"].as_f64().unwrap(), x["x"].as_f64().unwrap());
+            let premier = g["places"].as_array().unwrap().iter().min_by(|a, b| pos(a).partial_cmp(&pos(b)).unwrap()).unwrap();
+            assert_eq!(premier["x"].as_f64(), Some(0.0));
+            let elements = g["elements"].as_array().unwrap();
+            assert_eq!(elements.iter().map(|x| x["commande"].as_str().unwrap()).collect::<Vec<_>>(), ["C-1", "C-42"], "éléments dans l'ordre de la file");
+            // Groupé : par priorité, les 3 copies de C-42 (échéance la plus proche) d'abord.
+            let mut places: Vec<_> = g["places"].as_array().unwrap().clone();
+            places.sort_by(|a, b| pos(a).partial_cmp(&pos(b)).unwrap());
+            // Les deux travaux se distinguent par leur largeur (150 et 200 mm, étiquette en plus).
+            let largeur = |p: &serde_json::Value| p["largeur"].as_f64().unwrap();
+            assert!(places[..3].iter().all(|p| (largeur(p) - largeur(&places[0])).abs() < 1e-6) && largeur(&places[3]) - largeur(&places[0]) > 49.0, "{places:?}");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 5.12 : PDF de 3 pages en mise en file automatique ; page 2 décochée : ni dans la
+        /// file, ni dans la planche, refusée à la main ; recochée, elle revient.
+        #[tokio::test]
+        async fn page_decochee_ni_file_ni_planche_puis_reactivee() {
+            let e = etat("nid-exclure");
+            regler(&e, nid::Reglage { strategie: nid::Strategie::Economie, ..Default::default() });
+            let page = PageEssai { media: [0.0, 0.0, 200.0, 100.0], crop: None, rotate: 0 };
+            let pdf = pdf_pages(&[PageEssai { ..page }, PageEssai { media: [0.0, 0.0, 300.0, 150.0], ..page }, PageEssai { ..page }]);
+            let t = rendre(&e, pdf, Demande { dpi: 36, auto: reglages::Auto { imprimer: true, ..Default::default() }, ..Default::default() }).await;
+            let pages_en_file = |e: &Partage| { let mut v: Vec<usize> = e.file.lock().unwrap().sorties.iter().filter(|s| s.active()).map(|s| s.page).collect(); v.sort(); v };
+            let pages_planche = |g: &serde_json::Value| g["elements"].as_array().unwrap().iter().map(|x| x["page"].as_u64().unwrap()).collect::<Vec<_>>();
+            assert_eq!(pages_en_file(&e), [1, 2, 3]);
+            let url = format!("/api/travaux/{}/pages/2/exclure", t.id);
+            assert_eq!(appel(&e, "POST", &url, None, Some(serde_json::json!({ "exclue": true }))).await.status(), StatusCode::OK);
+            assert_eq!(pages_en_file(&e), [1, 3], "page 2 hors de la file");
+            assert_eq!(pages_planche(&planches(&e).await[0]), [1, 3], "ni dans la planche");
+            assert_eq!(lire_travail(&e.config.donnees, t.id).unwrap().pages_exclues, [2]);
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 2, "machine": "epson", "operation": "impression" }))).await;
+            assert_eq!(json(r).await["code"], "page_exclue");
+            let r = appel(&e, "POST", "/api/planches/apercu", None, Some(serde_json::json!({ "laize_mm": 1000.0, "elements": [{ "id": t.id, "page": 2, "copies": 1 }] }))).await;
+            assert_eq!(json(r).await["code"], "page_exclue");
+            assert_eq!(appel(&e, "POST", &url, None, Some(serde_json::json!({ "exclue": false }))).await.status(), StatusCode::OK);
+            assert_eq!(pages_en_file(&e), [1, 2, 3], "recochée : de retour en file");
+            assert_eq!(pages_planche(&planches(&e).await[0]), [1, 3, 2]);
+            assert_eq!(appel(&e, "POST", &format!("/api/travaux/{}/pages/4/exclure", t.id), None, Some(serde_json::json!({ "exclue": true }))).await.status(), StatusCode::NOT_FOUND);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// machines.json d'avant l'imbrication : un par un ; réglage incohérent refusé.
+        #[tokio::test]
+        async fn machines_d_avant_et_reglage_refuse() {
+            let e = etat("nid-machines");
+            let mut v = serde_json::to_value(e.machines.read().unwrap().clone()).unwrap();
+            for m in v.as_array_mut().unwrap() {
+                m.as_object_mut().unwrap().remove("imbrication");
+            }
+            let lues: Vec<machines::Machine> = serde_json::from_value(v.clone()).unwrap();
+            assert!(lues.iter().all(|m| m.imbrication.strategie == nid::Strategie::UnParUn));
+            v[0]["imbrication"] = serde_json::json!({ "strategie": "economie", "remplissage_pct": 80.0 });
+            assert_eq!(json(appel(&e, "POST", "/api/machines", None, Some(v.clone())).await).await["code"], "machine_invalide");
+            v[0]["imbrication"] = serde_json::json!({ "strategie": "economie", "longueur_cible_mm": 2000.0, "remplissage_pct": 80.0 });
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
+            assert_eq!(e.machines.read().unwrap()[0].imbrication.longueur_cible_mm, Some(2000.0));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }

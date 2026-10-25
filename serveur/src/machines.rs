@@ -111,6 +111,9 @@ pub struct Machine {
     /// Jeu de repères imposé aux travaux affectés à cette découpeuse.
     #[serde(default)]
     pub reperage: Option<crate::reperage::Reperage>,
+    /// Imbrication des impressions en file (roadmap 5.1 à 5.5) ; un par un par défaut.
+    #[serde(default)]
+    pub imbrication: crate::nid::Reglage,
 }
 
 fn vrai() -> bool {
@@ -285,8 +288,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None, imbrication: Default::default() },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false, coupe_auto: true, variante_de: None, reperage: None, imbrication: Default::default() },
     ]
 }
 
@@ -334,6 +337,7 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && m.m2_heure.is_none_or(|v| (0.1..=500.0).contains(&v))
             && m.parametres_decoupe.len() <= 20
             && m.parametres_decoupe.iter().all(ParametreDecoupe::valide)
+            && m.imbrication.valide()
     });
     if !bon {
         return Err("machine_invalide");

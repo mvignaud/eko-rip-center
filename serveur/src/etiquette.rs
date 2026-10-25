@@ -15,9 +15,9 @@ pub struct Infos {
     pub machine: String,
     /// Résolution et support.
     pub mode: String,
-    /// Référence de commande (fiche travail, roadmap 5.6) : aucune source encore.
+    /// Numéro de commande de la fiche travail (roadmap 5.6).
     pub commande: Option<String>,
-    /// Nombre de copies : aucune source encore (la file envoie une sortie par page).
+    /// Quantité due de la fiche travail (roadmap 5.6).
     pub copies: Option<u32>,
 }
 
