@@ -633,7 +633,7 @@ const textes = {
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", cadre_code: "Cadre Mutoh + code-barres (CutServer SF, type 2)", cadre_multi: "Cadre Mutoh multi-segments + code-barres (CutServer MF, type 3)", envoyer: "Envoyer au RIP", autre: "English",
-    envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
+    envoi: "Envoi…", envoi_progres: (n, a, b, pc, reste) => `Envoi de « ${n} » : ${a} / ${b} Mo (${pc} %)${reste != null ? ` · encore ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`}` : ""}`, envoi_traitement: "Fichier reçu par le serveur : conversion et contrôle…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
     en_attente: "En attente", en_cours: "En cours", termine: "Prêt", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
     couches_decoupe: "Couches de découpe", couche_couper: "Couper", couche_traces: (n) => `${n} tracé${n > 1 ? "s" : ""}`, couche_reglage_auto: "— même nom, sinon défaut —",
@@ -912,7 +912,7 @@ const textes = {
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", cadre_code: "Mutoh frame + barcode (CutServer SF, type 2)", cadre_multi: "Mutoh multi-segment frame + barcode (CutServer MF, type 3)", envoyer: "Send to RIP", autre: "Français",
-    envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
+    envoi: "Sending…", envoi_progres: (n, a, b, pc, reste) => `Sending “${n}”: ${a} / ${b} MB (${pc} %)${reste != null ? ` · ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`} left` : ""}`, envoi_traitement: "File received by the server: converting and checking…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
     en_attente: "Queued", en_cours: "In progress", termine: "Ready", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
     couches_decoupe: "Cut layers", couche_couper: "Cut", couche_traces: (n) => `${n} path${n > 1 ? "s" : ""}`, couche_reglage_auto: "— same name, else default —",
@@ -1785,7 +1785,32 @@ async function envoyerFichier(fichier) {
   corps.set("edition", JSON.stringify(lireEdition($("edition-envoi"))));
   if (fichier) corps.set("fichier", fichier, fichier.name);
   dire(T().envoi);
-  const c = await api("/api/travaux", { method: "POST", body: corps });
+  // XMLHttpRequest plutôt que fetch : lui seul dit où en est l'envoi (affiche de plusieurs Go).
+  const c = await new Promise((fini) => {
+    const x = new XMLHttpRequest(), debut = Date.now();
+    let vu = 0;
+    x.open("POST", "/api/travaux");
+    x.upload.onprogress = (e) => {
+      if (!e.lengthComputable || e.total < 5e6 || Date.now() - vu < 500) return;
+      vu = Date.now();
+      const part = e.loaded / e.total, ecoule = (Date.now() - debut) / 1000;
+      const reste = part > 0.02 ? Math.round(ecoule * (1 - part) / part) : null;
+      msg.className = ""; msg.hidden = false; clearTimeout(minuterieMessage);
+      msg.textContent = T().envoi_progres(fichier?.name || "", Math.round(e.loaded / 1048576), Math.round(e.total / 1048576), Math.round(part * 100), reste);
+    };
+    x.upload.onload = () => { msg.textContent = T().envoi_traitement; };
+    x.onload = () => {
+      let r = {};
+      try { r = JSON.parse(x.responseText); } catch {}
+      if (x.status >= 200 && x.status < 300) return fini(r);
+      if (x.status === 413) dire(texteErreur("trop_gros"), true);
+      else if (x.status === 401) { if (!fenetreConnexion.open) fenetreConnexion.showModal(); }
+      else dire(texteErreur(r.code, r.detail), true);
+      fini(null);
+    };
+    x.onerror = () => { dire(texteErreur("reseau"), true); fini(null); };
+    x.send(corps);
+  });
   if (c) dire(T().recu(c.nom));
   return c;
 }
