@@ -15,6 +15,26 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.22.0] — 2026-10-25
+
+Écran principal refait : une seule vue de production. Publiée sans la CI ; l'écran est servi
+par le serveur, les clients en place restent valables.
+
+### Modifié
+- **Vue Production** (remplace Travaux et File d'attente) : machines en haut (état, support
+  chargé, encres de l'Epson, file, durée ; un clic filtre sur la machine), **À imprimer** (la
+  file dans son ordre, puis les travaux non envoyés, avec une colonne d'actions de file :
+  en tête, monter, descendre, suspendre, reprendre, annuler, refaire, restaurer, retirer),
+  **Imprimés** repliable (fin, relevé d'encre et de support).
+- **Inspecteur à onglets** : Travail, Machine, Réglages (déposer un fichier sur un réglage
+  l'importe avec ce réglage), Journal (messages de l'écran).
+- Barre du haut : Production et Système remplacent le volet gauche ; sous 1360 px, les
+  outils gardent leur symbole et leur nom passe en bulle.
+
+*Changed: single Production view (machines on top, to-print queue with action buttons,
+collapsible printed list), tabbed inspector (Job, Machine, Settings with drop-on-setting
+import, Log), navigation moved to the top bar.*
+
 ## [0.21.0] — 2026-10-25
 
 Pont ERP (canal sortant) et tons directs. Publiée sans la CI ; le client macOS 0.19.0 et les
