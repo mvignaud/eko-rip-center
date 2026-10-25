@@ -717,6 +717,9 @@ shows the Lab colour. The job says so ("Spot colours printed in CMYK from the ta
   only import the ones you are entitled to use.
 - `White`, `Silver`, `Metallic` and cut colours cannot go into the table.
 - A 50 % tint lays half of the full colour's CMYK recipe.
+- A colour in the file that is neither an ink, nor a cut colour, nor in the table is
+  flagged on the page ("spot colour missing from the table") and listed under **Spot
+  colours met that are not in the table**: **Add** puts it in with its Lab value.
 - Used by the next renderings: restart a job already rendered.
 
 ## System

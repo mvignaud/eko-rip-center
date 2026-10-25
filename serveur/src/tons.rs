@@ -88,6 +88,43 @@ pub fn lire_csv(texte: &str) -> Result<Vec<Ton>, String> {
     Ok(tons)
 }
 
+/// Plaques d'une page qui ne sont ni une encre de l'imprimante, ni un ton de découpe : des
+/// tons directs absents de la table (ceux de la table sont déjà fondus au rendu).
+pub fn inconnus(plaques: &[String]) -> Vec<String> {
+    plaques.iter().filter(|p| crate::epson::canal(p).is_none() && !crate::decoupe::est_ton_de_decoupe(p)).cloned().collect()
+}
+
+/// Tons rencontrés absents de la table : nombre de travaux et dernière fois (secondes Unix).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Rencontre {
+    pub travaux: u32,
+    pub dernier: u64,
+}
+
+pub fn fichier_inconnus(donnees: &Path) -> PathBuf {
+    donnees.join("tons_inconnus.json")
+}
+
+pub fn lire_inconnus(donnees: &Path) -> std::collections::BTreeMap<String, Rencontre> {
+    crate::etat::lire(&fichier_inconnus(donnees)).ok().flatten().unwrap_or_default()
+}
+
+/// Journal des noms non trouvés : un travail de plus pour chacun. Un nom entré depuis dans
+/// la table en sort.
+pub fn noter_inconnus(donnees: &Path, noms: &[String], le: u64) {
+    let table = lire(donnees);
+    let mut j = lire_inconnus(donnees);
+    j.retain(|n, _| trouver(&table, n).is_none());
+    for n in noms {
+        let r = j.entry(n.clone()).or_default();
+        r.travaux += 1;
+        r.dernier = le;
+    }
+    if let Err(e) = crate::etat::ecrire(&fichier_inconnus(donnees), &j, false) {
+        eprintln!("tons directs inconnus : {e}");
+    }
+}
+
 /// Encrage C, M, J, N (0 à 255) d'une couleur Lab pleine, calculé par Ghostscript avec les
 /// options couleur du travail (profil de sortie, intention) : le même moteur que le rendu.
 pub async fn recette(gs: &str, options: &[String], lab: [f64; 3], delai: std::time::Duration) -> Result<[u8; 4], String> {
@@ -277,6 +314,23 @@ mod tests {
         let alternatives: Vec<Vec<u8>> = doc.objects.values().filter_map(|o| o.as_array().ok()).map(|a| a[2].as_array().map_or_else(|_| a[2].as_name().unwrap().to_vec(), |x| x[0].as_name().unwrap().to_vec())).collect();
         assert!(alternatives.contains(&b"Lab".to_vec()) && alternatives.contains(&b"DeviceCMYK".to_vec()));
         assert_eq!(en_lab(&octets, &[]).unwrap().1, 0);
+    }
+
+    #[test]
+    fn journal_des_noms_non_trouves() {
+        let d = std::env::temp_dir().join(format!("tons-inconnus-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        let plaques: Vec<String> = ["Black", "Cyan", "CutContour", "PANTONE 485 C", "White", "Yellow"].map(String::from).into();
+        assert_eq!(inconnus(&plaques), ["PANTONE 485 C"]);
+        noter_inconnus(&d, &inconnus(&plaques), 10);
+        noter_inconnus(&d, &["PANTONE 485 C".into(), "HX Bleu".into()], 20);
+        let j = lire_inconnus(&d);
+        assert_eq!(j["PANTONE 485 C"], Rencontre { travaux: 2, dernier: 20 });
+        assert_eq!(j["HX Bleu"].travaux, 1);
+        ecrire(&d, &[ton("HX Bleu", [40.0, 0.0, -40.0])]).unwrap();
+        noter_inconnus(&d, &[], 30);
+        assert!(!lire_inconnus(&d).contains_key("HX Bleu"), "entré dans la table : sort du journal");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

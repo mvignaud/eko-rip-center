@@ -411,6 +411,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/decoupe", get(lire_decoupe).post(enregistrer_decoupe))
         .route("/api/tons-directs", get(lire_tons).post(enregistrer_tons))
         .route("/api/tons-directs/import", axum::routing::post(importer_tons))
+        .route("/api/tons-directs/inconnus", get(lire_tons_inconnus))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
@@ -1145,11 +1146,25 @@ async fn traiter(etat: Partage, mut t: Travail) {
         Mode::Decouper => Ok((None, vec![], vec![])),
     };
     // Tons directs pris dans la table (roadmap 8.6) : dit sur le travail, pour information.
-    t.alertes.retain(|a| a.code != "tons_directs_fondus");
-    if let Ok((_, _, fondus)) = &rendu
-        && !fondus.is_empty()
-    {
-        t.alertes.push(controle::Alerte { code: "tons_directs_fondus".into(), page: None, detail: fondus.join(", ") });
+    t.alertes.retain(|a| a.code != "tons_directs_fondus" && a.code != "ton_direct_absent");
+    if let Ok((plaques, _, fondus)) = &rendu {
+        if !fondus.is_empty() {
+            t.alertes.push(controle::Alerte { code: "tons_directs_fondus".into(), page: None, detail: fondus.join(", ") });
+        }
+        // Tons ni encre, ni découpe, ni dans la table : dit sur la page, et gardé au journal.
+        let mut absents = vec![];
+        for (i, p) in plaques.iter().flatten().enumerate() {
+            let noms = tons::inconnus(p);
+            if !noms.is_empty() {
+                t.alertes.push(controle::Alerte { code: "ton_direct_absent".into(), page: Some(i + 1), detail: noms.join(", ") });
+                absents.extend(noms);
+            }
+        }
+        absents.sort();
+        absents.dedup();
+        if !absents.is_empty() {
+            tons::noter_inconnus(donnees, &absents, maintenant());
+        }
     }
     match rendu {
         Ok((plaques, mises, _)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
@@ -3086,6 +3101,11 @@ async fn enregistrer_decoupe(State(etat): State<Partage>, Json(r): Json<decoupe:
     }
     decoupe::installer(r.clone());
     Json(r).into_response()
+}
+
+/// Journal des tons rencontrés absents de la table (roadmap 8.6).
+async fn lire_tons_inconnus(State(etat): State<Partage>) -> Json<std::collections::BTreeMap<String, tons::Rencontre>> {
+    Json(tons::lire_inconnus(&etat.config.donnees))
 }
 
 async fn lire_tons(State(etat): State<Partage>) -> Json<Vec<tons::Ton>> {
@@ -6626,6 +6646,11 @@ mod tests {
             let t = rendre(&e, pdf_tons(&["Die-Cut 3"]), d).await;
             assert_eq!(t.pages[0].traces_decoupe, 1, "préfixe ajouté reconnu");
             assert!(t.alertes.is_empty(), "{:?}", t.alertes.iter().map(|a| &a.code).collect::<Vec<_>>());
+            // Impression : un ton ni encre, ni découpe, ni dans la table est signalé et journalisé.
+            let t = rendre(&e, pdf_tons(&["PANTONE 485 C"]), Demande { mode: Mode::Imprimer, ..Default::default() }).await;
+            let absent = t.alertes.iter().find(|a| a.code == "ton_direct_absent").expect("ton absent de la table signalé");
+            assert_eq!((absent.page, absent.detail.as_str()), (Some(1), "PANTONE 485 C"));
+            assert_eq!(tons::lire_inconnus(&e.config.donnees)["PANTONE 485 C"].travaux, 1, "gardé au journal");
             decoupe::installer(decoupe::Reglages::default());
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }

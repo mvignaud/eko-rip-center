@@ -32,6 +32,7 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
 | `charges.json` | media loaded in each machine, set by the operator or read from the Epson |
 | `tons_directs.json` | spot colour table (System > Spot colours: exact name, aliases, Lab colour); included in the backup and in the copy made before an update |
+| `tons_inconnus.json` | spot colours met that are not in the table (number of jobs, last time), listed in System > Spot colours |
 | `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); included in the configuration backup and in the copy made before an update |
 | `utilisateurs.json` | accounts (hashed passwords, mode 0600) |
 | `file.json` | output queue and history |

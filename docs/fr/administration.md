@@ -35,6 +35,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |
 | `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; compris dans la sauvegarde de la configuration et dans la copie avant mise à jour |
 | `tons_directs.json` | table des tons directs (Système > Tons directs : nom exact, alias, couleur Lab) ; comprise dans la sauvegarde et dans la copie avant mise à jour |
+| `tons_inconnus.json` | tons directs rencontrés absents de la table (nombre de travaux, dernière fois), listés dans Système > Tons directs |
 | `utilisateurs.json` | comptes (mots de passe hachés, droits 0600) |
 | `file.json` | file des sorties et historique |
 | `profils/` | profils ICC déposés |

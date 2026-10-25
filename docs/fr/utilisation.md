@@ -757,6 +757,9 @@ en CMJN d'après la table »).
   livrée avec le RIP ; n'importez que celles que vous avez le droit d'utiliser.
 - `White`, `Silver`, `Metallic` et les tons de découpe ne peuvent pas entrer dans la table.
 - Une teinte à 50 % pose la moitié de la recette CMJN de la teinte pleine.
+- Un ton du fichier qui n'est ni une encre, ni un ton de découpe, ni dans la table est
+  signalé sur la page (« ton direct absent de la table ») et noté dans **Tons rencontrés
+  absents de la table** : **Ajouter** le fait entrer avec sa valeur Lab.
 - Pris aux rendus suivants : relancer un travail déjà rendu.
 
 ## Système
