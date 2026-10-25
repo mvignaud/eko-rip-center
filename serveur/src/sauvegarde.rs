@@ -1,5 +1,6 @@
 //! Sauvegarde de la configuration en un seul fichier JSON : catalogue des machines, tarifs,
-//! réglages enregistrés, supports et modes, et profils ICC (en hexadécimal). Ni les comptes (mots de passe
+//! réglages enregistrés, supports et modes, profils ICC (en hexadécimal) et réglage du pont ERP
+//! (sans son secret). Ni les comptes (mots de passe
 //! hachés : ils se recréent sur le serveur), ni les travaux, ni la file.
 
 use crate::{couverture, machines, reglages, supports};
@@ -29,6 +30,10 @@ pub struct Sauvegarde {
     /// sauvegardes d'avant.
     #[serde(default)]
     pub consommation: Option<crate::consommation::Reglages>,
+    /// Pont ERP : URL, activation, instance (ni jeton ni secret) ; absent des sauvegardes
+    /// d'avant le lot R2 : le pont en place est gardé.
+    #[serde(default)]
+    pub pont: Option<crate::erp::Sauve>,
 }
 
 pub fn hex(octets: &[u8]) -> String {

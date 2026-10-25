@@ -27,7 +27,8 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `machines.json` | machine catalogue |
 | `tarifs.json` | ink and media prices, excl. or incl. VAT |
 | `reglages.json` | saved presets |
-| `erp.json` | ERP bridge: ERP token hash and HMAC secret (mode 0600) — see [erp-bridge.md](erp-bridge.md) |
+| `erp.json` | ERP bridge: ERP token hash, HMAC secret, ERP URL, enable switch, instance (mode 0600) — see [erp-bridge.md](erp-bridge.md) |
+| `pont/` | ERP bridge: event log (`journal.jsonl`) and sending state (`etat.json`); not configuration, not backed up |
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
 | `charges.json` | media loaded in each machine, set by the operator or read from the Epson |
 | `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); included in the configuration backup and in the copy made before an update |
@@ -92,6 +93,22 @@ administrator left: an account declared without a role becomes one.
   to `sorties/epson/`. The media width, state and alerts are read over SNMP when the
   address is set (the server speaks SNMP itself, nothing to install): without SNMP, the
   direct driver cannot stop a print on an alert.
+
+## ERP bridge
+
+System > **ERP bridge** (administrator): base URL given by the ERP, HMAC secret
+(`eko-rip-serveur erp secret`, or pasted; never shown again), enable switch. The RIP calls
+the ERP over outgoing HTTPS: no port to open. If the screen says:
+
+- **failing**: the code says what to do (signature refused → secret differs from the ERP's;
+  signature expired → server clock, `timedatectl`; ERP unreachable → network, DNS,
+  certificate). Nothing is lost: everything goes out when it is back, in order.
+- **replaced**: another installation talks to the ERP instead of this one. If intended,
+  nothing to do; otherwise, **Draw a new instance** (the other one will stop in turn).
+- **anomaly**: the ERP and the RIP no longer count the same; check with the ERP, then draw a
+  new instance.
+
+Details: [erp-bridge.md](erp-bridge.md), § 6.
 
 ## FAQ
 

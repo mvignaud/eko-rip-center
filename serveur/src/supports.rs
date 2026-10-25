@@ -172,7 +172,9 @@ pub fn appliquer(d: &mut crate::reglages::Demande, c: &Catalogue) -> Result<(), 
 }
 
 pub fn ecrire(donnees: &Path, c: &Catalogue) -> std::io::Result<()> {
-    crate::etat::ecrire(&fichier(donnees), c, false)
+    crate::etat::ecrire(&fichier(donnees), c, false)?;
+    crate::pont::reveiller();
+    Ok(())
 }
 
 /// Donne un identifiant aux supports et modes qui n'en ont pas ; refuse un identifiant

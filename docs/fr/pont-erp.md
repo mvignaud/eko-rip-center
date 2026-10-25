@@ -1,8 +1,9 @@
-# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lot R1)
+# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 et R2)
 
 Ce document fixe ce qu'un ERP peut attendre d'E-KO RIP Center. Le lot R1 pose les
 fondations : identifiants, accès machine à machine, signature des événements, modèle
-d'états. Les lots suivants (R2 canal et catalogue, R3 réception des travaux, R4 estimation,
+d'états ; le lot R2 (§ 6) le canal : journal, envois, instances, catalogue, états et
+consommation. Les lots suivants (R2 canal et catalogue, R3 réception des travaux, R4 estimation,
 R5 consommation réelle) s'ajoutent sans casser ce qui est écrit ici.
 
 Principes :
@@ -84,7 +85,7 @@ Route du lot R1 : `GET /api/erp/contrat` → `{ contrat, serveur, signature, eta
   `what do ya want for nothing?` →
   `5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843`.
 
-Enveloppe d'un événement (transport livré avec le lot R2) :
+Enveloppe d'un événement (transport : § 6) :
 
 ```json
 {
@@ -139,6 +140,10 @@ Après une coupure : un travail `en_cours` redevient `en_attente` et son rendu r
 Après une coupure : une sortie `en_cours` passe en `echec` avec le code `interrompu`. Elle
 ne repart pas seule : une découpe ne se reprend pas au milieu.
 
+`imbriquee` (ajout compatible, lot R2) : la sortie est posée sur une planche d'imbrication ;
+la planche, un travail à part, l'imprime, et la sortie passe `terminee` quand la planche
+est imprimée. La consommation est alors portée par la planche.
+
 À venir (lot R5, pilote direct de l'Epson) : `en_impression` et `imprimee`, émis par la
 machine elle-même. D'ici là, `terminee` signifie « confiée à la machine », pas « sortie
 de la machine ».
@@ -146,3 +151,98 @@ de la machine ».
 Correspondance suggérée côté ERP : travail `termine` → « prêt à imprimer » ; sortie
 `terminee` d'une imprimante → « en impression » ; sortie `terminee` d'une découpeuse →
 « découpé » ; `echec` → « bloqué », avec le code.
+
+
+## 6. Canal et événements (lot R2, côté RIP)
+
+### 6.1 Réglage
+
+Dans le client, **Système > Pont ERP** (administrateur) : URL de base de l'ERP, secret HMAC,
+activation. L'URL est celle que donne l'écran du pont de l'ERP
+(`https://<hôte>/api/v1/gestion-imprimerie/rip/<atelier>`) : `https` obligatoire (`http`
+n'est admis que vers la machine elle-même, pour les essais). Le secret se crée avec
+`eko-rip-serveur erp secret` ou se colle dans l'écran ; il n'est **jamais** réaffiché ni
+renvoyé par l'API, ni écrit dans la sauvegarde de la configuration (qui reprend l'URL,
+l'activation et l'instance). L'écran montre l'état (désactivé, actif, en erreur, remplacé,
+anomalie), le dernier `seq` numéroté et le dernier accusé par l'ERP, le dernier contact, la
+dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmation).
+
+### 6.2 Journal
+
+- Tant que le pont est activé, chaque événement est écrit dans `pont/journal.jsonl` (une
+  ligne, synchronisée sur le disque) **avant** tout envoi ; `seq` croît sans trou pour
+  l'instance. Une coupure de courant pendant l'écriture laisse au plus une ligne coupée :
+  elle est retirée au redémarrage, rien d'autre ne change (aucun événement perdu, aucun
+  renuméroté).
+- L'état du pont (`pont/etat.json`) garde le dernier accusé et le dernier état publié de
+  chaque travail et de chaque sortie.
+- Les événements accusés sont purgés après 30 jours ; ceux qui ne le sont pas restent
+  jusqu'à leur accusé, quelle que soit la durée de la panne.
+- Pont désactivé : rien n'est journalisé. À l'activation, les travaux et sorties existants
+  sont pris tels quels ; seuls leurs changements suivants font un événement.
+
+### 6.3 Échanges
+
+- `GET <base>/en-attente?instance=<uuid>`, toujours avec l'instance, signé sur
+  `"<t>.GET <chemin>?instance=<uuid>"` ; toutes les 30 s, toutes les 5 s quand une demande
+  attend (`catalogue_demande`), et aussitôt qu'un événement s'ajoute.
+- Puis `POST <base>/evenements` : une **liste** de 100 événements au plus, dans l'ordre de
+  `seq`, signée sur le corps exact ; tout ce qui suit le dernier accusé.
+- Réponses : `200` et `409 seq_manquant` donnent `dernier_seq_traite` : le RIP renvoie tout
+  ce qui suit. Toute autre erreur (401, 403, 404, 422, 429, 5xx, réseau) est affichée dans
+  Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
+  jamais un événement refusé.
+- `travaux`, `annulations`, `estimations` : lus, ignorés tant que leur forme n'est pas fixée
+  (lots R3 à R5) ; le journal du serveur le dit (« non prises en charge »).
+
+### 6.4 Instances
+
+- L'instance (UUID v4) est tirée au premier démarrage du serveur et gardée dans `erp.json`.
+- Réponse `dernier_seq_traite = 0` pour une instance **jamais accusée** : tout est rejoué
+  depuis `seq = 1` (installation neuve).
+- Réponse `0` pour une instance **déjà accusée** : une autre installation a pris la place.
+  Le RIP n'envoie plus rien (ni `GET` ni `POST`) et affiche « remplacé » dans Système. Seul
+  l'administrateur le relance, en tirant une nouvelle instance : le journal repart de 1.
+- Réponse plus grande que le dernier `seq` du RIP (même instance), ou rejeu demandé
+  d'événements purgés : « anomalie », arrêt, jamais de renumérotation silencieuse. Après
+  vérification avec l'ERP : nouvelle instance.
+
+### 6.5 Événements
+
+`catalogue.modifie` — catalogue complet, au démarrage du pont, à chaque modification
+(machines, couches de découpe, supports, modes, réglages enregistrés, profils ICC) et quand
+l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_decoupe`,
+`supports`, `modes`, `prereglages`, `profils`, et `serveur` (version). Chaque objet porte son
+`uuid` (sauf les profils, identifiés par `fichier`) et son `nom` ; `machine_uuid`,
+`support_uuid`, `mode_uuid`, `decoupeuse_uuid` les relient. Aucun prix.
+
+`travail.etat` — à chaque changement d'état d'un travail :
+
+```json
+{ "travail_uuid": "…", "ref_erp": null, "etat": "termine", "code_erreur": null, "pages": 2 }
+```
+
+`sortie.etat` — à chaque changement d'état d'une sortie :
+
+```json
+{ "sortie_uuid": "…", "travail_uuid": "…", "ref_erp": null, "page": 1, "machine_uuid": "…",
+  "machine": "epson", "operation": "impression", "etat": "en_attente", "code_erreur": null,
+  "raison_attente": "attente_support", "planche_uuid": null }
+```
+
+`travail.consommation` — à la fin d'une impression, puis d'une découpe (sortie `terminee`) :
+
+```json
+{ "travail_uuid": "…", "sortie_uuid": "…", "ref_erp": null, "page": 1, "operation": "impression",
+  "machine_uuid": "…", "machine": "epson", "support_uuid": "…", "mode_uuid": "…", "couche": null,
+  "copies": 1, "surface_m2": 1.2, "longueur_prevue_mm": 1000, "longueur_mm": 1204,
+  "longueur_source": "reel", "gache_mm": 204, "encre_ml": { "C": 3.5 }, "encre_sous_seuil_ml": null,
+  "encre_ml_estimee": { "C": 3.1 }, "encre_source": "reel", "duree_s": 600, "debut": 1793000000, "fin": 1793000600 }
+```
+
+- Rien n'est inventé : sans relevé de la machine (SNMP), `encre_ml`, `longueur_mm` et
+  `gache_mm` valent `null` ; `encre_source` dit d'où vient l'encre donnée (`reel` mesuré,
+  `estime` par les points posés du pilote direct, `null` : aucune).
+- `encre_ml` est l'encre réelle répartie au moment de la fin (la répartition d'une baisse
+  entre plusieurs impressions peut s'affiner ensuite dans les rapports du RIP).
+- `ref_erp` vaut `null` jusqu'à la réception des travaux de l'ERP (lot R3).

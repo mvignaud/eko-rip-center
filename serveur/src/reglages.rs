@@ -265,7 +265,9 @@ pub fn ecrire(donnees: &Path, reglages: &[Reglage]) -> std::io::Result<()> {
     for r in reglages {
         std::fs::create_dir_all(dossier_entree(donnees, &r.nom))?;
     }
-    crate::etat::ecrire(&fichier(donnees), reglages, false)
+    crate::etat::ecrire(&fichier(donnees), reglages, false)?;
+    crate::pont::reveiller();
+    Ok(())
 }
 
 /// Fichiers prêts : présents avec la même taille qu'au passage précédent (un fichier en

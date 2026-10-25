@@ -25,6 +25,7 @@ mod forme;
 mod imbrication;
 mod mosaique;
 mod nid;
+mod pont;
 mod plotter;
 mod render;
 mod reglages;
@@ -55,6 +56,18 @@ enum Statut {
     EnCours,
     Termine,
     Echec,
+}
+
+impl Statut {
+    /// Code publié à l'ERP (modèle d'états, `travail.etat`).
+    fn code(&self) -> &'static str {
+        match self {
+            Statut::EnAttente => "en_attente",
+            Statut::EnCours => "en_cours",
+            Statut::Termine => "termine",
+            Statut::Echec => "echec",
+        }
+    }
 }
 
 /// Format reconnu aux premiers octets du fichier reçu.
@@ -313,6 +326,8 @@ async fn main() {
     let adresse = env_ou("EKO_RIP_ADDR", "0.0.0.0:8640");
     std::fs::create_dir_all(config.donnees.join("travaux")).expect("dossier de données");
     std::fs::create_dir_all(&config.profils).expect("dossier des profils");
+    erp::assurer_instance(&config.donnees);
+    pont::demarrer(&config.donnees);
     reprendre_travaux_interrompus(&config.donnees);
     decoupe::installer(decoupe::lire(&config.donnees));
 
@@ -356,6 +371,7 @@ async fn main() {
     tokio::spawn(surveiller(etat.clone()));
     tokio::spawn(purger(etat.clone()));
     tokio::spawn(relever(etat.clone()));
+    tokio::spawn(pont::boucle(etat.config.donnees.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -413,6 +429,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/file/{id}", axum::routing::delete(retirer_de_la_file))
         .route("/api/file/{id}/{action}", axum::routing::post(agir_sur_la_file))
         .route("/api/erp/contrat", get(contrat_erp))
+        .route("/api/pont", get(lire_pont).post(regler_pont))
+        .route("/api/pont/instance", axum::routing::post(nouvelle_instance))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -422,8 +440,11 @@ fn dossier(donnees: &std::path::Path, id: Uuid) -> PathBuf {
     donnees.join("travaux").join(id.to_string())
 }
 
+/// Écrit `job.json` ; un changement d'état part vers l'ERP (`travail.etat`, pont actif).
 fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
-    etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)
+    etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)?;
+    pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le);
+    Ok(())
 }
 
 fn lire_tous(donnees: &std::path::Path) -> Vec<Travail> {
@@ -1414,6 +1435,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         supports: Some(supports::lire(&etat.config.donnees, "epson")),
         decoupe: Some(decoupe::lire(&etat.config.donnees)),
         consommation: Some(consommation::lire_reglages(&etat.config.donnees)),
+        pont: Some(erp::lire(&etat.config.donnees).sauve()),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1434,6 +1456,13 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
     }
     let mut s = s;
+    if let Some(p) = &mut s.pont {
+        p.url = match p.url.as_deref().map(erp::url_valide) {
+            None => None,
+            Some(Some(u)) => Some(u),
+            Some(None) => return refus(StatusCode::BAD_REQUEST, "url_erp_invalide", p.url.clone()),
+        };
+    }
     let connues = etat.machines.read().unwrap().clone();
     // Une sauvegarde porte ses identifiants : ils sont repris tels quels sur un serveur neuf.
     let mut connues_et_sauvees = connues.clone();
@@ -1490,6 +1519,13 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         if let Some(r) = &s.consommation {
             consommation::ecrire_reglages(&etat.config.donnees, r)?;
+        }
+        // Pont ERP : URL, activation et instance (le jeton et le secret restent ceux du serveur).
+        if let Some(p) = &s.pont {
+            let mut c = erp::lire(&etat.config.donnees);
+            (c.url, c.actif, c.instance) = (p.url.clone(), p.actif && p.url.is_some() && c.secret_hmac.is_some(), p.instance.or(c.instance));
+            erp::ecrire(&etat.config.donnees, &c)?;
+            pont::reveiller();
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -1974,6 +2010,66 @@ async fn contrat_erp() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "contrat": erp::CONTRAT, "serveur": env!("CARGO_PKG_VERSION"), "signature": "X-EKO-RIP-Signature: t=<secondes Unix>,v1=<hex HMAC-SHA256(secret, \"<t>.<corps>\")>", "etats": erp::modele_etats() }))
 }
 
+/// Réglage du pont depuis Système (administrateur). Secret absent ou vide : celui en place
+/// est gardé. Il n'est jamais renvoyé.
+#[derive(Deserialize)]
+struct ReglagePont {
+    #[serde(default)]
+    url: Option<String>,
+    actif: bool,
+    #[serde(default)]
+    secret: Option<String>,
+}
+
+async fn lire_pont(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(pont::etat_public(&etat.config.donnees))
+}
+
+async fn regler_pont(State(etat): State<Partage>, Json(r): Json<ReglagePont>) -> Response {
+    let donnees = &etat.config.donnees;
+    let url = match r.url.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+        None => None,
+        Some(u) => match erp::url_valide(u) {
+            Some(u) => Some(u),
+            None => return refus(StatusCode::BAD_REQUEST, "url_erp_invalide", None),
+        },
+    };
+    let secret = r.secret.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    if secret.as_deref().is_some_and(|s| !erp::secret_valide(s)) {
+        return refus(StatusCode::BAD_REQUEST, "secret_erp_invalide", None);
+    }
+    let mut c = erp::lire(donnees);
+    c.url = url;
+    if secret.is_some() {
+        c.secret_hmac = secret;
+    }
+    c.actif = r.actif;
+    if c.actif && (c.url.is_none() || c.secret_hmac.is_none()) {
+        return refus(StatusCode::BAD_REQUEST, "pont_incomplet", None);
+    }
+    if c.instance.is_none() {
+        c.instance = Some(Uuid::new_v4());
+    }
+    if let Err(e) = erp::ecrire(donnees, &c) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    pont::reveiller();
+    Json(pont::etat_public(donnees)).into_response()
+}
+
+/// Nouvelle instance (installation remplacée, anomalie) : le journal repart de 1 et l'ERP la
+/// prend comme une installation neuve.
+async fn nouvelle_instance(State(etat): State<Partage>) -> Response {
+    let donnees = &etat.config.donnees;
+    let mut c = erp::lire(donnees);
+    c.instance = Some(Uuid::new_v4());
+    if let Err(e) = erp::ecrire(donnees, &c) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    pont::reveiller();
+    Json(pont::etat_public(donnees)).into_response()
+}
+
 /// `eko-rip-serveur erp jeton|secret|etat` : crée le jeton de l'ERP ou le secret HMAC
 /// (affiché une seule fois ; le précédent cesse de valoir), ou dit ce qui est configuré.
 fn commande_erp(donnees: &std::path::Path, action: Option<&str>) -> i32 {
@@ -2329,7 +2425,10 @@ async fn deposer_profil(State(etat): State<Partage>, mut form: Multipart) -> Res
     };
     let Some(profil) = couleur::lire_entete(&octets, &nom) else { return refus(StatusCode::BAD_REQUEST, "profil_invalide", None) };
     match tokio::fs::write(etat.config.profils.join(&nom), &octets).await {
-        Ok(()) => (StatusCode::CREATED, Json(profil)).into_response(),
+        Ok(()) => {
+            pont::reveiller();
+            (StatusCode::CREATED, Json(profil)).into_response()
+        }
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
 }
@@ -3078,6 +3177,18 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
     None
 }
 
+/// Raison d'attente d'une sortie sur sa machine, ou sur son pool : en attente seulement si
+/// aucun membre ne peut la prendre.
+fn raison_de(donnees: &std::path::Path, s: &file::Sortie, tout: &[file::Sortie], catalogue: &[machines::Machine], charges: &std::collections::BTreeMap<String, supports::Charge>) -> Option<&'static str> {
+    match catalogue.iter().find(|m| m.id == s.machine) {
+        Some(m) => raison_attente(donnees, s, Some(m), charges.get(&m.id), tout, catalogue),
+        None => {
+            let raisons: Vec<_> = machines::membres(catalogue, &s.machine).iter().map(|m| raison_attente(donnees, s, Some(m), charges.get(&m.id), tout, catalogue)).collect();
+            if raisons.is_empty() { raison_attente(donnees, s, None, None, tout, catalogue) } else if raisons.contains(&None) { None } else { raisons[0] }
+        }
+    }
+}
+
 async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let tout = sorties.clone();
@@ -3100,15 +3211,7 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     v["fiche"] = serde_json::to_value(&t.fiche).unwrap();
                 }
                 v["planche_nom"] = serde_json::json!(s.planche.and_then(|p| lire_travail(&donnees, p)).map(|p| p.nom));
-                let raison = match catalogue.iter().find(|m| m.id == s.machine) {
-                    Some(m) => raison_attente(&donnees, &s, Some(m), charges.get(&m.id), &tout, &catalogue),
-                    // Envoyée à un pool : en attente seulement si aucun membre ne peut la prendre.
-                    None => {
-                        let raisons: Vec<_> = machines::membres(&catalogue, &s.machine).iter().map(|m| raison_attente(&donnees, &s, Some(m), charges.get(&m.id), &tout, &catalogue)).collect();
-                        if raisons.is_empty() { raison_attente(&donnees, &s, None, None, &tout, &catalogue) } else if raisons.contains(&None) { None } else { raisons[0] }
-                    }
-                };
-                v["raison_attente"] = serde_json::json!(raison);
+                v["raison_attente"] = serde_json::json!(raison_de(&donnees, &s, &tout, &catalogue, &charges));
                 v
             })
             .collect(),
@@ -3765,8 +3868,10 @@ async fn executer(etat: Partage, s: file::Sortie) {
             (x.etat, x.fin) = (file::Etat::Terminee, Some(maintenant()));
         }
     }
-    // Découpe terminée : laissée, archivée ou retirée (roadmap 4.12).
+    // Découpe terminée : laissée, archivée ou retirée (roadmap 4.12) ; sa fin est écrite
+    // avant, pour que le pont ERP la voie même retirée.
     if s.operation() == machines::Operation::Decoupe {
+        let _ = f.ecrire(&etat.config.donnees);
         f.apres_coupe(s.id, decoupe::reglages().apres_coupe);
     }
     let _ = f.ecrire(&etat.config.donnees);
@@ -4095,7 +4200,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("consommation.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs"), include_str!("coupe.rs"), include_str!("detourage.rs"), include_str!("reperage.rs"), include_str!("pont.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -4263,6 +4368,58 @@ mod tests {
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
+        /// Pont ERP depuis Système : réglé par l'administrateur seul ; le secret n'est jamais
+        /// renvoyé, ni par l'API ni par la sauvegarde ; l'instance suit la sauvegarde.
+        #[tokio::test]
+        async fn reglage_du_pont_depuis_systeme() {
+            let (e, neuf) = (etat("pont-api"), etat("pont-api-neuf"));
+            let compte = |nom: &str, role| acces::Utilisateur { nom: nom.into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap(), role };
+            acces::ecrire(&e.config.donnees, &[compte("chef", acces::Role::Admin), compte("op", acces::Role::Operateur)]).unwrap();
+            let mut cookies = vec![];
+            for nom in ["chef", "op"] {
+                let r = appel(&e, "POST", "/api/session", None, Some(serde_json::json!({ "nom": nom, "mot_de_passe": "phrase-de-passe-longue" }))).await;
+                cookies.push(r.headers()[header::SET_COOKIE].to_str().unwrap().split(';').next().unwrap().to_string());
+            }
+            let (chef, op) = (cookies[0].as_str(), cookies[1].as_str());
+            // Secret factice des essais.
+            let secret = "secret-factice-des-essais-0123456789abcdef";
+            let url = "https://erp.exemple.test/api/v1/rip/atelier";
+            let corps = |url: &str, actif: bool, secret: Option<&str>| Some(serde_json::json!({ "url": url, "actif": actif, "secret": secret }));
+            assert_eq!(appel(&e, "POST", "/api/pont", Some(op), corps(url, true, Some(secret))).await.status(), StatusCode::FORBIDDEN);
+            assert_eq!(appel(&e, "POST", "/api/pont/instance", Some(op), None).await.status(), StatusCode::FORBIDDEN);
+            let code = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap()["code"].clone() };
+            assert_eq!(code(appel(&e, "POST", "/api/pont", Some(chef), corps("http://erp.exemple.test/rip", true, Some(secret))).await).await, "url_erp_invalide");
+            assert_eq!(code(appel(&e, "POST", "/api/pont", Some(chef), corps(url, true, None)).await).await, "pont_incomplet");
+            assert_eq!(code(appel(&e, "POST", "/api/pont", Some(chef), corps(url, true, Some("court"))).await).await, "secret_erp_invalide");
+            let r = appel(&e, "POST", "/api/pont", Some(chef), corps(url, true, Some(secret))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let texte = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            assert!(!texte.contains(secret), "le secret n'est jamais renvoyé : {texte}");
+            let v: serde_json::Value = serde_json::from_str(&texte).unwrap();
+            assert_eq!((v["statut"].as_str(), v["secret_enregistre"].as_bool(), v["url"].as_str()), (Some("actif"), Some(true), Some(url)));
+            // Secret laissé vide : gardé.
+            assert_eq!(appel(&e, "POST", "/api/pont", Some(chef), corps(url, true, Some(""))).await.status(), StatusCode::OK);
+            assert_eq!(erp::lire(&e.config.donnees).secret_hmac.as_deref(), Some(secret));
+            let lu = String::from_utf8(axum::body::to_bytes(appel(&e, "GET", "/api/pont", Some(op), None).await.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            assert!(!lu.contains(secret) && lu.contains("\"actif\""), "{lu}");
+            let avant = erp::lire(&e.config.donnees).instance;
+            assert!(avant.is_some());
+            assert_eq!(appel(&e, "POST", "/api/pont/instance", Some(chef), None).await.status(), StatusCode::OK);
+            let instance = erp::lire(&e.config.donnees).instance;
+            assert_ne!(instance, avant, "nouvelle instance");
+            // Sauvegarde : URL et instance, jamais le secret ; reprises sur un serveur neuf.
+            let s = String::from_utf8(axum::body::to_bytes(appel(&e, "GET", "/api/sauvegarde", Some(chef), None).await.into_body(), 1 << 26).await.unwrap().to_vec()).unwrap();
+            assert!(!s.contains(secret), "jamais le secret dans la sauvegarde");
+            let s: serde_json::Value = serde_json::from_str(&s).unwrap();
+            assert_eq!(s["pont"]["instance"], serde_json::json!(instance));
+            assert_eq!(appel(&neuf, "POST", "/api/sauvegarde", None, Some(s)).await.status(), StatusCode::OK);
+            let c = erp::lire(&neuf.config.donnees);
+            assert_eq!((c.instance, c.url.as_deref(), c.actif, c.secret_hmac), (instance, Some(url), false, None), "sans secret, le pont reste à activer");
+            for x in [e, neuf] {
+                std::fs::remove_dir_all(&x.config.donnees).unwrap();
+            }
+        }
+
         /// Sauvegarde puis restauration sur un serveur neuf ; une sauvegarde fausse n'écrit rien.
         #[tokio::test]
         async fn sauvegarde_et_restauration_de_la_configuration() {
@@ -4311,7 +4468,7 @@ mod tests {
             assert_eq!(appel(&e, "GET", "/api/erp/contrat", None, None).await.status(), StatusCode::UNAUTHORIZED, "fermé sans jeton");
             assert_eq!(avec("x", "/api/erp/contrat").await.unwrap().status(), StatusCode::UNAUTHORIZED, "aucun jeton déclaré");
             let jeton = erp::aleatoire();
-            erp::ecrire(&e.config.donnees, &erp::Config { jeton_sha256: Some(erp::empreinte(&jeton)), secret_hmac: None }).unwrap();
+            erp::ecrire(&e.config.donnees, &erp::Config { jeton_sha256: Some(erp::empreinte(&jeton)), ..Default::default() }).unwrap();
             let r = avec(&jeton, "/api/erp/contrat").await.unwrap();
             assert_eq!(r.status(), StatusCode::OK);
             let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap();

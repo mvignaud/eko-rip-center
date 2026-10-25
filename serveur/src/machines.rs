@@ -298,7 +298,9 @@ pub fn lire(donnees: &Path) -> Option<Vec<Machine>> {
 }
 
 pub fn ecrire(donnees: &Path, machines: &[Machine]) -> std::io::Result<()> {
-    crate::etat::ecrire(&fichier(donnees), machines, false)
+    crate::etat::ecrire(&fichier(donnees), machines, false)?;
+    crate::pont::reveiller();
+    Ok(())
 }
 
 /// Identifiants immuables : repris de la machine connue de même `uuid`, sinon de même `id`

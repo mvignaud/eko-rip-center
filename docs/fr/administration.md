@@ -29,7 +29,8 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `machines.json` | catalogue des machines |
 | `tarifs.json` | prix d'encre et de support, HT ou TTC |
 | `reglages.json` | réglages enregistrés |
-| `erp.json` | pont ERP : empreinte du jeton de l'ERP et secret HMAC (droits 0600) — voir [pont-erp.md](pont-erp.md) |
+| `erp.json` | pont ERP : empreinte du jeton de l'ERP, secret HMAC, URL de l'ERP, activation, instance (droits 0600) — voir [pont-erp.md](pont-erp.md) |
+| `pont/` | pont ERP : journal des événements (`journal.jsonl`) et état des envois (`etat.json`) ; ce n'est pas de la configuration, il n'est pas sauvegardé |
 | `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
 | `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |
 | `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; compris dans la sauvegarde de la configuration et dans la copie avant mise à jour |
@@ -95,6 +96,22 @@ aucun administrateur : un compte déclaré sans rôle le devient.
   vont dans `sorties/epson/`. La largeur du média, l'état et les alertes se lisent par
   SNMP si l'adresse est renseignée (le serveur parle SNMP lui-même, rien à installer) :
   sans SNMP, le pilote direct ne peut pas arrêter une impression sur une alerte.
+
+## Pont ERP
+
+Système > **Pont ERP** (administrateur) : URL de base donnée par l'ERP, secret HMAC
+(`eko-rip-serveur erp secret`, ou collé ; jamais réaffiché), activation. Le RIP appelle
+l'ERP en HTTPS sortant : aucun port à ouvrir. Si l'écran dit :
+
+- **en erreur** : le code dit quoi faire (signature refusée → secret différent de celui de
+  l'ERP ; signature expirée → horloge du serveur, `timedatectl` ; ERP injoignable → réseau,
+  DNS, certificat). Rien n'est perdu : tout part au retour, dans l'ordre.
+- **remplacé** : une autre installation parle à l'ERP à la place de celle-ci. Si c'est
+  voulu, rien à faire ; sinon, **Tirer une nouvelle instance** (l'autre s'arrêtera à son tour).
+- **anomalie** : l'ERP et le RIP ne comptent plus pareil ; voir avec l'ERP, puis tirer une
+  nouvelle instance.
+
+Détail : [pont-erp.md](pont-erp.md), § 6.
 
 ## Questions fréquentes
 

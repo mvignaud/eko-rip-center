@@ -127,8 +127,11 @@ impl File {
         f
     }
 
+    /// Écrit la file ; chaque changement d'état d'une sortie part vers l'ERP (pont actif).
     pub fn ecrire(&self, donnees: &Path) -> std::io::Result<()> {
-        crate::etat::ecrire(&fichier(donnees), self, false)
+        crate::etat::ecrire(&fichier(donnees), self, false)?;
+        crate::pont::noter_sorties(donnees, &self.sorties);
+        Ok(())
     }
 
     /// Prochaine sortie à lancer sur `machine` (aucune si une y tourne déjà).
