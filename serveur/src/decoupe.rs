@@ -688,13 +688,19 @@ fn parcourir_svg(groupe: &usvg::Group, ton_parent: Option<&str>, tous: bool, ver
 }
 
 /// Aperçu des tracés à découper, à la taille de la page (1 unité = 1 point), en magenta pur :
-/// la couleur d'usage d'un tracé de coupe, distincte de toute encre de l'image.
+/// la couleur d'usage d'un tracé de coupe, distincte de toute encre de l'image. Une flèche
+/// grise, dans le coin bas gauche, montre le sens d'avance (roadmap 4.8) : vers le haut de
+/// la page, le bord qui entre le premier (comme le ▲ du repérage).
 pub fn apercu_svg(d: &Decoupe) -> String {
+    let (l, h) = (d.largeur, d.hauteur);
+    let a = l.min(h) * 0.12;
+    let (x, y) = (a * 0.5, h - a * 0.15);
+    let fleche = [(x - a * 0.08, y), (x + a * 0.08, y), (x + a * 0.08, y - a * 0.6), (x + a * 0.25, y - a * 0.6), (x, y - a), (x - a * 0.25, y - a * 0.6), (x - a * 0.08, y - a * 0.6)];
+    let fleche: Vec<String> = fleche.iter().map(|(x, y)| format!("{x:.1},{y:.1}")).collect();
     let mut svg = format!(
-        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {l:.1} {h:.1}"><rect width="100%" height="100%" fill="#fff"/><g fill="none" stroke="#ff00ff" stroke-width="{e:.2}" stroke-linejoin="round">"##,
-        l = d.largeur,
-        h = d.hauteur,
-        e = (d.largeur.max(d.hauteur) / 400.0).max(0.5)
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {l:.1} {h:.1}"><rect width="100%" height="100%" fill="#fff"/><polygon class="sens-avance" fill="#9aa0a6" fill-opacity="0.6" points="{f}"/><g fill="none" stroke="#ff00ff" stroke-width="{e:.2}" stroke-linejoin="round">"##,
+        f = fleche.join(" "),
+        e = (l.max(h) / 400.0).max(0.5)
     );
     for t in &d.traces {
         let points: Vec<String> = t.points.iter().map(|(x, y)| format!("{x:.1},{:.1}", d.hauteur - y)).collect();

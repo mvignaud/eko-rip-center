@@ -559,6 +559,11 @@ const textes = {
     en_attente: "En attente", en_cours: "En cours", termine: "Prêt", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
     couches_decoupe: "Couches de découpe", couche_couper: "Couper", couche_traces: (n) => `${n} tracé${n > 1 ? "s" : ""}`, couche_reglage_auto: "— même nom, sinon défaut —",
+    mise_coupe: "Mise en coupe", mise_rotation: "Rotation de la coupe", mise_degres: (d) => `${d}°`, mise_miroir: "Miroir", mise_echelle_x: "Échelle X (%)", mise_echelle_y: "Échelle Y (%)", mise_proportionnelle: "Proportionnelle",
+    mise_copies_x: "Copies X", mise_copies_y: "Copies Y", mise_ecart_x: "Écart X (mm)", mise_ecart_y: "Écart Y (mm)", mise_origine: "Départ depuis l'origine de la machine",
+    note_mise_coupe: "Tourne le travail pour la découpeuse, pas le fichier : tourner le support d'autant. La flèche grise de l'aperçu de coupe montre le sens d'avance (le haut de la page entre le premier).",
+    note_mise_seule: "Découpe seule : miroir, échelle, copies et départ à l'origine (sans impression, la coupe n'a pas d'encre à suivre).",
+    mise_enregistrer: "Enregistrer la mise en coupe", mise_enregistree: "Mise en coupe enregistrée : fichiers de coupe refaits.",
     couche_monter: "Monter", couche_descendre: "Descendre", couches_enregistrer: "Enregistrer les couches", couches_annuler: "Annuler", couches_modifiees: "Modifications non enregistrées.", couches_enregistrees: "Couches enregistrées : fichiers de coupe refaits.",
     note_couches_decoupe: "Une couche par nom de ton. L'ordre est l'ordre de coupe (mi-chair avant coupe à travers) ; le réglage qui porte le nom de la couche s'applique seul, sinon le premier de la découpeuse. Rien n'est gardé sans « Enregistrer ».",
     decoupeuse: "Découpeuse", decoupeuse_aucune: "— aucune —", note_decoupeuse: "La découpe automatique y va ; l'impression attend tant qu'elle n'est pas utilisable (pas d'encre gâchée).",
@@ -647,6 +652,8 @@ const textes = {
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
       couches_invalides: "Couches de découpe invalides : les mêmes couches qu'au rendu, réglage de 40 caractères au plus.",
+      mise_coupe_invalide: "Mise en coupe invalide : rotation 0, 90, 180 ou 270 ; échelle de 1 à 1000 % ; 1 à 100 copies par sens (1000 en tout) ; écart de 0 à 1000 mm.",
+      mise_decoupe_seule: "Miroir, échelle, copies et départ à l'origine : en découpe seule uniquement (la coupe ne suivrait plus l'impression).",
       prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
       decoupeuse_invalide: "Découpeuse invalide.",
       decoupeuse_indisponible: "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
@@ -743,6 +750,11 @@ const textes = {
     en_attente: "Queued", en_cours: "In progress", termine: "Ready", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
     couches_decoupe: "Cut layers", couche_couper: "Cut", couche_traces: (n) => `${n} path${n > 1 ? "s" : ""}`, couche_reglage_auto: "— same name, else default —",
+    mise_coupe: "Cut placement", mise_rotation: "Cut rotation", mise_degres: (d) => `${d}°`, mise_miroir: "Mirror", mise_echelle_x: "Scale X (%)", mise_echelle_y: "Scale Y (%)", mise_proportionnelle: "Proportional",
+    mise_copies_x: "Copies X", mise_copies_y: "Copies Y", mise_ecart_x: "Gap X (mm)", mise_ecart_y: "Gap Y (mm)", mise_origine: "Start from the machine origin",
+    note_mise_coupe: "Turns the job for the cutter, not the file: turn the media by as much. The grey arrow of the cut preview shows the feed direction (the top of the page goes in first).",
+    note_mise_seule: "Cut only: mirror, scale, copies and start from the origin (without printing, the cut has no ink to follow).",
+    mise_enregistrer: "Save cut placement", mise_enregistree: "Cut placement saved: cut files rebuilt.",
     couche_monter: "Up", couche_descendre: "Down", couches_enregistrer: "Save layers", couches_annuler: "Cancel", couches_modifiees: "Unsaved changes.", couches_enregistrees: "Layers saved: cut files rebuilt.",
     note_couches_decoupe: "One layer per spot colour name. The order is the cutting order (kiss cut before through cut); the setting named like the layer applies by itself, else the cutter's first one. Nothing is kept without \"Save\".",
     decoupeuse: "Cutter", decoupeuse_aucune: "— none —", note_decoupeuse: "The automatic cut goes there; printing waits while it is not usable (no wasted ink).",
@@ -831,6 +843,8 @@ const textes = {
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
       couches_invalides: "Invalid cut layers: the same layers as at rendering, setting of 40 characters at most.",
+      mise_coupe_invalide: "Invalid cut placement: rotation 0, 90, 180 or 270; scale from 1 to 1000 %; 1 to 100 copies each way (1000 in all); gap from 0 to 1000 mm.",
+      mise_decoupe_seule: "Mirror, scale, copies and start from the origin: for cut only jobs (the cut would no longer follow the print).",
       prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
       decoupeuse_invalide: "Invalid cutter.",
       decoupeuse_indisponible: "Cutter unavailable: a layer setting does not exist on this machine.",
@@ -1562,7 +1576,7 @@ function couchesDeLaPage(src, legende, t, page, n) {
   const calque = { image: $("image-vue"), decoupe: $("vue-decoupe"), blanc: $("vue-blanc"), argent: $("vue-argent") };
   const sources = {
     // Découpe superposable : seulement s'il y a des tracés et qu'on ne regarde pas déjà la découpe.
-    decoupe: t && page?.traces_decoupe && !src.endsWith(".svg") ? `${base}/decoupe.svg` : null,
+    decoupe: t && page?.traces_decoupe && !src.endsWith(".svg") && miseSuitImpression(t) ? `${base}/decoupe.svg` : null,
   };
   for (const cle of ["blanc", "argent"]) {
     const nom = page?.plaques.find((p) => NOMS_COUCHE[cle].includes(p.toLowerCase()));
@@ -1603,11 +1617,12 @@ function teinter(toile, src, [r, g, b]) {
 }
 /** Format de la page en mm : mesuré au rendu, sinon la viewBox du SVG (points), sinon l'aperçu à 50 dpi. */
 async function dimensionsMm(src, img, page) {
-  if (page?.largeur_mm > 0) return [page.largeur_mm, page.hauteur_mm];
-  if (src.endsWith(".svg")) {
-    const m = (await fetch(src).then((r) => r.text()).catch(() => "")).match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+  // L'aperçu de coupe a son format : la mise en coupe peut le tourner ou le répéter.
+  if (src.split("?")[0].endsWith(".svg")) {
+    const m = (await fetch(img.src || src).then((r) => r.text()).catch(() => "")).match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
     if (m) return [+m[1] * 25.4 / 72, +m[2] * 25.4 / 72];
   }
+  if (page?.largeur_mm > 0) return [page.largeur_mm, page.hauteur_mm];
   return [img.naturalWidth / 50 * 25.4 || 100, img.naturalHeight / 50 * 25.4 || 100];
 }
 const mmVers = (sx, sy) => ({ x: (sx - vue.tx) / (vue.z * PX_MM), y: (sy - vue.ty) / (vue.z * PX_MM) });
@@ -2498,6 +2513,7 @@ function afficherInspecteur() {
     corps.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
   }
   if (t.statut === "termine" && t.couches_decoupe?.length) corps.append(panneauCouches(t));
+  if (t.statut === "termine" && t.pages.some((p) => p.traces_decoupe)) corps.append(panneauMise(t));
   if (t.statut === "termine") t.pages.forEach((page, i) => corps.append(vuePage(t, page, i + 1)));
   z.replaceChildren(corps);
 }
@@ -2539,6 +2555,57 @@ function panneauCouches(t) {
   return el("details", { className: "section couches-decoupe", open: true }, el("summary", {}, T().couches_decoupe),
     el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_couches_decoupe),
       t.parametre_decoupe ? el("p", { className: "meta erreur", style: "margin: 0" }, T().ancien_reglage_coupe(t.parametre_decoupe)) : null, ...lignes, actions));
+}
+
+/** Mise en coupe par défaut (même forme que le serveur) et celle du travail. */
+const MISE_NEUTRE = { rotation: 0, miroir: false, echelle: [100, 100], copies: [1, 1], ecart_mm: [0, 0], depuis_origine: false };
+const miseDe = (t) => ({ ...MISE_NEUTRE, ...(t.mise_coupe || {}) });
+/** Coupe posée comme l'impression : l'aperçu de coupe se superpose à l'image. */
+const miseSuitImpression = (t) => JSON.stringify(miseDe(t)) === JSON.stringify(MISE_NEUTRE);
+const brouillonsMise = new Map();
+/** Travaux dont l'échelle Y se règle à part (« Proportionnelle » décochée). */
+const echelleLibre = new Set();
+/** Mise en coupe du travail (roadmap 4.8, 4.9) : rotation ; en découpe seule, miroir, échelle,
+ *  copies et départ à l'origine. Enregistrée seulement par « Enregistrer », comme les couches. */
+function panneauMise(t) {
+  const brouillon = brouillonsMise.get(t.id), m = brouillon || miseDe(t), seule = t.mode === "decouper";
+  const changer = (f) => { const c = structuredClone(m); f(c); brouillonsMise.set(t.id, c); document.activeElement?.blur(); afficherInspecteur(); };
+  const rotation = el("select", { ariaLabel: T().mise_rotation }, ...[0, 90, 180, 270].map((d) => new Option(T().mise_degres(d), d)));
+  rotation.value = m.rotation;
+  rotation.addEventListener("change", () => changer((v) => { v.rotation = +rotation.value; }));
+  const champ = (texte, valeur, attrs, poser) => {
+    const i = el("input", { type: "number", value: valeur, style: "width: 6em", ...attrs });
+    i.addEventListener("change", () => changer((v) => poser(v, +i.value)));
+    return el("label", {}, texte, " ", i);
+  };
+  const caseM = (texte, coche, poser) => {
+    const c = el("input", { type: "checkbox", checked: coche });
+    c.addEventListener("change", () => changer((v) => poser(v, c.checked)));
+    return el("label", { className: "case" }, c, " ", texte);
+  };
+  const prop = m.echelle[0] === m.echelle[1] && !echelleLibre.has(t.id);
+  const lignes = [el("p", { className: "meta", style: "margin: 0" }, T().note_mise_coupe), el("label", {}, T().mise_rotation, " ", rotation)];
+  if (seule) {
+    lignes.push(el("p", { className: "meta", style: "margin: 0" }, T().note_mise_seule),
+      caseM(T().mise_miroir, m.miroir, (v, c) => { v.miroir = c; }),
+      el("div", { className: "ligne" }, champ(T().mise_echelle_x, m.echelle[0], { min: 1, max: 1000, step: "any" }, (v, x) => { v.echelle[0] = x; if (prop) v.echelle[1] = x; }),
+        champ(T().mise_echelle_y, m.echelle[1], { min: 1, max: 1000, step: "any", disabled: prop }, (v, x) => { v.echelle[1] = x; }),
+        caseM(T().mise_proportionnelle, prop, (v, c) => { if (c) { echelleLibre.delete(t.id); v.echelle[1] = v.echelle[0]; } else echelleLibre.add(t.id); })),
+      el("div", { className: "ligne" }, champ(T().mise_copies_x, m.copies[0], { min: 1, max: 100 }, (v, x) => { v.copies[0] = x; }), champ(T().mise_copies_y, m.copies[1], { min: 1, max: 100 }, (v, x) => { v.copies[1] = x; })),
+      el("div", { className: "ligne" }, champ(T().mise_ecart_x, m.ecart_mm[0], { min: 0, max: 1000, step: "any" }, (v, x) => { v.ecart_mm[0] = x; }), champ(T().mise_ecart_y, m.ecart_mm[1], { min: 0, max: 1000, step: "any" }, (v, x) => { v.ecart_mm[1] = x; })),
+      caseM(T().mise_origine, m.depuis_origine, (v, c) => { v.depuis_origine = c; }));
+  }
+  const actions = el("div", { className: "ligne" });
+  if (brouillon) {
+    actions.append(el("span", { className: "meta erreur" }, T().couches_modifiees),
+      bouton(T().mise_enregistrer, async (b) => {
+        b.disabled = true;
+        if (await api(`/api/travaux/${t.id}/coupe`, json("POST", brouillon))) { brouillonsMise.delete(t.id); ED.versions[t.id] = Date.now(); dire(T().mise_enregistree); }
+        rafraichir();
+      }, ""),
+      bouton(T().couches_annuler, () => { brouillonsMise.delete(t.id); afficherInspecteur(); }));
+  }
+  return el("details", { className: "section mise-coupe", open: !!brouillon || !miseSuitImpression(t) }, el("summary", {}, T().mise_coupe), el("div", {}, ...lignes, actions));
 }
 
 /** Barre d'outils : actions sur le travail choisi. */
@@ -2588,7 +2655,7 @@ const derniereSortie = (t, n, machine) => sorties.filter((s) => s.travail === t.
 function vuePage(t, page, n) {
   const base = `/api/travaux/${t.id}/pages/${n}`;
   const vignette = (src, legende) => {
-    const img = el("img", { src, alt: legende, loading: "lazy", tabIndex: 0, style: "cursor: zoom-in" });
+    const img = el("img", { src: frais(src, t), alt: legende, loading: "lazy", tabIndex: 0, style: "cursor: zoom-in" });
     img.setAttribute("role", "button");
     img.addEventListener("click", () => voir(src, legende, { t, page, n }));
     img.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); voir(src, legende, { t, page, n }); } });

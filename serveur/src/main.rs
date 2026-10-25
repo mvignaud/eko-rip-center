@@ -6,6 +6,7 @@ mod bat;
 mod blanc;
 mod couleur;
 mod controle;
+mod coupe;
 mod couverture;
 mod decoupe;
 mod edition;
@@ -99,6 +100,10 @@ struct Travail {
     /// rendu, changées seulement par un enregistrement explicite (`/couches`, roadmap 4.4).
     #[serde(default)]
     couches_decoupe: Vec<decoupe::Couche>,
+    /// Mise en coupe (roadmap 4.8, 4.9) : rotation, et en découpe seule miroir, échelle,
+    /// copies, origine ; appliquée aux tracés à chaque fichier de coupe, sans nouveau rendu.
+    #[serde(default)]
+    mise_coupe: coupe::Mise,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -130,6 +135,10 @@ struct Page {
     /// Cadre Mutoh imprimé : coins au milieu des traits (x1, y1, x2, y2), en points.
     #[serde(default)]
     cadre_pt: Option<[f64; 4]>,
+    /// Format de la page des tracés de découpe (largeur, hauteur), en points ; absent des
+    /// travaux d'avant la mise en coupe (`taille_coupe`).
+    #[serde(default)]
+    taille_coupe_pt: Option<[f64; 2]>,
     /// Où l'image éditée se trouve sur la page rendue, pour les outils de la visionneuse.
     #[serde(default)]
     geometrie: Option<Geometrie>,
@@ -320,6 +329,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
         .route("/api/travaux/{id}/reglages", axum::routing::post(modifier_reglages))
         .route("/api/travaux/{id}/couches", axum::routing::post(enregistrer_couches))
+        .route("/api/travaux/{id}/coupe", axum::routing::post(enregistrer_mise))
         .route("/api/decoupe", get(lire_decoupe).post(enregistrer_decoupe))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -673,6 +683,7 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         alertes,
         cree_le: maintenant(),
         couches_decoupe: vec![],
+        mise_coupe: Default::default(),
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -924,7 +935,6 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 }
                 let traces: Vec<usize> = decoupes.iter().map(|d| d.traces.len()).collect();
                 let par_couche: Vec<std::collections::BTreeMap<String, usize>> = decoupes.iter().map(|d| t.couches_decoupe.iter().map(|c| (c.nom.clone(), d.traces.iter().filter(|x| decoupe::meme_couche(&x.ton, &c.nom)).count())).filter(|(_, n)| *n > 0).collect()).collect();
-                let fichiers = ecrire_coupes(&rep, &t.couches_decoupe, decoupes.len());
                 t.alertes.retain(|a| !a.code.starts_with("decoupe_"));
                 t.alertes.extend(alertes_decoupe(&rep, &t, traces.iter().sum()).await);
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
@@ -951,13 +961,14 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             largeur_mm: mesure.largeur_mm,
                             hauteur_mm: mesure.hauteur_mm,
                             cadre_pt: mises.get(i).and_then(|m| m.coins),
+                            taille_coupe_pt: decoupes.get(i).map(|d| [d.largeur, d.hauteur]),
                             reperage: mises.get(i).map(|m| m.reperage),
                             geometrie: geometrie.get(i).copied().flatten(),
                             tuile: tuiles.get(i).cloned().flatten().map(|t| mosaique::Tuile { decalage_mm: mises.get(i).map_or([0.0; 2], |m| [m.decalage.0 / imbrication::PT_PAR_MM, m.decalage.1 / imbrication::PT_PAR_MM]), ..t }),
                         }
                     })
                     .collect();
-                match fichiers {
+                match ecrire_coupes(&rep, &t) {
                     Ok(()) => {
                         t.statut = Statut::Termine;
                         mettre_en_file_auto(&etat, &t);
@@ -2200,8 +2211,8 @@ fn lire_traces(rep: &std::path::Path, page: usize) -> Option<Vec<decoupe::Trace>
 }
 
 /// Extrait les tracés à découper de chaque page ; pour une page qui en a, écrit
-/// `prod/decoupe-NNN.json` (tracés) et `apercu/decoupe-NNN.svg`. Avec un repérage, les
-/// tracés suivent le décalage de leur page. Le `.plt` suit, une fois les couches connues.
+/// `prod/decoupe-NNN.json` (tracés). Avec un repérage, les tracés suivent le décalage de
+/// leur page. Le `.plt` et l'aperçu suivent, une fois les couches connues.
 async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mises: &[reperage::Mise]) -> Result<Vec<decoupe::Decoupe>, String> {
     let source = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| e.to_string())?;
     let mut pages = tokio::task::spawn_blocking(move || match format {
@@ -2219,18 +2230,37 @@ async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mis
         }
         if !d.traces.is_empty() {
             tokio::fs::write(fichier_traces(rep, i + 1), serde_json::to_vec(&d.traces).map_err(|e| e.to_string())?).await.map_err(|e| e.to_string())?;
-            tokio::fs::write(fichier_svg(rep, i + 1), decoupe::apercu_svg(d)).await.map_err(|e| e.to_string())?;
         }
     }
     Ok(pages)
 }
 
-/// `prod/decoupe-NNN.plt` de chaque page qui a des tracés : couches actives dans leur ordre.
-fn ecrire_coupes(rep: &std::path::Path, couches: &[decoupe::Couche], pages: usize) -> std::io::Result<()> {
-    for n in 1..=pages {
-        if let Some(traces) = lire_traces(rep, n) {
-            machines::ecrire_atomique(&fichier_plt(rep, n), decoupe::hpgl(&traces, couches).as_bytes()).map_err(std::io::Error::other)?;
-        }
+/// Format de la page des tracés, en points : relevé au rendu ; pour un travail d'avant, le
+/// format imprimé, sinon ce qui contient les tracés.
+fn taille_coupe(p: &Page, traces: &[decoupe::Trace]) -> (f64, f64) {
+    let mm = imbrication::PT_PAR_MM;
+    match p.taille_coupe_pt {
+        Some([l, h]) => (l, h),
+        None if p.largeur_mm > 0.0 => (p.largeur_mm * mm, p.hauteur_mm * mm),
+        None => coupe::boite(traces).map_or((0.0, 0.0), |b| (b[2].max(0.0), b[3].max(0.0))),
+    }
+}
+
+/// Tracés de la page posés pour la machine par la mise en coupe du travail.
+fn posee(t: &Travail, p: &Page, traces: &[decoupe::Trace]) -> coupe::Posee {
+    t.mise_coupe.appliquer(traces, taille_coupe(p, traces), p.cadre_pt)
+}
+
+/// `prod/decoupe-NNN.plt` (couches actives dans leur ordre) et `apercu/decoupe-NNN.svg` de
+/// chaque page qui a des tracés, posés par la mise en coupe.
+fn ecrire_coupes(rep: &std::path::Path, t: &Travail) -> std::io::Result<()> {
+    for (i, p) in t.pages.iter().enumerate() {
+        let Some(traces) = lire_traces(rep, i + 1) else { continue };
+        let pose = posee(t, p, &traces);
+        machines::ecrire_atomique(&fichier_plt(rep, i + 1), decoupe::hpgl(&pose.traces, &t.couches_decoupe).as_bytes()).map_err(std::io::Error::other)?;
+        std::fs::create_dir_all(rep.join("apercu"))?;
+        let d = decoupe::Decoupe { traces: pose.traces, largeur: pose.taille.0, hauteur: pose.taille.1, signaux: vec![] };
+        machines::ecrire_atomique(&fichier_svg(rep, i + 1), decoupe::apercu_svg(&d).as_bytes()).map_err(std::io::Error::other)?;
     }
     Ok(())
 }
@@ -2382,11 +2412,10 @@ async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>
 /// aucune ne se crée ni ne se perd ici.
 async fn enregistrer_couches(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(couches): Json<Vec<decoupe::Couche>>) -> Response {
     let donnees = &etat.config.donnees;
-    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
-    let coupe_en_cours = etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == id && s.etat == file::Etat::EnCours && s.operation() == machines::Operation::Decoupe);
-    if actif(&t.statut) || coupe_en_cours {
-        return refus(StatusCode::CONFLICT, "travail_occupe", None);
-    }
+    let mut t = match coupe_modifiable(&etat, id) {
+        Ok(t) => t,
+        Err(r) => return *r,
+    };
     let memes = couches.len() == t.couches_decoupe.len() && t.couches_decoupe.iter().all(|c| couches.iter().filter(|x| x.nom == c.nom).count() == 1);
     if !memes || couches.iter().any(|c| c.reglage.as_ref().is_some_and(|r| r.trim().is_empty() || r.chars().count() > 40)) {
         return refus(StatusCode::BAD_REQUEST, "couches_invalides", None);
@@ -2394,11 +2423,39 @@ async fn enregistrer_couches(State(etat): State<Partage>, Chemin(id): Chemin<Uui
     t.couches_decoupe = couches;
     // Les couches sont réglées à la main : l'ancien réglage du travail entier est tranché.
     t.demande.parametre_decoupe = None;
-    let rep = dossier(donnees, id);
-    if let Err(e) = ecrire(donnees, &t).and_then(|()| ecrire_coupes(&rep, &t.couches_decoupe, t.pages.len())) {
+    enregistrer_coupe(donnees, t)
+}
+
+/// Travail dont la découpe peut changer : il existe, ne se rend pas et ne se coupe pas.
+fn coupe_modifiable(etat: &Etat, id: Uuid) -> Result<Travail, Box<Response>> {
+    let t = lire_travail(&etat.config.donnees, id).ok_or_else(|| Box::new(refus(StatusCode::NOT_FOUND, "introuvable", None)))?;
+    let coupe_en_cours = etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == id && s.etat == file::Etat::EnCours && s.operation() == machines::Operation::Decoupe);
+    if actif(&t.statut) || coupe_en_cours {
+        return Err(Box::new(refus(StatusCode::CONFLICT, "travail_occupe", None)));
+    }
+    Ok(t)
+}
+
+/// `job.json` écrit (écriture sûre), puis les fichiers de coupe refaits sans nouveau rendu.
+fn enregistrer_coupe(donnees: &std::path::Path, t: Travail) -> Response {
+    if let Err(e) = ecrire(donnees, &t).and_then(|()| ecrire_coupes(&dossier(donnees, t.id), &t)) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
     Json(t).into_response()
+}
+
+/// Mise en coupe d'un travail rendu (roadmap 4.8, 4.9) : rotation ; en découpe seule,
+/// miroir, échelle, copies et départ à l'origine. Enregistrée explicitement, comme les couches.
+async fn enregistrer_mise(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(mise): Json<coupe::Mise>) -> Response {
+    let mut t = match coupe_modifiable(&etat, id) {
+        Ok(t) => t,
+        Err(r) => return *r,
+    };
+    if let Err(code) = mise.verifier(t.demande.mode == Mode::Imprimer) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    t.mise_coupe = mise;
+    enregistrer_coupe(&etat.config.donnees, t)
 }
 
 /// Réglages de découpe du serveur : préfixes des tons, calques non imprimables.
@@ -2862,8 +2919,9 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
 /// pour le Kona, `AS`/`ZF`/`VS` après son `SP`, lecture du cadre s'il y en a un).
 /// `Err` : un réglage choisi pour une couche n'existe pas sur la machine.
 fn pour_la_machine(traces: &[decoupe::Trace], t: &Travail, p: &Page, m: &machines::Machine, seule: Option<&str>) -> Result<String, String> {
+    let pose = posee(t, p, traces);
     let mut parties = vec![];
-    for (c, bloc) in decoupe::blocs(traces, &t.couches_decoupe).into_iter().filter(|(c, _)| seule.is_none_or(|n| decoupe::meme_couche(n, &c.nom))) {
+    for (c, bloc) in decoupe::blocs(&pose.traces, &t.couches_decoupe).into_iter().filter(|(c, _)| seule.is_none_or(|n| decoupe::meme_couche(n, &c.nom))) {
         let reglage = m.reglage_couche(&c).map_err(|n| format!("couche « {} » : réglage « {n} » absent de {}", c.nom, m.nom))?;
         let mut texte = machines::changer_de_pas(&bloc, m.pas_mm(), m.decalage_mm);
         if let Some(r) = reglage.filter(|r| !r.motif_mm.is_empty()) {
@@ -2876,7 +2934,7 @@ fn pour_la_machine(traces: &[decoupe::Trace], t: &Travail, p: &Page, m: &machine
         return Ok(format!("IN;{}PU;SP0;", parties.into_iter().map(|(texte, _)| texte).collect::<String>()));
     }
     let u = |v: f64| (v * 100.0 * 25.4 / 72.0).round() as i64;
-    Ok(machines::pour_kona(&parties, p.cadre_pt.map(|c| c.map(u)), m.decoupe_retournee))
+    Ok(machines::pour_kona(&parties, pose.cadre.map(|c| c.map(u)), m.decoupe_retournee))
 }
 
 #[derive(Deserialize)]
@@ -2958,6 +3016,7 @@ mod tests {
             alertes: vec![],
             cree_le: 100 * jour - age_jours * jour,
             couches_decoupe: vec![],
+            mise_coupe: Default::default(),
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -3552,6 +3611,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -3613,6 +3673,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3679,6 +3740,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -3725,6 +3787,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3842,6 +3905,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3900,6 +3964,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3937,6 +4002,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: maintenant(),
                 couches_decoupe: vec![],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3990,11 +4056,16 @@ mod tests {
 
         /// Crée le travail depuis `pdf`, comme un envoi, et attend la fin du rendu.
         pub(super) async fn rendre(e: &Partage, pdf: Vec<u8>, d: Demande) -> Travail {
+            rendre_format(e, pdf, Format::Pdf, d).await
+        }
+
+        pub(super) async fn rendre_format(e: &Partage, octets: Vec<u8>, format: Format, d: Demande) -> Travail {
             let id = Uuid::new_v4();
             let rep = dossier(&e.config.donnees, id);
             std::fs::create_dir_all(&rep).unwrap();
-            std::fs::write(rep.join("source.tmp"), pdf).unwrap();
-            creer_travail(e, id, "essai.pdf".into(), Format::Pdf, d).await.unwrap_or_else(|(s, r)| panic!("refusé : {s} {r:?}"));
+            std::fs::write(rep.join("source.tmp"), octets).unwrap();
+            let nom = if format == Format::Svg { "essai.svg" } else { "essai.pdf" };
+            creer_travail(e, id, nom.into(), format, d).await.unwrap_or_else(|(s, r)| panic!("refusé : {s} {r:?}"));
             for _ in 0..600 {
                 let t = lire_travail(&e.config.donnees, id).unwrap();
                 if !actif(&t.statut) {
@@ -4872,7 +4943,7 @@ mod tests {
         use lopdf::{Document, Object, Stream, dictionary};
 
         /// PDF 600 × 300 pt : un carré de 100 pt par ton, le i-ième en x = 50 + 150·i, y = 50.
-        fn pdf_tons(tons: &[&str]) -> Vec<u8> {
+        pub(super) fn pdf_tons(tons: &[&str]) -> Vec<u8> {
             let mut doc = Document::with_version("1.4");
             let mut espaces = lopdf::Dictionary::new();
             let mut contenu = String::new();
@@ -4897,7 +4968,7 @@ mod tests {
             Arc::new(Etat { config: e.config.clone(), rendu: Semaphore::new(1), file: std::sync::Mutex::new(file::File::lire(&e.config.donnees)), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(machines) })
         }
 
-        async fn json(r: Response) -> serde_json::Value {
+        pub(super) async fn json(r: Response) -> serde_json::Value {
             serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap()).unwrap()
         }
 
@@ -4977,6 +5048,7 @@ mod tests {
                 alertes: vec![],
                 cree_le: 0,
                 couches_decoupe: vec![decoupe::Couche { nom: "CutContour".into(), active: true, reglage: None }],
+                mise_coupe: Default::default(),
             };
             let rep = dossier(d, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5151,4 +5223,82 @@ mod tests {
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 }
+    /// Mise en coupe (roadmap 4.8, 4.9) : rotation, flèche du sens d'avance, découpe seule
+    /// d'un SVG en copies.
+    mod mise_en_coupe {
+        use super::controle_d_acces::{appel, etat};
+        use super::couches_decoupe::{json, pdf_tons};
+        use super::regression_geometrie::{rendre, rendre_format};
+        use super::*;
+
+        /// Boîtes [x0, y0, x1, y1] en mm de chaque tracé d'un HP-GL (un `PU` par tracé).
+        fn boites_hpgl(texte: &str) -> Vec<[f64; 4]> {
+            decoupe::depuis_hpgl(texte).iter().map(|t| coupe::boite(std::slice::from_ref(t)).unwrap().map(|v| (v / imbrication::PT_PAR_MM * 100.0).round() / 100.0)).collect()
+        }
+
+        /// 4.8 : rotation de 90° enregistrée → `.plt` et aperçu refaits sans rendu, coordonnées
+        /// attendues, flèche du sens d'avance ; gardée au redémarrage, refusée si invalide.
+        #[tokio::test]
+        async fn rotation_du_travail_de_coupe() {
+            let e = etat("rotation-coupe");
+            let t = rendre(&e, pdf_tons(&["CutContour"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            assert_eq!(t.pages[0].taille_coupe_pt, Some([600.0, 300.0]));
+            let rep = dossier(&e.config.donnees, t.id);
+            assert!(std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap().contains("PU1764,1764;"));
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/coupe", t.id), None, Some(serde_json::json!({ "rotation": 90 }))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            // Carré de 100 pt en (50, 50) sur 600 × 300 : tourné, de (150, 50) à (250, 150).
+            let plt = std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap();
+            assert_eq!(plt, "IN;SP1;PU8819,1764;PD8819,5292,5292,5292,5292,1764,8819,1764;PU;SP0;");
+            let svg = std::fs::read_to_string(fichier_svg(&rep, 1)).unwrap();
+            assert!(svg.contains(r#"viewBox="0 0 300.0 600.0""#) && svg.contains(r#"class="sens-avance""#), "{svg}");
+            // La machine reçoit la même chose (Graphtec au pas de 0,025 mm : 3528, 706, 2117).
+            let lu = lire_travail(&e.config.donnees, t.id).unwrap();
+            let fc = machines::Machine { modele: machines::Modele::GraphtecFc7000, pas_mm: None, ..e.machines.read().unwrap()[1].clone() };
+            assert_eq!(pour_la_machine(&lire_traces(&rep, 1).unwrap(), &lu, &lu.pages[0], &fc, None).unwrap(), "IN;SP1;PU3528,706;PD3528,2117,2117,2117,2117,706,3528,706;PU;SP0;");
+            assert_eq!(lu.mise_coupe.rotation, 90, "enregistrée dans job.json");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/coupe", t.id), None, Some(serde_json::json!({ "rotation": 45 }))).await;
+            assert_eq!(json(r).await["code"], "mise_coupe_invalide");
+            // Impression puis coupe : la rotation oui, le miroir non (la coupe quitterait l'encre).
+            let imprime = rendre(&e, pdf_tons(&["CutContour"]), Demande::default()).await;
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/coupe", imprime.id), None, Some(serde_json::json!({ "miroir": true }))).await;
+            assert_eq!(json(r).await["code"], "mise_decoupe_seule");
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/coupe", imprime.id), None, Some(serde_json::json!({ "rotation": 180 }))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// 4.9 : SVG en découpe seule, rectangle de 50 × 20 mm en (10, 10) depuis le haut ;
+        /// 3 × 2 copies écartées de 5 mm → 6 contours aux bonnes positions ; puis départ à
+        /// l'origine de la machine, miroir et échelle non proportionnelle.
+        #[tokio::test]
+        async fn svg_en_copies_avec_ecarts() {
+            let e = etat("copies-svg");
+            let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="50mm" viewBox="0 0 100 50"><g id="CutContour"><rect x="10" y="10" width="50" height="20"/></g></svg>"#;
+            let t = rendre_format(&e, svg.as_bytes().to_vec(), Format::Svg, Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            async fn poser_(e: &Partage, id: Uuid, rep: &std::path::Path, mise: serde_json::Value) -> Vec<[f64; 4]> {
+                let r = appel(e, "POST", &format!("/api/travaux/{id}/coupe"), None, Some(mise)).await;
+                assert_eq!(r.status(), StatusCode::OK);
+                boites_hpgl(&std::fs::read_to_string(fichier_plt(rep, 1)).unwrap())
+            }
+            let poser = |mise| poser_(&e, t.id, &rep, mise);
+            let mut b = poser(serde_json::json!({ "copies": [3, 2], "ecart_mm": [5, 5] })).await;
+            b.sort_by(|p, q| (p[1], p[0]).partial_cmp(&(q[1], q[0])).unwrap());
+            let mut attendu = vec![];
+            for j in 0..2 {
+                for i in 0..3 {
+                    // Rectangle à 10–60 mm en x, 20–40 mm en y depuis le bas ; pas de 55 et 25 mm.
+                    attendu.push([10.0 + 55.0 * i as f64, 20.0 + 25.0 * j as f64, 60.0 + 55.0 * i as f64, 40.0 + 25.0 * j as f64]);
+                }
+            }
+            assert_eq!(b, attendu, "6 contours");
+            let b = poser(serde_json::json!({ "copies": [2, 1], "ecart_mm": [5, 0], "depuis_origine": true })).await;
+            assert_eq!(b, [[0.0, 0.0, 50.0, 20.0], [55.0, 0.0, 105.0, 20.0]], "départ à l'origine");
+            let b = poser(serde_json::json!({ "miroir": true, "echelle": [200, 100] })).await;
+            // Page 200 × 50 mm après échelle ; rectangle 20–120 mm, retourné : 80–180 mm.
+            assert_eq!(b, [[80.0, 20.0, 180.0, 40.0]], "miroir et échelle non proportionnelle");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
 }
