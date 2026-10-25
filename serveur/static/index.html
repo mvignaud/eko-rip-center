@@ -114,6 +114,9 @@
   #message { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translateX(-50%); margin: 0; max-width: min(640px, calc(100vw - 32px));
     padding: 10px 16px; border-radius: 8px; background: var(--texte); color: var(--fond); box-shadow: 0 4px 16px rgb(0 0 0 / .25); font-size: 13px; }
   #message.erreur { background: var(--echec); color: #fff; }
+  .envoi-en-cours { position: fixed; z-index: 31; right: 20px; bottom: 20px; width: min(380px, calc(100vw - 40px)); background: var(--carte); border: 1px solid var(--trait); border-radius: 10px; box-shadow: var(--ombre); padding: 12px 14px; display: grid; gap: 6px; }
+  .envoi-en-cours .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .envoi-en-cours progress { width: 100%; height: 8px; accent-color: var(--accent); }
 
   /* Liste des travaux */
   .filtres label { display: inline-flex; gap: 6px; align-items: center; }
@@ -511,6 +514,7 @@
 </main>
 </div>
 <p id="message" role="status" hidden></p>
+<div id="envoi-en-cours" class="envoi-en-cours" role="progressbar" aria-live="polite" hidden><div class="nom" id="envoi-nom"></div><progress id="envoi-barre" max="1"></progress><div class="meta" id="envoi-detail"></div></div>
 <!-- Confirmation et saisie dessinées dans la page : le client de bureau (Tauri) n'affiche pas
      confirm() ni prompt() (sur macOS, ils répondent « non » sans rien montrer). -->
 <dialog id="question">
@@ -633,7 +637,7 @@ const textes = {
     non_imprimee: (p) => `${p} (découpe, non imprimée)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Supprimer", relancer: "Relancer", confirmer: (n) => `Supprimer « ${n} » ?`,
     reperage: "Repérage Kona", aucun: "Aucun", manuel: "Croix P1–P4 (manuel)", cadre: "Cadre Mutoh (automatique, type 1)", cadre_code: "Cadre Mutoh + code-barres (CutServer SF, type 2)", cadre_multi: "Cadre Mutoh multi-segments + code-barres (CutServer MF, type 3)", envoyer: "Envoyer au RIP", autre: "English",
-    envoi: "Envoi…", envoi_progres: (n, a, b, pc, reste) => `Envoi de « ${n} » : ${a} / ${b} Mo (${pc} %)${reste != null ? ` · encore ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`}` : ""}`, envoi_traitement: "Fichier reçu par le serveur : conversion et contrôle…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
+    envoi: "Envoi…", envoi_progres: (a, b, pc, reste) => `${a} / ${b} Mo (${pc} %)${reste != null ? ` · encore ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`}` : ""}`, envoi_traitement: "Fichier reçu par le serveur : conversion et contrôle…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
     en_attente: "En attente", en_cours: "En cours", termine: "Prêt", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
     couches_decoupe: "Couches de découpe", couche_couper: "Couper", couche_traces: (n) => `${n} tracé${n > 1 ? "s" : ""}`, couche_reglage_auto: "— même nom, sinon défaut —",
@@ -912,7 +916,7 @@ const textes = {
     non_imprimee: (p) => `${p} (cut, not printed)`, page: (n) => `Page ${n}`, pages: (n) => `${n} page${n > 1 ? "s" : ""}`,
     supprimer: "Delete", relancer: "Retry", confirmer: (n) => `Delete “${n}”?`,
     reperage: "Kona registration", aucun: "None", manuel: "P1–P4 crosses (manual)", cadre: "Mutoh frame (automatic, type 1)", cadre_code: "Mutoh frame + barcode (CutServer SF, type 2)", cadre_multi: "Mutoh multi-segment frame + barcode (CutServer MF, type 3)", envoyer: "Send to RIP", autre: "Français",
-    envoi: "Sending…", envoi_progres: (n, a, b, pc, reste) => `Sending “${n}”: ${a} / ${b} MB (${pc} %)${reste != null ? ` · ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`} left` : ""}`, envoi_traitement: "File received by the server: converting and checking…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
+    envoi: "Sending…", envoi_progres: (a, b, pc, reste) => `${a} / ${b} MB (${pc} %)${reste != null ? ` · ≈ ${reste < 60 ? `${reste} s` : `${Math.round(reste / 60)} min`} left` : ""}`, envoi_traitement: "File received by the server: converting and checking…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
     en_attente: "Queued", en_cours: "In progress", termine: "Ready", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
     couches_decoupe: "Cut layers", couche_couper: "Cut", couche_traces: (n) => `${n} path${n > 1 ? "s" : ""}`, couche_reglage_auto: "— same name, else default —",
@@ -1790,16 +1794,26 @@ async function envoyerFichier(fichier) {
     const x = new XMLHttpRequest(), debut = Date.now();
     let vu = 0;
     x.open("POST", "/api/travaux");
+    // Cadre de progression (bas droite) : barre pendant l'envoi, puis barre animée pendant
+    // que le serveur convertit et contrôle le fichier.
+    const cadre = $("envoi-en-cours"), barre = $("envoi-barre");
+    $("envoi-nom").textContent = fichier?.name || "";
+    barre.value = 0;
+    $("envoi-detail").textContent = T().envoi;
+    const fermer = () => { cadre.hidden = true; };
     x.upload.onprogress = (e) => {
-      if (!e.lengthComputable || e.total < 5e6 || Date.now() - vu < 500) return;
+      if (!e.lengthComputable || e.total < 5e6 || Date.now() - vu < 300) return;
       vu = Date.now();
+      cadre.hidden = false;
       const part = e.loaded / e.total, ecoule = (Date.now() - debut) / 1000;
       const reste = part > 0.02 ? Math.round(ecoule * (1 - part) / part) : null;
-      msg.className = ""; msg.hidden = false; clearTimeout(minuterieMessage);
-      msg.textContent = T().envoi_progres(fichier?.name || "", Math.round(e.loaded / 1048576), Math.round(e.total / 1048576), Math.round(part * 100), reste);
+      barre.value = part;
+      $("envoi-detail").textContent = T().envoi_progres(Math.round(e.loaded / 1048576), Math.round(e.total / 1048576), Math.round(part * 100), reste);
     };
-    x.upload.onload = () => { msg.textContent = T().envoi_traitement; };
+    x.upload.onload = () => { if (!cadre.hidden) { barre.removeAttribute("value"); $("envoi-detail").textContent = T().envoi_traitement; } };
+
     x.onload = () => {
+      fermer();
       let r = {};
       try { r = JSON.parse(x.responseText); } catch {}
       if (x.status >= 200 && x.status < 300) return fini(r);
@@ -1808,7 +1822,7 @@ async function envoyerFichier(fichier) {
       else dire(texteErreur(r.code, r.detail), true);
       fini(null);
     };
-    x.onerror = () => { dire(texteErreur("reseau"), true); fini(null); };
+    x.onerror = () => { fermer(); dire(texteErreur("reseau"), true); fini(null); };
     x.send(corps);
   });
   if (c) dire(T().recu(c.nom));
