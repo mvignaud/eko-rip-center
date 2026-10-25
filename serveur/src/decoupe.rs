@@ -3,12 +3,75 @@
 //!
 //! On lit le contenu de la page : état graphique (`q`/`Q`/`cm`), formulaires XObject,
 //! chemins (`m l c v y h re`) et couleur courante. Seule une couleur en Séparation dont
-//! le nom est un ton de découpe rend un chemin « à découper ».
+//! le nom commence par un préfixe de découpe rend un chemin « à découper ».
+//!
+//! Chaque nom de ton est une **couche** (roadmap 4.2) : l'ordre des couches est l'ordre de
+//! coupe, une couche se désactive, et le réglage de coupe du même nom s'y applique seul.
+//! La lecture relève aussi les défauts de préparation du fichier (roadmap 4.5).
 
-use lopdf::{Dictionary, Document, Object, content::Content};
+use lopdf::{Dictionary, Document, Object, ObjectId, content::Content};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 
-/// Tons de découpe reconnus, comparés sans casse, espaces, tirets ni soulignés.
-const TONS_DECOUPE: &[&str] = &["cutcontour", "thrucut", "kisscut", "insidecut", "perforation", "creasing", "score", "vcut"];
+/// Préfixes de découpe d'origine (ceux reconnus avant la 0.20), comparés sans casse,
+/// espaces, tirets ni soulignés.
+pub const PREFIXES_DEFAUT: [&str; 8] = ["CutContour", "Thrucut", "Kisscut", "InsideCut", "Perforation", "Creasing", "Score", "VCut"];
+
+/// Réglages de découpe du serveur (`<données>/decoupe.json`). Globaux et non par machine :
+/// le préfixe est une convention de préparation des fichiers (comme le Quick Set d'ONYX),
+/// lue au rendu, avant qu'une découpeuse ne soit choisie ; il vaut pour toutes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Reglages {
+    /// Préfixes lus en début de nom : `CutContour` reconnaît `CutContour1` et
+    /// `CutContourKissCut`, pas `1CutContour`.
+    pub prefixes: Vec<String>,
+    /// Couper aussi les tracés des calques non imprimables (ignorés par défaut, avec alerte).
+    #[serde(default)]
+    pub calques_non_imprimables: bool,
+}
+
+impl Default for Reglages {
+    fn default() -> Self {
+        Reglages { prefixes: PREFIXES_DEFAUT.map(String::from).to_vec(), calques_non_imprimables: false }
+    }
+}
+
+impl Reglages {
+    pub fn verifier(&self) -> Result<(), &'static str> {
+        let bon = (1..=30).contains(&self.prefixes.len()) && self.prefixes.iter().all(|p| p.chars().count() <= 40 && !cle(p).is_empty());
+        if bon { Ok(()) } else { Err("prefixes_invalides") }
+    }
+
+    /// Le nom commence-t-il par un des préfixes ?
+    pub fn reconnait(&self, nom: &str) -> bool {
+        let c = cle(nom);
+        self.prefixes.iter().any(|p| c.starts_with(&cle(p)))
+    }
+}
+
+static REGLAGES: RwLock<Option<Reglages>> = RwLock::new(None);
+
+/// Réglages en vigueur (ceux d'origine tant que rien n'est installé).
+pub fn reglages() -> Reglages {
+    REGLAGES.read().unwrap().clone().unwrap_or_default()
+}
+
+pub fn installer(r: Reglages) {
+    *REGLAGES.write().unwrap() = Some(r);
+}
+
+pub fn fichier(donnees: &Path) -> PathBuf {
+    donnees.join("decoupe.json")
+}
+
+pub fn lire(donnees: &Path) -> Reglages {
+    crate::etat::lire(&fichier(donnees)).ok().flatten().unwrap_or_default()
+}
+
+pub fn ecrire(donnees: &Path, r: &Reglages) -> std::io::Result<()> {
+    crate::etat::ecrire(&fichier(donnees), r, false)
+}
 
 /// Écart maximal entre une courbe et ses segments : 0,025 mm, en points PDF.
 const TOLERANCE_PT: f64 = 0.025 * 72.0 / 25.4;
@@ -18,7 +81,7 @@ const TOLERANCE_PT: f64 = 0.025 * 72.0 / 25.4;
 /// sinon tout sort 2,5 fois trop grand ou trop petit (manuel Kona, chap. 4).
 const UNITES_PAR_PT: f64 = 100.0 * 25.4 / 72.0;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Trace {
     /// Nom du ton tel qu'écrit dans le PDF.
     pub ton: String,
@@ -31,8 +94,14 @@ fn cle(nom: &str) -> String {
     nom.chars().filter(|c| !matches!(c, ' ' | '-' | '_')).flat_map(char::to_lowercase).collect()
 }
 
+/// Nom de ton reconnu par les préfixes en vigueur.
 pub fn est_ton_de_decoupe(nom: &str) -> bool {
-    TONS_DECOUPE.contains(&cle(nom).as_str())
+    reglages().reconnait(nom)
+}
+
+/// Deux noms de ton de la même couche (`cut contour` et `CutContour`).
+pub fn meme_couche(a: &str, b: &str) -> bool {
+    cle(a) == cle(b)
 }
 
 /// Matrice PDF `[a b c d e f]`.
@@ -64,6 +133,10 @@ struct Etat {
     /// Ton de découpe effectivement encré (teinte > 0).
     trait_: Option<String>,
     fond: Option<String>,
+    /// Sous-chemins des rognages en vigueur (`W n`), pour reconnaître un trait non centré.
+    rognages: Vec<Vec<(f64, f64)>>,
+    /// Contenu d'un calque non imprimable (formulaire ou contenu marqué appelant).
+    masque: bool,
 }
 
 struct SousChemin {
@@ -71,11 +144,18 @@ struct SousChemin {
     ferme: bool,
 }
 
+/// Défaut de préparation relevé à la lecture : code (traduit par l'écran) et détail.
+pub type Signal = (&'static str, String);
+
 struct Lecteur<'a> {
     doc: &'a Document,
     /// Mode « tous les tracés » : tout chemin peint est découpé, quelle que soit sa couleur.
     tous: bool,
+    reglages: &'a Reglages,
+    /// Calques éteints de la configuration par défaut (`/OCProperties /D /OFF`).
+    calques_eteints: Vec<ObjectId>,
     traces: Vec<Trace>,
+    signaux: Vec<Signal>,
 }
 
 fn nombres(operandes: &[Object]) -> Vec<f64> {
@@ -103,18 +183,100 @@ fn sous_dict<'d>(doc: &'d Document, ressources: Option<&'d Dictionary>, cle: &[u
     deref(doc, ressources?.get(cle).ok()?).as_dict().ok()
 }
 
-/// Ton de découpe d'un espace de couleur nommé : `[/Separation /CutContour …]`.
-fn ton_espace(doc: &Document, ressources: Option<&Dictionary>, nom: &[u8]) -> Option<String> {
+/// Ton de découpe d'un espace de couleur nommé : `[/Separation /CutContour …]`, et vrai si
+/// son espace de remplacement est en RVB (la découpe attend un ton défini en CMJN).
+fn ton_espace(doc: &Document, ressources: Option<&Dictionary>, nom: &[u8], r: &Reglages) -> Option<(String, bool)> {
     let espaces = sous_dict(doc, ressources, b"ColorSpace")?;
     let tableau = deref(doc, espaces.get(nom).ok()?).as_array().ok()?;
     if deref(doc, tableau.first()?).as_name().ok()? != b"Separation" {
         return None;
     }
     let ton = String::from_utf8_lossy(deref(doc, tableau.get(1)?).as_name().ok()?).into_owned();
-    est_ton_de_decoupe(&ton).then_some(ton)
+    let rvb = tableau.get(2).map(|o| deref(doc, o)).is_some_and(|alt| match alt {
+        Object::Name(n) => n == b"DeviceRGB",
+        Object::Array(a) => match a.first().and_then(|g| g.as_name().ok()) {
+            Some(b"CalRGB") => true,
+            Some(b"ICCBased") => a.get(1).and_then(|f| deref(doc, f).as_stream().ok()).and_then(|f| f.dict.get(b"N").ok()?.as_i64().ok()) == Some(3),
+            _ => false,
+        },
+        _ => false,
+    });
+    r.reconnait(&ton).then_some((ton, rvb))
+}
+
+/// Calque (OCG) ou appartenance (OCMD) non imprimable : `/Usage /Print /PrintState /OFF`, à
+/// défaut éteint dans la configuration par défaut. Une appartenance n'est non imprimable que
+/// si tous ses calques le sont (politique `AnyOn`, la plus courante ; les autres politiques
+/// et les expressions `/VE` sont lues comme `AnyOn`).
+fn non_imprimable(doc: &Document, o: &Object, eteints: &[ObjectId]) -> bool {
+    let id = o.as_reference().ok();
+    let Ok(d) = deref(doc, o).as_dict() else { return false };
+    if d.get(b"Type").and_then(Object::as_name).ok() == Some(b"OCMD".as_slice()) {
+        let calques: Vec<&Object> = match d.get(b"OCGs").map(|o| deref(doc, o)) {
+            Ok(Object::Array(a)) => a.iter().collect(),
+            Ok(_) => d.get(b"OCGs").into_iter().collect(),
+            Err(_) => vec![],
+        };
+        return !calques.is_empty() && calques.iter().all(|c| non_imprimable(doc, c, eteints));
+    }
+    let impression = d
+        .get(b"Usage")
+        .ok()
+        .and_then(|u| deref(doc, u).as_dict().ok())
+        .and_then(|u| deref(doc, u.get(b"Print").ok()?).as_dict().ok())
+        .and_then(|p| p.get(b"PrintState").ok()?.as_name().ok());
+    match impression {
+        Some(etat) => etat == b"OFF",
+        None => id.is_some_and(|i| eteints.contains(&i)),
+    }
+}
+
+fn boite(points: &[(f64, f64)]) -> [f64; 4] {
+    points.iter().fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |b, &(x, y)| [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)])
+}
+
+fn chevauchent(a: [f64; 4], b: [f64; 4]) -> bool {
+    a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+}
+
+fn memes_points(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (p.0 - q.0).abs() < 0.01 && (p.1 - q.1).abs() < 0.01)
+}
+
+/// Contour vectorisé : un remplissage de deux sous-chemins fermés emboîtés, presque
+/// parallèles (retraits de la boîte égaux, 2 mm au plus) — un filet devenu surface, que la
+/// lame suivrait deux fois.
+fn contour_vectorise(chemin: &[SousChemin]) -> bool {
+    let boites: Vec<[f64; 4]> = chemin.iter().filter(|s| s.points.len() >= 3).map(|s| boite(&s.points)).collect();
+    boites.iter().enumerate().any(|(i, a)| {
+        boites.iter().enumerate().any(|(j, b)| {
+            let retraits = [b[0] - a[0], b[1] - a[1], a[2] - b[2], a[3] - b[3]];
+            let (min, max) = retraits.iter().fold((f64::MAX, f64::MIN), |(m, n), r| (m.min(*r), n.max(*r)));
+            i != j && min > 0.0 && max <= 2.0 * 72.0 / 25.4 && max - min <= (0.25 * max).max(0.5)
+        })
+    })
 }
 
 impl<'a> Lecteur<'a> {
+    fn signaler(&mut self, code: &'static str, detail: &str) {
+        if !self.tous && !self.signaux.iter().any(|(c, d)| *c == code && d == detail) {
+            self.signaux.push((code, detail.to_string()));
+        }
+    }
+
+    /// Encre peinte (ni découpe ni masquée) : un tracé de découpe déjà posé dessous n'est
+    /// plus au premier plan.
+    // ponytail: comparaison de boîtes, tracés × peintures ; s'arrête au premier défaut.
+    fn peinture(&mut self, b: [f64; 4]) {
+        if self.tous || self.signaux.iter().any(|(c, _)| *c == "decoupe_pas_au_premier_plan") {
+            return;
+        }
+        if let Some(t) = self.traces.iter().find(|t| chevauchent(boite(&t.points), b)) {
+            let ton = t.ton.clone();
+            self.signaler("decoupe_pas_au_premier_plan", &ton);
+        }
+    }
+
     fn lire(&mut self, contenu: &[u8], ressources: Option<&'a Dictionary>, etat_initial: Etat, profondeur: u32) -> Result<(), String> {
         let doc = self.doc;
         if profondeur > 20 {
@@ -126,6 +288,9 @@ impl<'a> Lecteur<'a> {
         let mut chemin: Vec<SousChemin> = vec![];
         let mut courant = (0.0, 0.0);
         let mut debut = (0.0, 0.0);
+        // Contenu marqué (`BDC`/`BMC` … `EMC`) : vrai pour un calque non imprimable.
+        let mut marques: Vec<bool> = vec![];
+        let mut rognage_attendu = false;
 
         for op in &operations {
             let n = nombres(&op.operands);
@@ -134,8 +299,24 @@ impl<'a> Lecteur<'a> {
                 "q" => pile.push(etat.clone()),
                 "Q" => etat = pile.pop().unwrap_or(etat),
                 "cm" if n.len() == 6 => etat.ctm = produit(&[n[0], n[1], n[2], n[3], n[4], n[5]], &etat.ctm),
+                "BMC" => marques.push(false),
+                "BDC" => {
+                    let oc = op.operands.first().and_then(|o| o.as_name().ok()) == Some(b"OC".as_slice());
+                    let propriete = match op.operands.get(1) {
+                        Some(Object::Name(nom)) => sous_dict(doc, ressources, b"Properties").and_then(|p| p.get(nom).ok()),
+                        o => o,
+                    };
+                    marques.push(oc && propriete.is_some_and(|p| non_imprimable(doc, p, &self.calques_eteints)));
+                }
+                "EMC" => {
+                    marques.pop();
+                }
                 "CS" | "cs" => {
-                    let ton = op.operands.first().and_then(|o| o.as_name().ok()).and_then(|nom| ton_espace(doc, ressources, nom));
+                    let lu = op.operands.first().and_then(|o| o.as_name().ok()).and_then(|nom| ton_espace(doc, ressources, nom, self.reglages));
+                    if let Some((ton, true)) = &lu {
+                        self.signaler("decoupe_ton_rvb", ton);
+                    }
+                    let ton = lu.map(|(t, _)| t);
                     // Une Séparation commence à la teinte 1.
                     if op.operator == "CS" {
                         (etat.espace_trait, etat.trait_) = (ton.clone(), ton);
@@ -182,9 +363,14 @@ impl<'a> Lecteur<'a> {
                     chemin.push(SousChemin { points: coins.to_vec(), ferme: true });
                     (courant, debut) = (coins[0], coins[0]);
                 }
+                "W" | "W*" => rognage_attendu = true,
                 "S" | "s" | "f" | "F" | "f*" | "B" | "B*" | "b" | "b*" | "n" => {
-                    let remplissage = matches!(op.operator.as_str(), "f" | "F" | "f*");
-                    let ton = match op.operator.as_str() {
+                    let operateur = op.operator.as_str();
+                    // Le rognage prend effet après l'opérateur qui termine le chemin.
+                    let rognage = std::mem::take(&mut rognage_attendu);
+                    let remplissage = matches!(operateur, "f" | "F" | "f*");
+                    let mixte = matches!(operateur, "B" | "B*" | "b" | "b*");
+                    let ton = match operateur {
                         "n" => None,
                         _ if self.tous => Some(TOUS.to_string()),
                         "S" | "s" => etat.trait_.clone(),
@@ -192,11 +378,37 @@ impl<'a> Lecteur<'a> {
                         _ => etat.trait_.clone().or_else(|| etat.fond.clone()),
                     };
                     // Un remplissage ou une fermeture (s, b) ferme chaque sous-chemin.
-                    let fermer = op.operator != "S" && op.operator != "B" && op.operator != "B*";
-                    if let Some(ton) = ton {
-                        for s in chemin.drain(..).filter(|s| s.points.len() >= 2) {
-                            self.traces.push(Trace { ton: ton.clone(), points: s.points, ferme: s.ferme || fermer });
+                    let fermer = operateur != "S" && operateur != "B" && operateur != "B*";
+                    let masque = etat.masque || marques.contains(&true);
+                    match ton {
+                        Some(ton) => {
+                            if remplissage && contour_vectorise(&chemin) {
+                                self.signaler("decoupe_contour_vectorise", &ton);
+                            } else if remplissage || mixte {
+                                self.signaler("decoupe_avec_fond", &ton);
+                            }
+                            let en_trait = !remplissage && etat.trait_.is_some();
+                            if en_trait && chemin.iter().any(|s| etat.rognages.iter().any(|r| memes_points(r, &s.points))) {
+                                self.signaler("decoupe_trait_non_centre", &ton);
+                            }
+                            if masque && !self.reglages.calques_non_imprimables && !self.tous {
+                                self.signaler("decoupe_calque_non_imprimable", &ton);
+                            } else {
+                                for s in chemin.iter().filter(|s| s.points.len() >= 2) {
+                                    self.traces.push(Trace { ton: ton.clone(), points: s.points.clone(), ferme: s.ferme || fermer });
+                                }
+                            }
                         }
+                        None if operateur != "n" && !masque => {
+                            let points: Vec<(f64, f64)> = chemin.iter().flat_map(|s| s.points.iter().copied()).collect();
+                            if !points.is_empty() {
+                                self.peinture(boite(&points));
+                            }
+                        }
+                        None => {}
+                    }
+                    if rognage {
+                        etat.rognages.extend(chemin.iter().map(|s| s.points.clone()));
                     }
                     chemin.clear();
                 }
@@ -204,8 +416,16 @@ impl<'a> Lecteur<'a> {
                     let Some(nom) = op.operands.first().and_then(|o| o.as_name().ok()) else { continue };
                     let Some(xobjets) = sous_dict(doc, ressources, b"XObject") else { continue };
                     let Ok(flux) = xobjets.get(nom).map(|o| deref(doc, o)).and_then(Object::as_stream) else { continue };
-                    if flux.dict.get(b"Subtype").and_then(Object::as_name).ok() != Some(b"Form".as_slice()) {
-                        continue;
+                    let masque = etat.masque || marques.contains(&true) || flux.dict.get(b"OC").is_ok_and(|o| non_imprimable(doc, o, &self.calques_eteints));
+                    match flux.dict.get(b"Subtype").and_then(Object::as_name).ok() {
+                        Some(b"Form") => {}
+                        // Une image occupe le carré unité de la matrice courante.
+                        Some(b"Image") if !masque => {
+                            let coins = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)].map(|p| transformer(&etat.ctm, p));
+                            self.peinture(boite(&coins));
+                            continue;
+                        }
+                        _ => continue,
                     }
                     let matrice = flux
                         .dict
@@ -220,6 +440,7 @@ impl<'a> Lecteur<'a> {
                     let ressources_form = flux.dict.get(b"Resources").ok().and_then(|o| deref(doc, o).as_dict().ok()).or(ressources);
                     let mut etat_form = etat.clone();
                     etat_form.ctm = produit(&matrice, &etat.ctm);
+                    etat_form.masque = masque;
                     let debut = self.traces.len();
                     self.lire(&contenu, ressources_form, etat_form.clone(), profondeur + 1)?;
                     // La BBox du formulaire rogne son contenu (ISO 32000-1, 8.10.1) : la
@@ -294,6 +515,8 @@ pub struct Decoupe {
     pub traces: Vec<Trace>,
     pub largeur: f64,
     pub hauteur: f64,
+    /// Défauts de préparation de la page (roadmap 4.5), sans doublon.
+    pub signaux: Vec<Signal>,
 }
 
 impl Decoupe {
@@ -309,17 +532,30 @@ impl Decoupe {
 }
 
 /// Tracés de découpe de chaque page d'un PDF (ou d'un fichier Illustrator enregistré
-/// avec « Créer un fichier compatible PDF »), dans l'ordre des pages.
+/// avec « Créer un fichier compatible PDF »), dans l'ordre des pages, avec les réglages
+/// de découpe en vigueur.
 pub fn extraire(pdf: &[u8], tous: bool) -> Result<Vec<Decoupe>, String> {
+    extraire_avec(pdf, tous, &reglages())
+}
+
+pub fn extraire_avec(pdf: &[u8], tous: bool, r: &Reglages) -> Result<Vec<Decoupe>, String> {
     let doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
     let pages: Vec<_> = doc.get_pages().into_values().collect();
     if pages.is_empty() {
         return Err("PDF sans page".into());
     }
-    pages.into_iter().enumerate().map(|(i, page)| extraire_page(&doc, page, tous).map_err(|e| format!("page {} : {e}", i + 1))).collect()
+    pages.into_iter().enumerate().map(|(i, page)| extraire_page(&doc, page, tous, r).map_err(|e| format!("page {} : {e}", i + 1))).collect()
 }
 
-fn extraire_page(doc: &Document, page: lopdf::ObjectId, tous: bool) -> Result<Decoupe, String> {
+/// Calques éteints par défaut : `/Root /OCProperties /D /OFF`.
+fn calques_eteints(doc: &Document) -> Vec<ObjectId> {
+    let racine = doc.trailer.get(b"Root").ok().and_then(|o| deref(doc, o).as_dict().ok());
+    let proprietes = racine.and_then(|r| deref(doc, r.get(b"OCProperties").ok()?).as_dict().ok());
+    let defaut = proprietes.and_then(|p| deref(doc, p.get(b"D").ok()?).as_dict().ok());
+    defaut.and_then(|d| deref(doc, d.get(b"OFF").ok()?).as_array().ok()).map(|a| a.iter().filter_map(|o| o.as_reference().ok()).collect()).unwrap_or_default()
+}
+
+fn extraire_page(doc: &Document, page: lopdf::ObjectId, tous: bool, r: &Reglages) -> Result<Decoupe, String> {
     let dict_page = doc.get_dictionary(page).map_err(|e| e.to_string())?;
     let ressources = match doc.get_page_resources(page).map_err(|e| e.to_string())? {
         (Some(d), _) => Some(d),
@@ -334,12 +570,50 @@ fn extraire_page(doc: &Document, page: lopdf::ObjectId, tous: bool) -> Result<De
         .filter(|m| m.len() == 4)
         .ok_or("page sans MediaBox")?;
     let ctm = [1.0, 0.0, 0.0, 1.0, -boite[0], -boite[1]];
-    let etat = Etat { ctm, espace_trait: None, espace_fond: None, trait_: None, fond: None };
+    let etat = Etat { ctm, espace_trait: None, espace_fond: None, trait_: None, fond: None, rognages: vec![], masque: false };
 
-    let mut lecteur = Lecteur { doc, tous, traces: vec![] };
+    let mut lecteur = Lecteur { doc, tous, reglages: r, calques_eteints: calques_eteints(doc), traces: vec![], signaux: vec![] };
     lecteur.lire(&doc.get_page_content(page), ressources, etat, 0)?;
     let (largeur, hauteur) = (boite[2] - boite[0], boite[3] - boite[1]);
-    Ok(Decoupe { traces: rogner(lecteur.traces, largeur, hauteur), largeur, hauteur })
+    // Hors du plan de travail (rogné ensuite à la page), ou posé sur son bord.
+    let e = 0.01;
+    for t in std::mem::take(&mut lecteur.traces) {
+        let dehors = t.points.iter().any(|&(x, y)| x < -e || y < -e || x > largeur + e || y > hauteur + e);
+        let bord = t.points.iter().any(|&(x, y)| x.abs() < e || y.abs() < e || (x - largeur).abs() < e || (y - hauteur).abs() < e);
+        if dehors {
+            lecteur.signaler("decoupe_hors_page", &t.ton);
+        } else if bord {
+            lecteur.signaler("decoupe_touche_bord", &t.ton);
+        }
+        lecteur.traces.push(t);
+    }
+    Ok(Decoupe { traces: rogner(lecteur.traces, largeur, hauteur), largeur, hauteur, signaux: lecteur.signaux })
+}
+
+/// Noms des tons en Séparation du PDF : pour dire à l'opérateur ce que le fichier contient
+/// quand aucun n'est reconnu.
+pub fn tons_du_pdf(pdf: &[u8]) -> Vec<String> {
+    fn visiter(o: &Object, tons: &mut Vec<String>) {
+        match o {
+            Object::Array(a) => {
+                if a.first().and_then(|g| g.as_name().ok()) == Some(b"Separation".as_slice())
+                    && let Some(n) = a.get(1).and_then(|n| n.as_name().ok())
+                {
+                    tons.push(String::from_utf8_lossy(n).into_owned());
+                }
+                a.iter().for_each(|x| visiter(x, tons));
+            }
+            Object::Dictionary(d) => d.iter().for_each(|(_, v)| visiter(v, tons)),
+            Object::Stream(s) => s.dict.iter().for_each(|(_, v)| visiter(v, tons)),
+            _ => {}
+        }
+    }
+    let Ok(doc) = Document::load_mem(pdf) else { return vec![] };
+    let mut tons = vec![];
+    doc.objects.values().for_each(|o| visiter(o, &mut tons));
+    tons.sort();
+    tons.dedup();
+    tons
 }
 
 /// Tracés d'un SVG. Sans couleur en Séparation dans ce format, un tracé est « de
@@ -353,7 +627,7 @@ pub fn extraire_svg(svg: &[u8], tous: bool) -> Result<Decoupe, String> {
     let vers_pt = |p: usvg::tiny_skia_path::Point| (p.x as f64 * k, hauteur - p.y as f64 * k);
     let mut traces = vec![];
     parcourir_svg(arbre.root(), None, tous, &vers_pt, &mut traces);
-    Ok(Decoupe { traces, largeur: arbre.size().width() as f64 * k, hauteur })
+    Ok(Decoupe { traces, largeur: arbre.size().width() as f64 * k, hauteur, signaux: vec![] })
 }
 
 fn parcourir_svg(groupe: &usvg::Group, ton_parent: Option<&str>, tous: bool, vers_pt: &dyn Fn(usvg::tiny_skia_path::Point) -> (f64, f64), traces: &mut Vec<Trace>) {
@@ -495,17 +769,111 @@ pub fn rogner(traces: Vec<Trace>, l: f64, h: f64) -> Vec<Trace> {
 
 /// Outil du plotter selon le ton : 1 lame, 2 rainage, 3 perforation, 4 coupe en V.
 fn outil(ton: &str) -> u8 {
-    match cle(ton).as_str() {
-        "creasing" | "score" => 2,
-        "perforation" => 3,
-        "vcut" => 4,
-        _ => 1,
+    let c = cle(ton);
+    if c.starts_with("creasing") || c.starts_with("score") {
+        2
+    } else if c.starts_with("perforation") {
+        3
+    } else if c.starts_with("vcut") {
+        4
+    } else {
+        1
     }
 }
 
-/// Ordre de passage des outils : rainage, perforation et V-cut d'abord, la coupe en
+/// Place d'une nouvelle couche dans l'ordre de coupe : rainage, perforation et V-cut
+/// d'abord, puis la mi-chair (kiss cut), la coupe de contour, et la coupe à travers en
 /// dernier, quand la matière tient encore.
-const ORDRE_OUTILS: [u8; 4] = [2, 3, 4, 1];
+fn rang(ton: &str) -> u8 {
+    let c = cle(ton);
+    match outil(ton) {
+        2 => 0,
+        3 => 1,
+        4 => 2,
+        _ if ["kiss", "inside", "michair"].iter().any(|m| c.contains(m)) => 3,
+        _ if ["thru", "through"].iter().any(|m| c.contains(m)) => 5,
+        _ => 4,
+    }
+}
+
+fn vrai() -> bool {
+    true
+}
+
+/// Couche de découpe d'un travail : les tracés d'un même nom de ton. L'ordre de la liste
+/// est l'ordre de coupe.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Couche {
+    /// Nom du ton tel qu'écrit dans le fichier (les variantes de casse, espaces et tirets
+    /// sont la même couche).
+    pub nom: String,
+    #[serde(default = "vrai")]
+    pub active: bool,
+    /// Réglage de coupe choisi à la main (nom) ; sinon celui qui porte le nom de la couche,
+    /// sinon le premier de la découpeuse.
+    #[serde(default)]
+    pub reglage: Option<String>,
+}
+
+/// Noms de ton des tracés, dans l'ordre d'apparition, une fois par couche.
+pub fn tons(traces: &[Trace]) -> Vec<&str> {
+    let mut v: Vec<&str> = vec![];
+    for t in traces {
+        if !v.iter().any(|x| meme_couche(x, &t.ton)) {
+            v.push(&t.ton);
+        }
+    }
+    v
+}
+
+/// Ajoute aux couches connues celles des `tons` nouveaux, à leur rang par défaut ; les
+/// couches connues gardent leur ordre et leurs réglages (même sans tracé).
+pub fn accorder(couches: &mut Vec<Couche>, tons: &[&str]) {
+    for ton in tons {
+        if couches.iter().any(|c| meme_couche(&c.nom, ton)) {
+            continue;
+        }
+        let r = rang(ton);
+        let i = couches.iter().position(|c| rang(&c.nom) > r).unwrap_or(couches.len());
+        couches.insert(i, Couche { nom: ton.to_string(), active: true, reglage: None });
+    }
+}
+
+/// HP-GL de chaque couche active qui a des tracés, dans l'ordre des couches : `SPn;` puis
+/// ses tracés (intérieurs d'abord, plus proche voisin), unités 1/100 mm, sans `IN;` ni fin.
+pub fn blocs(traces: &[Trace], couches: &[Couche]) -> Vec<(Couche, String)> {
+    let u = |(x, y): (f64, f64)| ((x * UNITES_PAR_PT).round() as i64, (y * UNITES_PAR_PT).round() as i64);
+    let mut toutes = couches.to_vec();
+    accorder(&mut toutes, &tons(traces));
+    toutes
+        .into_iter()
+        .filter(|c| c.active)
+        .filter_map(|c| {
+            let de: Vec<&Trace> = traces.iter().filter(|t| meme_couche(&t.ton, &c.nom)).collect();
+            if de.is_empty() {
+                return None;
+            }
+            let mut sortie = format!("SP{};", outil(&c.nom));
+            for t in ordonner(&de) {
+                let (x0, y0) = u(t.points[0]);
+                sortie += &format!("PU{x0},{y0};PD");
+                let mut suite: Vec<String> = t.points[1..].iter().map(|p| u(*p)).map(|(x, y)| format!("{x},{y}")).collect();
+                if t.ferme {
+                    suite.push(format!("{x0},{y0}"));
+                }
+                sortie += &suite.join(",");
+                sortie += ";";
+            }
+            Some((c, sortie))
+        })
+        .collect()
+}
+
+/// Fichier HP-GL : les couches actives dans leur ordre, un `SP` par couche.
+pub fn hpgl(traces: &[Trace], couches: &[Couche]) -> String {
+    let corps: String = blocs(traces, couches).into_iter().map(|(_, b)| b).collect();
+    format!("IN;{corps}PU;SP0;")
+}
 
 fn dans_polygone((x, y): (f64, f64), poly: &[(f64, f64)]) -> bool {
     let mut dedans = false;
@@ -560,28 +928,6 @@ pub fn ordonner<'t>(traces: &[&'t Trace]) -> Vec<&'t Trace> {
     ordre
 }
 
-/// Fichier HP-GL : un `SP` par outil, chaque tracé en `PU` puis `PD`, unités 1/100 mm.
-pub fn hpgl(traces: &[Trace]) -> String {
-    let u = |(x, y): (f64, f64)| ((x * UNITES_PAR_PT).round() as i64, (y * UNITES_PAR_PT).round() as i64);
-    let mut sortie = String::from("IN;");
-    for o in ORDRE_OUTILS.into_iter().filter(|o| traces.iter().any(|t| outil(&t.ton) == *o)) {
-        sortie += &format!("SP{o};");
-        let du_outil: Vec<&Trace> = traces.iter().filter(|t| outil(&t.ton) == o).collect();
-        for t in ordonner(&du_outil) {
-            let (x0, y0) = u(t.points[0]);
-            sortie += &format!("PU{x0},{y0};PD");
-            let mut suite: Vec<String> = t.points[1..].iter().map(|p| u(*p)).map(|(x, y)| format!("{x},{y}")).collect();
-            if t.ferme {
-                suite.push(format!("{x0},{y0}"));
-            }
-            sortie += &suite.join(",");
-            sortie += ";";
-        }
-    }
-    sortie += "PU;SP0;";
-    sortie
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -589,7 +935,7 @@ mod tests {
 
     #[test]
     fn apercu_de_decoupe_en_magenta_pur() {
-        let d = Decoupe { traces: vec![Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (10.0, 10.0)], ferme: false }], largeur: 20.0, hauteur: 20.0 };
+        let d = Decoupe { traces: vec![Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (10.0, 10.0)], ferme: false }], largeur: 20.0, hauteur: 20.0, signaux: vec![] };
         let svg = apercu_svg(&d);
         assert!(svg.contains(r##"stroke="#ff00ff""##), "{svg}");
         assert!(svg.contains(r#"<polyline points="0.0,20.0 10.0,10.0"/>"#), "{svg}");
@@ -737,7 +1083,7 @@ mod tests {
             Trace { ton: "Creasing".into(), points: vec![(0.0, 0.0), (0.0, 72.0)], ferme: false },
         ];
         // 72 pt = 25,4 mm = 2540 unités.
-        assert_eq!(hpgl(&traces), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;", "rainage avant la coupe");
+        assert_eq!(hpgl(&traces, &[]), "IN;SP2;PU0,0;PD0,2540;SP1;PU0,0;PD2540,0,2540,2540,0,0;PU;SP0;", "rainage avant la coupe");
     }
 
     #[test]
@@ -786,5 +1132,125 @@ mod tests {
         assert!(d.join("orig(CutContour).tif").exists());
         assert!(!d.join("neutre(CutContour).tif").exists(), "plus de plaque de découpe");
         std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn prefixes_lus_en_debut_de_nom() {
+        let r = Reglages::default();
+        assert_eq!(r.prefixes, ["CutContour", "Thrucut", "Kisscut", "InsideCut", "Perforation", "Creasing", "Score", "VCut"], "la liste d'avant reste le défaut");
+        for oui in ["CutContour", "CutContour1", "CutContourKissCut", "cut contour", "Kiss-Cut", "Thrucut Épais"] {
+            assert!(r.reconnait(oui), "{oui}");
+        }
+        for non in ["1CutContour", "MyCutContour", "White", "Silver"] {
+            assert!(!r.reconnait(non), "{non}");
+        }
+        let die = Reglages { prefixes: vec!["Die".into()], ..r.clone() };
+        assert!(die.reconnait("Die-Cut 3") && !die.reconnait("CutContour"));
+        assert!(die.verifier().is_ok());
+        assert_eq!(Reglages { prefixes: vec![], ..r.clone() }.verifier(), Err("prefixes_invalides"));
+        assert_eq!(Reglages { prefixes: vec!["--".into()], ..r }.verifier(), Err("prefixes_invalides"), "un préfixe sans lettre reconnaîtrait tout");
+    }
+
+    fn carre(ton: &str, x: f64) -> Trace {
+        Trace { ton: ton.into(), points: vec![(x, 0.0), (x + 72.0, 0.0), (x + 72.0, 72.0), (x, 72.0)], ferme: true }
+    }
+
+    #[test]
+    fn une_couche_par_ton_dans_l_ordre_de_coupe() {
+        let traces = [carre("Thrucut", 0.0), carre("CutContour", 100.0), carre("Kisscut", 200.0), carre("kiss cut", 300.0)];
+        let mut couches = vec![];
+        accorder(&mut couches, &tons(&traces));
+        let noms: Vec<&str> = couches.iter().map(|c| c.nom.as_str()).collect();
+        assert_eq!(noms, ["Kisscut", "CutContour", "Thrucut"], "mi-chair avant contour, coupe à travers en dernier ; « kiss cut » = Kisscut");
+        // 72 pt = 2540 unités : chaque bloc commence par son outil, puis ses tracés.
+        let depart = |h: &str, x: i64| h.find(&format!("PU{x},0;")).unwrap_or_else(|| panic!("{x} absent de {h}"));
+        let h = hpgl(&traces, &couches);
+        assert!(h.starts_with("IN;SP1;") && h.ends_with("PU;SP0;"));
+        assert_eq!(h.matches("SP1;").count(), 3, "un bloc par couche : {h}");
+        assert!(depart(&h, 7056) < depart(&h, 3528) && depart(&h, 3528) < depart(&h, 0), "Kisscut, CutContour, Thrucut : {h}");
+        assert!(depart(&h, 7056) < depart(&h, 10583), "les deux Kisscut ensemble");
+        // Ordre inversé : HP-GL inversé.
+        couches.reverse();
+        let inverse = hpgl(&traces, &couches);
+        assert!(depart(&inverse, 0) < depart(&inverse, 3528) && depart(&inverse, 3528) < depart(&inverse, 7056), "{inverse}");
+        // Couche décochée : absente.
+        couches[0].active = false;
+        assert!(!hpgl(&traces, &couches).contains("PU0,0;"));
+        // Un nouveau ton au rendu suivant prend son rang sans déranger l'ordre choisi.
+        accorder(&mut couches, &["Creasing"]);
+        assert_eq!(couches[0].nom, "Creasing");
+        assert_eq!(couches.len(), 4);
+        assert!(!couches[1].active, "les choix déjà faits restent");
+    }
+
+    /// PDF d'une page 600 × 600 avec `contenu` ; `/CS0` = CutContour (en RVB si `rvb`),
+    /// `/MC0` = calque non imprimable (`/Usage /Print /PrintState /OFF`).
+    fn pdf_controle(contenu: &str, rvb: bool) -> Vec<u8> {
+        let mut doc = Document::with_version("1.5");
+        let ton = if rvb {
+            Object::Array(vec!["Separation".into(), "CutContour".into(), "DeviceRGB".into(), Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 3], "C1" => vec![1.into(), 0.into(), 1.into()], "N" => 1 })])
+        } else {
+            separation("CutContour")
+        };
+        let calque = doc.add_object(dictionary! { "Type" => "OCG", "Name" => Object::string_literal("Découpe masquée"), "Usage" => dictionary! { "Print" => dictionary! { "PrintState" => "OFF" } } });
+        let contenu_id = doc.add_object(Stream::new(dictionary! {}, contenu.as_bytes().to_vec()));
+        let pages_id = doc.new_object_id();
+        let page_id = doc.add_object(dictionary! {
+            "Type" => "Page", "Parent" => pages_id, "MediaBox" => vec![0.into(), 0.into(), 600.into(), 600.into()],
+            "Contents" => contenu_id, "Resources" => dictionary! { "ColorSpace" => dictionary! { "CS0" => ton }, "Properties" => dictionary! { "MC0" => calque } },
+        });
+        doc.objects.insert(pages_id, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page_id.into()], "Count" => 1 }));
+        let catalogue = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id, "OCProperties" => dictionary! { "OCGs" => vec![calque.into()], "D" => dictionary! {} } });
+        doc.trailer.set("Root", catalogue);
+        let mut octets = vec![];
+        doc.save_to(&mut octets).unwrap();
+        octets
+    }
+
+    fn codes(pdf: &[u8], r: &Reglages) -> (Vec<&'static str>, usize) {
+        let d = extraire_avec(pdf, false, r).unwrap().remove(0);
+        (d.signaux.iter().map(|(c, _)| *c).collect(), d.traces.len())
+    }
+
+    #[test]
+    fn controle_prealable_une_alerte_par_defaut() {
+        let r = Reglages::default();
+        // Propre : l'encre est peinte avant (dessous), le filet seul, loin des bords.
+        let propre = "0 0 1 0 k 50 50 400 400 re f /CS0 CS 1 SCN 100 100 200 200 re S";
+        assert_eq!(codes(&pdf_controle(propre, false), &r), (vec![], 1), "un fichier propre : aucune alerte");
+        let cas = [
+            ("decoupe_ton_rvb", propre, true),
+            ("decoupe_avec_fond", "1 g /CS0 CS 1 SCN 100 100 200 200 re B", false),
+            ("decoupe_touche_bord", "/CS0 CS 1 SCN 0 100 200 200 re S", false),
+            ("decoupe_pas_au_premier_plan", "/CS0 CS 1 SCN 100 100 200 200 re S 0 0 1 0 k 150 150 50 50 re f", false),
+            ("decoupe_contour_vectorise", "/CS0 cs 1 scn 100 100 200 200 re 101 101 198 198 re f*", false),
+            ("decoupe_calque_non_imprimable", "/OC /MC0 BDC /CS0 CS 1 SCN 100 100 200 200 re S EMC", false),
+            ("decoupe_trait_non_centre", "q 100 100 200 200 re W n /CS0 CS 1 SCN 2 w 100 100 200 200 re S Q", false),
+            ("decoupe_hors_page", "/CS0 CS 1 SCN 500 100 200 200 re S", false),
+        ];
+        for (code, contenu, rvb) in cas {
+            assert_eq!(codes(&pdf_controle(contenu, rvb), &r).0, [code], "{contenu}");
+        }
+        let d = extraire_avec(&pdf_controle(cas[2].1, false), false, &r).unwrap().remove(0);
+        assert_eq!(d.signaux[0].1, "CutContour", "le détail nomme le ton");
+        // Calque non imprimable : ignoré par défaut ; avec l'option, coupé sans alerte.
+        assert_eq!(codes(&pdf_controle(cas[5].1, false), &r).1, 0);
+        let prendre = Reglages { calques_non_imprimables: true, ..r.clone() };
+        assert_eq!(codes(&pdf_controle(cas[5].1, false), &prendre), (vec![], 1));
+        // Un calque visible (sans état d'impression, pas éteint) n'est pas masqué.
+        let visible = pdf_controle("/OC /MC0 BDC /CS0 CS 1 SCN 100 100 200 200 re S EMC", false);
+        let mut doc = Document::load_mem(&visible).unwrap();
+        for o in doc.objects.values_mut() {
+            if let Ok(d) = o.as_dict_mut()
+                && d.get(b"Type").and_then(Object::as_name).ok() == Some(b"OCG".as_slice())
+            {
+                d.remove(b"Usage");
+            }
+        }
+        let mut octets = vec![];
+        doc.save_to(&mut octets).unwrap();
+        assert_eq!(codes(&octets, &r), (vec![], 1));
+        // Mode « tous les tracés » : pas de contrôle des tons.
+        assert!(extraire_avec(&pdf_controle(cas[1].1, false), true, &r).unwrap()[0].signaux.is_empty());
     }
 }

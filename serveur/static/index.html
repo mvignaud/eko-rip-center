@@ -343,7 +343,7 @@
         </label>
         <label data-t-title="note_support_mode"><span data-t="support_mode"></span> <select name="support_mode"></select></label>
         <label><span data-t="support_choix"></span> <select name="support"></select></label>
-        <label><span data-t="coupe_choix"></span> <select name="parametre_decoupe"></select></label>
+        <label data-t-title="note_decoupeuse"><span data-t="decoupeuse"></span> <select name="decoupeuse"></select></label>
         <label class="case" data-t-title="note_rotation_auto"><input type="checkbox" name="rotation_auto" checked> <span data-t="rotation_auto"></span></label>
         <label><span data-t="reperage"></span>
           <select name="reperage"><option value="aucun" data-t="aucun"></option><option value="manuel" data-t="manuel"></option><option value="cadre" data-t="cadre"></option><option value="cadre_code" data-t="cadre_code"></option><option value="cadre_multi" data-t="cadre_multi"></option></select>
@@ -557,6 +557,13 @@ const textes = {
     envoi: "Envoi…", recu: (n) => `« ${n} » reçu.`, composite: "Composite", choisir_fichier: "Choisir ou déposer un fichier.",
     en_attente: "En attente", en_cours: "En cours", termine: "Prêt", echec: "Échec",
     nb_alertes: (n) => `⚠ ${n} alerte${n > 1 ? "s" : ""}`,
+    couches_decoupe: "Couches de découpe", couche_couper: "Couper", couche_traces: (n) => `${n} tracé${n > 1 ? "s" : ""}`, couche_reglage_auto: "— même nom, sinon défaut —",
+    couche_monter: "Monter", couche_descendre: "Descendre", couches_enregistrer: "Enregistrer les couches", couches_annuler: "Annuler", couches_modifiees: "Modifications non enregistrées.", couches_enregistrees: "Couches enregistrées : fichiers de coupe refaits.",
+    note_couches_decoupe: "Une couche par nom de ton. L'ordre est l'ordre de coupe (mi-chair avant coupe à travers) ; le réglage qui porte le nom de la couche s'applique seul, sinon le premier de la découpeuse. Rien n'est gardé sans « Enregistrer ».",
+    decoupeuse: "Découpeuse", decoupeuse_aucune: "— aucune —", note_decoupeuse: "La découpe automatique y va ; l'impression attend tant qu'elle n'est pas utilisable (pas d'encre gâchée).",
+    mono_couche: "Une couche à la fois", note_mono_couche: "Machine sans changement d'outil ni de réglage en cours de coupe : une sortie par couche, la suivante retenue jusqu'à « Reprendre ».", couche_de_sortie: (n) => `couche ${n}`,
+    systeme_decoupe: "Découpe", prefixes_decoupe: "Préfixes de découpe (séparés par ;)", note_prefixes: "Un ton est de découpe si son nom commence par un préfixe (CutContour reconnaît CutContour1 et CutContourKissCut, pas 1CutContour ; sans casse, espaces ni tirets). Pris aux rendus suivants : relancer un travail déjà rendu.",
+    calques_non_imprimables: "Couper aussi les tracés des calques non imprimables", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
@@ -564,13 +571,22 @@ const textes = {
       marques_neutralisees: () => "Repérage Kona : traits de coupe et croix non imprimés (ils gêneraient la lecture des repères).",
       reperes_image_petite: (d, p) => `Page ${p} : ${d}, sous les 25 cm de côté conseillés pour le repérage Kona.`,
       reperes_blanc: (d, p) => `Page ${p} : ${d} de blanc entre l'image et les repères Kona, sous les 5 cm conseillés (consigne à confirmer sur le Kona).`,
+      decoupe_ton_rvb: (d, p) => `Page ${p} : le ton de découpe ${d} est défini en RVB ; le définir en CMJN (ton direct).`,
+      decoupe_avec_fond: (d, p) => `Page ${p} : le tracé ${d} a un fond ; un tracé de découpe est un filet seul, sans remplissage.`,
+      decoupe_touche_bord: (d, p) => `Page ${p} : un tracé ${d} touche le bord de la page (boîte englobante) ; l'en écarter.`,
+      decoupe_pas_au_premier_plan: (d, p) => `Page ${p} : un tracé ${d} est recouvert par l'image ; le mettre sur le calque du dessus.`,
+      decoupe_contour_vectorise: (d, p) => `Page ${p} : le tracé ${d} est un contour vectorisé (filet devenu surface) : il serait coupé deux fois. Garder le filet.`,
+      decoupe_sans_prefixe: (d) => `Une découpeuse est choisie, mais aucun ton de découpe n'est reconnu (tons du fichier : ${d}). Le nom doit commencer par un préfixe de découpe (Système > Découpe).`,
+      decoupe_calque_non_imprimable: (d, p) => `Page ${p} : un tracé ${d} est sur un calque non imprimable : il n'est pas coupé (Système > Découpe pour le prendre).`,
+      decoupe_trait_non_centre: (d, p) => `Page ${p} : le filet ${d} est aligné à l'intérieur ou à l'extérieur du tracé ; l'aligner au centre.`,
+      decoupe_hors_page: (d, p) => `Page ${p} : un tracé ${d} sort du plan de travail ; ce qui dépasse de la page n'est pas coupé.`,
     },
     rechercher: "Rechercher un travail…", filtre_tous: "Tous", filtre_actifs: "En cours", aucun_travail: "Aucun travail. Déposer un fichier pour commencer.",
     decoupe: (n) => (n ? `${n} tracé${n > 1 ? "s" : ""} de découpe` : "Aucun tracé de découpe"), telecharger: "Fichier .plt",
     vers_kona: "Découper (Kona)", vers_epson: "Imprimer (Epson)", mis_en_file: "Ajouté à la file d'attente.",
     machines: { kona: "Mutoh Kona 1650 — découpe", epson: "Epson SC-S80600 — impression" },
     note_epson: "Pilote à venir : les plaques sont copiées dans sorties/epson/ sur le serveur.",
-    raisons: { attente_operateur: ["Retenue", "Suspendue par un opérateur : « Reprendre » pour la relancer."], machine_hors_ligne: ["Machine injoignable", "La machine n'est pas branchée ou absente du catalogue : la sortie partira dès qu'elle répond."], source_absente: ["Fichier manquant", "Le rendu ou le tracé de cette page est introuvable : relancer le travail."], format_trop_petit: ["Trop large", "La page (repères compris) dépasse la laize de la machine : tourner, réduire ou changer de support."], attente_support: ["Autre support", "Le support chargé n'est pas celui du travail."] },
+    raisons: { attente_impression: ["Impression pas finie", "La découpe part quand l'impression de la page est terminée à 100 %."], decoupeuse_indisponible: ["Découpeuse indisponible", "La découpeuse affectée est absente, hors ligne, mal connectée, ou une couche n'y trouve pas son réglage : rien ne part, pour ne pas gâcher d'encre ni de support."], attente_operateur: ["Retenue", "Suspendue par un opérateur : « Reprendre » pour la relancer."], machine_hors_ligne: ["Machine injoignable", "La machine n'est pas branchée ou absente du catalogue : la sortie partira dès qu'elle répond."], source_absente: ["Fichier manquant", "Le rendu ou le tracé de cette page est introuvable : relancer le travail."], format_trop_petit: ["Trop large", "La page (repères compris) dépasse la laize de la machine : tourner, réduire ou changer de support."], attente_support: ["Autre support", "Le support chargé n'est pas celui du travail."] },
     etats: { en_attente: "En attente", suspendue: "Suspendue", en_cours: "En cours", terminee: "Terminée", echec: "Échec", annulee: "Annulée" }, deposee: "Déposée dans le dossier (pas imprimée)",
     actions: { en_tete: "En tête", monter: "Monter", descendre: "Descendre", suspendre: "Suspendre", reprendre: "Reprendre", annuler: "Annuler", refaire: "Refaire", retirer: "Retirer" },
     media: "Média chargé dans l'Epson", media_charge: (l, n) => `Largeur lue sur l'imprimante : ${l} mm${n ? ` — ${n}` : ""}`,
@@ -628,6 +644,10 @@ const textes = {
       edition_invalide: "Édition impossible (échelle 1 à 1000 %, marge 0 à 500 mm, œillets : écart 50 à 5000 mm, retrait 3 à 200 mm, diamètre 2 à 50 mm).",
       action_impossible: "Action impossible dans cet état.", sortie_echouee: "La sortie vers la machine a échoué.",
       interrompu: "Interrompu par un arrêt du serveur.",
+      couches_invalides: "Couches de découpe invalides : les mêmes couches qu'au rendu, réglage de 40 caractères au plus.",
+      prefixes_invalides: "Préfixes de découpe invalides : de 1 à 30, séparés par « ; », 40 caractères au plus chacun.",
+      decoupeuse_invalide: "Découpeuse invalide.",
+      decoupeuse_indisponible: "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
       trop_gros: "Fichier trop volumineux pour le serveur.", reseau: "Serveur injoignable.",
     },
   },
@@ -720,6 +740,13 @@ const textes = {
     envoi: "Sending…", recu: (n) => `“${n}” received.`, composite: "Composite", choisir_fichier: "Choose or drop a file.",
     en_attente: "Queued", en_cours: "In progress", termine: "Ready", echec: "Failed",
     nb_alertes: (n) => `⚠ ${n} warning${n > 1 ? "s" : ""}`,
+    couches_decoupe: "Cut layers", couche_couper: "Cut", couche_traces: (n) => `${n} path${n > 1 ? "s" : ""}`, couche_reglage_auto: "— same name, else default —",
+    couche_monter: "Up", couche_descendre: "Down", couches_enregistrer: "Save layers", couches_annuler: "Cancel", couches_modifiees: "Unsaved changes.", couches_enregistrees: "Layers saved: cut files rebuilt.",
+    note_couches_decoupe: "One layer per spot colour name. The order is the cutting order (kiss cut before through cut); the setting named like the layer applies by itself, else the cutter's first one. Nothing is kept without \"Save\".",
+    decoupeuse: "Cutter", decoupeuse_aucune: "— none —", note_decoupeuse: "The automatic cut goes there; printing waits while it is not usable (no wasted ink).",
+    mono_couche: "One layer at a time", note_mono_couche: "Machine that cannot change tool or setting during a cut: one output per layer, the next one held until \"Resume\".", couche_de_sortie: (n) => `layer ${n}`,
+    systeme_decoupe: "Cutting", prefixes_decoupe: "Cut prefixes (separated by ;)", note_prefixes: "A spot colour is a cut one if its name starts with a prefix (CutContour matches CutContour1 and CutContourKissCut, not 1CutContour; case, spaces and dashes ignored). Used by the next renderings: restart a job already rendered.",
+    calques_non_imprimables: "Also cut the paths of non-printing layers", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
@@ -727,13 +754,22 @@ const textes = {
       marques_neutralisees: () => "Kona registration: crop marks and crosses not printed (they would disturb the reading of the marks).",
       reperes_image_petite: (d, p) => `Page ${p}: ${d}, under the 25 cm per side advised for Kona registration.`,
       reperes_blanc: (d, p) => `Page ${p}: ${d} of white between the image and the Kona marks, under the advised 5 cm (to confirm on the Kona).`,
+      decoupe_ton_rvb: (d, p) => `Page ${p}: the cut spot colour ${d} is defined in RGB; define it in CMYK (spot colour).`,
+      decoupe_avec_fond: (d, p) => `Page ${p}: the ${d} path has a fill; a cut path is a stroke only, without fill.`,
+      decoupe_touche_bord: (d, p) => `Page ${p}: a ${d} path touches the page edge (bounding box); move it away.`,
+      decoupe_pas_au_premier_plan: (d, p) => `Page ${p}: a ${d} path is covered by the artwork; put it on the top layer.`,
+      decoupe_contour_vectorise: (d, p) => `Page ${p}: the ${d} path is an outlined stroke (a stroke turned into a shape): it would be cut twice. Keep the stroke.`,
+      decoupe_sans_prefixe: (d) => `A cutter is chosen, but no cut spot colour is recognised (colours in the file: ${d}). The name must start with a cut prefix (System > Cutting).`,
+      decoupe_calque_non_imprimable: (d, p) => `Page ${p}: a ${d} path is on a non-printing layer: it is not cut (System > Cutting to take it).`,
+      decoupe_trait_non_centre: (d, p) => `Page ${p}: the ${d} stroke is aligned inside or outside the path; align it to the centre.`,
+      decoupe_hors_page: (d, p) => `Page ${p}: a ${d} path goes beyond the artboard; what lies outside the page is not cut.`,
     },
     rechercher: "Search jobs…", filtre_tous: "All", filtre_actifs: "In progress", aucun_travail: "No job yet. Drop a file to start.",
     decoupe: (n) => (n ? `${n} cut path${n > 1 ? "s" : ""}` : "No cut path"), telecharger: ".plt file",
     vers_kona: "Cut (Kona)", vers_epson: "Print (Epson)", mis_en_file: "Added to the queue.",
     machines: { kona: "Mutoh Kona 1650 — cutting", epson: "Epson SC-S80600 — printing" },
     note_epson: "Driver to come: plates are copied to sorties/epson/ on the server.",
-    raisons: { attente_operateur: ["Held", "Held by an operator: \"Resume\" to restart it."], machine_hors_ligne: ["Machine unreachable", "The machine is unplugged or missing from the catalogue: the output leaves as soon as it answers."], source_absente: ["File missing", "This page's rendering or cut path cannot be found: re-run the job."], format_trop_petit: ["Too wide", "The page (marks included) is wider than the machine's roll: rotate, scale down or change media."], attente_support: ["Other media", "The loaded media is not the job's."] },
+    raisons: { attente_impression: ["Print not finished", "The cut starts once the page is 100 % printed."], decoupeuse_indisponible: ["Cutter unavailable", "The assigned cutter is missing, offline, badly connected, or a layer finds no setting on it: nothing goes out, so no ink or media is wasted."], attente_operateur: ["Held", "Held by an operator: \"Resume\" to restart it."], machine_hors_ligne: ["Machine unreachable", "The machine is unplugged or missing from the catalogue: the output leaves as soon as it answers."], source_absente: ["File missing", "This page's rendering or cut path cannot be found: re-run the job."], format_trop_petit: ["Too wide", "The page (marks included) is wider than the machine's roll: rotate, scale down or change media."], attente_support: ["Other media", "The loaded media is not the job's."] },
     etats: { en_attente: "Queued", suspendue: "On hold", en_cours: "Running", terminee: "Done", echec: "Failed", annulee: "Cancelled" }, deposee: "Left in the folder (not printed)",
     actions: { en_tete: "To top", monter: "Up", descendre: "Down", suspendre: "Hold", reprendre: "Resume", annuler: "Cancel", refaire: "Redo", retirer: "Remove" },
     media: "Media loaded in the Epson", media_charge: (l, n) => `Width read from the printer: ${l} mm${n ? ` — ${n}` : ""}`,
@@ -791,6 +827,10 @@ const textes = {
       edition_invalide: "Cannot edit (scale 1 to 1000 %, margin 0 to 500 mm, grommets: spacing 50 to 5000 mm, inset 3 to 200 mm, diameter 2 to 50 mm).",
       action_impossible: "Not possible in this state.", sortie_echouee: "Output to the machine failed.",
       interrompu: "Stopped by a server shutdown.",
+      couches_invalides: "Invalid cut layers: the same layers as at rendering, setting of 40 characters at most.",
+      prefixes_invalides: "Invalid cut prefixes: 1 to 30, separated by \";\", 40 characters at most each.",
+      decoupeuse_invalide: "Invalid cutter.",
+      decoupeuse_indisponible: "Cutter unavailable: a layer setting does not exist on this machine.",
       trop_gros: "File too large for the server.", reseau: "Server unreachable.",
     },
   },
@@ -1103,8 +1143,9 @@ function remplirSupports() {
 
 let infoSysteme = null;
 const go = (o) => `${(o / 1e9).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${langue === "fr" ? "Go" : "GB"}`;
+let reglagesDecoupe = null;
 async function chargerSysteme() {
-  infoSysteme = await api("/api/systeme");
+  [infoSysteme, reglagesDecoupe] = await Promise.all([api("/api/systeme"), api("/api/decoupe")]);
   afficherSysteme();
 }
 function afficherSysteme() {
@@ -1117,7 +1158,24 @@ function afficherSysteme() {
     dl.append(el("dt", {}, T().disque), el("dd", { className: basse ? "erreur" : "" }, T().libre_sur(go(s.disque_libre), go(s.disque_total)), jauge));
   }
   if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => a.dossier ? T().dossier_absent(a.fichier, a.reprise) : T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
-  $("systeme").replaceChildren(dl);
+  $("systeme").replaceChildren(dl, formulaireDecoupe());
+}
+/** Préfixes des tons de découpe et calques non imprimables : réglages du serveur (admin). */
+function formulaireDecoupe() {
+  const r = reglagesDecoupe;
+  if (!r) return null;
+  const prefixes = el("input", { name: "prefixes", value: r.prefixes.join(" ; "), style: "width: 100%" });
+  const calques = el("input", { type: "checkbox", name: "calques_non_imprimables", checked: !!r.calques_non_imprimables });
+  const f = el("form", { className: "admin", id: "reglages-decoupe" }, el("h3", {}, T().systeme_decoupe),
+    el("label", {}, T().prefixes_decoupe, prefixes), el("p", { className: "meta", style: "margin: 0" }, T().note_prefixes),
+    el("label", { className: "case" }, calques, " ", T().calques_non_imprimables),
+    el("div", { className: "ligne" }, el("button", { type: "submit" }, T().enregistrer)));
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const lu = await api("/api/decoupe", json("POST", { prefixes: prefixes.value.split(";").map((x) => x.trim()).filter(Boolean), calques_non_imprimables: calques.checked }));
+    if (lu) { reglagesDecoupe = lu; dire(T().decoupe_enregistree); afficherSysteme(); }
+  });
+  return f;
 }
 
 let reglages = [];
@@ -1147,7 +1205,7 @@ function demandeDuFormulaire() {
     support: f.support.value || null,
     support_uuid: f.support_mode.value ? f.support_mode.value.split("|")[0] : null,
     mode_uuid: f.support_mode.value ? f.support_mode.value.split("|")[1] : null,
-    parametre_decoupe: f.parametre_decoupe.value || null,
+    decoupeuse: f.decoupeuse.value || null,
     rotation_auto: f.rotation_auto.checked,
   };
 }
@@ -1286,8 +1344,8 @@ function appliquerDemande(d) {
   if (d.support && ![...f.support.options].some((o) => o.value === d.support)) f.support.append(new Option(d.support, d.support));
   f.support.value = d.support || "";
   f.support_mode.value = d.support_uuid && d.mode_uuid ? `${d.support_uuid}|${d.mode_uuid}` : "";
-  if (d.parametre_decoupe && ![...f.parametre_decoupe.options].some((o) => o.value === d.parametre_decoupe)) f.parametre_decoupe.append(new Option(d.parametre_decoupe, d.parametre_decoupe));
-  f.parametre_decoupe.value = d.parametre_decoupe || "";
+  if (d.decoupeuse && ![...f.decoupeuse.options].some((o) => o.value === d.decoupeuse)) f.decoupeuse.append(new Option(d.decoupeuse, d.decoupeuse));
+  f.decoupeuse.value = d.decoupeuse || "";
   f.rotation_auto.checked = d.rotation_auto !== false;
 }
 choixReglage.addEventListener("change", () => {
@@ -2431,8 +2489,47 @@ function afficherInspecteur() {
   if (t.alertes && t.alertes.length) {
     corps.append(el("ul", { className: "alertes" }, ...t.alertes.map((a) => el("li", {}, (T().alertes[a.code] || ((d) => d))(a.detail, a.page)))));
   }
+  if (t.statut === "termine" && t.couches_decoupe?.length) corps.append(panneauCouches(t));
   if (t.statut === "termine") t.pages.forEach((page, i) => corps.append(vuePage(t, page, i + 1)));
   z.replaceChildren(corps);
+}
+
+/** Couches modifiées et pas encore enregistrées, par travail : gardées d'un rafraîchissement
+ *  à l'autre, jamais envoyées sans « Enregistrer » (roadmap 4.4). */
+const brouillonsCouches = new Map();
+/** Couches de découpe du travail (roadmap 4.2, 4.3) : ordre de coupe, couche coupée ou non,
+ *  réglage de coupe. */
+function panneauCouches(t) {
+  const brouillon = brouillonsCouches.get(t.id), couches = brouillon || t.couches_decoupe;
+  const traces = (nom) => t.pages.reduce((a, p) => a + ((p.traces_par_couche || {})[nom] || 0), 0);
+  const reglages = [...new Set(catalogue.filter((m) => m.modele_decoupe).flatMap((m) => (m.parametres_decoupe || []).map((p) => p.nom)))];
+  const changer = (f) => { const c = structuredClone(couches); f(c); brouillonsCouches.set(t.id, c); document.activeElement?.blur(); afficherInspecteur(); };
+  const lignes = couches.map((c, i) => {
+    const caseC = el("input", { type: "checkbox", checked: c.active });
+    caseC.addEventListener("change", () => changer((v) => { v[i].active = caseC.checked; }));
+    const choix = el("select", { ariaLabel: T().coupe_choix }, new Option(T().couche_reglage_auto, ""), ...[...new Set([...reglages, ...(c.reglage ? [c.reglage] : [])])].map((n) => new Option(n, n)));
+    choix.value = c.reglage || "";
+    choix.addEventListener("change", () => changer((v) => { v[i].reglage = choix.value || null; }));
+    const monter = bouton("↑", () => changer((v) => { [v[i - 1], v[i]] = [v[i], v[i - 1]]; }));
+    const descendre = bouton("↓", () => changer((v) => { [v[i + 1], v[i]] = [v[i], v[i + 1]]; }));
+    monter.disabled = i === 0; descendre.disabled = i === couches.length - 1;
+    monter.title = T().couche_monter; descendre.title = T().couche_descendre;
+    return el("div", { className: "ligne bas couche-decoupe" }, el("span", { className: "meta" }, `${i + 1}.`),
+      el("label", { className: "case", style: "flex: 2" }, caseC, " ", el("strong", {}, c.nom), " ", el("span", { className: "meta" }, T().couche_traces(traces(c.nom)))),
+      choix, monter, descendre);
+  });
+  const actions = el("div", { className: "ligne" });
+  if (brouillon) {
+    actions.append(el("span", { className: "meta erreur" }, T().couches_modifiees),
+      bouton(T().couches_enregistrer, async (b) => {
+        b.disabled = true;
+        if (await api(`/api/travaux/${t.id}/couches`, json("POST", brouillon))) { brouillonsCouches.delete(t.id); dire(T().couches_enregistrees); }
+        rafraichir();
+      }, ""),
+      bouton(T().couches_annuler, () => { brouillonsCouches.delete(t.id); afficherInspecteur(); }));
+  }
+  return el("details", { className: "section couches-decoupe", open: true }, el("summary", {}, T().couches_decoupe),
+    el("div", {}, el("p", { className: "meta", style: "margin: 0" }, T().note_couches_decoupe), ...lignes, actions));
 }
 
 /** Barre d'outils : actions sur le travail choisi. */
@@ -2626,7 +2723,7 @@ function afficherFile() {
     const miennes = sorties.filter((s) => s.machine === machine || (m.pool && s.machine === m.pool));
     const finies = miennes.filter((s) => !aPasser(s)).reverse().slice(0, 30);
     const ligne = (s) => el("div", { className: "sortie" },
-      el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}`)),
+      el("div", {}, el("div", { className: "nom" }, s.nom, el("span", { className: "meta" }, ` · ${T().page(s.page)}${m.modele_imprime && m.modele_decoupe ? ` · ${T()[s.operation === "decoupe" ? "o_decouper" : "o_imprimer"]}` : ""}${s.couche ? ` · ${T().couche_de_sortie(s.couche)}` : ""}`)),
         el("div", { className: "badges" }, el("span", { className: `badge ${s.etat}` }, etatSortie(s)),
           // Travail miroité (roadmap 3.B3) : se voit dans la file avant d'imprimer.
           travaux.find((x) => x.id === s.travail)?.edition?.miroir ? el("span", { className: "badge", title: T().note_miroir_file }, T().miroir_file) : null,
@@ -2694,11 +2791,11 @@ async function chargerMachines() {
   const c = await api("/api/machines");
   if (!c) return;
   catalogue = c.map((m) => ({ ...m, modele_imprime: ["epson_sc_s80600", "roland_versacamm"].includes(m.modele), modele_decoupe: m.modele !== "epson_sc_s80600" }));
-  // Réglages de coupe proposés par travail : ceux de toutes les découpeuses.
-  const choixCoupe = form.parametre_decoupe, garde = choixCoupe.value;
-  const noms = [...new Set(catalogue.flatMap((m) => (m.parametres_decoupe || []).map((p) => p.nom)))];
-  choixCoupe.replaceChildren(new Option(T().coupe_defaut, ""), ...noms.map((n) => new Option(n, n)));
-  choixCoupe.value = noms.includes(garde) ? garde : "";
+  // Découpeuse affectée au travail : une machine du catalogue qui découpe.
+  const choixCoupe = form.decoupeuse, garde = choixCoupe.value;
+  const decoupeuses = catalogue.filter((m) => m.modele_decoupe);
+  choixCoupe.replaceChildren(new Option(T().decoupeuse_aucune, ""), ...decoupeuses.map((m) => new Option(m.nom, m.id)));
+  choixCoupe.value = decoupeuses.some((m) => m.id === garde) ? garde : "";
   afficherLateral();
   afficherEditeurMachines();
   derniereEmpreinte = "";
@@ -2778,7 +2875,8 @@ function afficherEditeurMachines() {
     };
     (m.parametres_decoupe || []).forEach((p) => ligneCoupe(p));
     bloc.append(el("div", { className: "ligne bas" }, el("strong", {}, T().coupes_titre), bouton(T().coupe_ajouter, () => ligneCoupe()),
-      el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee)), coupes);
+      el("label", { className: "case", title: T().note_retournee }, el("input", { type: "checkbox", name: "retournee", checked: !!m.decoupe_retournee }), " ", T().retournee),
+      el("label", { className: "case", title: T().note_mono_couche }, el("input", { type: "checkbox", name: "mono_couche", checked: !!m.mono_couche }), " ", T().mono_couche)), coupes);
     if (m.uuid) bloc.dataset.uuid = m.uuid;
     bloc.append(bouton(T().retirer_machine, () => bloc.remove(), "discret danger"));
     lignes.append(bloc);
@@ -2801,7 +2899,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
           // « 8/2 8/2 4/1 » : paires coupé/relevé en mm (virgule décimale acceptée).
           motif_mm: v("c_motif").trim() ? v("c_motif").trim().split(/\s+/).map((x) => x.replace(/,/g, ".").split("/").map(Number)).map(([b, h]) => [b || 0, h || 0]) : [] };
       }).filter((p) => p.nom),
-      decoupe_retournee: b.querySelector("[name=retournee]").checked };
+      decoupe_retournee: b.querySelector("[name=retournee]").checked, mono_couche: b.querySelector("[name=mono_couche]").checked };
   });
   if (await api("/api/machines", json("POST", liste))) { document.activeElement.blur(); dire(T().machines_enregistrees); await chargerMachines(); afficherEditeurMachines(); }
 });

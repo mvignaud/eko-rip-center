@@ -42,11 +42,14 @@ pub struct Sortie {
     pub debut: Option<u64>,
     #[serde(default)]
     pub fin: Option<u64>,
+    /// Découpeuse mono-couche (roadmap 4.3) : la seule couche que la sortie coupe.
+    #[serde(default)]
+    pub couche: Option<String>,
 }
 
 impl Sortie {
     pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None }
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None }
     }
 
     pub fn operation(&self) -> Operation {
@@ -145,7 +148,7 @@ impl File {
             }
             Action::Refaire if !matches!(etat, Etat::EnCours) => {
                 let s = &self.sorties[i];
-                let copie = Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le);
+                let copie = Sortie { couche: s.couche.clone(), ..Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le) };
                 self.sorties.push(copie);
             }
             _ => return Err("action_impossible"),

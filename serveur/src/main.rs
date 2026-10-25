@@ -95,6 +95,10 @@ struct Travail {
     alertes: Vec<controle::Alerte>,
     /// Secondes depuis l'époque Unix.
     cree_le: u64,
+    /// Couches de découpe, dans l'ordre de coupe (roadmap 4.2, 4.3) : tenues à jour à chaque
+    /// rendu, changées seulement par un enregistrement explicite (`/couches`, roadmap 4.4).
+    #[serde(default)]
+    couches_decoupe: Vec<decoupe::Couche>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -109,6 +113,9 @@ struct Page {
     plaques_decoupe: Vec<String>,
     /// Tracés de découpe de la page (0 : rien à découper).
     traces_decoupe: usize,
+    /// Tracés par couche (nom de la couche du travail).
+    #[serde(default)]
+    traces_par_couche: std::collections::BTreeMap<String, usize>,
     /// Surface imprimée de la page, en m² (0 en découpe seule).
     #[serde(default)]
     surface_m2: f64,
@@ -240,6 +247,7 @@ async fn main() {
     std::fs::create_dir_all(config.donnees.join("travaux")).expect("dossier de données");
     std::fs::create_dir_all(&config.profils).expect("dossier des profils");
     reprendre_travaux_interrompus(&config.donnees);
+    decoupe::installer(decoupe::lire(&config.donnees));
 
     let max = config.max_octets;
     let file = file::File::lire(&config.donnees);
@@ -311,6 +319,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
         .route("/api/travaux/{id}/reglages", axum::routing::post(modifier_reglages))
+        .route("/api/travaux/{id}/couches", axum::routing::post(enregistrer_couches))
+        .route("/api/decoupe", get(lire_decoupe).post(enregistrer_decoupe))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
@@ -579,6 +589,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
+            "decoupeuse" => {
+                d.decoupeuse = Some(valeur).filter(|v| !v.is_empty());
+                Ok(())
+            }
             _ => Ok(()),
         };
         if let Err(r) = r {
@@ -654,6 +668,7 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
         pages: vec![],
         alertes,
         cree_le: maintenant(),
+        couches_decoupe: vec![],
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -892,7 +907,16 @@ async fn traiter(etat: Partage, mut t: Travail) {
     };
     match rendu {
         Ok((plaques, mises)) => match preparer_decoupe(&rep, t.format, t.demande.tous_les_traces, &mises).await {
-            Ok(traces) => {
+            Ok(decoupes) => {
+                // Couches : celles connues gardent ordre et réglages, les nouvelles prennent leur rang.
+                for d in &decoupes {
+                    decoupe::accorder(&mut t.couches_decoupe, &decoupe::tons(&d.traces));
+                }
+                let traces: Vec<usize> = decoupes.iter().map(|d| d.traces.len()).collect();
+                let par_couche: Vec<std::collections::BTreeMap<String, usize>> = decoupes.iter().map(|d| t.couches_decoupe.iter().map(|c| (c.nom.clone(), d.traces.iter().filter(|x| decoupe::meme_couche(&x.ton, &c.nom)).count())).filter(|(_, n)| *n > 0).collect()).collect();
+                let fichiers = ecrire_coupes(&rep, &t.couches_decoupe, decoupes.len());
+                t.alertes.retain(|a| !a.code.starts_with("decoupe_"));
+                t.alertes.extend(alertes_decoupe(&rep, &t, traces.iter().sum()).await);
                 // En découpe seule, il n'y a pas de plaques : une page par jeu de tracés.
                 let plaques = plaques.unwrap_or_else(|| vec![vec![]; traces.len()]);
                 let geometrie = geometries(&rep, &t, &mises);
@@ -911,6 +935,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                             plaques_decoupe: plaques.iter().filter(|p| decoupe::est_ton_de_decoupe(p)).cloned().collect(),
                             plaques,
                             traces_decoupe: traces.get(i).copied().unwrap_or(0),
+                            traces_par_couche: par_couche.get(i).cloned().unwrap_or_default(),
                             surface_m2: mesure.surface_m2,
                             couverture: mesure.couverture,
                             largeur_mm: mesure.largeur_mm,
@@ -922,8 +947,13 @@ async fn traiter(etat: Partage, mut t: Travail) {
                         }
                     })
                     .collect();
-                t.statut = Statut::Termine;
-                mettre_en_file_auto(&etat, &t);
+                match fichiers {
+                    Ok(()) => {
+                        t.statut = Statut::Termine;
+                        mettre_en_file_auto(&etat, &t);
+                    }
+                    Err(e) => (t.statut, t.code_erreur, t.erreur) = (Statut::Echec, Some("decoupe_illisible".into()), Some(e.to_string())),
+                }
             }
             Err(e) => {
                 eprintln!("travail {} : {e}", t.id);
@@ -2023,11 +2053,13 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
     }
     // Première machine du catalogue qui imprime ; pour découper, elle-même si elle découpe
     // aussi (imprimante-découpeuse), sinon la première découpeuse.
+    // La découpeuse affectée au travail, si elle est au catalogue.
     let (imprimante, decoupeuse) = {
         let c = etat.machines.read().unwrap();
         let i = c.iter().find(|m| m.fait(machines::Operation::Impression));
-        let d = i.filter(|m| m.fait(machines::Operation::Decoupe)).or_else(|| c.iter().find(|m| m.fait(machines::Operation::Decoupe)));
-        (i.map(|m| m.id.clone()), d.map(|m| m.id.clone()))
+        let choisie = t.demande.decoupeuse.as_ref().and_then(|id| c.iter().find(|m| &m.id == id && m.fait(machines::Operation::Decoupe)));
+        let d = choisie.or_else(|| i.filter(|m| m.fait(machines::Operation::Decoupe))).or_else(|| c.iter().find(|m| m.fait(machines::Operation::Decoupe)));
+        (i.map(|m| m.id.clone()), d.cloned())
     };
     let mut f = etat.file.lock().unwrap();
     for (i, p) in t.pages.iter().enumerate() {
@@ -2042,8 +2074,13 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
         if let (true, Some(m)) = (imprime, &imprimante) {
             ajouter(m, machines::Operation::Impression, a.suspendre);
         }
-        if let (true, Some(m)) = (a.decouper && p.traces_decoupe > 0, &decoupeuse) {
-            ajouter(m, machines::Operation::Decoupe, a.suspendre || imprime);
+        if let (true, Some(m)) = (a.decouper && a_couper(t, p), &decoupeuse) {
+            for mut s in sorties_de_coupe(t, i + 1, p, &m.id, m) {
+                if a.suspendre || imprime {
+                    s.etat = file::Etat::Suspendue;
+                }
+                f.sorties.push(s);
+            }
         }
     }
     if let Err(e) = f.ecrire(&etat.config.donnees) {
@@ -2127,10 +2164,20 @@ fn fichier_svg(rep: &std::path::Path, page: usize) -> PathBuf {
     rep.join("apercu").join(format!("decoupe-{page:03}.svg"))
 }
 
+/// Tracés de la page après repérage (`prod/decoupe-NNN.json`) : la source des fichiers de
+/// coupe, refaits à chaque changement de couches sans refaire le rendu.
+fn fichier_traces(rep: &std::path::Path, page: usize) -> PathBuf {
+    rep.join("prod").join(format!("decoupe-{page:03}.json"))
+}
+
+fn lire_traces(rep: &std::path::Path, page: usize) -> Option<Vec<decoupe::Trace>> {
+    serde_json::from_slice(&std::fs::read(fichier_traces(rep, page)).ok()?).ok()
+}
+
 /// Extrait les tracés à découper de chaque page ; pour une page qui en a, écrit
-/// `prod/decoupe-NNN.plt` (HP-GL) et `apercu/decoupe-NNN.svg`. Avec un repérage, les
-/// tracés suivent le décalage de leur page. Rend le nombre de tracés par page.
-async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mises: &[reperage::Mise]) -> Result<Vec<usize>, String> {
+/// `prod/decoupe-NNN.json` (tracés) et `apercu/decoupe-NNN.svg`. Avec un repérage, les
+/// tracés suivent le décalage de leur page. Le `.plt` suit, une fois les couches connues.
+async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mises: &[reperage::Mise]) -> Result<Vec<decoupe::Decoupe>, String> {
     let source = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| e.to_string())?;
     let mut pages = tokio::task::spawn_blocking(move || match format {
         Format::Pdf => decoupe::extraire(&source, tous),
@@ -2146,11 +2193,81 @@ async fn preparer_decoupe(rep: &std::path::Path, format: Format, tous: bool, mis
             d.decaler(m.decalage, m.page);
         }
         if !d.traces.is_empty() {
-            tokio::fs::write(fichier_plt(rep, i + 1), decoupe::hpgl(&d.traces)).await.map_err(|e| e.to_string())?;
+            tokio::fs::write(fichier_traces(rep, i + 1), serde_json::to_vec(&d.traces).map_err(|e| e.to_string())?).await.map_err(|e| e.to_string())?;
             tokio::fs::write(fichier_svg(rep, i + 1), decoupe::apercu_svg(d)).await.map_err(|e| e.to_string())?;
         }
     }
-    Ok(pages.iter().map(|d| d.traces.len()).collect())
+    Ok(pages)
+}
+
+/// `prod/decoupe-NNN.plt` de chaque page qui a des tracés : couches actives dans leur ordre.
+fn ecrire_coupes(rep: &std::path::Path, couches: &[decoupe::Couche], pages: usize) -> std::io::Result<()> {
+    for n in 1..=pages {
+        if let Some(traces) = lire_traces(rep, n) {
+            machines::ecrire_atomique(&fichier_plt(rep, n), decoupe::hpgl(&traces, couches).as_bytes()).map_err(std::io::Error::other)?;
+        }
+    }
+    Ok(())
+}
+
+/// Contrôle préalable de la découpe (roadmap 4.5), sur le fichier tel que reçu (avant
+/// édition, mosaïque, étiquettes : ce que le RIP ajoute n'est pas un défaut du fichier).
+async fn alertes_decoupe(rep: &std::path::Path, t: &Travail, traces: usize) -> Vec<controle::Alerte> {
+    let mut alertes = vec![];
+    let original = [rep.join("source-original.pdf"), rep.join(Format::Pdf.fichier())].into_iter().find(|c| c.exists());
+    let pdf = match (t.format, original) {
+        (Format::Pdf, Some(c)) => tokio::fs::read(c).await.ok(),
+        _ => None,
+    };
+    if let Some(pdf) = pdf.clone().filter(|_| !t.demande.tous_les_traces) {
+        let r = decoupe::reglages();
+        let pages = tokio::task::spawn_blocking(move || decoupe::extraire_avec(&pdf, false, &r)).await.ok().and_then(Result::ok).unwrap_or_default();
+        for (i, d) in pages.into_iter().enumerate() {
+            alertes.extend(d.signaux.into_iter().map(|(code, detail)| controle::Alerte { code: code.into(), page: Some(i + 1), detail }));
+        }
+    }
+    // Une découpeuse est choisie, mais rien n'est reconnu : un préfixe manque ou est mal placé.
+    if traces == 0 && !t.demande.tous_les_traces && (t.demande.decoupeuse.is_some() || t.demande.auto.decouper) {
+        let tons = pdf.map(|p| decoupe::tons_du_pdf(&p)).unwrap_or_default();
+        alertes.push(controle::Alerte { code: "decoupe_sans_prefixe".into(), page: None, detail: if tons.is_empty() { "—".into() } else { tons.join(", ") } });
+    }
+    alertes
+}
+
+/// Couches actives qui ont des tracés sur la page, dans l'ordre de coupe.
+fn couches_a_couper(t: &Travail, p: &Page) -> Vec<String> {
+    t.couches_decoupe.iter().filter(|c| c.active && p.traces_par_couche.get(&c.nom).is_some_and(|n| *n > 0)).map(|c| c.nom.clone()).collect()
+}
+
+/// Quelque chose à découper sur la page (travaux d'avant les couches : ses tracés).
+fn a_couper(t: &Travail, p: &Page) -> bool {
+    if t.couches_decoupe.is_empty() { p.traces_decoupe > 0 } else { !couches_a_couper(t, p).is_empty() }
+}
+
+/// Sorties de découpe d'une page : une seule, ou une par couche sur une découpeuse
+/// mono-couche, la première prête et les suivantes retenues (changer d'outil ou de réglage
+/// avant de les libérer).
+fn sorties_de_coupe(t: &Travail, n: usize, p: &Page, cible: &str, m: &machines::Machine) -> Vec<file::Sortie> {
+    let une = |couche: Option<String>| file::Sortie { couche, ..file::Sortie::nouvelle(cible, machines::Operation::Decoupe, t.id, &t.nom, n, maintenant()) };
+    if !m.mono_couche || t.couches_decoupe.is_empty() {
+        return vec![une(None)];
+    }
+    couches_a_couper(t, p)
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| file::Sortie { etat: if i == 0 { file::Etat::EnAttente } else { file::Etat::Suspendue }, ..une(Some(c)) })
+        .collect()
+}
+
+/// Découpeuse prête pour ce travail : elle découpe, sa connexion est valable, et chaque
+/// couche active trouve son réglage.
+fn decoupeuse_utilisable(t: &Travail, m: &machines::Machine) -> bool {
+    m.fait(machines::Operation::Decoupe) && m.joignable().is_ok() && t.couches_decoupe.iter().filter(|c| c.active).all(|c| m.reglage_couche(c).is_ok())
+}
+
+/// Découpeuse affectée à la page : celle du travail, sinon celle de sa dernière découpe en file.
+fn decoupeuse_affectee(t: &Travail, n: usize, sorties: &[file::Sortie]) -> Option<String> {
+    t.demande.decoupeuse.clone().or_else(|| sorties.iter().rev().find(|s| s.travail == t.id && s.page == n && s.active() && s.operation() == machines::Operation::Decoupe).map(|s| s.machine.clone()))
 }
 
 fn actif(s: &Statut) -> bool {
@@ -2167,7 +2284,7 @@ fn effacer_sorties(donnees: &std::path::Path, id: Uuid) {
     for rep in std::fs::read_dir(donnees.join("sorties")).into_iter().flatten().flatten() {
         for e in std::fs::read_dir(rep.path()).into_iter().flatten().flatten() {
             if e.file_name().to_string_lossy().starts_with(&id.to_string()) {
-                let _ = std::fs::remove_dir_all(e.path());
+                let _ = if e.path().is_dir() { std::fs::remove_dir_all(e.path()) } else { std::fs::remove_file(e.path()) };
             }
         }
     }
@@ -2234,6 +2351,47 @@ async fn modifier_reglages(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>
     reconstruire(&etat, t).await
 }
 
+/// Couches de découpe d'un travail rendu (roadmap 4.2 à 4.4) : ordre de coupe, couche
+/// active ou non, réglage choisi. Enregistrées explicitement dans `job.json` (écriture sûre),
+/// puis les fichiers de coupe sont refaits sans nouveau rendu. Les mêmes couches seulement :
+/// aucune ne se crée ni ne se perd ici.
+async fn enregistrer_couches(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, Json(couches): Json<Vec<decoupe::Couche>>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some(mut t) = lire_travail(donnees, id) else { return refus(StatusCode::NOT_FOUND, "introuvable", None) };
+    let coupe_en_cours = etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == id && s.etat == file::Etat::EnCours && s.operation() == machines::Operation::Decoupe);
+    if actif(&t.statut) || coupe_en_cours {
+        return refus(StatusCode::CONFLICT, "travail_occupe", None);
+    }
+    let memes = couches.len() == t.couches_decoupe.len() && t.couches_decoupe.iter().all(|c| couches.iter().filter(|x| x.nom == c.nom).count() == 1);
+    if !memes || couches.iter().any(|c| c.reglage.as_ref().is_some_and(|r| r.trim().is_empty() || r.chars().count() > 40)) {
+        return refus(StatusCode::BAD_REQUEST, "couches_invalides", None);
+    }
+    t.couches_decoupe = couches;
+    let rep = dossier(donnees, id);
+    if let Err(e) = ecrire(donnees, &t).and_then(|()| ecrire_coupes(&rep, &t.couches_decoupe, t.pages.len())) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    Json(t).into_response()
+}
+
+/// Réglages de découpe du serveur : préfixes des tons, calques non imprimables.
+async fn lire_decoupe() -> Json<decoupe::Reglages> {
+    Json(decoupe::reglages())
+}
+
+/// Nouveaux réglages de découpe, pris par les rendus suivants (un travail rendu se relance).
+async fn enregistrer_decoupe(State(etat): State<Partage>, Json(r): Json<decoupe::Reglages>) -> Response {
+    let r = decoupe::Reglages { prefixes: r.prefixes.iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).collect(), ..r };
+    if let Err(code) = r.verifier() {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    if let Err(e) = decoupe::ecrire(&etat.config.donnees, &r) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
+    }
+    decoupe::installer(r.clone());
+    Json(r).into_response()
+}
+
 /// Source refaite depuis l'original (rotation automatique comprise), puis nouveau rendu.
 async fn reconstruire(etat: &Partage, mut t: Travail) -> Response {
     let infos = infos_travail(etat, t.id, &t.nom, &t.demande);
@@ -2282,7 +2440,7 @@ fn lire_page(donnees: &std::path::Path, id: Uuid, page: usize) -> Option<(Travai
 /// La file, chaque impression avec sa durée estimée (minutes, sur sa machine).
 /// Pourquoi une sortie ne part pas (roadmap 0.4) ; `None` : elle partira à son tour.
 /// Hors `attente_operateur`, la sortie est retenue tant que la raison dure.
-fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machines::Machine>, charge: Option<&supports::Charge>) -> Option<&'static str> {
+fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machines::Machine>, charge: Option<&supports::Charge>, sorties: &[file::Sortie], catalogue: &[machines::Machine]) -> Option<&'static str> {
     match s.etat {
         file::Etat::Suspendue => return Some("attente_operateur"),
         file::Etat::EnAttente => {}
@@ -2295,8 +2453,19 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
         return Some("machine_hors_ligne");
     }
     let Some((t, p)) = lire_page(donnees, s.travail, s.page) else { return Some("source_absente") };
-    if s.operation() == machines::Operation::Decoupe && !fichier_plt(&dossier(donnees, s.travail), s.page).exists() {
-        return Some("source_absente");
+    if s.operation() == machines::Operation::Decoupe {
+        if !fichier_traces(&dossier(donnees, s.travail), s.page).exists() {
+            return Some("source_absente");
+        }
+        // Coupe seulement sur une impression finie à 100 % (roadmap 4.6) : la dernière
+        // impression de la page doit être terminée (ou annulée : imprimée ailleurs).
+        let impression = sorties.iter().rev().find(|x| x.travail == s.travail && x.page == s.page && x.operation() == machines::Operation::Impression);
+        if impression.is_some_and(|x| !matches!(x.etat, file::Etat::Terminee | file::Etat::Annulee)) {
+            return Some("attente_impression");
+        }
+        if !decoupeuse_utilisable(&t, m) {
+            return Some("decoupeuse_indisponible");
+        }
     }
     // Impression : le support chargé (connu) doit être celui du travail (roadmap 1.4) ; la
     // sortie part d'elle-même dès qu'il l'est, on ne la force pas à la main.
@@ -2306,6 +2475,20 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
         && voulu != charge
     {
         return Some("attente_support");
+    }
+    // Pré-contrôle de la découpe (roadmap 4.16, Caldera C1) : pas d'encre sur un travail que
+    // sa découpeuse ne pourra pas couper (absente, hors ligne, connexion ou réglage manquant).
+    if impression
+        && a_couper(&t, &p)
+        && let Some(id) = decoupeuse_affectee(&t, s.page, sorties)
+    {
+        let candidates: Vec<&machines::Machine> = match catalogue.iter().find(|x| x.id == id) {
+            Some(x) => vec![x],
+            None => machines::membres(catalogue, &id),
+        };
+        if !candidates.iter().any(|x| decoupeuse_utilisable(&t, x)) {
+            return Some("decoupeuse_indisponible");
+        }
     }
     // Page (repères compris) plus large que la laize utile, ou que le rouleau chargé.
     let laize = charge.filter(|_| impression).and_then(|c| c.laize_mm).map_or(m.laize_mm, |l| l.min(m.laize_mm));
@@ -2317,6 +2500,7 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
 
 async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
     let sorties = etat.file.lock().unwrap().sorties.clone();
+    let tout = sorties.clone();
     let catalogue = etat.machines.read().unwrap().clone();
     let donnees = etat.config.donnees.clone();
     let charges = supports::lire_charges(&donnees);
@@ -2332,11 +2516,11 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
                 let raison = match catalogue.iter().find(|m| m.id == s.machine) {
-                    Some(m) => raison_attente(&donnees, &s, Some(m), charges.get(&m.id)),
+                    Some(m) => raison_attente(&donnees, &s, Some(m), charges.get(&m.id), &tout, &catalogue),
                     // Envoyée à un pool : en attente seulement si aucun membre ne peut la prendre.
                     None => {
-                        let raisons: Vec<_> = machines::membres(&catalogue, &s.machine).iter().map(|m| raison_attente(&donnees, &s, Some(m), charges.get(&m.id))).collect();
-                        if raisons.is_empty() { raison_attente(&donnees, &s, None, None) } else if raisons.contains(&None) { None } else { raisons[0] }
+                        let raisons: Vec<_> = machines::membres(&catalogue, &s.machine).iter().map(|m| raison_attente(&donnees, &s, Some(m), charges.get(&m.id), &tout, &catalogue)).collect();
+                        if raisons.is_empty() { raison_attente(&donnees, &s, None, None, &tout, &catalogue) } else if raisons.contains(&None) { None } else { raisons[0] }
                     }
                 };
                 v["raison_attente"] = serde_json::json!(raison);
@@ -2396,7 +2580,7 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         return refus(StatusCode::CONFLICT, "operation_impossible", None);
     }
     match operation {
-        Decoupe if p.traces_decoupe == 0 => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
+        Decoupe if !a_couper(&t, &p) => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
         Impression if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
         Impression if m.modele == machines::Modele::EpsonScS80600 => {
             // Le pilote direct (réseau) n'a pas encore le blanc ni l'argent ; le dossier, si.
@@ -2408,10 +2592,13 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         _ => {}
     }
     let cible = if membres.is_empty() { m.id.clone() } else { d.machine.clone() };
-    let s = file::Sortie::nouvelle(&cible, operation, t.id, &t.nom, d.page, maintenant());
-    let rendu = s.clone();
+    let nouvelles = match operation {
+        Decoupe => sorties_de_coupe(&t, d.page, &p, &cible, &m),
+        Impression => vec![file::Sortie::nouvelle(&cible, operation, t.id, &t.nom, d.page, maintenant())],
+    };
+    let rendu = nouvelles[0].clone();
     match modifier_file(&etat, |f| {
-        f.sorties.push(s);
+        f.sorties.extend(nouvelles);
         Ok(())
     }) {
         Ok(()) => (StatusCode::CREATED, Json(rendu)).into_response(),
@@ -2442,10 +2629,11 @@ async fn repartir(etat: Partage) {
         for id in ids {
             let suivante = {
                 let mut f = etat.file.lock().unwrap();
-                let m = etat.machines.read().unwrap().iter().find(|m| m.id == id).cloned();
+                let catalogue = etat.machines.read().unwrap().clone();
+                let m = catalogue.iter().find(|m| m.id == id).cloned();
                 let charge = supports::lire_charges(&etat.config.donnees).remove(&id);
                 let pool = m.as_ref().and_then(|m| m.pool.clone());
-                f.prochaine_dans(&id, pool.as_deref(), |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref()).is_none()).map(|i| {
+                f.prochaine_dans(&id, pool.as_deref(), |s| raison_attente(&etat.config.donnees, s, m.as_ref(), charge.as_ref(), &f.sorties, &catalogue).is_none()).map(|i| {
                     let s = &mut f.sorties[i];
                     // Envoyée au pool : elle revient à la machine qui la prend.
                     s.machine = id.clone();
@@ -2571,14 +2759,23 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
 /// Tête vide en début de page sur l'Epson (mm), avant l'origine Y de la machine.
 const TETE_EPSON_MM: f64 = 20.0;
 
-/// Découpe : le HP-GL du rendu (0,01 mm) passé au pas de la machine, par sa connexion ;
-/// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
+/// Découpe : les couches de la page (ou la seule de la sortie) au pas de la machine, par
+/// sa connexion ; pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en
+/// a un). Sans connexion (dossier), le fichier est déposé d'un coup dans
+/// `sorties/<machine>/` : un logiciel de découpe qui surveille le dossier ne lit jamais un
+/// fichier à moitié écrit (roadmap 4.6).
 async fn envoyer_la_decoupe(etat: &Etat, s: &file::Sortie, m: machines::Machine) -> Result<(), String> {
-    let plt = fichier_plt(&dossier(&etat.config.donnees, s.travail), s.page);
-    let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
-    tokio::task::spawn_blocking(move || {
-        let texte = std::fs::read_to_string(&plt).map_err(|e| format!("lecture de {} : {e}", plt.display()))?;
-        machines::envoyer(&m.connexion, pour_la_machine(&texte, &t, &p, &m).as_bytes())
+    let donnees = &etat.config.donnees;
+    let (t, p) = lire_page(donnees, s.travail, s.page).ok_or("travail ou page disparu")?;
+    let traces = lire_traces(&dossier(donnees, s.travail), s.page).ok_or("tracés de la page introuvables")?;
+    let texte = pour_la_machine(&traces, &t, &p, &m, s.couche.as_deref())?;
+    let depot = (m.connexion == machines::Connexion::Dossier).then(|| donnees.join("sorties").join(&m.id).join(format!("{}-p{}-{}.plt", s.travail, s.page, s.id)));
+    tokio::task::spawn_blocking(move || match depot {
+        Some(chemin) => {
+            std::fs::create_dir_all(chemin.parent().unwrap()).map_err(|e| e.to_string())?;
+            machines::ecrire_atomique(&chemin, texte.as_bytes())
+        }
+        None => machines::envoyer(&m.connexion, texte.as_bytes()),
     })
     .await
     .unwrap_or_else(|e| Err(e.to_string()))
@@ -2632,20 +2829,26 @@ async fn apercu_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin<
     }
 }
 
-/// HP-GL du rendu (0,01 mm) tel que la machine le reçoit : au pas de la machine, décalé ;
-/// pour le Kona, mis en forme comme par CutServer (lecture du cadre s'il y en a un).
-fn pour_la_machine(hpgl: &str, t: &Travail, p: &Page, m: &machines::Machine) -> String {
-    let reglage = t.demande.parametre_decoupe.as_ref().and_then(|n| m.parametres_decoupe.iter().find(|x| &x.nom == n)).or(m.parametres_decoupe.first());
-    let mut texte = machines::changer_de_pas(hpgl, m.pas_mm(), m.decalage_mm);
-    if let Some(r) = reglage.filter(|r| !r.motif_mm.is_empty()) {
-        let motif: Vec<[f64; 2]> = r.motif_mm.iter().map(|p| p.map(|v| v / m.pas_mm())).collect();
-        texte = machines::pointiller(&texte, &motif, r.diffusion);
+/// HP-GL tel que la machine le reçoit : les couches actives dans leur ordre (ou la seule
+/// couche `seule`), au pas de la machine, décalées, chacune avec son réglage de coupe (motif ;
+/// pour le Kona, `AS`/`ZF`/`VS` après son `SP`, lecture du cadre s'il y en a un).
+/// `Err` : un réglage choisi pour une couche n'existe pas sur la machine.
+fn pour_la_machine(traces: &[decoupe::Trace], t: &Travail, p: &Page, m: &machines::Machine, seule: Option<&str>) -> Result<String, String> {
+    let mut parties = vec![];
+    for (c, bloc) in decoupe::blocs(traces, &t.couches_decoupe).into_iter().filter(|(c, _)| seule.is_none_or(|n| decoupe::meme_couche(n, &c.nom))) {
+        let reglage = m.reglage_couche(&c).map_err(|n| format!("couche « {} » : réglage « {n} » absent de {}", c.nom, m.nom))?;
+        let mut texte = machines::changer_de_pas(&bloc, m.pas_mm(), m.decalage_mm);
+        if let Some(r) = reglage.filter(|r| !r.motif_mm.is_empty()) {
+            let motif: Vec<[f64; 2]> = r.motif_mm.iter().map(|p| p.map(|v| v / m.pas_mm())).collect();
+            texte = machines::pointiller(&texte, &motif, r.diffusion);
+        }
+        parties.push((texte, reglage));
     }
     if m.modele != machines::Modele::MutohKona {
-        return texte;
+        return Ok(format!("IN;{}PU;SP0;", parties.into_iter().map(|(texte, _)| texte).collect::<String>()));
     }
     let u = |v: f64| (v * 100.0 * 25.4 / 72.0).round() as i64;
-    machines::pour_kona(&texte, p.cadre_pt.map(|c| c.map(u)), reglage, m.decoupe_retournee)
+    Ok(machines::pour_kona(&parties, p.cadre_pt.map(|c| c.map(u)), m.decoupe_retournee))
 }
 
 #[derive(Deserialize)]
@@ -2669,8 +2872,12 @@ async fn fichier_decoupe(State(etat): State<Partage>, Chemin((id, page)): Chemin
     };
     match servir(&etat.config.donnees, id, page, |rep, _| Some(fichier_plt(rep, page))).await {
         Some(o) => {
-            let o = match (&machine, lire_page(&etat.config.donnees, id, page)) {
-                (Some(m), Some((t, p))) => pour_la_machine(&String::from_utf8_lossy(&o), &t, &p, m).into_bytes(),
+            let rep = dossier(&etat.config.donnees, id);
+            let o = match (&machine, lire_page(&etat.config.donnees, id, page), lire_traces(&rep, page)) {
+                (Some(m), Some((t, p)), Some(traces)) => match pour_la_machine(&traces, &t, &p, m, None) {
+                    Ok(texte) => texte.into_bytes(),
+                    Err(e) => return refus(StatusCode::CONFLICT, "decoupeuse_indisponible", Some(e)),
+                },
                 _ => o,
             };
             let nom = format!("attachment; filename=\"{}\"", cutserver.unwrap_or_else(|| format!("decoupe-{page:03}.plt")));
@@ -2722,6 +2929,7 @@ mod tests {
             pages: vec![],
             alertes: vec![],
             cree_le: 100 * jour - age_jours * jour,
+            couches_decoupe: vec![],
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -2741,7 +2949,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs"), include_str!("decoupe.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -3034,23 +3242,23 @@ mod tests {
             let present = d.join("port-present");
             std::fs::write(&present, b"").unwrap();
             let p = present.to_str().unwrap();
-            assert_eq!(raison_attente(&d, &s, None, None), Some("machine_hors_ligne"), "machine absente du catalogue");
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, "/dev/inexistant")), None), Some("machine_hors_ligne"));
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), Some("source_absente"), "pas de tracé");
-            std::fs::write(fichier_plt(&rep, 1), b"IN;").unwrap();
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), None);
-            assert_eq!(raison_attente(&d, &s, Some(&m(400.0, p)), None), Some("format_trop_petit"));
+            assert_eq!(raison_attente(&d, &s, None, None, &[], &[]), Some("machine_hors_ligne"), "machine absente du catalogue");
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, "/dev/inexistant")), None, &[], &[]), Some("machine_hors_ligne"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None, &[], &[]), Some("source_absente"), "pas de tracé");
+            std::fs::write(fichier_traces(&rep, 1), b"[]").unwrap();
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None, &[], &[]), None);
+            assert_eq!(raison_attente(&d, &s, Some(&m(400.0, p)), None, &[], &[]), Some("format_trop_petit"));
             s.etat = file::Etat::Suspendue;
-            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None), Some("attente_operateur"));
+            assert_eq!(raison_attente(&d, &s, Some(&m(1650.0, p)), None, &[], &[]), Some("attente_operateur"));
             s.etat = file::Etat::Terminee;
-            assert_eq!(raison_attente(&d, &s, None, None), None, "une sortie finie n'attend rien");
+            assert_eq!(raison_attente(&d, &s, None, None, &[], &[]), None, "une sortie finie n'attend rien");
             let mut f = file::File::default();
             let mut bloquee = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, Uuid::new_v4(), "absente", 1, 0);
             bloquee.etat = file::Etat::EnAttente;
             let prete = file::Sortie::nouvelle("kona", machines::Operation::Decoupe, id, "essai", 1, 0);
             f.sorties = vec![bloquee, prete];
             let machine = m(1650.0, p);
-            assert_eq!(f.prochaine_si("kona", |x| raison_attente(&d, x, Some(&machine), None).is_none()), Some(1), "la bloquée garde sa place, la suivante part");
+            assert_eq!(f.prochaine_si("kona", |x| raison_attente(&d, x, Some(&machine), None, &[], &[]).is_none()), Some(1), "la bloquée garde sa place, la suivante part");
             // Attente de support (roadmap 1.4) : impression d'un travail sur le support A.
             let (a, b) = (Uuid::new_v4(), Uuid::new_v4());
             let mut tr = lire_travail(&d, id).unwrap();
@@ -3059,10 +3267,10 @@ mod tests {
             let epson = machines::Machine { connexion: machines::Connexion::Dossier, ..m(1650.0, p) };
             let imp = file::Sortie::nouvelle("epson", machines::Operation::Impression, id, "essai", 1, 0);
             let charge = |u: Uuid, laize: Option<f64>| supports::Charge { support_uuid: Some(u), laize_mm: laize, source: "machine".into(), le: 0 };
-            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(b, None))), Some("attente_support"), "B chargé, A voulu");
-            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, None))), None, "A chargé : elle part");
-            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, Some(400.0)))), Some("format_trop_petit"), "rouleau chargé de 400 mm pour une page de 500");
-            assert_eq!(raison_attente(&d, &imp, Some(&epson), None), None, "support chargé inconnu : on n'arrête pas l'atelier");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(b, None)), &[], &[]), Some("attente_support"), "B chargé, A voulu");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, None)), &[], &[]), None, "A chargé : elle part");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), Some(&charge(a, Some(400.0))), &[], &[]), Some("format_trop_petit"), "rouleau chargé de 400 mm pour une page de 500");
+            assert_eq!(raison_attente(&d, &imp, Some(&epson), None, &[], &[]), None, "support chargé inconnu : on n'arrête pas l'atelier");
             std::fs::remove_dir_all(&d).unwrap();
         }
 
@@ -3315,6 +3523,7 @@ mod tests {
                 pages: vec![Page { plaques: vec!["Cyan".into(), "CutContour".into()], plaques_decoupe: vec!["CutContour".into()], ..Default::default() }],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -3375,6 +3584,7 @@ mod tests {
                 pages: vec![],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3423,6 +3633,7 @@ mod tests {
                 parametres_decoupe: vec![],
                 decoupe_retournee: false,
                 pool: None,
+                mono_couche: false,
             });
             let r = appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await;
             assert_eq!(r.status(), StatusCode::OK);
@@ -3439,10 +3650,12 @@ mod tests {
                 pages: vec![Page { traces_decoupe: 1, plaques: vec!["Cyan".into()], ..Default::default() }],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
-            std::fs::write(fichier_plt(&rep, 1), "IN;SP1;PU0,0;PD2540,0;PU;SP0;").unwrap();
+            let trait_ = vec![decoupe::Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (72.0, 0.0)], ferme: false }];
+            std::fs::write(fichier_traces(&rep, 1), serde_json::to_vec(&trait_).unwrap()).unwrap();
             ecrire(&donnees, &t).unwrap();
             let refus_epson = serde_json::json!({ "travail": t.id, "page": 1, "machine": "epson", "operation": "decoupe" });
             assert_eq!(appel(&e, "POST", "/api/file", None, Some(refus_epson)).await.status(), StatusCode::CONFLICT);
@@ -3483,6 +3696,7 @@ mod tests {
                 pages: vec![Page::default()],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3599,6 +3813,7 @@ mod tests {
                 pages: vec![],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3656,6 +3871,7 @@ mod tests {
                 pages: vec![],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -3692,6 +3908,7 @@ mod tests {
                 pages: vec![],
                 alertes: vec![],
                 cree_le: maintenant(),
+                couches_decoupe: vec![],
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -4615,6 +4832,237 @@ mod tests {
             assert!(neutre.neutre(), "le filtre ne touche pas au PDF");
             let mauvais = Demande { edition: edition::Edition { filtre: Some(filtre::Filtre { saturation: 150.0, ..Default::default() }), ..Default::default() }, ..Default::default() };
             assert_eq!(mauvais.verifier(&[]), Err("filtre_invalide"));
+        }
+    }
+
+    /// Couches de découpe, préfixes, coupe après impression, pré-contrôle (roadmap 4.1 à
+    /// 4.6, 4.16).
+    mod couches_decoupe {
+        use super::controle_d_acces::{appel, etat};
+        use super::regression_geometrie::rendre;
+        use super::*;
+        use lopdf::{Document, Object, Stream, dictionary};
+
+        /// PDF 600 × 300 pt : un carré de 100 pt par ton, le i-ième en x = 50 + 150·i, y = 50.
+        fn pdf_tons(tons: &[&str]) -> Vec<u8> {
+            let mut doc = Document::with_version("1.4");
+            let mut espaces = lopdf::Dictionary::new();
+            let mut contenu = String::new();
+            for (i, ton) in tons.iter().enumerate() {
+                espaces.set(format!("CS{i}"), Object::Array(vec!["Separation".into(), Object::Name(ton.as_bytes().to_vec()), "DeviceCMYK".into(), Object::Dictionary(dictionary! { "FunctionType" => 2, "Domain" => vec![0.into(), 1.into()], "C0" => vec![0.into(); 4], "C1" => vec![0.into(), 1.into(), 0.into(), 0.into()], "N" => 1 })]));
+                contenu += &format!("/CS{i} CS 1 SCN {} 50 100 100 re S ", 50 + 150 * i);
+            }
+            let c = doc.add_object(Stream::new(dictionary! {}, contenu.into_bytes()));
+            let parent = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), 600.into(), 300.into()], "Contents" => c, "Resources" => dictionary! { "ColorSpace" => espaces } });
+            doc.objects.insert(parent, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => parent });
+            doc.trailer.set("Root", cat);
+            let mut o = vec![];
+            doc.save_to(&mut o).unwrap();
+            o
+        }
+
+        /// Le serveur relu depuis son dossier de données, comme après un redémarrage.
+        fn redemarrer(e: &Partage) -> Partage {
+            let machines = machines::lire(&e.config.donnees).unwrap_or_else(|| e.machines.read().unwrap().clone());
+            Arc::new(Etat { config: e.config.clone(), rendu: Semaphore::new(1), file: std::sync::Mutex::new(file::File::lire(&e.config.donnees)), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(machines) })
+        }
+
+        async fn json(r: Response) -> serde_json::Value {
+            serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 22).await.unwrap()).unwrap()
+        }
+
+        fn reglage(nom: &str, force_g: f64) -> machines::ParametreDecoupe {
+            machines::ParametreDecoupe { uuid: None, nom: nom.into(), vitesse_cm_s: 15.0, force_g, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false }
+        }
+
+        fn noms(t: &Travail) -> Vec<(String, bool)> {
+            t.couches_decoupe.iter().map(|c| (c.nom.clone(), c.active)).collect()
+        }
+
+        /// 4.2 à 4.4 : PDF à deux tons → deux couches ; réglage « Kisscut » appliqué à la
+        /// couche Kisscut, défaut machine à l'autre, un bloc AS/ZF/VS par couche ; ordre
+        /// inversé et couche décochée enregistrés, gardés au redémarrage et au rendu suivant.
+        #[tokio::test]
+        async fn deux_tons_deux_couches_reglees_et_gardees() {
+            let e = etat("couches");
+            let t = rendre(&e, pdf_tons(&["Thrucut", "Kisscut"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            assert_eq!(noms(&t), [("Kisscut".into(), true), ("Thrucut".into(), true)], "mi-chair d'abord");
+            assert_eq!(t.pages[0].traces_par_couche, std::collections::BTreeMap::from([("Kisscut".into(), 1), ("Thrucut".into(), 1)]));
+            let rep = dossier(&e.config.donnees, t.id);
+            let traces = lire_traces(&rep, 1).unwrap();
+            let mut kona = e.machines.read().unwrap()[1].clone();
+            kona.parametres_decoupe = vec![reglage("Défaut atelier", 50.0), reglage("Kisscut", 100.0)];
+            let k = pour_la_machine(&traces, &t, &t.pages[0], &kona, None).unwrap();
+            // Kona : X = y, Y = −x ; Kisscut en x = 200 pt (7056), Thrucut en x = 50 pt (1764).
+            let ou = |motif: &str| k.find(motif).unwrap_or_else(|| panic!("{motif} absent : {k}"));
+            assert_eq!(k.matches("AS 1.0;").count(), 2, "un bloc de réglages par couche : {k}");
+            assert!(ou("ZF 100;") < ou("PU1764,-7056;") && ou("PU1764,-7056;") < ou("ZF 50;") && ou("ZF 50;") < ou("PU1764,-1764;"), "{k}");
+            // Réglage choisi à la main mais absent de la machine : refusé, pas remplacé en silence.
+            let mut choisi = t.clone();
+            choisi.couches_decoupe[1].reglage = Some("Inexistant".into());
+            assert!(pour_la_machine(&traces, &choisi, &t.pages[0], &kona, None).is_err());
+
+            // Thrucut d'abord, Kisscut décochée : enregistré, fichier de coupe refait.
+            let mut couches = t.couches_decoupe.clone();
+            couches.reverse();
+            couches[1].active = false;
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/couches", t.id), None, Some(serde_json::to_value(&couches).unwrap())).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let plt = std::fs::read_to_string(fichier_plt(&rep, 1)).unwrap();
+            assert!(plt.contains("PU1764,1764;") && !plt.contains("PU7056,1764;"), "{plt}");
+            let mut fausse = couches.clone();
+            fausse[0].nom = "Inventée".into();
+            let r = appel(&e, "POST", &format!("/api/travaux/{}/couches", t.id), None, Some(serde_json::to_value(&fausse).unwrap())).await;
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            assert_eq!(json(r).await["code"], "couches_invalides");
+
+            // Redémarrage : relu du disque, rien de perdu.
+            let e2 = redemarrer(&e);
+            let liste = json(appel(&e2, "GET", "/api/travaux", None, None).await).await;
+            let lu = liste.as_array().unwrap().iter().find(|x| x["id"] == serde_json::json!(t.id)).unwrap();
+            assert_eq!(serde_json::from_value::<Vec<decoupe::Couche>>(lu["couches_decoupe"].clone()).unwrap(), couches);
+            // Rendu refait : les choix restent.
+            assert_eq!(appel(&e2, "POST", &format!("/api/travaux/{}/relancer", t.id), None, None).await.status(), StatusCode::ACCEPTED);
+            for _ in 0..200 {
+                if lire_travail(&e2.config.donnees, t.id).is_some_and(|x| !actif(&x.statut)) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!(lire_travail(&e2.config.donnees, t.id).unwrap().couches_decoupe, couches);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Travail rendu à la main : une page, un tracé CutContour, découpeuse « fc7000 ».
+        fn travail_a_couper(d: &std::path::Path) -> Travail {
+            let t = Travail {
+                id: Uuid::new_v4(),
+                nom: "essai.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { decoupeuse: Some("fc7000".into()), ..Default::default() },
+                statut: Statut::Termine,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![Page { plaques: vec!["Cyan".into()], traces_decoupe: 1, traces_par_couche: [("CutContour".to_string(), 1)].into(), largeur_mm: 100.0, ..Default::default() }],
+                alertes: vec![],
+                cree_le: 0,
+                couches_decoupe: vec![decoupe::Couche { nom: "CutContour".into(), active: true, reglage: None }],
+            };
+            let rep = dossier(d, t.id);
+            std::fs::create_dir_all(rep.join("prod")).unwrap();
+            std::fs::write(fichier_traces(&rep, 1), serde_json::to_vec(&vec![decoupe::Trace { ton: "CutContour".into(), points: vec![(0.0, 0.0), (72.0, 0.0)], ferme: false }]).unwrap()).unwrap();
+            ecrire(d, &t).unwrap();
+            t
+        }
+
+        /// 4.16 : découpeuse affectée absente, mal connectée ou sans réglage → l'impression est
+        /// retenue avant tout envoi ; rétablie → elle part. 4.6 : la coupe attend l'impression
+        /// terminée.
+        #[test]
+        fn impression_retenue_puis_coupe_apres_impression() {
+            let e = etat("precontrole");
+            let d = e.config.donnees.clone();
+            let mut t = travail_a_couper(&d);
+            let catalogue = e.machines.read().unwrap().clone();
+            let epson = machines::Machine { connexion: machines::Connexion::Dossier, ..catalogue[0].clone() };
+            let fc7000 = machines::Machine { id: "fc7000".into(), modele: machines::Modele::GraphtecFc7000, connexion: machines::Connexion::Reseau { hote: "127.0.0.1".into(), port: 9100 }, parametres_decoupe: vec![], ..catalogue[1].clone() };
+            let imp = file::Sortie::nouvelle("epson", machines::Operation::Impression, t.id, &t.nom, 1, 0);
+            let sorties = vec![imp.clone()];
+            let raison = |cat: &[machines::Machine]| raison_attente(&d, &imp, Some(&epson), None, &sorties, cat);
+            assert_eq!(raison(&catalogue), Some("decoupeuse_indisponible"), "découpeuse absente du catalogue");
+            let mut avec = catalogue.clone();
+            avec.push(fc7000.clone());
+            assert_eq!(raison(&avec), None, "découpeuse rétablie : l'impression part");
+            let mut f = file::File { sorties: sorties.clone() };
+            assert_eq!(f.prochaine_si("epson", |s| raison_attente(&d, s, Some(&epson), None, &sorties, &catalogue).is_none()), None, "rien n'est envoyé");
+            assert_eq!(f.prochaine_si("epson", |s| raison_attente(&d, s, Some(&epson), None, &sorties, &avec).is_none()), Some(0));
+            let sans_adresse = machines::Machine { connexion: machines::Connexion::Reseau { hote: String::new(), port: 9100 }, ..fc7000.clone() };
+            assert_eq!(raison(&[catalogue[0].clone(), sans_adresse]), Some("decoupeuse_indisponible"), "connexion invalide");
+            let hors_ligne = machines::Machine { connexion: machines::Connexion::Serie { port: "/dev/inexistant".into(), stty: String::new() }, ..fc7000.clone() };
+            assert_eq!(raison(&[catalogue[0].clone(), hors_ligne]), Some("decoupeuse_indisponible"), "hors ligne");
+            t.couches_decoupe[0].reglage = Some("Vinyle épais".into());
+            ecrire(&d, &t).unwrap();
+            assert_eq!(raison(&avec), Some("decoupeuse_indisponible"), "couche sans son réglage");
+            let reglee = machines::Machine { parametres_decoupe: vec![machines::ParametreDecoupe { uuid: None, nom: "Vinyle épais".into(), vitesse_cm_s: 10.0, force_g: 200.0, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false }], ..fc7000.clone() };
+            assert_eq!(raison(&[catalogue[0].clone(), reglee.clone()]), None);
+            f.sorties[0].etat = file::Etat::Echec;
+            t.couches_decoupe[0].active = false;
+            ecrire(&d, &t).unwrap();
+            assert_eq!(raison(&catalogue), None, "rien à couper : pas de contrôle");
+
+            // 4.6 : la coupe attend la fin de l'impression de la page.
+            t.couches_decoupe[0].active = true;
+            ecrire(&d, &t).unwrap();
+            let coupe = file::Sortie::nouvelle("fc7000", machines::Operation::Decoupe, t.id, &t.nom, 1, 0);
+            for (etat, attendu) in [(file::Etat::EnAttente, Some("attente_impression")), (file::Etat::EnCours, Some("attente_impression")), (file::Etat::Echec, Some("attente_impression")), (file::Etat::Terminee, None), (file::Etat::Annulee, None)] {
+                let file_ = [file::Sortie { etat, ..imp.clone() }, coupe.clone()];
+                assert_eq!(raison_attente(&d, &coupe, Some(&reglee), None, &file_, std::slice::from_ref(&reglee)), attendu, "impression {etat:?}");
+            }
+            assert_eq!(raison_attente(&d, &coupe, Some(&reglee), None, std::slice::from_ref(&coupe), &[]), None, "découpe seule : rien à attendre");
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        /// 4.3 mono-couche et 4.6 dossier : une sortie par couche, la suivante retenue ; le
+        /// fichier de la première couche seule est déposé d'un coup dans le dossier.
+        #[tokio::test]
+        async fn mono_couche_et_depot_atomique_en_dossier() {
+            let e = etat("mono");
+            let donnees = e.config.donnees.clone();
+            let mut catalogue = e.machines.read().unwrap().clone();
+            catalogue.push(machines::Machine { id: "graphtec".into(), uuid: None, modele: machines::Modele::GraphtecFc7000, connexion: machines::Connexion::Dossier, mono_couche: true, parametres_decoupe: vec![], ..catalogue[1].clone() });
+            assert_eq!(appel(&e, "POST", "/api/machines", None, Some(serde_json::to_value(&catalogue).unwrap())).await.status(), StatusCode::OK);
+            let t = rendre(&e, pdf_tons(&["Thrucut", "Kisscut"]), Demande { mode: Mode::Decouper, ..Default::default() }).await;
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": "graphtec" }))).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let vues: Vec<(Option<String>, file::Etat)> = e.file.lock().unwrap().sorties.iter().map(|s| (s.couche.clone(), s.etat)).collect();
+            assert_eq!(vues, [(Some("Kisscut".into()), file::Etat::EnAttente), (Some("Thrucut".into()), file::Etat::Suspendue)]);
+            tokio::spawn(repartir(e.clone()));
+            for _ in 0..100 {
+                if e.file.lock().unwrap().sorties[0].etat == file::Etat::Terminee {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert_eq!(e.file.lock().unwrap().sorties[0].etat, file::Etat::Terminee);
+            let depot: Vec<PathBuf> = std::fs::read_dir(donnees.join("sorties").join("graphtec")).unwrap().map(|x| x.unwrap().path()).collect();
+            assert_eq!(depot.len(), 1, "un seul fichier, pas de temporaire : {depot:?}");
+            assert!(depot[0].extension().is_some_and(|x| x == "plt"));
+            // Pas de 0,025 mm : Kisscut en (200, 50) pt → (2822, 706) ; Thrucut (50, 50) → (706, 706).
+            let texte = std::fs::read_to_string(&depot[0]).unwrap();
+            assert!(texte.starts_with("IN;SP1;PU2822,706;") && !texte.contains("PU706,706;"), "{texte}");
+            assert_eq!(e.file.lock().unwrap().sorties[1].etat, file::Etat::Suspendue, "la couche suivante attend l'opérateur");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// 4.1 et 4.5 : préfixes réglés depuis Système (gardés sur le disque) ; préfixe absent
+        /// alors qu'une découpeuse est choisie → alerte qui nomme les tons du fichier.
+        #[tokio::test]
+        async fn prefixes_reglables_et_prefixe_absent_signale() {
+            let e = etat("prefixes");
+            let mut avec_die = decoupe::Reglages::default();
+            // Les préfixes sont globaux au processus : la liste d'origine reste dedans, les
+            // autres tests ne voient pas la différence.
+            avec_die.prefixes.push(" Die ".into());
+            let r = appel(&e, "POST", "/api/decoupe", None, Some(serde_json::to_value(&avec_die).unwrap())).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(decoupe::lire(&e.config.donnees).prefixes.last().unwrap(), "Die", "enregistré, espaces ôtés");
+            let lu = json(appel(&e, "GET", "/api/decoupe", None, None).await).await;
+            assert_eq!(lu["prefixes"].as_array().unwrap().len(), 9);
+            let r = appel(&e, "POST", "/api/decoupe", None, Some(serde_json::json!({ "prefixes": [" "] }))).await;
+            assert_eq!(json(r).await["code"], "prefixes_invalides");
+
+            let d = Demande { mode: Mode::Decouper, decoupeuse: Some("kona".into()), ..Default::default() };
+            let t = rendre(&e, pdf_tons(&["1CutContour"]), d.clone()).await;
+            assert_eq!(t.pages[0].traces_decoupe, 0, "1CutContour n'est pas reconnu");
+            let a = t.alertes.iter().find(|a| a.code == "decoupe_sans_prefixe").expect("alerte préfixe absent");
+            assert_eq!(a.detail, "1CutContour");
+            let t = rendre(&e, pdf_tons(&["Die-Cut 3"]), d).await;
+            assert_eq!(t.pages[0].traces_decoupe, 1, "préfixe ajouté reconnu");
+            assert!(t.alertes.is_empty(), "{:?}", t.alertes.iter().map(|a| &a.code).collect::<Vec<_>>());
+            decoupe::installer(decoupe::Reglages::default());
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }
 }

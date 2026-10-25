@@ -121,9 +121,11 @@ pub struct Demande {
     pub support_uuid: Option<uuid::Uuid>,
     #[serde(default)]
     pub mode_uuid: Option<uuid::Uuid>,
-    /// Réglage de coupe de la découpeuse (nom), sinon son premier.
+    /// Découpeuse affectée au travail (identifiant du catalogue) : la découpe automatique y
+    /// va, et l'impression attend qu'elle soit utilisable (roadmap 4.16). Le réglage de coupe
+    /// se choisit désormais par couche (`Travail::couches`).
     #[serde(default)]
-    pub parametre_decoupe: Option<String>,
+    pub decoupeuse: Option<String>,
     /// Tourner de 90° une page trop large pour la laize de l'imprimante, si elle y tient
     /// alors (repérage compris). Sans effet avec une rotation choisie ou une mosaïque.
     #[serde(default = "vrai")]
@@ -154,7 +156,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, parametre_decoupe: None, rotation_auto: true }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, rotation_auto: true }
     }
 }
 
@@ -171,6 +173,9 @@ impl Demande {
         self.edition.verifier()?;
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
+        }
+        if self.decoupeuse.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) {
+            return Err("decoupeuse_invalide");
         }
         couleur::verifier(&self.couleur, profils)
     }

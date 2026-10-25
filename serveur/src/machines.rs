@@ -95,6 +95,10 @@ pub struct Machine {
     /// laize) ; une sortie envoyée au pool part sur la première machine prête.
     #[serde(default)]
     pub pool: Option<String>,
+    /// Découpeuse sans changement d'outil ni de réglage en cours de coupe (roadmap 4.3) :
+    /// une sortie par couche, la suivante retenue jusqu'à ce que l'opérateur la libère.
+    #[serde(default)]
+    pub mono_couche: bool,
 }
 
 /// Couches de découpe de CutServer à l'atelier (relevées le 24/10), reprises pour le Kona.
@@ -217,6 +221,27 @@ fn troncons(trace: &[(f64, f64)], diffusion: bool) -> Vec<Vec<(f64, f64)>> {
 }
 
 impl Machine {
+    /// Réglage de coupe d'une couche : celui choisi à la main, sinon celui qui porte le nom
+    /// de la couche (sans casse, espaces ni tirets), sinon le premier (défaut de la
+    /// machine). `Err` : le réglage choisi n'existe pas sur cette machine.
+    pub fn reglage_couche(&self, c: &crate::decoupe::Couche) -> Result<Option<&ParametreDecoupe>, String> {
+        match &c.reglage {
+            Some(nom) => self.parametres_decoupe.iter().find(|p| &p.nom == nom).map(Some).ok_or_else(|| nom.clone()),
+            None => Ok(self.parametres_decoupe.iter().find(|p| crate::decoupe::meme_couche(&p.nom, &c.nom)).or(self.parametres_decoupe.first())),
+        }
+    }
+
+    /// Connexion utilisable : port série présent, hôte et port renseignés, dossier du
+    /// fichier présent. `Err` : la raison, non traduite.
+    pub fn joignable(&self) -> Result<(), String> {
+        match &self.connexion {
+            Connexion::Serie { port, .. } if !port.exists() => Err(format!("port {} absent", port.display())),
+            Connexion::Reseau { hote, port } if hote.trim().is_empty() || *port == 0 => Err("adresse réseau incomplète".into()),
+            Connexion::Fichier { chemin } if !chemin.parent().is_some_and(Path::exists) && !chemin.exists() => Err(format!("{} introuvable", chemin.display())),
+            _ => Ok(()),
+        }
+    }
+
     /// Minutes pour imprimer `longueur_mm` de rouleau à `dpi` ; `None` sans cadence connue.
     /// Epson SC-S80600 (fiche publique) : 360 dpi 94 m²/h (1 passe), 720 dpi 17 m²/h
     /// (720 × 1440, 6 passes), au-delà 6,6 m²/h (1440 × 1440, 16 passes).
@@ -244,8 +269,8 @@ pub fn fichier(donnees: &Path) -> PathBuf {
 /// Catalogue d'origine : l'Epson (sorties en dossier) et le Kona sur son port série.
 pub fn catalogue_initial(port_kona: &Path, stty: &str, snmp_epson: Option<String>) -> Vec<Machine> {
     vec![
-        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None },
-        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None },
+        Machine { id: "epson".into(), uuid: None, nom: "Epson SC-S80600".into(), modele: Modele::EpsonScS80600, laize_mm: 1626.0, connexion: Connexion::Dossier, snmp: snmp_epson, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: vec![], decoupe_retournee: false, pool: None, mono_couche: false },
+        Machine { id: "kona".into(), uuid: None, nom: "Mutoh Kona 1650".into(), modele: Modele::MutohKona, laize_mm: 1650.0, connexion: Connexion::Serie { port: port_kona.into(), stty: stty.into() }, snmp: None, pas_mm: None, decalage_mm: [0.0; 2], origine_impression_mm: [0.0; 2], m2_heure: None, parametres_decoupe: couches_cutserver(), decoupe_retournee: false, pool: None, mono_couche: false },
     ]
 }
 
@@ -334,31 +359,34 @@ pub fn changer_de_pas(hpgl: &str, pas_mm: f64, decalage_mm: [f64; 2]) -> String 
 
 /// Découpe pour le Mutoh Kona, telle que CutServer l'envoie (capture USB du 24/10) : une
 /// commande par ligne (`;\r\n`), `PROGSTEP10` (pas de 0,01 mm), réglages de coupe
-/// `AS`/`ZF`/`VS`, et avec un cadre la lecture automatique `AL5` : coins opposés du cadre,
-/// coupe, retour au premier coin, `AL5,2`. `hpgl` est celui du RIP, au pas de 0,01 mm ;
-/// `cadre` : coins au milieu des traits (x1, y1, x2, y2) dans les mêmes unités.
+/// `AS`/`ZF`/`VS` après chaque `SP`, et avec un cadre la lecture automatique `AL5` : coins
+/// opposés du cadre, coupe, retour au premier coin, `AL5,2`. `parties` : le HP-GL de chaque
+/// couche (au pas de 0,01 mm) avec son réglage, dans l'ordre de coupe ; `cadre` : coins au
+/// milieu des traits (x1, y1, x2, y2) dans les mêmes unités.
 ///
 /// Axes du Kona (essais au point 0) : X suit la longueur de la feuille, Y+ vers la gauche,
 /// repère direct ; d'où X = y de la page, Y = −x (comme ONYX). `retourne` : 180° de plus.
-pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoupe>, retourne: bool) -> String {
+pub fn pour_kona(parties: &[(String, Option<&ParametreDecoupe>)], cadre: Option<[i64; 4]>, retourne: bool) -> String {
     let s = if retourne { -1 } else { 1 };
     let axes = |x: i64, y: i64| (s * y, -s * x);
     let mut corps = String::new();
-    // Écrit comme CutServer : « AS 1.0;ZF 145;VS 15; » ; rien avec les valeurs du massicot.
-    let reglages = p.filter(|p| !p.valeurs_machine).map(|p| format!("AS {:.1};ZF {};VS {};LT;\r\n", p.acceleration_g, p.force_g, p.vitesse_cm_s)).unwrap_or_default();
-    let outil = p.and_then(|p| p.outil);
-    for cmd in hpgl.split(';').map(str::trim).filter(|c| !c.is_empty()) {
-        match cmd.get(..2) {
-            Some(op @ ("PU" | "PD")) if cmd.len() > 2 => {
-                let v: Vec<i64> = cmd[2..].split(',').filter_map(|n| n.trim().parse().ok()).collect();
-                // Une commande par point, comme CutServer.
-                for &[x, y] in v.as_chunks::<2>().0 {
-                    let (x, y) = axes(x, y);
-                    corps += &format!("{op}{x},{y};\r\n");
+    for (hpgl, p) in parties {
+        // Écrit comme CutServer : « AS 1.0;ZF 145;VS 15; » ; rien avec les valeurs du massicot.
+        let reglages = p.filter(|p| !p.valeurs_machine).map(|p| format!("AS {:.1};ZF {};VS {};LT;\r\n", p.acceleration_g, p.force_g, p.vitesse_cm_s)).unwrap_or_default();
+        let outil = p.and_then(|p| p.outil);
+        for cmd in hpgl.split(';').map(str::trim).filter(|c| !c.is_empty()) {
+            match cmd.get(..2) {
+                Some(op @ ("PU" | "PD")) if cmd.len() > 2 => {
+                    let v: Vec<i64> = cmd[2..].split(',').filter_map(|n| n.trim().parse().ok()).collect();
+                    // Une commande par point, comme CutServer.
+                    for &[x, y] in v.as_chunks::<2>().0 {
+                        let (x, y) = axes(x, y);
+                        corps += &format!("{op}{x},{y};\r\n");
+                    }
                 }
+                Some("SP") if cmd != "SP0" => corps += &format!("{};\r\n{reglages}", outil.map_or(cmd.to_string(), |o| format!("SP{o}"))),
+                _ => {}
             }
-            Some("SP") if cmd != "SP0" => corps += &format!("{};\r\n{reglages}", outil.map_or(cmd.to_string(), |o| format!("SP{o}"))),
-            _ => {}
         }
     }
     match cadre {
@@ -372,6 +400,19 @@ pub fn pour_kona(hpgl: &str, cadre: Option<[i64; 4]>, p: Option<&ParametreDecoup
         }
         None => format!("IN;\r\nPA;PROGSTEP10;\r\n{corps}PU0,0;\r\nSP0;\r\n"),
     }
+}
+
+/// Écrit `octets` à `chemin` d'un coup : fichier temporaire caché du même dossier,
+/// synchronisé, puis renommé. Un logiciel qui surveille le dossier ne voit jamais un
+/// fichier à moitié écrit (roadmap 4.6).
+pub fn ecrire_atomique(chemin: &Path, octets: &[u8]) -> Result<(), String> {
+    let nom = chemin.file_name().ok_or("chemin sans nom de fichier")?.to_string_lossy();
+    let tmp = chemin.with_file_name(format!(".{nom}.tmp"));
+    let ecrit = std::fs::File::create(&tmp).and_then(|mut f| f.write_all(octets).and_then(|()| f.sync_all())).and_then(|()| std::fs::rename(&tmp, chemin));
+    ecrit.map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{} : {e}", chemin.display())
+    })
 }
 
 /// Connexion TCP brute (port 9100…), délai de 5 s à l'ouverture et de 60 s par écriture.
@@ -392,6 +433,8 @@ pub fn envoyer(c: &Connexion, octets: &[u8]) -> Result<(), String> {
             flux.write_all(octets).map_err(|e| format!("{hote}:{port} : {e}"))?;
             flux.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())
         }
+        // Un fichier ordinaire est remplacé d'un coup ; un périphérique (`/dev/…`) s'écrit tel quel.
+        Connexion::Fichier { chemin } if chemin.is_file() => ecrire_atomique(chemin, octets),
         Connexion::Fichier { chemin } => std::fs::OpenOptions::new().write(true).open(chemin).and_then(|mut f| f.write_all(octets)).map_err(|e| format!("{} : {e}", chemin.display())),
         Connexion::Dossier => Err("machine sans connexion : sortie en dossier seulement".into()),
     }
@@ -441,15 +484,15 @@ mod tests {
         assert_eq!(changer_de_pas(rip, 0.025, [0.0; 2]), "IN;SP1;PU0,0;PD1016,0,1016,1016;PU;SP0;");
         // Kona avec cadre : axes tournés (X = y, Y = −x), coins min/max, une commande par ligne.
         let p = ParametreDecoupe { uuid: None, nom: "Mi-chair V3000".into(), vitesse_cm_s: 15.0, force_g: 145.0, acceleration_g: 1.0, valeurs_machine: false, outil: None, motif_mm: vec![], diffusion: false };
-        let k = pour_kona(rip, Some([-500, -500, 3000, 3000]), Some(&p), false);
+        let k = pour_kona(&[(rip.into(), Some(&p))], Some([-500, -500, 3000, 3000]), false);
         assert!(k.starts_with("AL5,0;IN;\r\nPA;PROGSTEP10;\r\n@SEGMENTEDFILESTART1;\r\n@SEGMENTSTART1;\r\n\r\nAL5,0,0,1,-500,-3000,3000,500;\r\nSP1;\r\nAS 1.0;ZF 145;VS 15;LT;\r\nPU0,0;\r\nPD0,-2540;\r\nPD2540,-2540;\r\n"), "{k}");
         assert!(k.ends_with("PU-500,-3000;\r\nAL5,2;\r\n\r\n@SEGMENTEND1;\r\n\r\nSP0;@SEGMENTEDFILEEND1;\r\n"), "{k}");
         // Valeurs du massicot : aucun réglage envoyé ; outil imposé.
         let q = ParametreDecoupe { valeurs_machine: true, outil: Some(3), ..p.clone() };
-        let k = pour_kona(rip, None, Some(&q), false);
+        let k = pour_kona(&[(rip.into(), Some(&q))], None, false);
         assert!(!k.contains("ZF") && k.contains("SP3;\r\n") && !k.contains("SP1;"), "{k}");
         // Sans cadre : outil 1 obligatoire (sans lui, le Kona ne coupe rien : essai du 24/10).
-        assert!(pour_kona(rip, None, None, false).contains("SP1;\r\n"));
+        assert!(pour_kona(&[(rip.into(), None)], None, false).contains("SP1;\r\n"));
         assert_eq!(changer_de_pas(rip, 0.01, [0.0; 2]), rip);
         // 1 mm à droite, 0,5 mm en arrière, au pas de 0,025 mm : +40 et −20.
         assert_eq!(changer_de_pas(rip, 0.025, [1.0, -0.5]), "IN;SP1;PU40,-20;PD1056,-20,1056,996;PU;SP0;");
