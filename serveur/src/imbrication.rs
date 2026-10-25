@@ -190,6 +190,45 @@ pub fn normaliser_pages(pdf: &[u8]) -> Result<Option<Vec<u8>>, String> {
     Ok(Some(sortie))
 }
 
+/// Suffixe d'une couche de découpe désactivée sur son travail, une fois sur une planche.
+pub const SUFFIXE_EXCLU: &str = "_exclu";
+
+/// Couches désactivées d'un travail posé sur une planche (roadmap 5.3) : leurs tons de
+/// découpe sont renommés `<ton>_exclu` dans tout le PDF (Separation et DeviceN). Le préfixe
+/// reste, donc le ton reste un ton de découpe jamais imprimé, mais il forme une couche à
+/// part, que la planche garde désactivée ; l'encre n'est pas touchée.
+pub fn exclure_tons(pdf: &[u8], exclus: &[String]) -> Result<Vec<u8>, String> {
+    let mut doc = Document::load_mem(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    fn renommer(o: &mut Object, exclus: &[String]) {
+        let nom = |o: &mut Object| {
+            if let Object::Name(n) = o {
+                let ton = String::from_utf8_lossy(n).into_owned();
+                if exclus.iter().any(|e| crate::decoupe::meme_couche(e, &ton)) {
+                    *n = format!("{ton}{SUFFIXE_EXCLU}").into_bytes();
+                }
+            }
+        };
+        match o {
+            Object::Array(a) => {
+                let famille = a.first().and_then(|x| x.as_name().ok()).map(<[u8]>::to_vec);
+                match (famille.as_deref(), a.get_mut(1)) {
+                    (Some(b"Separation"), Some(x)) => nom(x),
+                    (Some(b"DeviceN"), Some(Object::Array(noms))) => noms.iter_mut().for_each(nom),
+                    _ => {}
+                }
+                a.iter_mut().for_each(|x| renommer(x, exclus));
+            }
+            Object::Dictionary(d) => d.iter_mut().for_each(|(_, x)| renommer(x, exclus)),
+            Object::Stream(s) => s.dict.iter_mut().for_each(|(_, x)| renommer(x, exclus)),
+            _ => {}
+        }
+    }
+    doc.objects.values_mut().for_each(|o| renommer(o, exclus));
+    let mut sortie = vec![];
+    doc.save_to(&mut sortie).map_err(|e| e.to_string())?;
+    Ok(sortie)
+}
+
 /// Une page à imbriquer : PDF source, numéro de page (à partir de 1), nombre de copies.
 pub struct Source<'a> {
     pub pdf: &'a [u8],

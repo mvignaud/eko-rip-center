@@ -105,7 +105,7 @@ pub struct Trace {
     pub ferme: bool,
 }
 
-fn cle(nom: &str) -> String {
+pub(crate) fn cle(nom: &str) -> String {
     nom.chars().filter(|c| !matches!(c, ' ' | '-' | '_')).flat_map(char::to_lowercase).collect()
 }
 
