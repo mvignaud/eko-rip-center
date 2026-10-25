@@ -14,6 +14,7 @@ mod etat;
 mod epson;
 mod escp2;
 mod etiquette;
+mod filtre;
 mod machines;
 mod media;
 mod file;
@@ -309,6 +310,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/travaux/{id}/reglages", axum::routing::post(modifier_reglages))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
+        .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
         .route("/api/travaux/{id}/pages/{page}/decoupe.plt", get(fichier_decoupe))
         .route("/api/travaux/{id}/pages/{page}/decoupe.svg", get(apercu_decoupe))
@@ -874,7 +876,10 @@ async fn traiter(etat: Partage, mut t: Travail) {
             Ok((pdf, mises)) => {
                 let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
                 match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai).await {
-                    Ok(r) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises)),
+                    Ok(r) => match filtrer(&rep, &r.pages, t.demande.edition.filtre.clone(), t.demande.dpi).await {
+                        Ok(()) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises)),
+                        Err(e) => Err(e),
+                    },
                     Err(e) => Err(e),
                 }
             }
@@ -1047,6 +1052,10 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
                 format!("Tracés de découpe : {traces}"),
             ]
         };
+        // L'épreuve se rend depuis le PDF : un filtre couleur (posé sur les plaques) n'y paraît pas.
+        if d.edition.filtre.as_ref().is_some_and(|f| !f.neutre()) {
+            lignes.push(if en { "Colour filter: yes (applied to the plates, not shown in this proof)" } else { "Filtre couleur : oui (appliqué aux plaques, non visible sur cette épreuve)" }.into());
+        }
         for a in &t.alertes {
             lignes.push(format!("{} {}", if en { "Warning:" } else { "Alerte :" }, a.detail));
         }
@@ -2038,6 +2047,26 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail) {
     }
 }
 
+/// Filtre couleur (roadmap 3.E2, 3.E3) sur les plaques CMJN de chaque page, production et
+/// aperçu, avant le blanc automatique (la sous-couche suit l'encre filtrée).
+async fn filtrer(rep: &std::path::Path, pages: &[Vec<String>], f: Option<filtre::Filtre>, dpi: u32) -> Result<(), String> {
+    let Some(f) = f.filter(|f| !f.neutre()) else { return Ok(()) };
+    for (i, plaques) in pages.iter().enumerate() {
+        let n = i + 1;
+        if let Some(absente) = filtre::ENCRES.iter().find(|e| !plaques.iter().any(|p| p == *e)) {
+            return Err(format!("filtre couleur de la page {n} : plaque {absente} absente"));
+        }
+        let prod = filtre::ENCRES.map(|e| render::chemin_plaque(rep, n, e));
+        let apercu = filtre::ENCRES.map(|e| render::chemin_apercu_plaque(rep, n, e));
+        let (composite, avant, f) = (render::chemin_composite(rep, n), render::chemin_composite_avant(rep, n), f.clone());
+        tokio::task::spawn_blocking(move || filtre::filtrer_tiff(&prod, &f, dpi).and_then(|()| filtre::filtrer_apercu(&apercu, &composite, &avant, &f)))
+            .await
+            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("filtre couleur de la page {n} : {e}"))?;
+    }
+    Ok(())
+}
+
 /// Génère la plaque `White` de chaque page (production et aperçu) selon le réglage de
 /// blanc ; rend les listes de plaques, `White` comprise.
 async fn ajouter_blanc(rep: &std::path::Path, mut pages: Vec<Vec<String>>, b: blanc::Blanc, dpi: u32) -> Result<Vec<Vec<String>>, String> {
@@ -2654,6 +2683,14 @@ async fn apercu(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, u
     }
 }
 
+/// Composite d'avant le filtre couleur : 404 sans filtre.
+async fn apercu_avant(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>) -> Response {
+    match servir(&etat.config.donnees, id, page, |rep, _| Some(render::chemin_composite_avant(rep, page))).await {
+        Some(o) => png(o),
+        None => page_absente(&etat.config.donnees, id),
+    }
+}
+
 async fn plaque(State(etat): State<Partage>, Chemin((id, page, nom)): Chemin<(Uuid, usize, String)>) -> Response {
     // Le nom doit être une plaque connue de la page : jamais un chemin fourni par le client.
     let chemin = |rep: &std::path::Path, p: &Page| p.plaques.contains(&nom).then(|| render::chemin_apercu_plaque(rep, page, &nom));
@@ -2700,7 +2737,7 @@ mod tests {
     fn chaque_code_erreur_est_traduit_dans_les_deux_langues() {
         // Les codes viennent de ces fichiers ; une chaîne qui suit `Err(` ou `erreur(` en est un.
         let sans_tests = |s: &'static str| s.split("#[cfg(test)]").next().unwrap();
-        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs")].map(sans_tests).concat();
+        let source = [include_str!("main.rs"), include_str!("reglages.rs"), include_str!("couleur.rs"), include_str!("file.rs"), include_str!("couverture.rs"), include_str!("blanc.rs"), include_str!("edition.rs"), include_str!("media.rs"), include_str!("machines.rs"), include_str!("supports.rs"), include_str!("mosaique.rs"), include_str!("filtre.rs")].map(sans_tests).concat();
         let page = include_str!("../static/index.html");
         let (fr, en) = page.split_once("\n  en: {").expect("bloc anglais");
         // Un code est une chaîne en minuscules et `_` placée après `(` ou `StatusCode::X, `
@@ -4457,6 +4494,123 @@ mod tests {
             let (x, y) = (l - marge - 2.0 - code.marge_mm - code.taille_mm, (marge - code.taille_mm) / 2.0);
             assert_eq!(etiquette::tests::lire_qr(lire, attendu.len(), (x, y, code.taille_mm)), attendu, "QR du lé 2");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
+
+    /// Filtres couleur (roadmap 3.E2) et remplacement de couleur (3.E3), mesurés dans les
+    /// plaques, puis exportés vers un réglage et repris à l'import par son dossier surveillé.
+    mod filtres {
+        use super::controle_d_acces::{appel, etat};
+        use super::regression_geometrie::rendre;
+        use super::*;
+
+        /// 100 × 50 mm : à gauche C 20 % M 60 %, à droite C 100 % M 50 %.
+        fn deux_aplats() -> Vec<u8> {
+            let contenu = "0.2 0.6 0 0 k 0 0 141.73 141.73 re f\n1 0.5 0 0 k 141.73 0 141.73 141.73 re f\n";
+            let objets = [
+                "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+                "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 283.46 141.73] /Contents 4 0 R >>".to_string(),
+                format!("<< /Length {} >>\nstream\n{contenu}endstream", contenu.len()),
+            ];
+            let mut pdf = String::from("%PDF-1.4\n");
+            let mut positions = vec![];
+            for (i, o) in objets.iter().enumerate() {
+                positions.push(pdf.len());
+                pdf += &format!("{} 0 obj\n{o}\nendobj\n", i + 1);
+            }
+            let xref = pdf.len();
+            pdf += &format!("xref\n0 {}\n0000000000 65535 f \n", objets.len() + 1);
+            for p in positions {
+                pdf += &format!("{p:010} 00000 n \n");
+            }
+            pdf += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objets.len() + 1);
+            pdf.into_bytes()
+        }
+
+        /// Valeurs (0 = pleine encre) des quatre plaques au centre de la moitié gauche et de la droite.
+        fn mesurer(chemin: impl Fn(&str) -> PathBuf) -> [[u8; 4]; 2] {
+            let plaques = filtre::ENCRES.map(|e| image::open(chemin(e)).unwrap().to_luma8());
+            let (l, h) = plaques[0].dimensions();
+            [l / 4, 3 * l / 4].map(|x| std::array::from_fn(|i| plaques[i].get_pixel(x, h / 2)[0]))
+        }
+
+        fn filtre_essai() -> filtre::Filtre {
+            filtre::Filtre {
+                luminosite: 20.0,
+                remplacements: vec![filtre::Remplacement { de: [100.0, 50.0, 0.0, 0.0], vers: [0.0, 100.0, 100.0, 0.0], tolerance: 1.0, actif: true }],
+                ..Default::default()
+            }
+        }
+
+        #[tokio::test]
+        async fn filtre_mesure_dans_les_plaques_puis_exporte_et_repris_a_l_import() {
+            let e = etat("filtres");
+            let base = Demande { dpi: 36, rotation_auto: false, ..Default::default() };
+            let brut = rendre(&e, deux_aplats(), base.clone()).await;
+            let rep_brut = dossier(&e.config.donnees, brut.id);
+            let [gauche, droite] = mesurer(|p| render::chemin_plaque(&rep_brut, 1, p));
+            assert_eq!(gauche, [204, 102, 255, 255], "sans filtre : C 20 %, M 60 %");
+            assert!(droite[0] == 0 && (127..=128).contains(&droite[1]) && droite[2..] == [255, 255], "sans filtre : {droite:?}");
+            assert!(!render::chemin_composite_avant(&rep_brut, 1).exists(), "pas de vue « avant » sans filtre");
+
+            let avec = Demande { edition: edition::Edition { filtre: Some(filtre_essai()), ..Default::default() }, ..base.clone() };
+            let t = rendre(&e, deux_aplats(), avec).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let prod = mesurer(|p| render::chemin_plaque(&rep, 1, p));
+            // Luminosité +20 : 80 % de l'encre (51 → 41, 153 → 122) ; aplat de droite remplacé (3.E3).
+            assert_eq!(prod, [[214, 133, 255, 255], [255, 0, 0, 255]], "plaques de production filtrées");
+            assert_eq!(mesurer(|p| render::chemin_apercu_plaque(&rep, 1, p)), prod, "aperçu = production");
+            // Vue scindée : le composite d'origine est gardé, le filtré en diffère.
+            let (avant, apres) = (image::open(render::chemin_composite_avant(&rep, 1)).unwrap().to_rgb8(), image::open(render::chemin_composite(&rep, 1)).unwrap().to_rgb8());
+            assert_eq!(avant, image::open(render::chemin_composite(&rep_brut, 1)).unwrap().to_rgb8(), "avant = rendu sans filtre");
+            let (x, y) = (3 * avant.width() / 4, avant.height() / 2);
+            assert!(apres.get_pixel(x, y)[0] > 200 && apres.get_pixel(x, y)[1] < 80, "après : l'aplat de droite vire au rouge {:?}", apres.get_pixel(x, y));
+            let r = appel(&e, "GET", &format!("/api/travaux/{}/pages/1/apercu-avant.png", t.id), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(appel(&e, "GET", &format!("/api/travaux/{}/pages/1/apercu-avant.png", brut.id), None, None).await.status(), StatusCode::NOT_FOUND);
+
+            // « Exporter vers un réglage » : le filtre du travail rejoint le réglage existant.
+            let mut reglage = serde_json::json!({ "nom": "Vinyle", "demande": base });
+            assert_eq!(appel(&e, "POST", "/api/reglages", None, Some(reglage.clone())).await.status(), StatusCode::CREATED);
+            reglage["demande"]["edition"]["filtre"] = serde_json::to_value(&t.demande.edition.filtre).unwrap();
+            assert_eq!(appel(&e, "POST", "/api/reglages", None, Some(reglage)).await.status(), StatusCode::CREATED);
+            let r = reglages::lire(&e.config.donnees).into_iter().find(|r| r.nom == "Vinyle").unwrap();
+            assert_eq!(r.demande.edition.filtre, Some(filtre_essai()));
+
+            // Import par le dossier surveillé du réglage : même rendu, au pixel près.
+            let fichier = reglages::dossier_entree(&e.config.donnees, "Vinyle").join("arrivee.pdf");
+            std::fs::write(&fichier, deux_aplats()).unwrap();
+            prendre_fichier(&e, &fichier, r.demande).await.unwrap();
+            let travaux = dossier(&e.config.donnees, Uuid::nil()).parent().unwrap().to_path_buf();
+            let id = std::fs::read_dir(&travaux).unwrap().flatten().filter_map(|d| d.file_name().to_str()?.parse::<Uuid>().ok()).find(|i| ![brut.id, t.id].contains(i)).unwrap();
+            let mut fini = None;
+            for _ in 0..600 {
+                let i = lire_travail(&e.config.donnees, id).unwrap();
+                if !actif(&i.statut) {
+                    fini = Some(i);
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert!(matches!(fini.map(|i| i.statut), Some(Statut::Termine)));
+            let rep2 = dossier(&e.config.donnees, id);
+            for encre in filtre::ENCRES {
+                let (a, b) = (image::open(render::chemin_plaque(&rep, 1, encre)).unwrap().to_luma8(), image::open(render::chemin_plaque(&rep2, 1, encre)).unwrap().to_luma8());
+                assert_eq!(a, b, "plaque {encre} : rendu repris à l'import différent");
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Découpe seule : pas de filtre (rien n'est imprimé) ; un filtre hors bornes est refusé.
+        #[test]
+        fn decoupe_seule_et_bornes() {
+            let d = Demande { mode: Mode::Decouper, edition: edition::Edition { filtre: Some(filtre_essai()), ..Default::default() }, ..Default::default() }.normaliser();
+            assert_eq!(d.edition.filtre, None);
+            let neutre = edition::Edition { filtre: Some(filtre_essai()), ..Default::default() };
+            assert!(neutre.neutre(), "le filtre ne touche pas au PDF");
+            let mauvais = Demande { edition: edition::Edition { filtre: Some(filtre::Filtre { saturation: 150.0, ..Default::default() }), ..Default::default() }, ..Default::default() };
+            assert_eq!(mauvais.verifier(&[]), Err("filtre_invalide"));
         }
     }
 }

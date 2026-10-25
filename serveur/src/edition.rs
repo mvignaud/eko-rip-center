@@ -297,6 +297,10 @@ pub struct Edition {
     pub etiquette: Option<Etiquette>,
     #[serde(default)]
     pub code: Option<CodeMarge>,
+    /// Filtre couleur (roadmap 3.E2, 3.E3) : appliqué aux plaques après le rendu, pas au PDF ;
+    /// réglé dans la visionneuse avec le reste de l'édition (même historique, même envoi).
+    #[serde(default)]
+    pub filtre: Option<crate::filtre::Filtre>,
 }
 
 /// Portée du miroir. ⚠️ À éprouver à l'atelier : selon le support et la pose (vitrophanie
@@ -318,14 +322,15 @@ fn cent() -> f64 {
 
 impl Default for Edition {
     fn default() -> Self {
-        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None, recadrage: None, echelle_xy: None, miroir_portee: PorteeMiroir::default(), marques: None, fond_perdu: None, etiquette: None, code: None }
+        Edition { echelle: 100.0, rotation: 0, miroir: false, marge_mm: 0.0, oeillets: None, contour_mm: None, recadrage: None, echelle_xy: None, miroir_portee: PorteeMiroir::default(), marques: None, fond_perdu: None, etiquette: None, code: None, filtre: None }
     }
 }
 
 impl Edition {
-    /// Rien à faire : la portée d'un miroir absent ne compte pas.
+    /// Rien à faire au PDF : la portée d'un miroir absent ne compte pas, le filtre couleur
+    /// non plus (il agit sur les plaques).
     pub fn neutre(&self) -> bool {
-        Edition { miroir_portee: if self.miroir { self.miroir_portee } else { PorteeMiroir::default() }, ..self.clone() } == Edition::default()
+        Edition { miroir_portee: if self.miroir { self.miroir_portee } else { PorteeMiroir::default() }, filtre: None, ..self.clone() } == Edition::default()
     }
 
     /// Échelle de chaque axe (1 = 100 %).
@@ -379,7 +384,7 @@ impl Edition {
         if self.code.is_some_and(|c| !dans(c.taille_mm, 5.0, 100.0) || !dans(c.marge_mm, 0.0, 50.0) || !matches!(c.cote, Cote::Haut | Cote::Bas)) {
             return Err("code_invalide");
         }
-        Ok(())
+        self.filtre.as_ref().map_or(Ok(()), crate::filtre::Filtre::verifier)
     }
 
     /// Marge blanche réellement posée, en mm : celle saisie, agrandie pour loger les marques

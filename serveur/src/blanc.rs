@@ -241,12 +241,12 @@ pub fn generer_tiff(sources: &[PathBuf], existant: Option<&Path>, sortie: &Path,
     std::fs::rename(&tmp, sortie).map_err(|e| e.to_string())
 }
 
-const RANGS_PAR_BANDE: usize = 64;
+pub(crate) const RANGS_PAR_BANDE: usize = 64;
 
 /// TIFF de base, gris 8 bits (0 = noir = pleine encre), bandes LZW écrites l'une après
 /// l'autre. Écrit à la main : l'encodeur de la crate `tiff` (0.11) n'applique pas la
 /// compression annoncée quand on lui donne les bandes une à une.
-struct EcrivainTiff {
+pub(crate) struct EcrivainTiff {
     f: BufWriter<std::fs::File>,
     position: u64,
     largeur: u32,
@@ -257,7 +257,7 @@ struct EcrivainTiff {
 }
 
 impl EcrivainTiff {
-    fn creer(chemin: &Path, largeur: u32, hauteur: u32, dpi: u32) -> std::io::Result<Self> {
+    pub(crate) fn creer(chemin: &Path, largeur: u32, hauteur: u32, dpi: u32) -> std::io::Result<Self> {
         use std::io::Write;
         let mut f = BufWriter::new(std::fs::File::create(chemin)?);
         // En-tête petit-boutiste ; le décalage du répertoire est écrit à la fin.
@@ -273,7 +273,7 @@ impl EcrivainTiff {
         Ok(ici)
     }
 
-    fn bande(&mut self, pixels: &[u8]) -> std::io::Result<()> {
+    pub(crate) fn bande(&mut self, pixels: &[u8]) -> std::io::Result<()> {
         let lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8).encode(pixels).map_err(std::io::Error::other)?;
         let ici = self.ecrire(&lzw)?;
         self.decalages.push(ici);
@@ -281,7 +281,7 @@ impl EcrivainTiff {
         Ok(())
     }
 
-    fn finir(mut self) -> std::io::Result<()> {
+    pub(crate) fn finir(mut self) -> std::io::Result<()> {
         use std::io::{Seek, Write};
         let octets = |v: &[u32]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
         // Valeurs de plus de 4 octets : hors du répertoire.

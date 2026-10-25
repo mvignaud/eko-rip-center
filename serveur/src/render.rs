@@ -122,6 +122,11 @@ pub fn chemin_composite(dossier: &Path, page: usize) -> PathBuf {
     dossier.join("apercu").join(format!("composite-{page:03}.png"))
 }
 
+/// Composite d'avant le filtre couleur (vue scindée avant/après), s'il y a un filtre.
+pub fn chemin_composite_avant(dossier: &Path, page: usize) -> PathBuf {
+    dossier.join("apercu").join(format!("composite-{page:03}-avant.png"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

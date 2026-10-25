@@ -197,6 +197,10 @@
   #vue-scene { background: #fff; position: absolute; left: 0; top: 0; box-shadow: 0 0 0 1px var(--trait), 0 2px 10px rgb(0 0 0 / .25); }
   #vue-scene img { position: absolute; inset: 0; width: 100%; height: 100%; background: #fff; user-select: none; pointer-events: none; }
   #vue-scene #vue-decoupe { background: transparent; mix-blend-mode: multiply; }
+  #vue-scission { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--accent); pointer-events: none; }
+  #vue-edition details :is(input[type=text], input[type=range], select) { width: 100%; min-width: 0; box-sizing: border-box; }
+  #vue-edition details .deux { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .vue-courbes { width: 100%; max-width: 180px; aspect-ratio: 1; background: #fff; box-shadow: 0 0 0 1px var(--trait); }
   #vue-laize { position: absolute; left: 0; top: -100000px; bottom: -100000px; border-left: 2px dashed var(--accent); border-right: 2px dashed var(--accent); background: rgb(61 143 224 / .06); pointer-events: none; }
   #vue-hors { position: absolute; top: 0; bottom: 0; background: rgb(249 112 102 / .3); pointer-events: none; }
   /* Mosaïque (3.C) : lés en pointillés, recouvrements teintés, soudure, tuiles décochées. */
@@ -267,6 +271,9 @@
       <button type="button" class="discret" id="vue-tourner-g" data-t-aria="vue_tourner_g" disabled>⟲</button>
       <button type="button" class="discret" id="vue-tourner-d" data-t-aria="vue_tourner_d" disabled>⟳</button>
       <button type="button" class="discret" id="vue-miroir" data-t="vue_miroir" aria-pressed="false" disabled></button>
+      <button type="button" class="discret" id="vue-couleur" data-t="vue_couleur" aria-pressed="false" disabled></button>
+      <button type="button" class="discret" id="vue-defaire" data-t-aria="hist_annuler" data-t-title="hist_annuler" disabled>↶</button>
+      <button type="button" class="discret" id="vue-refaire" data-t-aria="hist_retablir" data-t-title="hist_retablir" disabled>↷</button>
       <span class="sep"></span>
       <label class="case" id="vue-calque-laize"><input type="checkbox" id="vue-voir-laize" checked> <span data-t="vue_laize"></span></label>
       <button class="discret" data-t="fermer" style="margin-left: auto"></button>
@@ -280,6 +287,8 @@
       <div id="vue-zone" tabindex="0" data-t-aria="vue_aide" data-outil="main">
         <div id="vue-scene">
           <img id="image-vue" alt="" draggable="false">
+          <img id="vue-avant" alt="" draggable="false" hidden>
+          <div id="vue-scission" hidden></div>
           <img id="vue-decoupe" alt="" draggable="false" hidden>
           <canvas id="vue-blanc" hidden></canvas>
           <canvas id="vue-argent" hidden></canvas>
@@ -510,14 +519,22 @@ const textes = {
     vue_laize: "Laize", vue_aide: "Molette : zoom · glisser : déplacer · clic : sélectionner la page · loupe : clic, Maj+clic, rectangle · touches + − 0 1 · pages : ← → ou Pg↑ Pg↓ (Maj+← → : déplacer)",
     vue_pages: "Pages du travail", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Couches", couche_argent: "Argent", couche_reperes: "Repères",
     vue_reperes_noir: "Imprimés dans la plaque Black : pas de couche séparée.",
-    vue_recadrer: "Recadrer", vue_echelle: "Taille", vue_tourner_g: "Tourner de 90° à gauche", vue_tourner_d: "Tourner de 90° à droite", vue_miroir: "Miroir",
+    vue_recadrer: "Recadrer", vue_echelle: "Taille", vue_tourner_g: "Tourner de 90° à gauche", vue_tourner_d: "Tourner de 90° à droite", vue_miroir: "Miroir", vue_couleur: "Couleur",
     ed_titre: "Édition de la page", ed_rotation: (r) => `Rotation : ${r}°`, ed_portee: "Le miroir retourne", portee_image_et_decoupe: "l'image et la découpe", portee_image_seule: "l'image seule",
     note_portee: "À éprouver à l'atelier : selon la pose, la découpe doit suivre l'image ou non.",
     ed_recadrage: "Recadrage (mm, page source)", ed_x: "X (depuis la gauche)", ed_y: "Y (depuis le bas)", ed_l: "Largeur", ed_h: "Hauteur", ed_ancrage: "Ancrage",
     ed_verrou: "Garder les proportions", ed_sans_recadrage: "Sans recadrage", note_repere_source: "Repères de la page d'origine, avant rotation et miroir. Poignées : tirer un bord ; glisser l'intérieur pour déplacer.",
     ed_hors_page: "Le cadre sort de la page : il sera refusé.", ed_taille: "Taille imprimée", ed_largeur_mm: "Largeur (mm)", ed_hauteur_mm: "Hauteur (mm)",
     ed_liees: "Proportions liées", note_taille: "Angles : proportionnel ; côtés : libre (proportions déliées). Le coin haut gauche reste fixe.",
-    ed_appliquer: "Appliquer", ed_annuler: "Annuler les changements", ed_en_cours: "Rendu en cours…", ed_indisponible: "Édition à la page : PDF rendu, sans mosaïque.",
+    ed_appliquer: "Appliquer", ed_annuler: "Annuler les changements", hist_annuler: "Annuler (Ctrl+Z)", hist_retablir: "Rétablir (Maj+Ctrl+Z ou Ctrl+Y)",
+    hist_etat: (i, n) => `Historique : ${i} / ${n}`,
+    fc_titre: "Filtre couleur", fc_actif: "actif", fc_note: "Sur les plaques CMJN, après le profil de sortie ; blanc, argent et découpe ne sont pas touchés.",
+    fc_courbes: "Courbes (entrée:sortie en %, ex. 0:0 50:60 100:100 ; vide = aucune)", fc_encres: ["C", "M", "J", "N"], fc_courbe_invalide: "Points « entrée:sortie » de 0 à 100, entrées croissantes.",
+    fc_luminosite: "Luminosité (%, + = moins d'encre)", fc_saturation: "Saturation (%)", fc_remplacements: "Remplacement de couleur (CMJN en %)",
+    fc_de: "De (C M J N)", fc_vers: "Vers (C M J N)", fc_tolerance: "Plage (± %)", fc_actif_case: "Actif", fc_retirer: "Retirer", fc_ajouter: "Ajouter un remplacement",
+    fc_cmjn_invalide: "Quatre valeurs de 0 à 100, séparées par des espaces.", fc_sans: "Sans filtre",
+    fc_scinder: "Avant / après (gauche : avant)", fc_scinder_note: "Aperçu du filtre rendu ; « après » estime l'effet sur l'épreuve écran.",
+    fc_exporter: "Exporter vers le réglage", fc_nouveau: "Nouveau réglage (réglages de ce travail)", fc_exporte: (n) => `Filtre ajouté au réglage « ${n} ».`, ed_en_cours: "Rendu en cours…", ed_indisponible: "Édition à la page : PDF rendu, sans mosaïque.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Laize ${l} mm (${n})`, vue_media_charge: "média chargé",
     vue_hors_laize: (d) => `dépasse la laize de ${d} mm`,
     blanc: "Blanc", blanc_mode: "Blanc généré", blanc_aucun: "Aucun (celui du fichier seulement)", blanc_sous_couche: "Sous-couche sous l'encre",
@@ -605,6 +622,7 @@ const textes = {
       media_indisponible: "L'Epson ne répond pas ou ne donne pas la largeur du média.", media_non_configure: "Lecture du média non configurée.",
       recadrage_invalide: "Recadrage impossible : le cadre doit faire au moins 1 × 1 mm et rester dans la page.",
       oeillets_invalides: "Œillets : de 1 à 200 par bord.", marques_invalides: "Marques impossibles (distance 0 à 100 mm, longueur 1 à 100 mm, épaisseur 0,05 à 5 mm, tiret et vide 0,1 à 50 mm, 20 repères de pli au plus).",
+      filtre_invalide: "Filtre couleur impossible (courbes : 16 points au plus, de 0 à 100 %, entrées croissantes ; luminosité et saturation −100 à 100 ; 20 remplacements au plus, plage 0 à 50 %).",
       fond_perdu_invalide: "Fond perdu impossible (0 à 100 mm par côté, rogne 0 à 200 mm, couleur 0 à 100 %).", etiquette_invalide: "Étiquette impossible (corps 1,5 à 20 mm, en haut ou en bas).",
       code_invalide: "QR code impossible (côté 5 à 100 mm, blanc 0 à 50 mm, en haut ou en bas).",
       edition_invalide: "Édition impossible (échelle 1 à 1000 %, marge 0 à 500 mm, œillets : écart 50 à 5000 mm, retrait 3 à 200 mm, diamètre 2 à 50 mm).",
@@ -664,14 +682,22 @@ const textes = {
     vue_laize: "Roll width", vue_aide: "Wheel: zoom · drag: move · click: select the page · magnifier: click, Shift+click, rectangle · keys + − 0 1 · pages: ← → or PgUp PgDn (Shift+← →: move)",
     vue_pages: "Pages of the job", vue_page_n: (n, total) => `Page ${n} / ${total}`, vue_couches: "Layers", couche_argent: "Silver", couche_reperes: "Marks",
     vue_reperes_noir: "Printed in the Black plate: no separate layer.",
-    vue_recadrer: "Crop", vue_echelle: "Size", vue_tourner_g: "Rotate 90° left", vue_tourner_d: "Rotate 90° right", vue_miroir: "Mirror",
+    vue_recadrer: "Crop", vue_echelle: "Size", vue_tourner_g: "Rotate 90° left", vue_tourner_d: "Rotate 90° right", vue_miroir: "Mirror", vue_couleur: "Colour",
     ed_titre: "Page editing", ed_rotation: (r) => `Rotation: ${r}°`, ed_portee: "The mirror flips", portee_image_et_decoupe: "the image and the cut", portee_image_seule: "the image only",
     note_portee: "To be proven in the workshop: depending on how it is mounted, the cut must follow the image or not.",
     ed_recadrage: "Crop (mm, source page)", ed_x: "X (from the left)", ed_y: "Y (from the bottom)", ed_l: "Width", ed_h: "Height", ed_ancrage: "Anchor",
     ed_verrou: "Keep proportions", ed_sans_recadrage: "No crop", note_repere_source: "Coordinates of the original page, before rotation and mirror. Handles: drag an edge; drag inside to move.",
     ed_hors_page: "The frame goes outside the page: it will be refused.", ed_taille: "Printed size", ed_largeur_mm: "Width (mm)", ed_hauteur_mm: "Height (mm)",
     ed_liees: "Proportions linked", note_taille: "Corners: proportional; sides: free (proportions unlinked). The top left corner stays put.",
-    ed_appliquer: "Apply", ed_annuler: "Discard changes", ed_en_cours: "Rendering…", ed_indisponible: "Page editing: rendered PDF, no tiling.",
+    ed_appliquer: "Apply", ed_annuler: "Discard changes", hist_annuler: "Undo (Ctrl+Z)", hist_retablir: "Redo (Shift+Ctrl+Z or Ctrl+Y)",
+    hist_etat: (i, n) => `History: ${i} / ${n}`,
+    fc_titre: "Colour filter", fc_actif: "on", fc_note: "On the CMYK plates, after the output profile; white, silver and cut are left untouched.",
+    fc_courbes: "Curves (input:output in %, e.g. 0:0 50:60 100:100; empty = none)", fc_encres: ["C", "M", "Y", "K"], fc_courbe_invalide: "“input:output” points from 0 to 100, increasing inputs.",
+    fc_luminosite: "Brightness (%, + = less ink)", fc_saturation: "Saturation (%)", fc_remplacements: "Colour replacement (CMYK in %)",
+    fc_de: "From (C M Y K)", fc_vers: "To (C M Y K)", fc_tolerance: "Range (± %)", fc_actif_case: "On", fc_retirer: "Remove", fc_ajouter: "Add a replacement",
+    fc_cmjn_invalide: "Four values from 0 to 100, separated by spaces.", fc_sans: "No filter",
+    fc_scinder: "Before / after (left: before)", fc_scinder_note: "Preview of the rendered filter; “after” estimates its effect on the soft proof.",
+    fc_exporter: "Export to the preset", fc_nouveau: "New preset (this job's settings)", fc_exporte: (n) => `Filter added to the preset “${n}”.`, ed_en_cours: "Rendering…", ed_indisponible: "Page editing: rendered PDF, no tiling.",
     vue_dims: (l, h) => `Page ${l} × ${h} mm`, vue_pos: (x, y) => `X ${x} · Y ${y} mm`, vue_laize_de: (l, n) => `Roll width ${l} mm (${n})`, vue_media_charge: "loaded media",
     vue_hors_laize: (d) => `${d} mm wider than the roll`,
     blanc: "White", blanc_mode: "Generated white", blanc_aucun: "None (the file's own only)", blanc_sous_couche: "Underlay under the ink",
@@ -759,6 +785,7 @@ const textes = {
       media_indisponible: "The Epson does not answer or gives no media width.", media_non_configure: "Media reading not set up.",
       recadrage_invalide: "Cannot crop: the frame must be at least 1 × 1 mm and stay inside the page.",
       oeillets_invalides: "Grommets: 1 to 200 per edge.", marques_invalides: "Cannot draw the marks (distance 0 to 100 mm, length 1 to 100 mm, width 0.05 to 5 mm, dash and gap 0.1 to 50 mm, at most 20 fold marks).",
+      filtre_invalide: "Invalid colour filter (curves: at most 16 points, 0 to 100 %, increasing inputs; brightness and saturation −100 to 100; at most 20 replacements, range 0 to 50 %).",
       fond_perdu_invalide: "Cannot add the bleed (0 to 100 mm per side, trim 0 to 200 mm, colour 0 to 100 %).", etiquette_invalide: "Cannot print the label (text 1.5 to 20 mm, top or bottom).",
       code_invalide: "Cannot print the QR code (size 5 to 100 mm, white 0 to 50 mm, top or bottom).",
       edition_invalide: "Cannot edit (scale 1 to 1000 %, margin 0 to 500 mm, grommets: spacing 50 to 5000 mm, inset 3 to 200 mm, diameter 2 to 50 mm).",
@@ -1145,9 +1172,10 @@ const COTES = ["haut", "bas", "gauche", "droite"];
 
 /** Champs d'édition rapide (panneau d'envoi et fenêtre « Éditer »), préremplis par `e`. */
 function champsEdition(racine, e) {
-  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, ...(e || {}) };
-  // Réglés dans la visionneuse : gardés tels quels ; l'échelle déliée tombe si on retouche le %.
-  racine._garde = { recadrage: e.recadrage, echelle_xy: e.echelle_xy, echelle: e.echelle };
+  e = { echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(e || {}) };
+  // Réglés dans la visionneuse : gardés tels quels (le filtre couleur aussi : un réglage qui
+  // le porte le garde quand on l'enregistre de nouveau) ; l'échelle déliée tombe si on retouche le %.
+  racine._garde = { recadrage: e.recadrage, echelle_xy: e.echelle_xy, echelle: e.echelle, filtre: e.filtre };
   const d = T();
   const portee = el("select", { name: "ed_portee" }, ...["image_et_decoupe", "image_seule"].map((v) => el("option", { value: v, selected: e.miroir_portee === v }, d[`portee_${v}`])));
   const o = { ...FINITIONS.oeillets, ...(e.oeillets || {}) };
@@ -1223,7 +1251,7 @@ function lireEdition(racine) {
     style: { genre: q("mq_genre").value, trait_mm: +q("mq_tiret").value, vide_mm: +q("mq_vide").value, epaisseur_mm: +q("mq_epaisseur").value, couleur: q("mq_couleur").value } };
   const r = {
     echelle: +q("echelle").value, rotation: +q("rotation").value, miroir: q("miroir").checked, marge_mm: +q("marge").value,
-    miroir_portee: q("portee").value, recadrage: g.recadrage || null, echelle_xy: +q("echelle").value === g.echelle ? g.echelle_xy || null : null,
+    miroir_portee: q("portee").value, recadrage: g.recadrage || null, filtre: g.filtre || null, echelle_xy: +q("echelle").value === g.echelle ? g.echelle_xy || null : null,
     oeillets: q("oeillets").checked ? { espacement_mm: +q("espacement").value, retrait_mm: +q("retrait").value, diametre_mm: +q("diametre").value, bords: [0, 1, 2, 3].map((i) => q(`bord${i}`).checked),
       quantites: q("oe_mode").value === "quantite" ? n4("oe_quantite").map(Math.round) : null, forme: q("oe_forme").value, depuis_coupe: q("oe_depuis_coupe").checked } : null,
     contour_mm: q("contour").checked ? +q("contour_mm").value : null,
@@ -1643,6 +1671,13 @@ zoneVue.addEventListener("pointerup", (e) => {
 });
 zoneVue.addEventListener("pointerleave", () => { if (!vue.geste) { vue.curseur = null; dessinerVue(); } });
 $("visionneuse").addEventListener("keydown", (e) => {
+  // Ctrl/Cmd+Z, Maj+Ctrl/Cmd+Z, Ctrl+Y : l'historique d'édition ; un champ de saisie garde les siens.
+  const touche = e.key.toLowerCase(), saisie = e.target.tagName === "TEXTAREA" || (e.target.tagName === "INPUT" && ["number", "text"].includes(e.target.type));
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !saisie && (touche === "z" || (touche === "y" && !e.shiftKey))) {
+    e.preventDefault();
+    deplacerHist(touche === "z" && !e.shiftKey ? -1 : 1);
+    return;
+  }
   if (["SELECT", "INPUT"].includes(e.target.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
   const pan = { ArrowLeft: [60, 0], ArrowRight: [-60, 0], ArrowUp: [0, 60], ArrowDown: [0, -60] }[e.key];
   // Multipage : ← → et Pg↑ Pg↓ changent de page ; Maj+← → déplace toujours.
@@ -1684,7 +1719,7 @@ function boiteA(m, [x, y, l, h]) {
   const p = appliquerA(m, [x, y]), q = appliquerA(m, [x + l, y + h]);
   return [Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.max(p[0], q[0]), Math.max(p[1], q[1])];
 }
-const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, ...(t.edition || {}) });
+const editionDe = (t) => ({ echelle: 100, rotation: 0, miroir: false, marge_mm: 0, oeillets: null, contour_mm: null, recadrage: null, echelle_xy: null, miroir_portee: "image_et_decoupe", marques: null, fond_perdu: null, etiquette: null, code: null, filtre: null, ...(t.edition || {}) });
 const echellesDe = (e) => (e.echelle_xy ? e.echelle_xy.map((v) => v / 100) : [e.echelle / 100, e.echelle / 100]);
 const geomVue = () => vue.travail.pages[vue.n - 1].geometrie;
 const arrondi = (v) => Math.round(v * 100) / 100;
@@ -1719,12 +1754,45 @@ const horsPage = (c) => { const [sl, sh] = geomVue().source_mm; return c[0] < 0 
 
 function preparerEditionVue() {
   const t = vue.travail, page = t?.pages[vue.n - 1], ok = !!page?.geometrie && t.statut === "termine" && !ED.attente;
-  for (const id of ["vue-recadrer", "vue-echelle", "vue-tourner-g", "vue-tourner-d", "vue-miroir"]) $(id).disabled = !ok;
+  for (const id of ["vue-recadrer", "vue-echelle", "vue-tourner-g", "vue-tourner-d", "vue-miroir", "vue-couleur"]) $(id).disabled = !ok;
   Object.assign(ED, { outil: null, geste: null, cadre: null, erreur: ED.attente ? ED.erreur : null });
   ED.ed = ok ? { ...editionDe(t), rotation: page.geometrie.rotation } : null;
-  ED.initiale = JSON.stringify(ED.ed);
+  ED.initiale = cleEd(ED.ed);
   ED.liees = !ED.ed?.echelle_xy;
+  if (ED.ed) {
+    // L'état rendu par le serveur : le pas courant s'il lui est égal (après « Appliquer »), sinon un pas de plus.
+    if (HIST.id !== t.id) Object.assign(HIST, { id: t.id, pile: [], pos: -1 });
+    if (HIST.pile[HIST.pos]?.s !== ED.initiale) noterEd();
+    HIST.pile[HIST.pos].applique = true;
+  }
   afficherEditionVue();
+}
+/** Annuler / rétablir (roadmap 3.E1) : les états successifs de l'édition du travail ouvert,
+ *  `HIST_MAX` au plus, gardés d'un rendu à l'autre. Un état « appliqué » a été rendu par le
+ *  serveur : y revenir le renvoie (nouveau rendu) ; un état seulement saisi revient dans le
+ *  panneau, à appliquer. Un geste à la souris compte pour un pas, à son relâché. */
+const HIST = { id: null, pile: [], pos: -1 }, HIST_MAX = 50;
+/** Édition en texte, clés triées : le serveur ne rend pas les clés dans l'ordre de l'écran. */
+const cleEd = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : 1))) : x));
+function noterEd() {
+  if (!ED.ed || ED.geste) return;
+  const s = cleEd(ED.ed);
+  if (HIST.pile[HIST.pos]?.s === s) return;
+  HIST.pile.splice(HIST.pos + 1);
+  HIST.pile.push({ s, applique: false });
+  if (HIST.pile.length > HIST_MAX) HIST.pile.shift();
+  HIST.pos = HIST.pile.length - 1;
+}
+function deplacerHist(sens) {
+  const cible = HIST.pile[HIST.pos + sens];
+  if (!cible || !ED.ed || ED.attente || HIST.id !== vue.travail?.id) return;
+  HIST.pos += sens;
+  ED.ed = JSON.parse(cible.s);
+  ED.liees = !ED.ed.echelle_xy;
+  if (ED.cadre) ED.cadre = [...(ED.ed.recadrage || [0, 0, ...geomVue().source_mm])];
+  if (cible.applique && cible.s !== ED.initiale) { envoyerReglagesVue({ edition: ED.ed }); return; }
+  afficherEditionVue();
+  dessinerVue();
 }
 function majEditionVue() {
   if (ED.cadre) {
@@ -1732,6 +1800,7 @@ function majEditionVue() {
     const entier = Math.abs(c[0]) < 0.01 && Math.abs(c[1]) < 0.01 && Math.abs(c[2] - sl) < 0.01 && Math.abs(c[3] - sh) < 0.01;
     ED.ed.recadrage = entier ? null : c.map(arrondi);
   }
+  noterEd();
   afficherEditionVue();
   dessinerVue();
 }
@@ -1746,6 +1815,11 @@ function afficherEditionVue() {
   $("vue-recadrer").setAttribute("aria-pressed", String(ED.outil === "recadrer"));
   $("vue-echelle").setAttribute("aria-pressed", String(ED.outil === "echelle"));
   $("vue-miroir").setAttribute("aria-pressed", String(!!ED.ed?.miroir));
+  $("vue-couleur").setAttribute("aria-pressed", String(FC.ouvert));
+  majScission();
+  const histOk = !!ED.ed && !ED.attente && HIST.id === t?.id;
+  $("vue-defaire").disabled = !(histOk && HIST.pos > 0);
+  $("vue-refaire").disabled = !(histOk && HIST.pos < HIST.pile.length - 1);
   p.hidden = !t;
   if (!t) return;
   const titre = el("strong", {}, d.ed_titre), erreur = ED.erreur ? el("p", { className: "erreur", role: "alert" }, ED.erreur) : null;
@@ -1802,12 +1876,13 @@ function afficherEditionVue() {
       el("p", { className: "meta" }, d.note_taille));
   }
   if (ED.outil) blocs.push(remplirKonaVue(el("div", { id: "vue-kona-infos", style: "display: grid; gap: 6px" })));
-  const change = JSON.stringify(ed) !== ED.initiale;
+  blocs.push(blocFiltreVue());
+  const change = cleEd(ed) !== ED.initiale;
   const appliquer = el("button", { type: "button", disabled: !change || ED.attente }, d.ed_appliquer);
   appliquer.addEventListener("click", appliquerEditionVue);
   const annuler = bouton(d.ed_annuler, () => { preparerEditionVue(); dessinerVue(); });
   annuler.disabled = !change;
-  blocs.push(erreur, el("div", { className: "ligne" }, appliquer, annuler));
+  blocs.push(erreur, el("div", { className: "ligne" }, appliquer, annuler), el("p", { className: "meta" }, d.hist_etat(HIST.pos + 1, HIST.pile.length)));
   p.replaceChildren(...blocs.filter(Boolean));
 }
 /** Cadre de l'outil, en mm de l'aperçu : le recadrage, ou la taille à venir à l'échelle réelle
@@ -1916,6 +1991,115 @@ function survolEd(m) {
   majEditionVue();
   return true;
 }
+/** Filtre couleur du travail (roadmap 3.E2, 3.E3), dans l'édition : courbes par encre,
+ *  luminosité, saturation, remplacements ; même historique et même « Appliquer » que le
+ *  reste. Le serveur le pose sur les plaques (`filtre.rs`). */
+const FC = { ouvert: false, scinder: false, x: 50, erreur: null };
+const FILTRE_VIDE = () => ({ courbes: [[], [], [], []], luminosite: 0, saturation: 0, remplacements: [] });
+const filtreActif = (f) => !!f && (f.courbes.some((c) => c.length) || f.luminosite !== 0 || f.saturation !== 0 || f.remplacements.some((r) => r.actif));
+/** « 0:0 50:60 100:100 » → points ; null si la saisie est fausse (bornes, ordre). */
+function lirePoints(texte) {
+  const pts = texte.trim() ? texte.trim().split(/\s+/).map((p) => p.replace(/,/g, ".").split(":").map(Number)) : [];
+  const ok = pts.length <= 16 && pts.every((p) => p.length === 2 && p.every((v) => Number.isFinite(v) && v >= 0 && v <= 100)) && pts.every((p, i) => !i || p[0] > pts[i - 1][0]);
+  return ok ? pts : null;
+}
+function lireCmjn(texte) {
+  const v = texte.trim().replace(/,/g, ".").split(/\s+/).map(Number);
+  return v.length === 4 && v.every((x) => Number.isFinite(x) && x >= 0 && x <= 100) ? v : null;
+}
+/** Les quatre courbes, en SVG (0 % en bas à gauche). */
+function svgCourbes(f) {
+  const NS = "http://www.w3.org/2000/svg", s = document.createElementNS(NS, "svg");
+  s.setAttribute("viewBox", "0 0 100 100"); s.setAttribute("class", "vue-courbes"); s.setAttribute("aria-hidden", "true");
+  ["#00a0e0", "#e0007a", "#d8c000", "#222"].forEach((c, i) => {
+    const pts = f.courbes[i].length ? f.courbes[i] : [];
+    const tous = [...(pts[0]?.[0] > 0 ? [[0, 0]] : []), ...pts, ...(pts.length && pts[pts.length - 1][0] < 100 ? [[100, 100]] : [])];
+    const l = document.createElementNS(NS, "polyline");
+    l.setAttribute("points", (tous.length ? tous : [[0, 0], [100, 100]]).map(([x, y]) => `${x},${100 - y}`).join(" "));
+    l.setAttribute("fill", "none"); l.setAttribute("stroke", c); l.setAttribute("stroke-width", tous.length ? "1.5" : "0.5");
+    s.append(l);
+  });
+  return s;
+}
+/** Entrée valide le champ sans soumettre le formulaire de la visionneuse (qui la fermerait). */
+const entreeValide = (i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); i.dispatchEvent(new Event("change")); } });
+function blocFiltreVue() {
+  const d = T(), ed = ED.ed;
+  const f = ed.filtre ? structuredClone(ed.filtre) : FILTRE_VIDE();
+  const poser = (g) => { ed.filtre = filtreActif(g) || ed.filtre ? g : null; FC.erreur = null; majEditionVue(); };
+  const texte = (valeur, lire, appliquer, erreur, attrs = {}) => {
+    const i = el("input", { type: "text", value: valeur, ...attrs });
+    entreeValide(i);
+    i.addEventListener("change", () => { const v = lire(i.value); if (v === null) { FC.erreur = erreur; afficherEditionVue(); return; } appliquer(v); });
+    return i;
+  };
+  const nombre = (texte_, valeur, appliquer, attrs = {}) => {
+    const i = el("input", { type: "number", step: "any", value: valeur, ...attrs });
+    entreeValide(i);
+    i.addEventListener("change", () => { if (i.value !== "" && Number.isFinite(+i.value)) appliquer(borner(+i.value, attrs.min ?? -1e9, attrs.max ?? 1e9)); });
+    return el("label", {}, texte_, i);
+  };
+  const courbes = f.courbes.map((c, k) => el("label", { style: "display: grid; grid-template-columns: 2em 1fr; align-items: center" }, d.fc_encres[k],
+    texte(c.map((p) => `${p[0]}:${p[1]}`).join(" "), lirePoints, (v) => { f.courbes[k] = v; poser(f); }, d.fc_courbe_invalide, { ariaLabel: `${d.fc_courbes} ${d.fc_encres[k]}` })));
+  const remplacements = f.remplacements.map((r, k) => {
+    const actif = el("input", { type: "checkbox", checked: r.actif });
+    actif.addEventListener("change", () => { r.actif = actif.checked; poser(f); });
+    return el("div", { style: "display: grid; gap: 4px; padding: 4px 0; border-top: 1px solid var(--trait)" },
+      el("div", { className: "deux" },
+        el("label", {}, d.fc_de, texte(r.de.join(" "), lireCmjn, (v) => { r.de = v; poser(f); }, d.fc_cmjn_invalide)),
+        el("label", {}, d.fc_vers, texte(r.vers.join(" "), lireCmjn, (v) => { r.vers = v; poser(f); }, d.fc_cmjn_invalide))),
+      el("div", { className: "ligne" }, nombre(d.fc_tolerance, r.tolerance, (v) => { r.tolerance = v; poser(f); }, { min: 0, max: 50 }),
+        el("label", { className: "case" }, actif, " ", d.fc_actif_case),
+        bouton(d.fc_retirer, () => { f.remplacements.splice(k, 1); poser(f); })));
+  });
+  // Vue scindée et export : sur le filtre déjà rendu (celui du travail), pas sur la saisie.
+  const rendu = filtreActif(vue.travail.edition?.filtre) && vue.suffixe === "apercu.png";
+  const scinder = el("input", { type: "checkbox", checked: FC.scinder, disabled: !rendu });
+  scinder.addEventListener("change", () => { FC.scinder = scinder.checked; afficherEditionVue(); });
+  const curseur = el("input", { type: "range", min: 0, max: 100, value: FC.x, disabled: !rendu || !FC.scinder, ariaLabel: d.fc_scinder });
+  curseur.addEventListener("input", () => { FC.x = +curseur.value; majScission(); });
+  const cible = el("select", {}, el("option", { value: "" }, d.fc_nouveau), ...reglages.map((r) => el("option", { value: r.nom }, r.nom)));
+  const exporter = bouton(d.fc_exporter, () => exporterFiltre(cible.value, f));
+  exporter.disabled = !filtreActif(ed.filtre);
+  const corps = el("div", { style: "display: grid; gap: 6px" },
+    el("p", { className: "meta" }, d.fc_note),
+    el("span", {}, d.fc_courbes), svgCourbes(f), ...courbes,
+    el("div", { className: "deux" }, nombre(d.fc_luminosite, f.luminosite, (v) => { f.luminosite = v; poser(f); }, { min: -100, max: 100 }),
+      nombre(d.fc_saturation, f.saturation, (v) => { f.saturation = v; poser(f); }, { min: -100, max: 100 })),
+    el("strong", {}, d.fc_remplacements), ...remplacements,
+    bouton(d.fc_ajouter, () => { f.remplacements.push({ de: [100, 0, 0, 0], vers: [100, 0, 0, 0], tolerance: 2, actif: true }); poser(f); }),
+    FC.erreur ? el("p", { className: "erreur", role: "alert" }, FC.erreur) : null,
+    el("label", { className: "case" }, scinder, " ", d.fc_scinder), curseur, el("p", { className: "meta" }, d.fc_scinder_note),
+    cible, exporter,
+    ed.filtre ? bouton(d.fc_sans, () => { ed.filtre = null; majEditionVue(); }) : null);
+  const bloc = el("details", { open: FC.ouvert }, el("summary", {}, d.fc_titre, filtreActif(ed.filtre) ? ` · ${d.fc_actif}` : ""), corps);
+  bloc.addEventListener("toggle", () => { FC.ouvert = bloc.open; $("vue-couleur").setAttribute("aria-pressed", String(FC.ouvert)); });
+  return bloc;
+}
+/** Composite d'avant le filtre, à gauche de la scission ; seulement sur l'aperçu d'un travail filtré. */
+function majScission() {
+  const t = vue.travail, img = $("vue-avant"), ligne = $("vue-scission");
+  const voir = !!t && FC.scinder && vue.suffixe === "apercu.png" && filtreActif(t.edition?.filtre) && t.statut === "termine";
+  img.hidden = ligne.hidden = !voir;
+  if (!voir) return;
+  const src = frais(`/api/travaux/${t.id}/pages/${vue.n}/apercu-avant.png`, t);
+  if (img.getAttribute("src") !== src) img.src = src;
+  img.style.clipPath = `inset(0 ${100 - FC.x}% 0 0)`;
+  ligne.style.left = `${FC.x}%`;
+}
+/** « Exporter vers un réglage » : le filtre rejoint le réglage choisi (le reste de celui-ci
+ *  ne change pas), ou un nouveau réglage fait des réglages du travail ; il s'applique alors
+ *  à chaque fichier importé avec ce réglage. */
+async function exporterFiltre(nom, f) {
+  const t = vue.travail;
+  if (!nom) nom = ((await demander(T().nom_reglage, { saisie: "" })) || "").trim();
+  if (!nom) return;
+  const r = reglages.find((x) => x.nom === nom);
+  // Nouveau réglage : les réglages du travail, sans son édition propre à ce fichier (recadrage…).
+  const base = r ? r.demande : { ...t, edition: null };
+  const demande = { ...base, edition: { ...(base.edition || {}), filtre: f } };
+  if (await api("/api/reglages", json("POST", { nom, demande }))) { await chargerReglages(); dire(T().fc_exporte(nom)); afficherEditionVue(); }
+}
 const appliquerEditionVue = () => envoyerReglagesVue({ edition: ED.ed });
 /** Réglages du travail ouvert changés (`changes`), rendu refait, puis la page revue. */
 async function envoyerReglagesVue(changes) {
@@ -1954,6 +2138,9 @@ $("vue-echelle").addEventListener("click", () => outilEd("echelle"));
 $("vue-tourner-g").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 90) % 360; majEditionVue(); });
 $("vue-tourner-d").addEventListener("click", () => { ED.ed.rotation = (ED.ed.rotation + 270) % 360; majEditionVue(); });
 $("vue-miroir").addEventListener("click", () => { ED.ed.miroir = !ED.ed.miroir; majEditionVue(); });
+$("vue-defaire").addEventListener("click", () => deplacerHist(-1));
+$("vue-couleur").addEventListener("click", () => { FC.ouvert = !FC.ouvert; afficherEditionVue(); });
+$("vue-refaire").addEventListener("click", () => deplacerHist(1));
 
 /** Mosaïque dans la visionneuse (roadmap 3.C). Page plus large que la laize : les lés en
  *  pointillés, recouvrements teintés, numéros ; traits à glisser pour des lés inégaux (et des

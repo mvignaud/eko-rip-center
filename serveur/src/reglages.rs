@@ -186,7 +186,7 @@ impl Demande {
             // contour restent (ils changent la découpe).
             (self.edition.oeillets, self.edition.marge_mm) = (None, 0.0);
             // Ni marques, ni fond perdu, ni étiquette, ni code.
-            (self.edition.marques, self.edition.fond_perdu, self.edition.etiquette, self.edition.code) = (None, None, None, None);
+            (self.edition.marques, self.edition.fond_perdu, self.edition.etiquette, self.edition.code, self.edition.filtre) = (None, None, None, None, None);
         }
         self
     }
