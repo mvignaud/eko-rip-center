@@ -15,6 +15,17 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.26.0] — 2026-10-25
+
+### Corrigé
+- **TIFF de Photoshop** : quand l'en-tête TIFF donne une résolution sans unité, la vraie est
+  lue dans les données de Photoshop (une affiche de 891 × 1260 mm à 300 ppi sortait à
+  3,7 × 5,2 m, et son rendu dépassait le délai).
+- Une transparence partout opaque (PNG, TIFF) ne devient plus un masque : rendu plus rapide.
+
+*Fixed: Photoshop TIFF resolution read from its image resources when the TIFF header has no
+unit; fully opaque alpha no longer becomes a soft mask.*
+
 ## [0.25.0] — 2026-10-25
 
 ### Ajouté
