@@ -86,7 +86,9 @@ pub fn signature(secret: &str, t: u64, corps: &[u8]) -> String {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Evenement {
     pub contrat: String,
-    /// Numéro croissant sans trou, par serveur : l'ERP rejoue « depuis N ».
+    /// Installation du pont (UUID tiré au premier démarrage) : l'ERP compte `seq` par instance.
+    pub instance: uuid::Uuid,
+    /// Numéro croissant sans trou, par instance : l'ERP rejoue « depuis N ».
     pub seq: u64,
     pub id: uuid::Uuid,
     /// `catalogue.modifie`, `travail.etat`, `sortie.etat`, `travail.consommation`…

@@ -79,6 +79,7 @@ Event envelope (transport ships with lot R2):
 ```json
 {
   "contrat": "eko-rip-erp/1",
+  "instance": "0c9d6a2e-5b1f-4f0e-9a7d-3e2b8c4f6a10",
   "seq": 42,
   "id": "6f1c0e8e-1b8e-4b9a-9d5e-2f6f3c1a7b10",
   "type": "sortie.etat",
@@ -87,8 +88,14 @@ Event envelope (transport ships with lot R2):
 }
 ```
 
-- `seq`: increasing number **without gaps**, per server; the ERP may ask to replay
-  "everything since N".
+- `instance`: identifier (UUID) of this bridge installation, drawn on first start, kept in
+  `erp.json` and carried by the configuration backup (compatible addition, 25/10).
+- `seq`: increasing number **without gaps** per instance; the ERP deduplicates and detects
+  gaps on `(instance, seq)`. An unknown instance starting at `seq = 1` closes the previous one;
+  an unknown instance with `seq > 1` gets 409 `seq_manquant` and `dernier_seq_traite = 0` (the
+  RIP replays from 1). If the ERP answers, for the SAME instance, a `dernier_seq_traite` above
+  the RIP's last `seq`, the RIP stops sending and reports it in System: it never renumbers
+  silently.
 - `id`: unique event id. `type`: `catalogue.modifie`, `travail.etat`, `sortie.etat`,
   `travail.consommation`…
 

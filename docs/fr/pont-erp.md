@@ -89,6 +89,7 @@ Enveloppe d'un événement (transport livré avec le lot R2) :
 ```json
 {
   "contrat": "eko-rip-erp/1",
+  "instance": "0c9d6a2e-5b1f-4f0e-9a7d-3e2b8c4f6a10",
   "seq": 42,
   "id": "6f1c0e8e-1b8e-4b9a-9d5e-2f6f3c1a7b10",
   "type": "sortie.etat",
@@ -97,8 +98,15 @@ Enveloppe d'un événement (transport livré avec le lot R2) :
 }
 ```
 
-- `seq` : numéro croissant **sans trou**, propre au serveur ; l'ERP peut demander à
-  rejouer « tout depuis N ».
+- `instance` : identifiant (UUID) de cette installation du pont, tiré au premier démarrage,
+  gardé dans `erp.json` et repris par la sauvegarde de la configuration (ajout compatible du
+  25/10, adopté par l'ERP E-KO).
+- `seq` : numéro croissant **sans trou** pour une instance ; l'ERP dédoublonne et détecte les
+  trous sur le couple `(instance, seq)`. Une instance inconnue qui commence à `seq = 1` ferme
+  la précédente ; une instance inconnue avec `seq > 1` reçoit 409 `seq_manquant` et
+  `dernier_seq_traite = 0` (le RIP rejoue depuis 1). Si l'ERP répond, pour la MÊME instance,
+  un `dernier_seq_traite` plus grand que le dernier `seq` du RIP, le RIP cesse d'envoyer et le
+  signale dans Système : il ne renumérote jamais en silence.
 - `id` : identifiant unique de l'événement.
 - `type` : `catalogue.modifie`, `travail.etat`, `sortie.etat`, `travail.consommation`…
 
