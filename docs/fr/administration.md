@@ -31,12 +31,14 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `reglages.json` | réglages enregistrés |
 | `erp.json` | pont ERP : empreinte du jeton de l'ERP et secret HMAC (droits 0600) — voir [pont-erp.md](pont-erp.md) |
 | `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
+| `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |
+| `decoupe.json` | réglages de découpe du serveur (Système > Découpe : préfixes, calques non imprimables, tracés ouverts, tri, après coupe) ; ni dans la sauvegarde de la configuration, ni dans la copie avant mise à jour : le noter à part |
 | `utilisateurs.json` | comptes (mots de passe hachés, droits 0600) |
 | `file.json` | file des sorties et historique |
 | `profils/` | profils ICC déposés |
 | `entrees/<réglage>/` | dossiers surveillés, un par réglage |
 | `travaux/<id>/` | un dossier par travail : source, `job.json`, plaques (`prod/`), aperçus |
-| `sorties/<machine>/` | plaques copiées pour une machine sans pilote (Epson) |
+| `sorties/<machine>/` | plaques copiées pour une machine en connexion Dossier (Epson), fichiers de coupe d'une découpeuse en Dossier |
 | `releves/<machine>.jsonl` | relevés SNMP (encres, rouleau) pour la consommation réelle |
 | `sauvegardes/avant-<version>-<date>.tar.gz` | configuration copiée avant chaque mise à jour du paquet (machines, supports, réglages, tarifs, comptes, pont ERP, profils ; 10 gardées, droits 0600) |
 | `*.json.prec` | version précédente de chaque fichier d'état, gardée à chaque écriture |
@@ -88,9 +90,11 @@ aucun administrateur : un compte déclaré sans rôle le devient.
   l'avoir branché. Absent : débrancher, rebrancher, puis `journalctl -k | tail`.
 - **Machine en réseau** (Graphtec, Roland) : l'adresse et le port doivent répondre depuis
   le serveur (`nc -vz <ip> <port>`).
-- **Epson** : pas encore de pilote ; ses plaques vont dans `sorties/epson/`. La largeur
-  du média se lit par SNMP si l'adresse est renseignée (le serveur parle SNMP lui-même,
-  rien à installer).
+- **Epson** : en connexion **Réseau (TCP)**, port 9100, le RIP imprime par son pilote
+  direct (vérifier `nc -vz <ip> 9100` depuis le serveur) ; en **Dossier**, ses plaques
+  vont dans `sorties/epson/`. La largeur du média, l'état et les alertes se lisent par
+  SNMP si l'adresse est renseignée (le serveur parle SNMP lui-même, rien à installer) :
+  sans SNMP, le pilote direct ne peut pas arrêter une impression sur une alerte.
 
 ## Questions fréquentes
 
@@ -125,7 +129,12 @@ l'annuler d'abord.
 
 **« Envoi à l'imprimante impossible » sur l'Epson.** Un ton direct n'a pas d'encre sur
 l'Epson (le renommer `White` ou `Metallic`, ou le convertir en CMJN), ou la page porte
-à la fois du blanc et de l'argent.
+à la fois du blanc et de l'argent. En connexion Réseau (pilote direct), le blanc et
+l'argent sont refusés pour l'instant : passer par une machine en Dossier.
+
+**« L'imprimante signale une alerte : impression arrêtée. »** Le pilote direct a lu une
+alerte bloquante par SNMP (capot ouvert…). La lever sur l'Epson, puis **Refaire** la
+sortie depuis l'historique.
 
 **« L'Epson ne répond pas ou ne donne pas la largeur du média. »** Vérifier l'adresse
 SNMP de la machine, que l'Epson est allumée et sur le même réseau, et la communauté

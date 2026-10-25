@@ -29,12 +29,14 @@ Package: `/var/lib/eko-rip` (otherwise `EKO_RIP_DATA`).
 | `reglages.json` | saved presets |
 | `erp.json` | ERP bridge: ERP token hash and HMAC secret (mode 0600) — see [erp-bridge.md](erp-bridge.md) |
 | `supports.json` | media per machine and their print modes (stable identifiers); taken from `tarifs.json` on first start |
+| `charges.json` | media loaded in each machine, set by the operator or read from the Epson |
+| `decoupe.json` | server cutting settings (System > Cutting: prefixes, non-printing layers, open paths, sorting, after cutting); neither in the configuration backup nor in the copy made before an update: note them separately |
 | `utilisateurs.json` | accounts (hashed passwords, mode 0600) |
 | `file.json` | output queue and history |
 | `profils/` | uploaded ICC profiles |
 | `entrees/<preset>/` | hot folders, one per preset |
 | `travaux/<id>/` | one folder per job: source, `job.json`, plates (`prod/`), previews |
-| `sorties/<machine>/` | plates copied for a machine without a driver (Epson) |
+| `sorties/<machine>/` | plates copied for a machine on a Folder connection (Epson), cut files of a cutter on Folder |
 | `releves/<machine>.jsonl` | SNMP readings (inks, roll) for actual consumption |
 | `sauvegardes/avant-<version>-<date>.tar.gz` | configuration copied before every package update (machines, media, presets, prices, accounts, ERP bridge, profiles; 10 kept, mode 0600) |
 | `*.json.prec` | previous version of each state file, kept on every write |
@@ -85,8 +87,11 @@ administrator left: an account declared without a role becomes one.
   plugged in. Missing: unplug, plug back, then `journalctl -k | tail`.
 - **Network machine** (Graphtec, Roland): the address and port must answer from the
   server (`nc -vz <ip> <port>`).
-- **Epson**: no driver yet; its plates go to `sorties/epson/`. The media width is read
-  over SNMP when the address is set (the server speaks SNMP itself, nothing to install).
+- **Epson**: on a **Network (TCP)** connection, port 9100, the RIP prints through its
+  direct driver (check `nc -vz <ip> 9100` from the server); on **Folder**, its plates go
+  to `sorties/epson/`. The media width, state and alerts are read over SNMP when the
+  address is set (the server speaks SNMP itself, nothing to install): without SNMP, the
+  direct driver cannot stop a print on an alert.
 
 ## FAQ
 
@@ -119,7 +124,12 @@ restore): run or cancel it first.
 
 **"Cannot send to the printer" on the Epson.** A spot colour has no ink on the Epson
 (rename it `White` or `Metallic`, or convert it to CMYK), or the page carries both white
-and silver.
+and silver. On a Network connection (direct driver), white and silver are refused for
+now: use a machine on Folder.
+
+**"The printer reports an alert: printing stopped."** The direct driver read a blocking
+alert over SNMP (cover open…). Clear it on the Epson, then **Redo** the output from the
+history.
 
 **No media width from the Epson.** Check the machine's SNMP address, that the Epson is
 on and on the same network, and the community (`EKO_RIP_EPSON_COMMUNAUTE`, `public` by

@@ -3,8 +3,8 @@
 On travaille dans le **client E-KO RIP Center** (voir son installation). L'écran se lit
 comme une file de RIP :
 - en haut, la **barre d'outils** : **Importer**, puis les actions sur le travail choisi
-  (**Imprimer**, **Découper**, **Éditer**, **BAT**, **Relancer**, **Supprimer**), la
-  recherche, le thème (sombre ou clair, ◐) et la langue ;
+  (**Imprimer**, **Découper**, **Éditer**, **Réglages**, **BAT**, **Relancer**,
+  **Supprimer**), la recherche, le thème (sombre ou clair, ◐) et la langue ;
 - à gauche, les **vues** (Travaux, File d'attente, Système), les **machines** du
   catalogue avec le nombre de sorties en file (un clic ouvre leur file) et les
   **réglages enregistrés** (un clic ouvre l'import avec ce réglage) ;
@@ -21,9 +21,14 @@ dans l'installation du serveur).
 2. Choisir le **Mode** :
    - **Imprimer (et découper)** : rendu en plaques d'encre, plus la découpe s'il y a
      des tracés de découpe ;
-   - **Découper seulement** : rien n'est imprimé ; seuls les tracés partent au Kona.
-3. Régler la **Résolution** (360, 720 ou 1440 dpi), les **Tracés à découper** et le
-   **Repérage Kona**. Les blocs **Couleur** et **Mosaïque** s'ouvrent d'un clic.
+   - **Découper seulement** : rien n'est imprimé ; seuls les tracés partent à la
+     découpeuse.
+3. Régler la **Résolution** (360, 720 ou 1440 dpi), les **Tracés à découper**, le
+   **Support et mode d'impression** (voir [Supports et modes
+   d'impression](#supports-et-modes-dimpression)), la **Découpeuse** (voir
+   [Découpe](#découpe)) et le **Repérage Kona**. Les blocs **Couleur**, **Édition
+   rapide**, **Mise en file automatique**, **Blanc**, **Fond sous les repères**,
+   **Tolérance de découpe** et **Mosaïque** s'ouvrent d'un clic.
 4. **Envoyer au RIP**.
 
 Formats acceptés : PDF, AI (enregistré avec « Créer un fichier compatible PDF ») et SVG
@@ -38,69 +43,191 @@ travail. Sans effet avec une rotation choisie dans l'édition rapide ou avec une
 (les lés s'en chargent).
 
 **Réglages** (barre d'outils) rouvre le panneau de l'import sur le travail choisi : mode,
-repérage, réglage de coupe, lés, blanc, support, couleur… **Appliquer et refaire le
+repérage, découpeuse, lés, blanc, support, couleur… **Appliquer et refaire le
 rendu** repart de l'original, sans renvoyer le fichier.
 
 ## Édition rapide
 
 Bloc **Édition rapide** du panneau d'envoi, ou bouton **Éditer** d'un travail fini (le
 rendu est refait depuis le fichier d'origine, sans le renvoyer) :
-- **Échelle** (%), **Rotation** (0, 90, 180, 270°), **Miroir** (vitrophanie, caisson vu
-  de l'arrière), **Marge blanche** autour de l'image ;
-- **Œillets** : repères imprimés (anneau et croix de centre) le long des bords cochés,
-  à la **distance au bord** donnée, coins compris, répartis régulièrement avec un **écart
-  maximal** ;
-- **Contour de découpe rectangulaire** autour de l'image, décalé de quelques mm
-  (négatif = vers l'intérieur).
+- **Échelle** (%), **Rotation** (0, 90, 180, 270°), **Miroir (vitrophanie)** (caisson vu
+  de l'arrière), **Marge blanche** autour de l'image. **Le miroir retourne** : **l'image
+  et la découpe** (par défaut) ou **l'image seule** — à éprouver à l'atelier : selon la
+  pose, la découpe doit suivre l'image ou non ;
+- **Œillets (repères imprimés)** le long des bords cochés, à la **distance au bord**
+  donnée, coins compris. **Répartition** **par espacement** (un **écart maximal**) ou
+  **par quantité** (un nombre par bord). **Forme** : cercle, disque plein, croix, cercle
+  et croix. Avec **Distance comptée depuis le trait de coupe (vers l'intérieur)**, le
+  retrait part du contour de découpe et non du bord ;
+- **Contour de découpe rectangulaire**, décalé de quelques mm (négatif = retrait vers
+  l'intérieur), **autour de** l'image, du fond perdu, ou de la boîte de rognage (fond
+  perdu + rogne) ;
+- **Marques imprimées** (voir ci-dessous), **Fond perdu**, **Étiquette imprimée** et
+  **QR code en marge**.
 
 La découpe suit l'édition. Un travail qui a une sortie en file ne s'édite pas : annuler
-ou finir la sortie d'abord.
+ou finir la sortie d'abord. La marge s'agrandit d'elle-même pour loger les marques,
+l'étiquette et le code.
+
+**Marques imprimées** :
+- **Traits de coupe aux angles**, à une **distance au fond perdu** et d'une **longueur**
+  réglables ; ou **Croix de repérage aux angles** (elles remplacent les traits de coupe) ;
+- **Contour imprimé sur le trait de coupe** ;
+- **Repères de pli et de couture** : **Ajouter un repère**, choisir le côté et la
+  **distance au côté** ; **Couture (trait continu)** ; **Imprimé** décoché, le repère
+  n'est pas imprimé (20 repères au plus) ;
+- **Trait** plein, pointillé ou alterné (tirets sur blanc), avec **Tiret**, **Vide**,
+  **Épaisseur** et **Couleur** (noir, repérage CMJN 100 %, blanc).
+
+Avec un repérage Kona, les traits de coupe et les croix ne sont pas imprimés (ils
+gêneraient la lecture des repères) : une alerte le dit sur le travail.
+
+**Fond perdu** sur les 4 côtés (**Côtés liés** pour la même valeur partout), jusqu'à
+100 mm. **Remplissage** : une couleur (C, M, J, N en %), le premier pixel du bord, le
+miroir de l'image, ou la duplication des bords. Les tons de découpe ne sont pas
+recopiés dans le fond perdu. **Blanc de rogne** : blanc ajouté autour, au-delà du fond
+perdu. Les marques se posent hors du fond perdu.
+
+**Étiquette imprimée** : nom, date, L × H, lé, copies, mode et commande, en haut ou en bas
+de chaque lé, au **corps du texte** choisi. Copies et référence de commande s'impriment
+vides (« — ») tant que la fiche travail n'existe pas.
+
+**QR code en marge** : en haut ou en bas, **côté du code**, **blanc autour**, niveau de
+**correction d'erreur** (L, M, Q, H) et **balises** à y mettre (nom, page, tuile/total,
+date, n° de travail, n° de coupe, machine, réf. commande). **Contour de découpe autour du
+code** en option.
 
 ## Mise en file automatique
 
 Bloc **Mise en file automatique** : une fois le rendu fini, chaque page imprimable part
-dans la file de l'Epson et chaque page à découper dans celle du Kona. **Ajouter en
-suspendu** les met en attente : on importe dix fichiers et on libère ceux qu'on veut
-depuis la file. Une découpe qui suit une impression est toujours ajoutée suspendue (le
-support doit d'abord passer au Kona). Le réglage s'enregistre avec les autres : un
-dossier surveillé peut ainsi imprimer seul.
+dans la file de l'Epson et chaque page à découper dans celle du Kona (ou de la
+découpeuse choisie à l'import). **Ajouter en suspendu** les met en attente : on importe
+dix fichiers et on libère ceux qu'on veut depuis la file. Une découpe qui suit une
+impression est toujours ajoutée suspendue (le support doit d'abord passer au Kona). Le
+réglage s'enregistre avec les autres : un dossier surveillé peut ainsi imprimer seul.
 
 On peut choisir plusieurs fichiers à la fois ; ils partent chacun avec les mêmes réglages.
 
 ## BAT (bon à tirer)
 
-Lien **BAT (PDF)** d'un travail fini : un PDF A4 paysage à envoyer au client, une page
+Bouton **BAT** d'un travail fini : un PDF A4 paysage à envoyer au client, une page
 par page du travail : l'image en épreuve écran du profil de support, le tracé de découpe
 en magenta (non imprimé), le format en mm, les réglages (mode, résolution, profil, blanc,
 édition, œillets), les alertes de pré-vérification et un cadre « Bon pour accord » (date,
-nom et signature). Il sort dans la langue de l'écran.
+nom et signature). Il sort dans la langue de l'écran. Un filtre couleur est mentionné,
+mais l'épreuve ne le montre pas.
 
-## Visionneuse
+## Éditeur visuel (visionneuse)
 
-Un clic sur une vignette (composite, plaque, découpe) l'ouvre en grand, avec ses
-dimensions en mm.
+Un clic sur une vignette (composite, plaque, découpe) de l'inspecteur l'ouvre en grand.
+
+**Voir.** Zoom de 25 à 800 % à la molette (le point sous le curseur reste fixe), par
+**−**, **+**, la liste des %, **Ajuster** et **100 %** (taille réelle à l'écran). Outils
+**Main** (glisser pour déplacer) et **Loupe** (clic : zoom avant ; Maj+clic : zoom
+arrière ; tirer un rectangle : zoom sur ce rectangle). Règles en mm sur deux bords ; en
+bas, les dimensions de la page et la position du curseur en mm. Clavier : `+` `−` `0` `1` et flèches.
+
+**Laize.** Case **Laize** : la largeur du support chargé dans l'Epson (sinon la laize de
+la machine) est dessinée ; ce qui dépasse est en rouge, avec l'écart en mm.
+
+**Pages.** Un travail de plusieurs pages montre un bandeau de vignettes, une par page,
+la page courante marquée. ← → ou Pg↑ Pg↓ changent de page ; la vue choisie (composite,
+découpe, plaque) est gardée.
+
+**Sélection.** Un clic sur la page la sélectionne (cadre et 8 poignées) ; un clic hors
+de la page la désélectionne.
+
+**Couches.** Panneau de droite : image, découpe (en magenta), blanc et argent,
+activables une à une. Le blanc et l'argent sont les plaques aux noms que reconnaît
+l'Epson, teintées sur l'image. Les repères Kona sont imprimés dans la plaque Black : pas
+de couche séparée. La découpe ne se superpose que si la coupe est posée comme
+l'impression (sans rotation ni miroir de [mise en coupe](#mise-en-coupe)).
+
+### Éditer la page
+
+Les outils d'édition ne s'ouvrent que sur un PDF rendu, sans mosaïque. Chaque changement
+se prépare à l'écran ; **Appliquer** l'envoie et refait le rendu, **Annuler les
+changements** revient à l'état rendu.
+
+- **Recadrer** : poignées (tirer un bord, glisser l'intérieur pour déplacer) ou champs
+  X (depuis la gauche), Y (depuis le bas), Largeur, Hauteur, en mm de la page d'origine,
+  avant rotation et miroir. **Ancrage** sur 9 points, **Garder les proportions**,
+  **Sans recadrage**. Un cadre qui sort de la page est refusé (au moins 1 × 1 mm).
+- **Taille** : **Taille imprimée** en largeur et hauteur (mm) ou en %. Angles :
+  proportionnel ; côtés : libre. **Proportions liées** décoché, largeur et hauteur se
+  règlent à part, et la découpe se déforme pareil. Le coin haut gauche reste fixe.
+- **Tourner de 90° à gauche** (⟲) / **à droite** (⟳), **Miroir** ; le choix **Le miroir
+  retourne** (image et découpe, ou image seule) apparaît avec le miroir — à éprouver à
+  l'atelier. Un travail en miroir porte le badge **Miroir** dans la file.
+- Pendant un recadrage ou un changement de taille avec un repérage Kona, les repères
+  sont dessinés en pointillés autour de la taille à venir.
+
+**Annuler / rétablir** : ↶ et ↷, ou Ctrl+Z (Cmd+Z), Maj+Ctrl+Z et Ctrl+Y ; 50 états au
+plus. Revenir à un état déjà rendu refait le rendu ; un état seulement saisi revient
+dans le panneau.
+
+### Filtre couleur
+
+Bouton **Couleur** de la visionneuse : bloc **Filtre couleur**, propre au travail. Il agit
+sur les plaques CMJN, après le profil de sortie et avant le blanc automatique ; blanc,
+argent et découpe ne sont pas touchés.
+- **Courbes** C, M, J, N : points « entrée:sortie » en % (ex. `0:0 50:60 100:100`), 16 au
+  plus ; vide = aucune.
+- **Luminosité** (+ = moins d'encre) et **Saturation**, de −100 à 100 %.
+- **Remplacement de couleur** : une teinte CMJN **De** vers une teinte CMJN **Vers**,
+  avec une **Plage** (± %), 20 au plus ; il passe avant le reste du filtre. **Ajouter un
+  remplacement**, case **Actif**, **Retirer**.
+- **Avant / après (gauche : avant)** : aperçu scindé, sur un filtre déjà rendu ; le
+  curseur déplace la séparation. L'« après » estime l'effet sur l'épreuve écran.
+- **Exporter vers le réglage** : le filtre va dans un réglage enregistré, ou dans un
+  **Nouveau réglage (réglages de ce travail)** ; il est repris à l'import. **Sans
+  filtre** le retire.
+
+### Lés et tuilage
+
+Sur une page plus large que la laize, la visionneuse montre les lés en pointillés,
+leurs recouvrements teintés et leurs numéros. Panneau **Lés** :
+- glisser un trait de lé (ou de rangée) donne des lés inégaux ; **Largeur des lés** et
+  **Hauteur des rangées** se saisissent aussi au mm ; **Lés égaux** revient au partage
+  égal ;
+- **Laize**, **Hauteur maxi d'une tuile** (au-delà, la page est coupée en rangées) et
+  **Recouvrement** donnent la grille, résumée en colonnes × rangées ;
+- **Soudure** : le recouvrement ne reçoit pas d'encre sous la tuile voisine (12,7 mm de
+  recouvrement au moins) ;
+- **Trait de coupe au milieu des recouvrements** ;
+- **Tuiles à imprimer** : une case par tuile ; une tuile décochée n'est ni rendue ni mise
+  en file. Un clic sur son numéro règle son **recouvrement** propre (négatif = espace) ;
+- **Ordre d'impression** (ex. `3 1 2`) : ces tuiles d'abord, puis les autres par numéro.
+
+**Couper en lés** applique. Sur un travail déjà en lés, **Appliquer** garde les
+changements et **Page entière (sans mosaïque)** revient à une seule page.
 
 ## Suivre les travaux
 
-Chaque travail est une carte : vignette, nom, badges (état, mode ou résolution, nombre
-de pages, repérage) et date. États : *En attente*, *En cours*, *Terminé*, *Échec*. Un
-clic sur la carte l'ouvre :
+Chaque travail est une ligne du tableau : vignette, nom, état, format, pages, support,
+prix de revient et date. États : *En attente*, *En cours*, *Prêt*, *Échec*. Un clic sur
+la ligne l'ouvre dans l'inspecteur :
 
-- une ligne par page, avec le nombre de tracés de découpe ;
-- les boutons **Imprimer (Epson)** et **Découper (Kona)**, qui mettent la page dans la
-  file d'attente de la machine ; le badge à côté donne l'état de la dernière sortie ;
+- une partie par page, avec le nombre de tracés de découpe ;
+- un bouton **Imprimer sur…** par imprimante (et par pool) et **Découper sur…** par
+  découpeuse, qui mettent la page dans la file de la machine ; le badge à côté donne
+  l'état de la dernière sortie ;
 - **Fichier .plt** : télécharge la découpe (HP-GL, 0,010 mm par pas, origine au coin
   bas gauche de la page) ;
-- les aperçus : composite (avec l'épreuve du profil de support), découpe, et une
-  vignette par plaque.
+- l'aperçu (composite, avec l'épreuve du profil de support) ; la découpe et une vignette
+  par plaque sont derrière le bouton **Couches** ;
+- sur un travail à découper : les panneaux **Couches de découpe** et **Mise en coupe**,
+  et sur chaque page imprimée d'un PDF, **Détourage automatique** (voir
+  [Découpe](#découpe)).
 
-**Alertes** (badge orange) : à l'envoi d'un PDF à imprimer, le serveur signale les
+**Alertes** (badge ⚠) : à l'envoi d'un PDF à imprimer, le serveur signale les
 polices non incorporées (une autre sera prise au rendu : vectoriser le texte ou
 incorporer la police) et les images de moins de 100 ppi à leur taille imprimée. Le
+contrôle préalable de la découpe ajoute les siennes (voir [Découpe](#découpe)). Le
 travail part quand même : c'est à l'opérateur de juger.
 
 La barre de recherche filtre par nom ; les pastilles **Tous**, **En cours**,
-**Terminé** et **Échec** filtrent par état. **Relancer** refait un travail en échec ;
+**Prêt** et **Échec** filtrent par état. **Relancer** refait un travail en échec ;
 **Supprimer** efface un travail fini (refusé tant qu'une sortie l'attend dans la file).
 
 ## File d'attente
@@ -109,17 +236,20 @@ Vue **File d'attente** : une colonne par machine. Le nombre de sorties à passer
 s'affiche dans l'onglet.
 
 - **Mutoh Kona 1650** : la découpe part par le port du plotter (`/dev/kona`).
-- **Epson SC-S80600** : son pilote n'existe pas encore. En attendant, les plaques à
-  imprimer sont copiées dans `/var/lib/eko-rip/sorties/epson/<travail>-p<page>-<sortie>/`
-  sur le serveur, telles que le pilote les enverra : un fichier par canal de
-  l'imprimante (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, puis `WH.tif` ou `MS.tif`) et
-  `envoi.json` (canaux dans l'ordre, plaque d'origine, couches). Les tons de découpe
-  (`CutContour`…) ne partent jamais. Le blanc est reconnu sous les noms `White`, `Blanc`,
-  `WH`, l'argent sous `Metallic`, `Silver`, `Argent`, `MS` (Epson conseille `White` et
-  `Metallic`). **Blanc ou argent** (section Blanc du travail) le pose sous la couleur ou
-  dessus (vitrophanie). La mise en file est refusée, avec la raison, pour un autre ton
-  direct (le convertir en CMJN ou le renommer), ou pour du blanc et de l'argent sur la
-  même page.
+- **Epson SC-S80600** : en connexion **Réseau (TCP)**, port 9100, le RIP imprime par son
+  propre pilote (voir [Pilote direct de l'Epson](#pilote-direct-de-lepson)). En
+  connexion **Dossier**, rien n'est imprimé : les plaques sont copiées dans
+  `/var/lib/eko-rip/sorties/epson/<travail>-p<page>-<sortie>/` sur le serveur, un
+  fichier par canal de l'imprimante (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, puis `WH.tif`
+  ou `MS.tif`) et `envoi.json` (canaux dans l'ordre, plaque d'origine, couches) ; la
+  sortie finie s'affiche **Déposée dans le dossier (pas imprimée)**.
+
+Les tons de découpe (`CutContour`…) ne partent jamais à l'imprimante. Le blanc est
+reconnu sous les noms `White`, `Blanc`, `WH`, l'argent sous `Metallic`, `Silver`,
+`Argent`, `MS` (Epson conseille `White` et `Metallic`). **Blanc ou argent** (section
+Blanc du travail) le pose sous la couleur ou dessus (vitrophanie). La mise en file est
+refusée, avec la raison, pour un autre ton direct (le convertir en CMJN ou le renommer),
+ou pour du blanc et de l'argent sur la même page.
 
 Chaque impression à passer affiche sa **durée estimée**, et l'en-tête de la colonne le
 total restant ; la fiche du travail aussi. Estimation : longueur imprimée × laize de la
@@ -133,10 +263,53 @@ Chaque machine passe une sortie à la fois, dans l'ordre de sa colonne. Sur une 
 à passer : **En tête**, **Monter**, **Descendre**, **Suspendre** / **Reprendre**,
 **Annuler**. Une sortie suspendue ne part pas ; les suivantes passent devant elle.
 L'**Historique** garde les sorties finies : **Refaire** relance la même sortie sans
-refaire le rendu, **Retirer** l'efface de l'historique.
+refaire le rendu, **Retirer** l'efface de l'historique. L'**Archive** garde les découpes
+archivées (voir [Après la coupe](#couper-dès-larrivée-et-après-la-coupe)) : **Restaurer**
+ou **Retirer**.
+
+**Raison d'attente.** Une sortie qui ne peut pas partir le dit par un badge rouge (le
+survol donne le détail), et laisse passer les suivantes (une sortie suspendue par un
+opérateur reste simplement *Suspendue*) :
+- **Machine injoignable** : machine débranchée ou absente du catalogue ; la sortie part
+  dès qu'elle répond ;
+- **Fichier manquant** : rendu ou tracé introuvable ; relancer le travail ;
+- **Trop large** : la page, repères compris, dépasse la laize de la machine ou du rouleau
+  chargé ;
+- **Autre support** : le support chargé n'est pas celui du travail ; la sortie part
+  d'elle-même quand le bon est chargé ;
+- **Impression pas finie** : une découpe attend que l'impression de sa page soit finie ;
+- **Découpeuse indisponible** : une impression attend que la découpeuse affectée soit
+  utilisable (pas d'encre gâchée).
 
 Une sortie coupée par un arrêt du serveur ne repart pas seule (une découpe ne se
 reprend pas au milieu) : elle passe en *Échec*, et **Refaire** la relance.
+
+## Pilote direct de l'Epson
+
+Avec une Epson SC-S80600 en connexion **Réseau (TCP)**, **Adresse IP** de l'imprimante et
+**Port TCP** 9100 (Système > Machines), le RIP envoie lui-même l'impression : les plaques
+C, M, J, N du rendu sont séparées sur les 9 encres de la machine (couples clair et foncé,
+limite d'encre), tramées en 4 tailles de point et envoyées bande par bande. Premier aplat
+CMJN imprimé le 25/10, couleurs justes.
+
+- **Alertes de l'imprimante** : avec une adresse **SNMP** sur la machine, l'état est lu
+  avant l'envoi, puis toutes les 5 s jusqu'à la fin de l'impression. Une alerte
+  bloquante (capot ouvert…) arrête l'envoi : la sortie passe en *Échec* avec « L'imprimante
+  signale une alerte : impression arrêtée ». La chauffe compte comme impression en cours.
+  Sans SNMP, la sortie est finie dès que tout est envoyé.
+- **Tête vide** : l'image commence 20 mm après le début de la page, pour éviter la bande
+  foncée vue en tête au premier tirage.
+- **Plafond d'encre** : chaque canal est limité à 85 %, contre les fines bandes vues dans
+  le jaune au premier tirage. Tête vide et plafond sont à confirmer au second tirage.
+- **Origine X / Y impression (mm)** de la machine : place l'image sur la page envoyée,
+  X depuis le bord de référence de la laize (arrondi à 16 points), Y ajouté à la tête vide.
+  0 par défaut, à régler sur un essai papier.
+- **Blanc et argent** ne passent pas encore par le pilote direct : la mise en file
+  vers une Epson en Réseau est refusée (« Envoi à l'imprimante impossible ») ; passer
+  par une machine en **Dossier** en attendant.
+
+Limites connues : seuls les tirages du 25/10 ont été faits ; les autres résolutions et
+les supports réels restent à éprouver à l'atelier.
 
 ## Les plaques
 
@@ -163,20 +336,144 @@ Bloc **Blanc** (mode Imprimer) : la plaque `White` est générée après le rend
 
 Le blanc déjà dessiné dans le fichier (ton direct `White`) est gardé : le blanc final
 réunit les deux. La plaque générée apparaît dans les aperçus, compte dans le coût et part
-à l'Epson avec les autres plaques. Un réglage enregistré garde le choix de blanc.
+à l'Epson avec les autres plaques (en connexion Dossier pour l'instant, voir le pilote
+direct). Un réglage enregistré garde le choix de blanc.
 
 ## Découpe
 
-Les tracés peints dans un ton de découpe sont repérés : `CutContour`, `Thrucut`,
-`Kisscut`, `Insidecut`, `Perforation`, `Creasing`, `Score`, `Vcut` (majuscules,
-espaces et tirets indifférents). Un ton de découpe à 0 % n'est pas découpé. Avec
-**Tous les tracés**, chaque tracé du fichier est découpé (fichiers de découpe seule).
-Les tracés sont rognés à la page : la lame ne sort jamais du support.
+Les tracés peints dans un ton de découpe sont repérés. Un ton à 0 % n'est pas découpé.
+Avec **Tous les tracés**, chaque tracé du fichier est découpé (fichiers de découpe seule).
+Les tracés sont rognés à la page, et au cadre d'un formulaire du PDF : la lame ne sort
+jamais du support.
 
-Ordre de coupe : rainage (`Creasing`, `Score`), perforation et V-cut d'abord, la coupe
-en dernier, quand la matière tient encore. Un contour contenu dans un autre (le trou d'un
-« O », une fenêtre) est découpé avant lui, pour que la pièce ne bouge pas ; à profondeur
-égale, la lame va au contour le plus proche.
+### Préfixes de découpe
+
+**Système > Découpe**, **Préfixes de découpe (séparés par ;)** : un ton est de découpe si
+son nom **commence** par un préfixe. Par défaut : `CutContour`, `Thrucut`, `Kisscut`,
+`InsideCut`, `Perforation`, `Creasing`, `Score`, `VCut`. Majuscules, espaces et tirets
+indifférents : `CutContour` reconnaît `CutContour1` et `CutContourKissCut`, pas
+`1CutContour`. Un changement vaut pour les rendus suivants : relancer un travail déjà
+rendu.
+
+### Couches de découpe
+
+Panneau **Couches de découpe** de l'inspecteur : **une couche par nom de ton**, avec son
+nombre de tracés.
+- **L'ordre des couches est l'ordre de coupe** (↑ / ↓) : mi-chair avant coupe à travers.
+  Ordre de départ : rainage (`Creasing`, `Score`), perforation et V-cut d'abord, la coupe
+  en dernier, quand la matière tient encore.
+- La case de la couche la coupe ou non.
+- **Réglage de coupe** : par défaut, **— même nom, sinon défaut —** : le réglage de la
+  découpeuse qui porte le nom de la couche s'applique seul, sinon le premier de la
+  machine. On peut en imposer un autre.
+- Rien n'est gardé sans **Enregistrer les couches** (les fichiers de coupe sont alors
+  refaits) ; **Annuler** revient aux couches enregistrées. Les couches enregistrées
+  restent au redémarrage et au rendu suivant.
+
+Un travail d'avant les couches garde son ancien réglage de coupe : il va à la couche du
+même nom ou à la seule couche ; sinon le panneau le signale, à choisir couche par couche.
+
+Dans une couche, un contour contenu dans un autre (le trou d'un « O », une fenêtre) est
+découpé avant lui, pour que la pièce ne bouge pas ; à profondeur égale, la lame va au
+contour le plus proche (voir le tri des tracés plus bas).
+
+Sur la machine, **Une couche à la fois** (Système > Machines) : pour une découpeuse qui ne
+change ni d'outil ni de réglage en cours de coupe, chaque couche devient une sortie, la
+suivante retenue jusqu'à **Reprendre**.
+
+### Contrôle préalable
+
+Au rendu, le RIP signale (alertes du travail) :
+- un ton de découpe défini en RVB (le définir en CMJN, ton direct) ;
+- un tracé de découpe avec un fond (un tracé de découpe est un filet seul) ;
+- un tracé qui touche le bord de la page ;
+- un tracé recouvert par l'image (le mettre sur le calque du dessus) ;
+- un contour vectorisé (filet devenu surface : il serait coupé deux fois) ;
+- un filet aligné à l'intérieur ou à l'extérieur du tracé (l'aligner au centre) ;
+- un tracé qui sort du plan de travail (ce qui dépasse n'est pas coupé) ;
+- une découpeuse choisie sans aucun ton de découpe reconnu (les tons du fichier sont
+  listés) ;
+- un tracé sur un calque non imprimable : il n'est pas coupé, sauf avec **Couper aussi
+  les tracés des calques non imprimables** (Système > Découpe) ;
+- des tracés ouverts non coupés, si les tracés ouverts ne sont pas autorisés.
+
+### Découpeuse et coupe après impression
+
+**Découpeuse** (panneau d'envoi) : la machine où va la découpe automatique. Tant
+qu'elle n'est pas utilisable (absente, hors ligne, mal connectée, ou une couche sans
+réglage sur elle), l'impression attend : rien ne part, pour ne pas gâcher d'encre ni de
+support. Une découpe attend que l'impression de sa page soit finie à 100 %.
+
+### Mise en coupe
+
+Panneau **Mise en coupe** de l'inspecteur. Il tourne le travail pour la découpeuse, pas
+le fichier, sans nouveau rendu :
+- **Rotation de la coupe** par quart de tour, cadre de repérage compris : tourner le
+  support d'autant. L'aperçu de coupe porte une flèche grise du sens d'avance (le haut de
+  la page entre le premier) ;
+- **Décaler la coupe vers l'extérieur (mm)**, de 0 à 5 mm : la pièce grandit d'autant
+  (un trou se resserre) ;
+- **Compensation de cintrage** (travail imprimé) : voir plus bas ;
+- en **découpe seule** seulement (sans impression, la coupe n'a pas d'encre à suivre) :
+  **Miroir**, **Échelle X / Y (%)** (**Proportionnelle** ou non), **Copies X / Y** avec
+  **Écart X / Y (mm)** (100 par sens, 1000 en tout), **Départ depuis l'origine de la
+  machine**.
+
+**Enregistrer la mise en coupe** refait les fichiers de coupe. Le décalage ne remplace
+pas l'étalonnage imprimante-découpeuse (décalage X / Y de la machine).
+
+### Tolérance de découpe
+
+Bloc **Tolérance de découpe** du panneau d'envoi, **Étendre l'image près des tracés** :
+l'encre qui s'arrête à moins du **seuil de proximité** d'un contour fermé est prolongée
+jusqu'au contour, puis au-delà sur la **largeur** donnée (0,1 à 10 mm) : la coupe ne
+laisse pas de liseré blanc. L'aperçu composite ne le montre pas, les plaques si. Valeurs
+prudentes ; ne remplace pas l'étalonnage.
+
+### Tracés ouverts et tri
+
+Dans **Système > Découpe** (actifs par défaut) :
+- **Autoriser les tracés ouverts (évents de bâche)** : décoché, un tracé ouvert n'est pas
+  coupé, avec une alerte par page ;
+- **Trier les tracés** : intérieurs d'abord, puis le plus proche voisin ; décoché, les
+  tracés sont coupés dans leur ordre de création.
+
+### Couper dès l'arrivée et après la coupe
+
+**Couper dès l'arrivée** (machine, Système > Machines, coché par défaut) : décoché, chaque
+découpe arrive suspendue dans la file de la machine et part quand l'opérateur clique
+**Reprendre**.
+
+**Après coupe** (Système > Découpe) : **ne rien faire (historique)** (par défaut),
+**archiver (restaurable)**, ou **supprimer de la file**. Une découpe archivée sort de la
+file et va dans l'**Archive** de sa machine ; **Restaurer** la remet en file (suspendue
+sur une machine sans coupe à l'arrivée).
+
+### Détourage automatique
+
+Panneau **Détourage automatique** de chaque page imprimée d'un PDF : le RIP analyse
+l'image rendue, retire le blanc autour et propose un contour de découpe (`CutContour`).
+Réglages : **Seuil du blanc (1–255)**, **Supprimer les plus petits que (mm²)**,
+**Lissage (0–5)**, **Décalage vers l'extérieur (mm)**, **Supprimer les contours
+intérieurs**. **Aperçu** d'abord (nombre de contours et dessin), puis **Accepter** : les
+fichiers de coupe sont refaits. **Retirer le détourage** l'ôte. Un nouveau rendu
+l'efface. Seulement sur le rendu d'un PDF.
+
+### Compensation de cintrage
+
+Dans **Mise en coupe**, **Compenser le cintrage** : une fois les sécheurs chauds,
+l'impression sort courbée (milieu en retard sur les bords) ; la coupe suit. Régler la
+**Largeur du support (mm)** (la courbe y est centrée), le **Début (mm d'avance)**, compté
+depuis le haut de la page (rien avant), et la **Flèche (mm)**. La courbe s'installe sur
+50 mm. À mesurer sur un tirage.
+
+### Variantes de machine
+
+Système > Machines, **Dupliquer (autre jeu de repères)** sur une découpeuse : une
+variante, même machine physique, avec son propre **Jeu de repères** (ou **— celui du
+travail —**). Connexion, modèle et réglages de coupe sont repris de la machine d'origine
+à chaque enregistrement. Un travail affecté à la variante prend ses repères ; sa
+découpe passe par la machine d'origine, une sortie à la fois.
 
 ## Repérage pour le Kona
 
@@ -199,6 +496,11 @@ En mode **Imprimer**, le choix **Repérage Kona** ajoute autour de l'image :
   repère de 30 mm tous les 500 mm au plus sur chaque côté, mêmes codes, fichier
   `Nom_MF_<numéro>.plt`, pour les grandes longueurs découpées par segments.
 
+**Multi-cadre automatique** : avec le type 2, une page de **1,5 m et plus** dans le sens
+d'avance prend d'elle-même le cadre multi-segments (type 3), et son fichier le suffixe
+`MF`. Le manuel Kona (§ 6.3) déconseille le cadre simple au-delà de 2 m et le
+multi-cadre sous 1,5 m.
+
 Types 2 et 3 suivent les tableaux du guide d'application Kona (chap. 4.4.2) ; la place
 du code du haut et l'écart des repères du type 3 sont lus sur ses schémas, sans cote (le
 type 3 reste à éprouver).
@@ -206,6 +508,18 @@ type 3 reste à éprouver).
 Chaque cadre porte une **flèche ▲** dans son coin intérieur bas-droit : elle pointe vers
 le bord qui sort le premier de l'Epson, celui qu'on engage le premier dans le Kona (par
 l'arrière).
+
+**Alertes de repérage** : une image de moins de 25 cm de côté est signalée (taille
+conseillée pour le repérage Kona). L'alerte « moins de 5 cm de blanc » entre l'image et
+les repères est suspendue : nos cadres laissent 10 mm, la règle reste à éprouver sur la
+machine.
+
+**Fond sous les repères** (bloc du panneau d'envoi), pour un support sombre, transparent
+ou réfléchissant : **Imprimer un fond sous les repères** pose une bande d'encre qui
+déborde de chaque repère et code-barres (**Débord autour des repères**, 0,5 à 13 mm), ou,
+avec **Aplat de toute la zone des repères (hors image)**, toute leur zone. **Encre** :
+blanc (ton `White`) ou CMJN (valeurs en %). Les repères noirs sont imprimés dessus en
+surimpression : le fond reste aussi sous eux.
 
 **Envoi au Kona.** Le RIP envoie la découpe comme Mutoh CutServer : avec un cadre, il
 déclare les deux coins opposés du cadre (milieux des traits), le Kona le balaie, lit le
@@ -215,7 +529,8 @@ CutServer ; le premier sert par défaut. Comme dans CutServer, chacun peut aussi
 **valeurs du massicot** (rien n'est envoyé), imposer un **outil** (1 à 4), et suivre un
 **motif** de découpe : jusqu'à 10 paires « bas/haut » en mm (`8/2 8/2` = couper 8 mm,
 lever 2 mm), avec la **diffusion** (un nombre entier de motifs par ligne droite, la coupe
-commence et finit aux angles vifs). **Fichier .plt** avec `?machine=kona` donne le
+commence et finit aux angles vifs). Chaque couche de découpe part avec son propre réglage.
+**Fichier .plt** avec `?machine=kona` donne le
 fichier tel que le Kona le reçoit, à envoyer à la main (port série 9600, 8N1, RTS/CTS).
 Si la coupe sort tournée de 180°, cocher **découpe retournée** sur la machine.
 
@@ -232,14 +547,25 @@ sur le serveur. Un PDF, AI ou SVG déposé dedans devient un travail avec ce ré
 que sa copie est terminée (taille stable pendant 5 s). Un fichier refusé est rangé dans
 `refuses/`, avec un fichier `.refus.txt` qui donne la raison.
 
+**Exporter, importer** (administrateur, Système > Sauvegarde de la configuration) :
+**Exporter les réglages** télécharge tous les réglages enregistrés, pour un autre serveur ;
+**Importer des réglages** reprend ceux d'un export. **Si le nom existe** : **renommer
+(« nom 2 »)** ou **écraser**. Tout est contrôlé avant d'écrire.
+
 ## Mosaïque
 
 Bloc **Mosaïque** : cocher **Couper en lés si plus large que la laize**, régler la laize
 et le **recouvrement** (zone imprimée sur les deux lés voisins, pour coller ou souder).
-Les lés ont tous la même largeur. Chaque lé devient une page du travail, avec sa propre
-découpe rognée à son bord. **Numéro et traits d'assemblage** ajoute en pied de chaque lé
-une bande de 10 mm : « Lé 2/3 » et un trait vertical là où le lé voisin s'arrête ou
-commence, pour aligner les lés à la pose.
+Les lés ont d'abord la même largeur. Chaque lé devient une page du travail, avec sa
+propre découpe rognée à son bord. **Numéro et traits d'assemblage** ajoute en pied de
+chaque lé une bande de 10 mm : « Lé 2/3 » et un trait vertical là où le lé voisin
+s'arrête ou commence, pour aligner les lés à la pose.
+
+Le bloc règle aussi la **Hauteur maxi d'une tuile** (la page est alors coupée en
+rangées : colonnes × rangées), la **Soudure** (recouvrement sans encre sous la voisine,
+12,7 mm au moins) et le **Trait de coupe au milieu des recouvrements**. Lés inégaux,
+tuiles à ne pas imprimer, recouvrement propre à une tuile et ordre d'impression se
+règlent dans la visionneuse (voir [Lés et tuilage](#lés-et-tuilage)).
 
 ## Planche (imbrication)
 
@@ -278,13 +604,17 @@ Bloc **Couleur** (mode Imprimer) :
 - **Support (sortie)** : profil du support imprimé ; l'aperçu simule son rendu.
 - **Intention** : perceptuelle, colorimétrique relative, saturation, absolue.
 
-Les tons directs (`White`, `Silver`…) ne sont jamais convertis.
+Les tons directs (`White`, `Silver`…) ne sont jamais convertis. Pour retoucher les
+couleurs d'un travail : [filtre couleur](#filtre-couleur) de la visionneuse.
 
 ## Système
 
 Vue **Système** : version du serveur, durée de conservation des travaux (30 jours par
 défaut, réglée par `EKO_RIP_CONSERVATION_JOURS`) et espace libre du disque des données,
-en rouge sous 10 %.
+en rouge sous 10 %. Un dossier ou un fichier d'état manquant ou abîmé y est signalé
+(« Fichiers et dossiers »). Le bloc **Découpe** (administrateur) porte les préfixes de
+découpe, les calques non imprimables, les tracés ouverts, le tri des tracés et le
+choix **Après coupe** (voir [Découpe](#découpe)).
 
 ## Machines
 
@@ -295,14 +625,52 @@ réseau TCP, périphérique comme `/dev/usb/lp0`, ou dossier), l'adresse SNMP po
 média chargé, le pas de découpe (0,01 mm pour le Kona, 0,025 mm par défaut ailleurs) et
 le **décalage X / Y** de la découpe (−20 à 20 mm) : l'écart mesuré sur une coupe d'essai
 entre la découpe et l'impression, ajouté à chaque découpe envoyée à cette machine.
-**Enregistrer** applique tout de suite : les boutons d'impression et de découpe, la file
-et la barre latérale suivent. Une machine qui a encore une sortie à passer ne peut pas
-être retirée.
+Aussi : l'**Origine X / Y impression** (Epson, pilote direct), la **Cadence (m²/h)**, le
+**Pool**, et pour une découpeuse ses réglages de coupe, **Découpe retournée (180°)**,
+**Une couche à la fois**, **Couper dès l'arrivée** et **Dupliquer (autre jeu de
+repères)**. **Enregistrer** applique tout de suite : les boutons d'impression et de
+découpe, la file et la barre latérale suivent. Une machine qui a encore une sortie à
+passer ne peut pas être retirée.
 
+- **Epson SC-S80600** : connexion **Réseau (TCP)**, hôte = adresse de l'imprimante, port
+  9100 = pilote direct ; **Dossier** = plaques copiées, rien n'est imprimé. Renseigner le
+  SNMP pour arrêter la sortie sur une alerte.
 - **Graphtec FC7000-75** : régler la machine en HP-GL (Menu > Interface > Command), pas de
   0,025 mm ; le repérage ARMS se règle au panneau de la machine.
 - **Roland VersaCAMM VP-300 / VP-540** (762 / 1371 mm) : la découpe part par le réseau ;
   à éprouver à l'atelier. L'impression Roland viendra après une capture réseau.
+
+**Pool d'imprimantes** : le même nom de **Pool** sur des machines identiques (même
+modèle, même laize). Un bouton **Imprimer sur pool « … »** apparaît sur chaque page ; la
+sortie se montre chez chaque membre et part sur la première machine prête, qui la
+prend. Refusé si les supports chargés connus des membres diffèrent : charger le même
+support, ou dupliquer la machine.
+
+## Supports et modes d'impression
+
+**Système > Supports de l'Epson** (administrateur) : le catalogue des supports. Pour
+chacun : **Nom**, **N° dans l'imprimante** (le n° de support enregistré dans l'Epson,
+qui permet de reconnaître le support chargé), **Laize (mm)**, **Encres**, et ses
+**Modes** d'impression, écrits `Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4`. Les
+prix restent dans « Coûts d'encre et de support », reliés par le nom. Chaque support et
+chaque mode garde un identifiant stable : le renommer ne le change pas.
+
+**À l'envoi**, **Support et mode d'impression** : le mode impose la résolution du rendu ;
+le support relie aux tarifs. **— résolution choisie à la main —** garde la résolution du
+panneau. Changer de mode sur un travail reçu refait le rendu.
+
+**Support chargé** (Système > Média chargé dans l'Epson) : reconnu par son n° lu sur
+l'imprimante, ou choisi par l'opérateur dans la liste (le choix prime jusqu'au retour à
+**— lu sur l'imprimante —**). Un n° inconnu du catalogue est signalé. Une impression
+attend que le support chargé soit celui du travail (**Autre support**), puis part
+d'elle-même ; la laize du rouleau chargé borne la page (**Trop large**). Support chargé
+inconnu : rien n'est bloqué.
+
+**Paquet support** : **Exporter** (sur la ligne d'un support) donne un fichier avec ce
+support, ses modes et les réglages qui s'en servent, sans profil ICC. **Importer un
+paquet support** le reprend sur un autre serveur : identifiants gardés, réimport sans
+doublon ; un paquet fait par une version plus récente est refusé (mettre ce serveur à
+jour d'abord).
 
 ## Média chargé dans l'Epson
 
@@ -311,7 +679,8 @@ mesure au chargement, est lue par le réseau (SNMP, Printer-MIB normalisée) et 
 laize des panneaux Planche et Mosaïque (**Utiliser comme laize**, **Relire**). Il faut
 renseigner l'adresse IP de l'Epson dans `EKO_RIP_EPSON_SNMP` (voir l'installation du
 serveur). Validé sur la SC-S80600 : l'écran montre aussi la longueur restante du rouleau,
-le n° de support, les chauffages et le niveau de chaque encre.
+le n° de support, les chauffages, le niveau de chaque encre, les alertes et le
+support chargé.
 
 **Consommation réelle** : le serveur relève l'Epson chaque minute (encres et rouleau) et
 garde chaque changement dans `releves/epson.jsonl` (dossier des données). L'écran affiche
@@ -352,13 +721,16 @@ l'estimation de chaque page et le CSV (colonne `base`) suivent.
 travail, page, surface, ml par encre, coûts), séparateur `;`, décimales avec un point,
 pour un tableur ou E-KO ERP.
 
-Limite connue : le support compté est la surface de la page, pas la longueur de rouleau
-consommée sur toute la laize.
+Limite connue : sans largeur de rouleau connue, le support compté est la surface de la
+page, pas la longueur de rouleau consommée sur toute la laize.
 
 ## Ce qui n'existe pas encore
 
-- Le pilote de l'Epson : les plaques sortent dans un dossier, pas vers l'imprimante.
-- La lecture automatique du cadre par le Kona n'a pas encore été essayée sur la machine.
+- Le blanc et l'argent par le pilote direct de l'Epson : ils sortent en dossier.
+- L'impression par la Roland.
+- Le cadre Kona type 3 (multi-segments) n'a pas encore été essayé sur la machine.
+- L'import d'images (PNG, JPEG…) : seuls PDF, AI et SVG sont reçus ; le détourage se fait
+  sur le rendu d'un PDF.
 - Les couleurs métallisées `MT-*` du nuancier Epson ne sont pas encore converties.
 
 ## Glossaire
@@ -368,5 +740,10 @@ consommée sur toute la laize.
   sa propre plaque au lieu d'être mélangée au CMJN.
 - **Laize** : largeur utile du rouleau.
 - **Lé** : bande verticale d'une mosaïque, au plus large comme la laize.
+- **Tuile** : un morceau d'une mosaïque en colonnes × rangées ; chaque tuile est une page.
+- **Couche de découpe** : les tracés d'un même nom de ton, coupés ensemble avec un même
+  réglage.
+- **Mode d'impression** : résolution, passes et chauffage d'un support.
 - **Sortie** : une page d'un travail envoyée à une machine, dans la file d'attente.
+- **Variante** : copie d'une découpeuse avec son propre jeu de repères.
 - **Dossier surveillé** : dossier du serveur dont chaque fichier déposé devient un travail.

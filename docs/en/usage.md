@@ -1,28 +1,33 @@
 # Usage
 
-The screen has three views, at the top: **Jobs**, **Queue** and **System**. The button
-on the right switches language (French or English). If the server has accounts, the
-screen asks you to sign in first (see *Security* in the server installation guide).
+The screen has three views, on the left: **Jobs**, **Queue** and **System**. The button
+on the right of the toolbar switches language (French or English). If the server has
+accounts, the screen asks you to sign in first (see *Security* in the server
+installation guide).
 
 ## The screen
 
 Work happens in the **E-KO RIP Center client**. The screen reads like a RIP queue: the
 **toolbar** on top (**Import**, then actions on the selected job: **Print**, **Cut**,
-**Edit**, **Proof**, **Retry**, **Delete**; search, theme ◐, language), on the left the
-**views**, the catalogue **machines** with their queued outputs and the **saved presets**,
-in the middle the **job table**, on the right the **inspector** of the selected job.
+**Edit**, **Settings**, **Proof**, **Retry**, **Delete**; search, theme ◐, language), on
+the left the **views**, the catalogue **machines** with their queued outputs and the
+**saved presets**, in the middle the **job table**, on the right the **inspector** of the
+selected job.
 
 ## Sending a job
 
-1. **Jobs** view, **New job** panel: drop a file onto the dashed area, or click it to
-   choose one. You can also drop one or more files anywhere on the page: they are all
-   sent with the panel's settings.
+1. **Import**: drop a file onto the dashed area, or click it to choose one. You can also
+   drop one or more files anywhere on the window: they are all sent with the import
+   settings.
 2. Pick the **Mode**:
    - **Print (and cut)**: rendered into ink plates, plus cutting when the file has cut
      paths;
-   - **Cut only**: nothing is printed; only the paths go to the Kona.
-3. Set the **Resolution** (360, 720 or 1440 dpi), the **Paths to cut** and the **Kona
-   registration**. The **Colour** and **Tiling** blocks open with a click.
+   - **Cut only**: nothing is printed; only the paths go to the cutter.
+3. Set the **Resolution** (360, 720 or 1440 dpi), the **Paths to cut**, the **Media and
+   print mode** (see [Media and print modes](#media-and-print-modes)), the **Cutter**
+   (see [Cutting](#cutting)) and the **Kona registration**. The **Colour**, **Quick
+   edit**, **Automatic queueing**, **White**, **Background under marks**, **Cutting
+   tolerance** and **Tiling** blocks open with a click.
 4. **Send to RIP**.
 
 Accepted formats: PDF, AI (saved with “Create PDF Compatible File”) and SVG (cut only).
@@ -35,65 +40,181 @@ registration included (frame, codes, margins), is wider than the printer's roll 
 No effect with a rotation chosen in quick edit or with tiling (the tiles handle it).
 
 **Settings** (toolbar) reopens the import panel on the selected job: mode,
-registration, cut setting, tiles, white, media, colour… **Apply and render again**
+registration, cutter, tiles, white, media, colour… **Apply and render again**
 starts from the original, without sending the file again.
 
 ## Quick edit
 
 **Quick edit** block of the send panel, or **Edit** button on a finished job (rendering
 is redone from the original file, no need to send it again):
-- **Scale** (%), **Rotation** (0, 90, 180, 270°), **Mirror** (window film, lightbox
-  seen from behind), **White margin** around the image;
-- **Grommets**: printed marks (ring and centre cross) along the ticked edges, at the
-  given **distance from edge**, corners included, evenly spread with a **maximum
-  spacing**;
-- **Rectangular cut contour** around the image, offset by a few mm (negative = inside).
+- **Scale** (%), **Rotation** (0, 90, 180, 270°), **Mirror (window film)** (lightbox seen
+  from behind), **White margin** around the image. **The mirror flips**: **the image and
+  the cut** (default) or **the image only** — to be proven in the workshop: depending on
+  how it is mounted, the cut must follow the image or not;
+- **Grommets (printed marks)** along the ticked edges, at the given **distance from
+  edge**, corners included. **Placement** **by spacing** (a **maximum spacing**) or **by
+  quantity** (a number per edge). **Shape**: circle, filled disc, cross, circle and
+  cross. With **Distance measured from the cut line (inwards)**, the inset starts from the
+  cut contour, not the edge;
+- **Rectangular cut contour**, offset by a few mm (negative = choke inwards), **around**
+  the image, the bleed, or the trim box (bleed + trim);
+- **Printed marks** (see below), **Bleed**, **Printed label** and **QR code in the
+  margin**.
 
 Cutting follows the edit. A job with an output in the queue cannot be edited: cancel or
-finish the output first.
+finish the output first. The margin grows by itself to hold the marks, the label and the
+code.
+
+**Printed marks**:
+- **Corner crop marks**, at an adjustable **distance from the bleed** and **length**; or
+  **Corner registration crosses** (they replace the crop marks);
+- **Contour printed on the cut line**;
+- **Fold and sewing marks**: **Add a mark**, choose the side and the **distance from the
+  edge**; **Sewing (continuous line)**; with **Printed** unticked the mark is not printed
+  (20 marks at most);
+- **Line** solid, dashed or alternate (dashes on white), with **Dash**, **Gap**, **Width**
+  and **Colour** (black, registration CMYK 100 %, white).
+
+With Kona registration, crop marks and crosses are not printed (they would disturb the
+reading of the marks): a job alert says so.
+
+**Bleed** on all 4 sides (**Sides linked** for one value everywhere), up to 100 mm.
+**Fill**: a colour (C, M, Y, K in %), the first edge pixel, a mirrored image, or edge
+duplication. Cut spot colours are not copied into the bleed. **Trim white**: white added
+around, beyond the bleed. Marks sit outside the bleed.
+
+**Printed label**: name, date, W × H, panel, copies, mode and order, at the top or bottom
+of each panel, at the chosen **text size**. Copies and order reference print empty
+(“—”) until the job sheet exists.
+
+**QR code in the margin**: top or bottom, **code size**, **white around**, **error
+correction** level (L, M, Q, H) and the **tags** to put in it (name, page, tile/total,
+date, job ID, cut ID, machine, order ref.). Optional **Cut contour around the code**.
 
 ## Automatic queueing
 
 **Automatic queueing** block: once rendered, each printable page goes to the Epson
-queue and each page to cut to the Kona queue. **Add on hold** holds them: import ten
-files and release the ones you want from the queue. A cut that follows a print is
-always added on hold (the media must first move to the Kona). The setting is saved with
-the others: a hot folder can thus print on its own.
+queue and each page to cut to the Kona queue (or the cutter chosen at import). **Add on
+hold** holds them: import ten files and release the ones you want from the queue. A cut
+that follows a print is always added on hold (the media must first move to the Kona). The
+setting is saved with the others: a hot folder can thus print on its own.
 
 Several files can be chosen at once; each is sent with the same settings.
 
 ## Proof (BAT)
 
-**Proof (PDF)** link on a finished job: an A4 landscape PDF to send to the customer, one
+**Proof** button on a finished job: an A4 landscape PDF to send to the customer, one
 page per job page: the image soft-proofed with the media profile, the cut line in magenta
 (not printed), the size in mm, the settings (mode, resolution, profile, white, edit,
 grommets), the preflight warnings and an “Approved for printing” box (date, name and
-signature). It comes out in the screen's language.
+signature). It comes out in the screen's language. A colour filter is mentioned, but the
+proof image does not show it.
 
-## Viewer
+## Visual editor (viewer)
 
-Clicking a thumbnail (composite, plate, cut) opens it large, with its size in mm.
+Clicking a thumbnail (composite, plate, cut) in the inspector opens it large.
+
+**Viewing.** Zoom from 25 to 800 % with the wheel (the point under the cursor stays put),
+with **−**, **+**, the % list, **Fit** and **100 %** (actual size on screen). **Hand**
+tool (drag to move) and **Magnifier** (click: zoom in; Shift+click: zoom out; drag a
+rectangle: zoom on it). Rulers in mm on two edges; at the bottom, the page size and the
+cursor position in mm. Keyboard: `+` `−` `0` `1` and arrows.
+
+**Roll width.** **Roll width** box: the width of the media loaded in the Epson (otherwise
+the machine's roll width) is drawn; what overflows is in red, with the gap in mm.
+
+**Pages.** A multi-page job shows a strip of thumbnails, one per page, the current one
+marked. ← → or PgUp PgDn change page; the chosen view (composite, cut, plate) is kept.
+
+**Selection.** A click on the page selects it (frame and 8 handles); a click outside the
+page deselects it.
+
+**Layers.** Right-hand panel: image, cut (in magenta), white and silver, switched on one
+by one. White and silver are the plates with the names the Epson recognises, tinted on
+the image. Kona marks are printed in the Black plate: no separate layer. The cut is only
+overlaid when the cut is placed like the print (no rotation or mirror in [cut
+placement](#cut-placement)).
+
+### Editing the page
+
+The editing tools only open on a rendered PDF without tiling. Each change is prepared on
+screen; **Apply** sends it and renders again, **Discard changes** goes back to the
+rendered state.
+
+- **Crop**: handles (drag an edge, drag inside to move) or fields X (from the left), Y
+  (from the bottom), Width, Height, in mm of the original page, before rotation and
+  mirror. 9-point **Anchor**, **Keep proportions**, **No crop**. A frame that goes outside
+  the page is refused (at least 1 × 1 mm).
+- **Size**: **Printed size** as width and height (mm) or %. Corners: proportional;
+  sides: free. With **Proportions linked** unticked, width and height are set apart, and
+  the cut is distorted the same way. The top left corner stays put.
+- **Rotate 90° left** (⟲) / **right** (⟳), **Mirror**; the **The mirror flips** choice
+  (image and cut, or image only) shows with the mirror — to be proven in the workshop. A
+  mirrored job carries the **Mirror** badge in the queue.
+- While cropping or resizing with Kona registration, the marks are drawn dotted around the
+  size to come.
+
+**Undo / redo**: ↶ and ↷, or Ctrl+Z (Cmd+Z), Shift+Ctrl+Z and Ctrl+Y; 50 states at most.
+Going back to a state already rendered renders again; a state only typed in comes back
+into the panel.
+
+### Colour filter
+
+**Colour** button in the viewer: **Colour filter** block, specific to the job. It acts on
+the CMYK plates, after the output profile and before automatic white; white, silver and
+cut are left untouched.
+- **Curves** C, M, Y, K: “input:output” points in % (e.g. `0:0 50:60 100:100`), 16 at
+  most; empty = none.
+- **Brightness** (+ = less ink) and **Saturation**, from −100 to 100 %.
+- **Colour replacement**: a CMYK colour **From** to a CMYK colour **To**, with a **Range**
+  (± %), 20 at most; it comes before the rest of the filter. **Add a replacement**, **On**
+  box, **Remove**.
+- **Before / after (left: before)**: split preview, on a filter already rendered; the
+  slider moves the split. “After” estimates the effect on the soft proof.
+- **Export to the preset**: the filter goes into a saved preset, or a **New preset (this
+  job's settings)**; it is picked up at import. **No filter** removes it.
+
+### Panels and tiles
+
+On a page wider than the roll, the viewer shows the panels dotted, their overlaps tinted
+and their numbers. **Panels** panel:
+- drag a panel (or row) line for unequal panels; **Panel widths** and **Row heights** can
+  also be typed in mm; **Equal panels** goes back to an even split;
+- **Roll width**, **Maximum tile height** (beyond it the page is split into rows) and
+  **Overlap** give the grid, summed up as columns × rows;
+- **Weld**: no ink in the overlap under the neighbouring tile (at least 12.7 mm of
+  overlap);
+- **Cut line in the middle of each overlap**;
+- **Tiles to print**: one box per tile; an unticked tile is neither rendered nor queued.
+  Clicking its number sets its own **overlap** (negative = gap);
+- **Print order** (e.g. `3 1 2`): these tiles first, then the others by number.
+
+**Split into panels** applies. On a job already in panels, **Apply** keeps the changes
+and **Whole page (no tiling)** goes back to a single page.
 
 ## Following jobs
 
-Each job is a card: thumbnail, name, badges (state, mode or resolution, page count,
-registration) and date. States: *Queued*, *In progress*, *Done*, *Failed*. Click a card
-to open it:
+Each job is a row of the table: thumbnail, name, state, size, pages, media, cost price
+and date. States: *Queued*, *In progress*, *Ready*, *Failed*. Click a row to open it in
+the inspector:
 
-- one row per page, with its number of cut paths;
-- the **Print (Epson)** and **Cut (Kona)** buttons, which add the page to that
-  machine's queue; the badge next to them shows the state of the last output;
+- one part per page, with its number of cut paths;
+- a **Print on…** button per printer (and per pool) and **Cut on…** per cutter, which add
+  the page to that machine's queue; the badge next to them shows the state of the last
+  output;
 - **.plt file**: downloads the cut file (HP-GL, 0.010 mm per step, origin at the
   bottom-left corner of the page);
-- the previews: composite (soft-proofed with the media profile), cut, and one thumbnail
-  per plate.
+- the preview (composite, soft-proofed with the media profile); the cut and one thumbnail
+  per plate are behind the **Layers** button;
+- on a job to cut: the **Cut layers** and **Cut placement** panels, and on each printed
+  page of a PDF, **Auto contour** (see [Cutting](#cutting)).
 
-**Warnings** (orange badge): when a PDF to print is sent, the server flags fonts that
-are not embedded (another one will be used at rendering: outline the text or embed the
-font) and images under 100 ppi at their printed size. The job still goes through: the
-operator decides.
+**Warnings** (⚠ badge): when a PDF to print is sent, the server flags fonts that are not
+embedded (another one will be used at rendering: outline the text or embed the font) and
+images under 100 ppi at their printed size. The cut preflight adds its own (see
+[Cutting](#cutting)). The job still goes through: the operator decides.
 
-The search bar filters by name; the **All**, **In progress**, **Done** and **Failed**
+The search bar filters by name; the **All**, **In progress**, **Ready** and **Failed**
 chips filter by state. **Retry** redoes a failed job; **Delete** removes a finished job
 (refused while an output is waiting for it in the queue).
 
@@ -103,16 +224,19 @@ chips filter by state. **Retry** redoes a failed job; **Delete** removes a finis
 the tab.
 
 - **Mutoh Kona 1650**: the cut goes out through the cutter port (`/dev/kona`).
-- **Epson SC-S80600**: its driver does not exist yet. Meanwhile, the plates to print
-  are copied to `/var/lib/eko-rip/sorties/epson/<job>-p<page>-<output>/` on the server.
-  They are laid out as the driver will send them: one file per printer channel
-  (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, then `WH.tif` or `MS.tif`) and `envoi.json`
-  (channels in order, source plate, layers). Cut spot colours (`CutContour`…) never go
-  out. White is recognised as `White`, `Blanc`, `WH`, silver as `Metallic`, `Silver`,
-  `Argent`, `MS` (Epson recommends `White` and `Metallic`). **White or silver** (White
-  section of the job) puts it under the colour or over it (window film). Queuing is
-  refused, with the reason, for any other spot colour (convert it to CMYK or rename it),
-  or for white and silver on the same page.
+- **Epson SC-S80600**: with a **Network (TCP)** connection, port 9100, the RIP prints
+  through its own driver (see [Direct Epson driver](#direct-epson-driver)). With a
+  **Folder** connection, nothing is printed: the plates are copied to
+  `/var/lib/eko-rip/sorties/epson/<job>-p<page>-<output>/` on the server, one file per
+  printer channel (`K.tif`, `C.tif`, `M.tif`, `Y.tif`, then `WH.tif` or `MS.tif`) and
+  `envoi.json` (channels in order, source plate, layers); the finished output shows
+  **Left in the folder (not printed)**.
+
+Cut spot colours (`CutContour`…) never go to the printer. White is recognised as
+`White`, `Blanc`, `WH`, silver as `Metallic`, `Silver`, `Argent`, `MS` (Epson recommends
+`White` and `Metallic`). **White or silver** (White section of the job) puts it under the
+colour or over it (window film). Queuing is refused, with the reason, for any other spot
+colour (convert it to CMYK or rename it), or for white and silver on the same page.
 
 Each print still to run shows its **estimated time**, and the column header the total
 left; so does the job card. Estimate: printed length × machine roll width ÷ speed. Epson
@@ -125,9 +249,52 @@ Each machine runs one output at a time, in its column's order. On an output stil
 run: **To top**, **Up**, **Down**, **Hold** / **Resume**, **Cancel**. An output on hold
 does not run; the next ones pass it. **History** keeps finished outputs: **Redo** runs
 the same output again without re-rendering, **Remove** deletes it from the history.
+**Archive** keeps archived cuts (see [After cutting](#cut-on-arrival-and-after-cutting)):
+**Restore** or **Remove**.
+
+**Wait reason.** An output that cannot go says so with a red badge (hover for details),
+and lets the next ones pass (an output held by an operator simply stays *On hold*):
+- **Machine unreachable**: the machine is unplugged or missing from the catalogue; the
+  output leaves as soon as it answers;
+- **File missing**: rendering or cut path not found; re-run the job;
+- **Too wide**: the page, marks included, is wider than the machine's or the loaded
+  roll's width;
+- **Other media**: the loaded media is not the job's; the output leaves by itself once
+  the right one is loaded;
+- **Print not finished**: a cut waits until its page is printed;
+- **Cutter unavailable**: a print waits until the assigned cutter is usable (no wasted
+  ink).
 
 An output cut short by a server shutdown does not restart by itself (a cut cannot
 resume halfway): it becomes *Failed*, and **Redo** runs it again.
+
+## Direct Epson driver
+
+With an Epson SC-S80600 on a **Network (TCP)** connection, the printer's **IP address**
+and **TCP port** 9100 (System > Machines), the RIP sends the print itself: the C, M, Y, K
+plates of the rendering are split over the machine's 9 inks (light/dark pairs, ink
+limit), screened with 4 dot sizes and sent band by band. First CMYK flat printed on
+25/10, colours right.
+
+- **Printer alerts**: with an **SNMP** address on the machine, the state is read before
+  sending, then every 5 s until printing ends. A blocking alert (cover open…) stops the
+  sending: the output becomes *Failed* with “The printer reports an alert: printing
+  stopped”. Heating up counts as printing. Without SNMP, the output is done as soon as
+  everything is sent.
+- **Blank head**: the image starts 20 mm after the start of the page, to avoid the dark
+  band seen at the head of the first print.
+- **Ink ceiling**: each channel is capped at 85 %, against the thin bands seen in the
+  yellow on the first print. Blank head and ceiling are to be confirmed on the second
+  print.
+- **Print origin X / Y (mm)** of the machine: places the image on the page sent, X from
+  the reference edge of the roll (rounded to 16 dots), Y added to the blank head. 0 by
+  default, to set on a paper test.
+- **White and silver** do not go through the direct driver yet: queuing to an Epson on
+  Network is refused (“Cannot send to the printer”); use a machine on **Folder**
+  meanwhile.
+
+Known limits: only the prints of 25/10 have been made; other resolutions and real media
+are still to be proven in the workshop.
 
 ## Plates
 
@@ -154,20 +321,136 @@ them, even without overprint in the file: at rendering they become the PDF stand
 
 White already drawn in the file (`White` spot colour) is kept: the final white is the
 union of both. The generated plate shows in the previews, counts in the cost and goes to
-the Epson with the other plates. A saved preset keeps the white choice.
+the Epson with the other plates (through a Folder connection for now, see the direct
+driver). A saved preset keeps the white choice.
 
 ## Cutting
 
-Paths painted in a cut spot colour are detected: `CutContour`, `Thrucut`, `Kisscut`,
-`Insidecut`, `Perforation`, `Creasing`, `Score`, `Vcut` (case, spaces and dashes
-ignored). A cut spot colour at 0 % is not cut. With **All paths**, every path in the
-file is cut (cut-only files). Paths are clipped to the page: the blade never leaves the
-media.
+Paths painted in a cut spot colour are detected. A cut spot colour at 0 % is not cut.
+With **All paths**, every path in the file is cut (cut-only files). Paths are clipped to
+the page, and to the box of a PDF form: the blade never leaves the media.
 
-Cutting order: creasing (`Creasing`, `Score`), perforation and V-cut first, the cut last,
-while the material still holds. A contour inside another (the hole of an “O”, a window)
-is cut before it, so the piece does not move; at equal depth, the blade goes to the
-nearest contour.
+### Cut prefixes
+
+**System > Cutting**, **Cut prefixes (separated by ;)**: a spot colour is a cut one if
+its name **starts** with a prefix. Default: `CutContour`, `Thrucut`, `Kisscut`,
+`InsideCut`, `Perforation`, `Creasing`, `Score`, `VCut`. Case, spaces and dashes ignored:
+`CutContour` matches `CutContour1` and `CutContourKissCut`, not `1CutContour`. A change
+applies to the next renderings: restart a job already rendered.
+
+### Cut layers
+
+**Cut layers** panel of the inspector: **one layer per spot colour name**, with its number
+of paths.
+- **The layer order is the cutting order** (↑ / ↓): kiss cut before through cut. Starting
+  order: creasing (`Creasing`, `Score`), perforation and V-cut first, the cut last, while
+  the material still holds.
+- The layer's box cuts it or not.
+- **Cut setting**: by default **— same name, else default —**: the cutter's setting named
+  like the layer applies by itself, else the machine's first one. Another one can be
+  forced.
+- Nothing is kept without **Save layers** (the cut files are then rebuilt); **Cancel**
+  goes back to the saved layers. Saved layers survive a restart and the next rendering.
+
+A job from before layers keeps its former cut setting: it goes to the layer of the same
+name or to the only layer; otherwise the panel says so, to choose layer by layer.
+
+Within a layer, a contour inside another (the hole of an “O”, a window) is cut before it,
+so the piece does not move; at equal depth, the blade goes to the nearest contour (see
+path sorting below).
+
+On the machine, **One layer at a time** (System > Machines): for a cutter that cannot
+change tool or setting during a cut, each layer becomes an output, the next one held
+until **Resume**.
+
+### Preflight
+
+At rendering, the RIP flags (job warnings):
+- a cut spot colour defined in RGB (define it in CMYK, spot colour);
+- a cut path with a fill (a cut path is a stroke only);
+- a path touching the page edge;
+- a path covered by the artwork (put it on the top layer);
+- an outlined stroke (a stroke turned into a shape: it would be cut twice);
+- a stroke aligned inside or outside the path (align it to the centre);
+- a path beyond the artboard (what lies outside is not cut);
+- a cutter chosen with no cut spot colour recognised (the file's colours are listed);
+- a path on a non-printing layer: it is not cut, unless **Also cut the paths of
+  non-printing layers** is ticked (System > Cutting);
+- open paths not cut, when open paths are not allowed.
+
+### Cutter and cut after print
+
+**Cutter** (send panel): the machine where the automatic cut goes. While it is not usable
+(missing, offline, badly connected, or a layer with no setting on it), printing waits:
+nothing goes out, so no ink or media is wasted. A cut waits until its page is 100 %
+printed.
+
+### Cut placement
+
+**Cut placement** panel of the inspector. It turns the job for the cutter, not the file,
+without rendering again:
+- **Cut rotation** by quarter turns, registration frame included: turn the media by as
+  much. The cut preview carries a grey arrow for the feed direction (the top of the page
+  goes in first);
+- **Expand the cut outwards (mm)**, from 0 to 5 mm: the piece grows by as much (a hole
+  gets smaller);
+- **Bowing compensation** (printed job): see below;
+- in **cut only** mode only (without printing, the cut has no ink to follow): **Mirror**,
+  **Scale X / Y (%)** (**Proportional** or not), **Copies X / Y** with **Gap X / Y (mm)**
+  (100 per direction, 1000 in all), **Start from the machine origin**.
+
+**Save cut placement** rebuilds the cut files. The expansion does not replace the
+printer-cutter calibration (the machine's offset X / Y).
+
+### Cutting tolerance
+
+**Cutting tolerance** block of the send panel, **Add bleed near cuts**: ink that stops
+within the **proximity threshold** of a closed contour is carried up to the contour, then
+beyond it over the given **width** (0.1 to 10 mm): the cut leaves no white edge. The
+composite preview does not show it, the plates do. Use cautious values; it does not
+replace calibration.
+
+### Open paths and sorting
+
+In **System > Cutting** (on by default):
+- **Allow open paths (banner vents)**: unticked, an open path is not cut, with a warning
+  per page;
+- **Sort the paths**: inner ones first, then nearest neighbour; unticked, paths are cut
+  in creation order.
+
+### Cut on arrival and after cutting
+
+**Cut on arrival** (machine, System > Machines, ticked by default): unticked, each cut
+arrives on hold in the machine's queue and goes when the operator clicks **Resume**.
+
+**After cutting** (System > Cutting): **do nothing (history)** (default), **archive (can
+be restored)**, or **remove from the queue**. An archived cut leaves the queue and goes
+to its machine's **Archive**; **Restore** puts it back in the queue (on hold on a machine
+without cut on arrival).
+
+### Auto contour
+
+**Auto contour** panel of each printed page of a PDF: the RIP analyses the rendered
+image, removes the white around it and proposes a cut contour (`CutContour`). Settings:
+**White threshold (1–255)**, **Remove those smaller than (mm²)**, **Smoothing (0–5)**,
+**Outward offset (mm)**, **Remove inner contours**. **Preview** first (number of contours
+and drawing), then **Accept**: the cut files are rebuilt. **Remove the auto contour**
+takes it off. A new rendering erases it. Only on the rendering of a PDF.
+
+### Bowing compensation
+
+In **Cut placement**, **Compensate media bowing**: once the dryers are hot, the print
+comes out bowed (middle behind the edges); the cut follows. Set the **Media width (mm)**
+(the curve is centred on it), the **Start (mm of feed)**, counted from the top of the page
+(nothing before), and the **Sag (mm)**. The curve sets in over 50 mm. Measure it on a
+print.
+
+### Machine variants
+
+System > Machines, **Duplicate (other set of marks)** on a cutter: a variant, the same
+physical machine, with its own **Set of marks** (or **— the job's —**). Connection, model
+and cut settings are taken from the original machine at every save. A job assigned to the
+variant gets its marks; its cut goes through the original machine, one output at a time.
 
 ## Kona registration
 
@@ -189,12 +472,27 @@ In **Print** mode, **Kona registration** adds around the image:
   marker at most every 500 mm on each side, same codes, file `Name_MF_<number>.plt`, for
   long jobs cut segment by segment.
 
+**Automatic multi-frame**: with type 2, a page **1.5 m or longer** in the feed direction
+takes the multi-segment frame (type 3) by itself, and its file the `MF` suffix. The Kona
+manual (§ 6.3) advises against a single frame beyond 2 m and against a multi-frame under
+1.5 m.
+
 Types 2 and 3 follow the tables of the Kona application guide (ch. 4.4.2); the place of
 the top code and the type 3 marker spacing are read from its drawings, without
 dimensions (type 3 still to be proven).
 
 Every frame carries an **▲ arrow** in its inner bottom-right corner: it points to the
 edge that leaves the Epson first, the one fed first into the Kona (from the rear).
+
+**Registration warnings**: an image under 25 cm per side is flagged (size advised for
+Kona registration). The “under 5 cm of white” warning between image and marks is
+suspended: our frames leave 10 mm, the rule is still to be proven on the machine.
+
+**Background under marks** (send panel block), for dark, clear or reflective media:
+**Print a background under the marks** lays a band of ink beyond each mark and barcode
+(**Margin around the marks**, 0.5 to 13 mm), or, with **Flood the whole marks area (image
+excluded)**, their whole area. **Ink**: white (`White` spot colour) or CMYK (values in %).
+The black marks are printed over it with overprint: the background stays under them too.
 
 **Sending to the Kona.** The RIP sends the cut as Mutoh CutServer does: with a frame it
 declares two opposite frame corners (line centres), the Kona scans it, reads the code,
@@ -203,9 +501,10 @@ per machine in System > Machines, like CutServer's "cut layers"; the first is th
 default. As in CutServer, each can also keep the **cutter defaults** (nothing sent),
 force a **tool** (1 to 4), and follow a cut **pattern**: up to 10 "down/up" pairs in mm
 (`8/2 8/2` = cut 8 mm, lift 2 mm), with **spread** (a whole number of patterns per
-straight line, the cut starting and ending at sharp corners). **.plt file** with `?machine=kona` gives the file as the Kona receives it, to
-send by hand (serial port 9600, 8N1, RTS/CTS). If the cut comes out turned 180°, tick
-**cut turned** on the machine.
+straight line, the cut starting and ending at sharp corners). Each cut layer goes out
+with its own setting. **.plt file** with `?machine=kona` gives the file as the Kona
+receives it, to send by hand (serial port 9600, 8N1, RTS/CTS). If the cut comes out
+turned 180°, tick **cut turned** on the machine.
 
 The printed page grows accordingly, and the cut file follows the same offset. The Kona
 must be set to a resolution of **0.010 mm**.
@@ -220,14 +519,25 @@ server. A PDF, AI or SVG dropped there becomes a job with that preset once its c
 complete (size stable for 5 s). A rejected file is moved to `refuses/`, with a
 `.refus.txt` file giving the reason.
 
+**Export, import** (administrator, System > Configuration backup): **Export presets**
+downloads all saved presets, for another server; **Import presets** takes in those of an
+export. **If the name exists**: **rename ("name 2")** or **overwrite**. Everything is
+checked before writing.
+
 ## Tiling
 
 **Tiling** block: tick **Split into panels when wider than the roll**, set the roll
 width and the **overlap** (area printed on both neighbouring panels, for gluing or
-welding). All panels have the same width. Each panel becomes a page of the job, with
+welding). Panels start with the same width. Each panel becomes a page of the job, with
 its own cut clipped to its edge. **Panel number and joining marks** adds a 10 mm band at
 the foot of each panel: “Lé 2/3” and a vertical mark where the neighbouring panel stops
 or starts, to line panels up when installing.
+
+The block also sets the **Maximum tile height** (the page is then split into rows:
+columns × rows), the **Weld** (overlap with no ink under the neighbour, at least 12.7 mm)
+and the **Cut line in the middle of each overlap**. Unequal panels, tiles not to print,
+a tile's own overlap and the print order are set in the viewer (see [Panels and
+tiles](#panels-and-tiles)).
 
 ## Sheet (nesting)
 
@@ -264,28 +574,68 @@ width (100 columns, 500 rows and 2000 copies at most). The cut follows every cop
 - **Media (output)**: profile of the printed media; the preview simulates it.
 - **Intent**: perceptual, relative colorimetric, saturation, absolute.
 
-Spot colours (`White`, `Silver`…) are never converted.
+Spot colours (`White`, `Silver`…) are never converted. To adjust a job's colours: the
+viewer's [colour filter](#colour-filter).
 
 ## System
 
 **System** view: server version, job retention (30 days by default, set with
-`EKO_RIP_CONSERVATION_JOURS`) and free space on the data disk, in red under 10 %.
+`EKO_RIP_CONSERVATION_JOURS`) and free space on the data disk, in red under 10 %. A
+missing or damaged state file or folder is flagged there (“Files and folders”). The
+**Cutting** block (administrator) holds the cut prefixes, non-printing layers, open
+paths, path sorting and the **After cutting** choice (see [Cutting](#cutting)).
 
 ## Machines
 
 **System > Machines**: the workshop's machine catalogue. For each: an id (lowercase,
 digits, `-`), a name, the model (Epson SC-S80600, Mutoh Kona, Graphtec FC7000, Roland
 VersaCAMM VP), the roll width, the connection (serial or USB-serial, TCP network, device
-such as `/dev/usb/lp0`, or folder), the SNMP address to read the loaded media, and the cut
+such as `/dev/usb/lp0`, or folder), the SNMP address to read the loaded media, the cut
 step (0.01 mm for the Kona, 0.025 mm by default elsewhere) and the cut **offset X / Y**
 (−20 to 20 mm): the gap measured on a test cut between cut and print, added to every cut
-sent to that machine. **Save** applies at once. A
+sent to that machine. Also: the **Print origin X / Y** (Epson, direct driver), the
+**Speed (m²/h)**, the **Pool**, and for a cutter its cut settings, **Cut turned (180°)**,
+**One layer at a time**, **Cut on arrival** and **Duplicate (other set of marks)**.
+**Save** applies at once: the print and cut buttons, the queue and the sidebar follow. A
 machine with an output still to run cannot be removed.
 
+- **Epson SC-S80600**: **Network (TCP)** connection, host = the printer's address, port
+  9100 = direct driver; **Folder** = plates copied, nothing is printed. Fill in SNMP to
+  stop the output on an alert.
 - **Graphtec FC7000-75**: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm
   step; ARMS registration is set on the machine's panel.
 - **Roland VersaCAMM VP-300 / VP-540** (762 / 1371 mm): cutting goes over the network; to
   be tried at the workshop. Roland printing will follow a network capture.
+
+**Printer pool**: the same **Pool** name on identical machines (same model, same roll
+width). A **Print on pool "…"** button appears on each page; the output shows at every
+member and goes to the first machine ready, which takes it. Refused if the known loaded
+media of the members differ: load the same media, or duplicate the machine.
+
+## Media and print modes
+
+**System > Epson media** (administrator): the media catalogue. For each: **Name**, **No.
+in the printer** (the media number stored in the Epson, which lets the loaded media be
+recognised), **Roll width (mm)**, **Inks**, and its print **Modes**, written
+`Name = 720 dpi / 8 passes; Other = 360 dpi / 4`. Prices stay in “Ink and media costs”,
+linked by name. Each media and each mode keeps a stable identifier: renaming does not
+change it.
+
+**When sending**, **Media and print mode**: the mode sets the rendering resolution; the
+media links to the price list. **— resolution set by hand —** keeps the panel's
+resolution. Changing mode on a received job renders again.
+
+**Loaded media** (System > Media loaded in the Epson): recognised by its number read from
+the printer, or chosen by the operator in the list (the choice wins until set back to
+**— read from the printer —**). A number unknown to the catalogue is flagged. A print
+waits until the loaded media is the job's (**Other media**), then leaves by itself; the
+loaded roll's width bounds the page (**Too wide**). Unknown loaded media: nothing is
+blocked.
+
+**Media package**: **Export** (on a media row) gives one file with this media, its modes
+and the presets that use it, without ICC profile. **Import a media package** takes it in
+on another server: identifiers kept, re-import without duplicates; a package made by a
+newer version is refused (update this server first).
 
 ## Media loaded in the Epson
 
@@ -294,7 +644,7 @@ measures when loading, is read over the network (SNMP, standard Printer-MIB) and
 the roll width of the Sheet and Tiling panels (**Use as roll width**, **Read again**).
 Set the Epson's IP address in `EKO_RIP_EPSON_SNMP` (see the server installation guide).
 Validated on the SC-S80600: the screen also shows the remaining roll length, the media
-number, the heaters and the level of each ink.
+number, the heaters, the level of each ink, the alerts and the loaded media.
 
 **Actual consumption**: the server reads the Epson every minute (inks and roll) and keeps
 each change in `releves/epson.jsonl` (data folder). The screen shows what was used over 7
@@ -333,13 +683,16 @@ card, each page's estimate and the CSV (`base` column) follow.
 **Export consumption (CSV)** downloads one row per printed page (UTC date, job, page,
 area, ml per ink, costs), `;` separator, dot decimals, for a spreadsheet or E-KO ERP.
 
-Known limit: the media counted is the page area, not the roll length used across the
-whole roll width.
+Known limit: without a known roll width, the media counted is the page area, not the
+roll length used across the whole roll width.
 
 ## Not there yet
 
-- The Epson driver: plates go to a folder, not to the printer.
-- Automatic frame reading by the Kona has not been tried on the machine yet.
+- White and silver through the direct Epson driver: they go out to a folder.
+- Printing on the Roland.
+- The Kona type 3 frame (multi-segment) has not been tried on the machine yet.
+- Importing images (PNG, JPEG…): only PDF, AI and SVG are accepted; auto contour works on
+  the rendering of a PDF.
 - The Epson swatch book's `MT-*` metallic colours are not converted yet.
 
 ## Glossary
@@ -349,5 +702,9 @@ whole roll width.
   its own plate instead of being mixed into CMYK.
 - **Roll width**: usable width of the roll.
 - **Panel**: vertical strip of a tiled job, at most as wide as the roll.
+- **Tile**: one piece of a tiling in columns × rows; each tile is a page.
+- **Cut layer**: the paths of one spot colour name, cut together with one setting.
+- **Print mode**: resolution, passes and heating of a media.
 - **Output**: one page of a job sent to a machine, in the queue.
+- **Variant**: copy of a cutter with its own set of marks.
 - **Hot folder**: server folder where every dropped file becomes a job.
