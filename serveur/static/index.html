@@ -545,7 +545,7 @@ const textes = {
     importer: "Importer", o_imprimer: "Imprimer", o_decouper: "Découper", o_bat: "BAT", vues: "Vues", machines_titre: "Machines",
     reglages_titre: "Réglages enregistrés", aucun_reglage_enregistre: "Aucun pour l'instant.", aucune_selection: "Sélectionner un travail dans la liste.",
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
-    laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, decouper_sur: (n) => `Découper sur ${n}`,
+    laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, sans_bat: "Sans BAT", bat_sur: (n) => `BAT sur ${n}`, note_bat_sur: "Épreuve : une copie « -BAT » part sur cette machine ; l'impression demandée attend, suspendue. La reprendre (« Reprendre ») une fois le BAT accepté.", bat_en_file: "BAT en file ; l'original attend, suspendu.", attend_bat: (m, e) => `Attend le BAT (${m} : ${e})`, decouper_sur: (n) => `Découper sur ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} en file sur ${m}.`,
     nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", afficher_seulement: (n) => `N'afficher que ${n}`, voir_machine: "État de la machine", configurer_machine: "Configurer (Système)", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
     deposer_ici: "Déposer un fichier ici", fichier: "PDF, AI ou SVG — ou cliquer pour choisir", resolution: "Résolution", mode: "Mode",
@@ -781,6 +781,7 @@ const textes = {
       identifiant_inconnu: "Identifiant inconnu : un identifiant ne se choisit pas, il est attribué par le serveur.",
       supports_invalides: "Supports invalides : nom unique (60 caractères), encres connues sans blanc et argent ensemble, au moins un mode (90 à 2880 dpi, 1 à 64 passes, encre totale de 100 à 400 %).",
       pdf_illisible: "PDF illisible : impossible d'en séparer les pages. Le réenregistrer depuis l'application d'origine.",
+      epreuve_impossible: "Épreuve impossible : elle se fait en impression, sur une autre machine qui imprime.",
       jeton_renvoi_requis: "Renvoi refusé : jeton absent ou faux (sur ce serveur : eko-rip-serveur renvoi jeton).",
       renvoi_vide: "Renvoi sans flux.",
       renvoi_sans_connexion: "Cette machine sort en dossier : elle ne peut pas recevoir de renvoi.",
@@ -836,7 +837,7 @@ const textes = {
     importer: "Import", o_imprimer: "Print", o_decouper: "Cut", o_bat: "Proof", vues: "Views", machines_titre: "Machines",
     reglages_titre: "Saved presets", aucun_reglage_enregistre: "None yet.", aucune_selection: "Select a job in the list.",
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
-    laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, decouper_sur: (n) => `Cut on ${n}`,
+    laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, sans_bat: "No proof", bat_sur: (n) => `Proof on ${n}`, note_bat_sur: "Proof: a \"-BAT\" copy goes to this machine; the requested print waits, on hold. Resume it (\"Resume\") once the proof is approved.", bat_en_file: "Proof queued; the original waits, on hold.", attend_bat: (m, e) => `Waiting for the proof (${m}: ${e})`, decouper_sur: (n) => `Cut on ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} queued on ${m}.`,
     nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", afficher_seulement: (n) => `Show only ${n}`, voir_machine: "Machine state", configurer_machine: "Configure (System)", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
     deposer_ici: "Drop a file here", fichier: "PDF, AI or SVG — or click to choose", resolution: "Resolution", mode: "Mode",
@@ -1072,6 +1073,7 @@ const textes = {
       identifiant_inconnu: "Unknown identifier: identifiers are assigned by the server, never chosen.",
       supports_invalides: "Invalid media: unique name (60 characters), known inks without white and metallic together, at least one mode (90 to 2880 dpi, 1 to 64 passes, total ink 100 to 400 %).",
       pdf_illisible: "Unreadable PDF: its pages cannot be split. Save it again from the original application.",
+      epreuve_impossible: "Proof not possible: it is a print, on another machine that prints.",
       jeton_renvoi_requis: "Forwarding refused: missing or wrong token (on this server: eko-rip-serveur renvoi jeton).",
       renvoi_vide: "Forwarding without a stream.",
       renvoi_sans_connexion: "This machine outputs to a folder: it cannot receive forwarded streams.",
@@ -3408,6 +3410,8 @@ async function agir(url, methode) {
 /** Dernière sortie d'une page vers une machine (pour afficher son état). */
 const derniereSortie = (t, n, machine) => sorties.filter((s) => s.travail === t.id && s.page === n && s.machine === machine).at(-1);
 
+/** Machine d'épreuve choisie (roadmap 9.5), gardée d'un rafraîchissement à l'autre. */
+let batChoisi = "";
 /** Une page : ses sorties (Epson, Kona), puis ses aperçus (composite, découpe, plaques). */
 function vuePage(t, page, n) {
   const base = `/api/travaux/${t.id}/pages/${n}`;
@@ -3428,11 +3432,16 @@ function vuePage(t, page, n) {
     (page.plaques_decoupe || []).includes(p) ? T().non_imprimee(p) : p + taux(p))));
 
   const sortiesPage = el("div", { className: "ligne" });
+  // Épreuve sur une 2e machine (roadmap 9.5) : la copie « -BAT » y part, l'original attend.
+  const imprimantes = catalogue.filter((m) => m.modele_imprime);
+  const choixBat = imprimantes.length > 1 ? el("select", { title: T().note_bat_sur }, el("option", { value: "" }, T().sans_bat), ...imprimantes.map((m) => el("option", { value: m.id, selected: m.id === batChoisi }, T().bat_sur(m.nom)))) : null;
+  choixBat?.addEventListener("change", () => { batChoisi = choixBat.value; });
   const versMachine = (m, operation, texte) => {
     const s = sorties.filter((x) => x.travail === t.id && x.page === n && x.machine === m.id && (x.operation || (x.machine === "kona" ? "decoupe" : "impression")) === operation).at(-1);
     sortiesPage.append(bouton(texte, async (b) => {
       b.disabled = true;
-      if (await api("/api/file", json("POST", { travail: t.id, page: n, machine: m.id, operation }))) dire(T().mis_en_file);
+      const epreuve = operation === "impression" && choixBat?.value && choixBat.value !== m.id ? choixBat.value : null;
+      if (await api("/api/file", json("POST", { travail: t.id, page: n, machine: m.id, operation, epreuve }))) dire(epreuve ? T().bat_en_file : T().mis_en_file);
       rafraichir();
     }));
     if (s) sortiesPage.append(el("span", { className: `badge ${s.etat}` }, etatSortie(s)));
@@ -3446,6 +3455,7 @@ function vuePage(t, page, n) {
   if (exclue) sortiesPage.append(el("span", { className: "badge echec" }, T().page_non_imprimee));
   // Pools (roadmap 1.7) : une destination de plus, la machine prête la prend.
   const pools = [...new Set(catalogue.filter((m) => m.modele_imprime && m.pool).map((m) => m.pool))];
+  if (!exclue && t.mode === "imprimer" && imprimables.length && choixBat) sortiesPage.append(choixBat);
   if (!exclue && t.mode === "imprimer" && imprimables.length) [...catalogue.filter((m) => m.modele_imprime), ...pools.map((p) => ({ id: p, nom: T().pool_nom(p) }))].forEach((m) => versMachine(m, "impression", T().imprimer_sur(m.nom)));
   if (page.traces_decoupe && !exclue) {
     catalogue.filter((m) => m.modele_decoupe).forEach((m) => versMachine(m, "decoupe", T().decouper_sur(m.nom)));
@@ -3520,6 +3530,9 @@ let couchesOuvertes = false;
  *  fait que déposer les plaques, on le dit. */
 function etatSortie(s) {
   const m = catalogue.find((x) => x.id === s.machine);
+  // Original retenu par son épreuve (roadmap 9.5) : où en est le BAT.
+  const bat = s.etat === "suspendue" && sorties.filter((x) => x.bat_de === s.id).at(-1);
+  if (bat) return T().attend_bat(catalogue.find((x) => x.id === bat.machine)?.nom || bat.machine, T().etats[bat.etat]);
   const dossier = m?.connexion?.type === "dossier" && (s.operation || "impression") === "impression";
   return s.etat === "terminee" && dossier ? T().deposee : T().etats[s.etat];
 }
