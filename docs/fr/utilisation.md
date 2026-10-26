@@ -37,7 +37,15 @@ d'après la résolution enregistrée dans le fichier (sans résolution : 72 ppi,
 signale), en CMJN, RVB ou niveaux de gris, 8 ou 16 bits, avec son profil ICC ; la
 transparence ne pose pas d'encre. Taille maximale d'un fichier : 8 Go (`EKO_RIP_MAX_MO`).
 Pas encore pris en charge : TIFF à palette, YCbCr, Lab ou à plans séparés, PNG entrelacé
-(refusés avec un message) ; les canaux de tons directs d'un TIFF sont ignorés et signalés.
+(refusés avec un message).
+
+**Canaux de tons directs d'un TIFF** : chacun devient sa propre plaque, posée par-dessus
+les couleurs sans les effacer. Son nom est celui du canal dans Photoshop (sans nom :
+`Spot1`, `Spot2`…). Un canal nommé `White`, `Blanc`, `WH` ou `Spot1` (majuscules,
+espaces et `_` ignorés) donne la plaque de blanc. Les canaux de sélection de Photoshop
+(masques) ne s'impriment pas. Le travail signale les plaques reprises : les regarder avant
+la première impression, le sens des valeurs (canal clair = sans encre) n'a pas encore été
+vérifié sur un fichier de l'atelier.
 
 ## Rotation automatique et réglages après l'import
 
@@ -1029,8 +1037,8 @@ le facteur de chacune. Rétention et facteurs sont dans la sauvegarde de la conf
 - Le blanc et l'argent par le pilote direct de l'Epson : ils sortent en dossier.
 - L'impression par la Roland.
 - Le cadre Kona type 3 (multi-segments) n'a pas encore été essayé sur la machine.
-- Les canaux de tons directs d'un TIFF (blanc, vernis) : ignorés pour l'instant ; la
-  transparence comme plaque de blanc viendra avec la roadmap 9.12.
+- Les canaux de tons directs d'un TIFF : le sens des valeurs reste à vérifier sur un vrai
+  TIFF Photoshop ; la transparence comme plaque de blanc viendra avec la roadmap 9.12.
 - Les couleurs métallisées `MT-*` du nuancier Epson ne sont pas encore converties.
 
 ## Glossaire

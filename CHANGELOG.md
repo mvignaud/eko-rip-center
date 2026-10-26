@@ -28,9 +28,13 @@ parité ; d'ici là, 0.Y.Z.
 - **Dossier automatique `entrees-auto/`** (feuille de route 9.1) : le réglage vient de la
   première règle qui prend le fichier, par motif de nom (`BACHE_*`) et format de la première
   page d'un PDF ; règles éditées dans Système et gardées dans la sauvegarde.
+- **Tons directs des TIFF** (feuille de route 9.2) : chaque canal en plus devient sa
+  plaque, en surimpression ; `Spot1`, `White` ou `Blanc` donne la plaque de blanc ; les
+  canaux de sélection de Photoshop sont ignorés. Sens des valeurs à confirmer sur un
+  fichier de l'atelier.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules.*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates.*
 
 ## [0.26.0] — 2026-10-25
 
