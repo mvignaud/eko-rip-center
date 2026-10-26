@@ -41,9 +41,12 @@ parité ; d'ici là, 0.Y.Z.
   l'écran) ou par renvoi vers un autre E-KO RIP Center, qui passe le flux à sa machine
   (jeton `eko-rip-serveur renvoi jeton`, jamais réaffiché). L'Epson imprime en direct par
   les deux.
+- **Épreuve sur une 2e machine** (feuille de route 9.5) : liste **BAT sur…** de la page ;
+  la copie « nom-BAT » part sur la machine d'épreuve, l'original attend suspendu
+  (« Attend le BAT ») jusqu'à **Reprendre**.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP.*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held.*
 
 ## [0.26.0] — 2026-10-25
 

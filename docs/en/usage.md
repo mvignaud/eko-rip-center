@@ -122,6 +122,14 @@ grommets), the preflight warnings and an “Approved for printing” box (date, 
 signature). It comes out in the screen's language. A colour filter is mentioned, but the
 proof image does not show it.
 
+**Proof on another machine**: with at least two printers, the page's **Proof on…** list
+(next to **Print on…**) picks the proof machine. **Print on** then queues two outputs: the
+**"name-BAT"** copy on the proof machine, and the requested print, **on hold**, showing
+**Waiting for the proof** with the proof's state. Once the proof is approved, **Resume**
+the original; rejected, **Cancel** it. Proofs are prints only, on a machine other than the
+requested one (nor of the same pool). The choice stays until changed: back to **No
+proof**.
+
 ## Visual editor (viewer)
 
 Clicking a thumbnail (composite, plate, cut) in the inspector opens it large.

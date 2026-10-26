@@ -3613,6 +3613,20 @@ struct DemandeSortie {
     /// Facultative si la machine ne fait qu'une chose.
     #[serde(default)]
     operation: Option<machines::Operation>,
+    /// Épreuve sur une autre machine (roadmap 9.5) : une copie « -BAT » y part, l'original
+    /// attend, suspendu, d'être repris.
+    #[serde(default)]
+    epreuve: Option<String>,
+}
+
+/// L'Epson ne prend que ce que sa connexion sait sortir : le pilote direct n'a pas encore
+/// le blanc ni l'argent ; le dossier, si.
+fn controler_impression(m: &machines::Machine, t: &Travail, p: &Page) -> Result<(), String> {
+    if m.modele != machines::Modele::EpsonScS80600 {
+        return Ok(());
+    }
+    let controle = if m.connexion.flux_direct() { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
+    controle(&p.plaques, t.demande.couches)
 }
 
 /// Met une page en file : découpe pour le Kona, plaques pour l'Epson.
@@ -3653,20 +3667,38 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
     match operation {
         Decoupe if !a_couper(&t, &p) => return refus(StatusCode::CONFLICT, "rien_a_decouper", None),
         Impression if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
-        Impression if m.modele == machines::Modele::EpsonScS80600 => {
-            // Le pilote direct (réseau) n'a pas encore le blanc ni l'argent ; le dossier, si.
-            let controle = if m.connexion.flux_direct() { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
-            if let Err(e) = controle(&p.plaques, t.demande.couches) {
+        Impression => {
+            if let Err(e) = controler_impression(&m, &t, &p) {
                 return refus(StatusCode::CONFLICT, "envoi_impossible", Some(e));
             }
         }
         _ => {}
     }
     let cible = if membres.is_empty() { m.id.clone() } else { d.machine.clone() };
-    let nouvelles = match operation {
+    // Épreuve : une autre machine qui imprime, hors du pool de la cible.
+    let epreuve = match d.epreuve.as_deref().filter(|e| !e.is_empty()) {
+        None => None,
+        Some(_) if operation != Impression => return refus(StatusCode::BAD_REQUEST, "epreuve_impossible", Some("impression seulement".into())),
+        Some(e) => {
+            let Some(me) = machine(&etat, e) else { return refus(StatusCode::NOT_FOUND, "introuvable", Some(e.into())) };
+            if me.id == m.id || membres.iter().any(|x| x.id == me.id) || !me.fait(Impression) {
+                return refus(StatusCode::BAD_REQUEST, "epreuve_impossible", Some(me.nom));
+            }
+            if let Err(e) = controler_impression(&me, &t, &p) {
+                return refus(StatusCode::CONFLICT, "envoi_impossible", Some(format!("{} : {e}", me.nom)));
+            }
+            Some(me.id)
+        }
+    };
+    let mut nouvelles = match operation {
         Decoupe => sorties_de_coupe(&t, d.page, &p, &cible, &m),
         Impression => vec![file::Sortie::nouvelle(&cible, operation, t.id, &t.nom, d.page, maintenant())],
     };
+    if let Some(e) = epreuve {
+        nouvelles[0].etat = file::Etat::Suspendue;
+        let bat = file::Sortie { bat_de: Some(nouvelles[0].id), ..file::Sortie::nouvelle(&e, Impression, t.id, &format!("{}-BAT", t.nom), d.page, maintenant()) };
+        nouvelles.push(bat);
+    }
     let rendu = nouvelles[0].clone();
     match modifier_file(&etat, |f| {
         double_impression(f, &t, None)?;
@@ -4324,7 +4356,8 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     let dpi = t.demande.dpi;
     let points = |mm: f64| (mm / 25.4 * dpi as f64).floor().max(0.0) as u32;
     let travail = escp2::Travail {
-        nom: t.nom.clone(),
+        // Nom de la sortie : « -BAT » pour une épreuve (roadmap 9.5).
+        nom: s.nom.clone(),
         poste: "E-KO RIP Center".into(),
         utilisateur: String::new(),
         largeur: 0,
@@ -4349,7 +4382,7 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
         return Err(("imprimante_en_alerte", a));
     }
     // Réseau brut (9100), IPP ou autre RIP (roadmap 9.4) : le même flux ESC/P2.
-    let nom = t.nom.clone();
+    let nom = s.nom.clone();
     let connexion = tokio::task::spawn_blocking(move || ports::ouvrir(&c, &nom)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
     let coupure = connexion.coupure().map_err(|e| echec(e.to_string()))?;
     let mut envoi = tokio::task::spawn_blocking(move || {
@@ -5228,6 +5261,51 @@ mod tests {
             supports::ecrire_charge(&donnees, "epson-2", supports::Charge { support_uuid: Some(a), laize_mm: None, source: "saisie".into(), le: 0 }).unwrap();
             let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": id, "page": 1, "machine": "epsons", "operation": "impression" }))).await;
             assert_eq!(r.status(), StatusCode::CREATED, "même support : accepté");
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Épreuve sur une 2e machine (roadmap 9.5) : la copie « -BAT » part sur l'autre
+        /// imprimante, l'original attend suspendu ; refusée vers la même machine, une
+        /// machine qui n'imprime pas, ou pour une découpe. « Reprendre » libère l'original.
+        #[tokio::test]
+        async fn epreuve_sur_une_autre_machine() {
+            let e = etat("epreuve");
+            let donnees = e.config.donnees.clone();
+            let base = e.machines.read().unwrap()[0].clone();
+            let kona = e.machines.read().unwrap()[1].clone();
+            let mut cat = vec![machines::Machine { id: "grande".into(), uuid: None, ..base.clone() }, machines::Machine { id: "petite".into(), uuid: None, laize_mm: 600.0, ..base.clone() }, kona.clone()];
+            machines::identifier(&mut cat, &[]).unwrap();
+            *e.machines.write().unwrap() = cat;
+            let id = Uuid::new_v4();
+            std::fs::create_dir_all(dossier(&donnees, id)).unwrap();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Vitrine", "statut": "termine", "erreur": null, "cree_le": 0,
+                "pages": [{ "plaques": ["Cyan"], "traces_decoupe": 0, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            let demande = |machine: &str, epreuve: &str, operation: &str| Some(serde_json::json!({ "travail": id, "page": 1, "machine": machine, "operation": operation, "epreuve": epreuve }));
+            let code = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap()["code"].clone() };
+            for (machine, epreuve, operation, statut, attendu) in [
+                ("grande", "grande", "impression", StatusCode::BAD_REQUEST, "epreuve_impossible"),
+                ("grande", kona.id.as_str(), "impression", StatusCode::BAD_REQUEST, "epreuve_impossible"),
+                ("grande", "absente", "impression", StatusCode::NOT_FOUND, "introuvable"),
+            ] {
+                let r = appel(&e, "POST", "/api/file", None, demande(machine, epreuve, operation)).await;
+                assert_eq!(r.status(), statut, "{epreuve}");
+                assert_eq!(code(r).await, attendu);
+            }
+            assert!(e.file.lock().unwrap().sorties.is_empty(), "rien en file après un refus");
+            let r = appel(&e, "POST", "/api/file", None, demande("grande", "petite", "impression")).await;
+            assert_eq!(r.status(), StatusCode::CREATED);
+            let sorties = e.file.lock().unwrap().sorties.clone();
+            assert_eq!(sorties.len(), 2);
+            let (original, bat) = (&sorties[0], &sorties[1]);
+            assert_eq!((original.machine.as_str(), original.etat, original.nom.as_str()), ("grande", file::Etat::Suspendue, "Vitrine"));
+            assert_eq!((bat.machine.as_str(), bat.etat, bat.nom.as_str(), bat.bat_de), ("petite", file::Etat::EnAttente, "Vitrine-BAT", Some(original.id)));
+            // BAT accepté : l'original part.
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{}/reprendre", original.id), None, None).await.status(), StatusCode::NO_CONTENT);
+            assert_eq!(e.file.lock().unwrap().sorties[0].etat, file::Etat::EnAttente);
+            // Sans épreuve (champ vide) : comme avant.
+            assert_eq!(appel(&e, "POST", "/api/file", None, demande("petite", "", "impression")).await.status(), StatusCode::CREATED);
+            assert_eq!(e.file.lock().unwrap().sorties.len(), 3);
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 

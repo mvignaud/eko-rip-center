@@ -63,6 +63,10 @@ pub struct Sortie {
     /// (roadmap 6.1) ; absente sans relevé SNMP.
     #[serde(default)]
     pub consommation: Option<crate::consommation::Reel>,
+    /// Épreuve (roadmap 9.5) : copie « -BAT » de cette sortie, imprimée sur une autre
+    /// machine pendant que l'original attend, suspendu, d'être repris.
+    #[serde(default)]
+    pub bat_de: Option<Uuid>,
 }
 
 /// Ce que devient une découpe terminée (roadmap 4.12) : réglage de découpe du serveur.
@@ -80,7 +84,7 @@ pub enum ApresCoupe {
 
 impl Sortie {
     pub fn nouvelle(machine: &str, operation: Operation, travail: Uuid, nom: &str, page: usize, le: u64) -> Self {
-        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false, planche: None, avant_imbrication: None, consommation: None }
+        Sortie { id: Uuid::new_v4(), machine: machine.into(), operation: Some(operation), travail, nom: nom.into(), page, etat: Etat::EnAttente, code_erreur: None, erreur: None, cree_le: le, debut: None, fin: None, couche: None, archivee: false, planche: None, avant_imbrication: None, consommation: None, bat_de: None }
     }
 
     pub fn operation(&self) -> Operation {
@@ -189,7 +193,7 @@ impl File {
             }
             Action::Refaire if !matches!(etat, Etat::EnCours) => {
                 let s = &self.sorties[i];
-                let copie = Sortie { couche: s.couche.clone(), ..Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le) };
+                let copie = Sortie { couche: s.couche.clone(), bat_de: s.bat_de, ..Sortie::nouvelle(&s.machine, s.operation(), s.travail, &s.nom, s.page, le) };
                 self.sorties.push(copie);
             }
             _ => return Err("action_impossible"),

@@ -130,6 +130,14 @@ en magenta (non imprimé), le format en mm, les réglages (mode, résolution, pr
 nom et signature). Il sort dans la langue de l'écran. Un filtre couleur est mentionné,
 mais l'épreuve ne le montre pas.
 
+**Épreuve sur une autre machine** : avec au moins deux imprimantes, la liste **BAT sur…**
+de la page (à côté de **Imprimer sur…**) choisit la machine d'épreuve. **Imprimer sur**
+met alors deux sorties en file : la copie **« nom-BAT »** sur la machine d'épreuve, et
+l'impression demandée, **suspendue**, qui affiche **Attend le BAT** avec l'état de
+l'épreuve. Une fois le BAT accepté, **Reprendre** l'original ; refusé, l'**Annuler**.
+L'épreuve se fait en impression seulement, sur une autre machine que celle demandée (ni
+du même pool). Le choix reste tant qu'on ne le change pas : revenir à **Sans BAT**.
+
 ## Éditeur visuel (visionneuse)
 
 Un clic sur une vignette (composite, plaque, découpe) de l'inspecteur l'ouvre en grand.
