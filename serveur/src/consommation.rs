@@ -793,7 +793,7 @@ mod tests {
         let s: crate::file::Sortie = serde_json::from_value(sortie).unwrap();
         assert_eq!(s.consommation, None);
         let m: crate::supports::ModeImpression = serde_json::from_value(serde_json::json!({ "nom": "720", "dpi": [720, 720], "passes": 8 })).unwrap();
-        assert_eq!(m.gouttes_pl, None);
+        assert_eq!((m.gouttes_pl, m.bascule, m.limite_totale), (None, None, None));
         let r: Reglages = serde_json::from_str("{}").unwrap();
         assert_eq!(r, Reglages::default());
     }

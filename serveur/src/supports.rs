@@ -33,6 +33,13 @@ pub struct ModeImpression {
     /// des points (roadmap 6.9) ; absent : `consommation::GOUTTES_PL`.
     #[serde(default)]
     pub gouttes_pl: Option<[f64; 3]>,
+    /// Bascule des encres claires (roadmap 8.11) ; absente : `Couple::default()`.
+    #[serde(default)]
+    pub bascule: Option<crate::separation::Bascule>,
+    /// Encre totale maximale (%), saisie à la main, par exemple d'après la limite proposée
+    /// sur une série mesurée (8.11) ; absente : celle de `Separation::default()`.
+    #[serde(default)]
+    pub limite_totale: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -114,7 +121,7 @@ fn fichier(donnees: &Path) -> PathBuf {
 
 /// Mode de la capture de l'atelier (720 × 720, 8 passes), donné aux supports repris.
 pub fn mode_par_defaut() -> ModeImpression {
-    ModeImpression { id: None, nom: "720 × 720 · 8 passes".into(), dpi: [720, 720], passes: 8, chauffage_c: None, gouttes_pl: None }
+    ModeImpression { id: None, nom: "720 × 720 · 8 passes".into(), dpi: [720, 720], passes: 8, chauffage_c: None, gouttes_pl: None, bascule: None, limite_totale: None }
 }
 
 /// Catalogue en place ; au premier démarrage, repris des supports de `tarifs.json`
@@ -217,7 +224,8 @@ pub fn verifier(supports: &[Support]) -> Result<(), &'static str> {
                     && m.dpi.iter().all(|d| (90..=2880).contains(d))
                     && (1..=64).contains(&m.passes)
                     && m.chauffage_c.is_none_or(|c| (0.0..=120.0).contains(&c))
-                && m.gouttes_pl.is_none_or(|g| g.iter().all(|v| v.is_finite() && *v > 0.0 && *v <= 200.0))
+                    && m.gouttes_pl.is_none_or(|g| g.iter().all(|v| v.is_finite() && *v > 0.0 && *v <= 200.0))
+                    && m.limite_totale.is_none_or(|l| (100.0..=400.0).contains(&l))
             })
     });
     if bon { Ok(()) } else { Err("supports_invalides") }
@@ -267,6 +275,8 @@ mod tests {
             |s: &mut Support| s.modes[0].dpi = [720, 10],
             |s: &mut Support| s.modes[0].passes = 0,
             |s: &mut Support| s.nom = " Vinyle".into(),
+            |s: &mut Support| s.modes[0].limite_totale = Some(450.0),
+            |s: &mut Support| s.modes[0].limite_totale = Some(f32::NAN),
         ] {
             let mut x = s.clone();
             casse(&mut x[0]);
@@ -279,7 +289,7 @@ mod tests {
 
     #[test]
     fn le_mode_impose_la_resolution() {
-        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, numero_machine: Some(6), modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: None }] }];
+        let mut s = vec![Support { id: None, machine: "epson".into(), nom: "Vinyle".into(), encres: vec!["C".into()], laize_mm: None, numero_machine: Some(6), modes: vec![mode_par_defaut(), ModeImpression { id: None, nom: "360".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: None, bascule: None, limite_totale: None }] }];
         attribuer_ids(&mut s, &[]);
         let c = Catalogue { version: VERSION, supports: s.clone() };
         let mut d = crate::reglages::Demande { mode_uuid: s[0].modes[1].id, ..Default::default() };

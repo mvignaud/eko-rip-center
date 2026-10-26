@@ -79,6 +79,38 @@ impl Couple {
     }
 }
 
+/// Préréglages de bascule des encres claires (roadmap 8.11) : où et comment la foncée
+/// prend le relais de la claire sur C, M et K. Noms et valeurs à nous ; la densité de la
+/// claire (`clair`, mesurée) et la zone morte (`start`) du réglage en place sont gardées.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Bascule {
+    /// Claire pleine, relais long (de 30 % à 70 % avec `clair` 0,3) et un peu de claire
+    /// sous la foncée : le moins de grain, pour les dégradés et la peau vus de près.
+    Douce,
+    /// Les valeurs par défaut de `Couple`.
+    Equilibree,
+    /// Claire limitée à 60 %, relais court (de 18 % à 33 %) : moins d'encre posée et un
+    /// séchage plus rapide, pour l'affichage vu de loin.
+    Franche,
+}
+
+impl Bascule {
+    pub const TOUTES: [Bascule; 3] = [Bascule::Douce, Bascule::Equilibree, Bascule::Franche];
+
+    pub fn appliquer(self, c: Couple) -> Couple {
+        let (max, transition, end) = match self {
+            Bascule::Douce => (1.0, 0.4, 0.15),
+            Bascule::Equilibree => {
+                let d = Couple::default();
+                (d.max, d.transition, d.end)
+            }
+            Bascule::Franche => (0.6, 0.15, 0.0),
+        };
+        Couple { max, transition, end, ..c }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Separation {
@@ -109,6 +141,23 @@ impl Default for Separation {
     fn default() -> Self {
         let c = Couple::default();
         Separation { cyan: c, magenta: c, noir: c, limite_or: 1.0, limite_rd: 1.0, limite_totale: 300.0, limite_canal: limite_canal_defaut() }
+    }
+}
+
+impl Separation {
+    /// Séparation d'un mode d'impression : la bascule et la limite totale qu'il porte
+    /// (8.11), le reste par défaut.
+    pub fn du_mode(bascule: Option<Bascule>, limite_totale: Option<f32>) -> Self {
+        let mut p = Separation::default();
+        if let Some(b) = bascule {
+            p.cyan = b.appliquer(p.cyan);
+            p.magenta = b.appliquer(p.magenta);
+            p.noir = b.appliquer(p.noir);
+        }
+        if let Some(l) = limite_totale {
+            p.limite_totale = l;
+        }
+        p
     }
 }
 
@@ -223,6 +272,43 @@ mod tests {
         let s = separer(&Cmjn { c: &zero, m: &zero, y: &zero, k: &zero, or: Some(&plein), rd: Some(&plein) }, &p).unwrap();
         assert_eq!((s[7].1[0], s[8].1[0]), (127, 63));
         assert!(separer(&Cmjn { c: &zero, m: &zero[..10], y: &zero, k: &zero, or: None, rd: None }, &p).is_err());
+    }
+
+    /// Entrée (0..=255) à partir de laquelle la foncée se pose.
+    fn debut_du_fonce(c: Couple) -> usize {
+        c.table().iter().position(|&(_, k)| k > 0).unwrap()
+    }
+
+    #[test]
+    fn prereglages_de_bascule_donnent_les_courbes_attendues() {
+        let base = Couple { clair: 0.3, start: 0.02, ..Couple::default() };
+        for b in Bascule::TOUTES {
+            let c = b.appliquer(base);
+            assert_eq!((c.clair, c.start), (0.3, 0.02), "{b:?} garde la densité mesurée");
+            let d = densite(&c.table(), c.clair);
+            assert!(d.windows(2).all(|w| w[1] >= w[0] - 1e-3), "{b:?} non monotone");
+            assert!((d[255] - 255.0).abs() <= 0.5);
+        }
+        assert_eq!(Bascule::Equilibree.appliquer(Couple::default()), Couple::default());
+        // La foncée arrive le plus tôt en franche, le plus tard en douce.
+        let [douce, equilibree, franche] = Bascule::TOUTES.map(|b| debut_du_fonce(b.appliquer(Couple::default())));
+        assert!(franche < equilibree && equilibree < douce, "{franche} {equilibree} {douce}");
+        // Valeurs repères, `clair` 0,3 : la claire seule va jusqu'à 30 % (douce), 24 %
+        // (équilibrée), 18 % (franche) de densité ; à 100 %, la douce garde 15 % de claire.
+        assert_eq!((douce, equilibree, franche), (77, 62, 47));
+        let fin = |b: Bascule| b.appliquer(Couple::default()).table()[255];
+        assert_eq!(fin(Bascule::Douce), (38, 244));
+        assert_eq!(fin(Bascule::Equilibree), (0, 255));
+        assert_eq!(fin(Bascule::Franche), (0, 255));
+        // La douce pose plus de claire que la franche sur toute la rampe.
+        let (td, tf) = (Bascule::Douce.appliquer(Couple::default()).table(), Bascule::Franche.appliquer(Couple::default()).table());
+        assert!((0..256).all(|i| td[i].0 >= tf[i].0));
+        // Appliquée au mode : C, M et K suivent la bascule, Y, Or et Rd ne changent pas.
+        let p = Separation::du_mode(Some(Bascule::Franche), Some(260.0));
+        assert_eq!((p.cyan, p.magenta, p.noir), (Bascule::Franche.appliquer(Couple::default()), Bascule::Franche.appliquer(Couple::default()), Bascule::Franche.appliquer(Couple::default())));
+        assert_eq!(p.limite_totale, 260.0);
+        assert_eq!(Separation::du_mode(None, None), Separation::default());
+        assert_eq!(serde_json::to_string(&Bascule::Equilibree).unwrap(), "\"equilibree\"");
     }
 
     #[test]

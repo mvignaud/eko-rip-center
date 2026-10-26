@@ -19,8 +19,15 @@ parité ; d'ici là, 0.Y.Z.
 - **Dépôt APT des postes Linux** sur `https://apt.e-ko.fr/rip/` : installation par
   `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`, puis mises à jour par
   `sudo apt update && sudo apt upgrade`. Publication : `outils/publier-depot.sh`.
+- **Bascule des encres claires par mode** (feuille de route 8.11) : trois préréglages à
+  nous, douce, équilibrée et franche, et l'encre totale du mode (`/ franche / 260 %`),
+  appliqués par le pilote direct de l'Epson.
+- **Limite d'encre totale proposée** à partir d'aplats mesurés (L*), à valider à la main,
+  et **mire de linéarisation CGATS** resserrée dans les hautes lumières.
+- Feuille de route de parité et notes rangées dans `docs/feuille-de-route/`.
 
-*Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes.*
+*Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart.*
 
 ## [0.26.0] — 2026-10-25
 
