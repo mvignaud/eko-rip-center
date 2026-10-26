@@ -11,7 +11,22 @@ Télécharger depuis la page des releases :
 |---|---|
 | macOS (Apple Silicon et Intel) | `E-KO.RIP.Center_<version>_universal.dmg` |
 | Windows | `E-KO.RIP.Center_<version>_x64-setup.exe` ou `.msi` |
-| Linux | `.deb` ou `.AppImage` |
+| Linux | dépôt APT (ci-dessous), ou `.deb` / `.AppImage` |
+
+## Linux : par le dépôt APT (mises à jour par `apt`)
+
+Sur Ubuntu ou Debian, une seule fois :
+
+```bash
+wget -qO- https://depot.e-ko.fr/rip/installer | sudo sh
+```
+
+Le script ajoute la clé du dépôt et `/etc/apt/sources.list.d/eko-rip.list`, puis installe
+le client. Ensuite, le client se met à jour avec le reste du système :
+
+```bash
+sudo apt update && sudo apt upgrade
+```
 
 ## Premier lancement
 
