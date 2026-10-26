@@ -82,7 +82,7 @@ connexion au serveur).
 
 ## Publier sur le dépôt APT
 
-Les postes Linux se mettent à jour depuis `https://depot.e-ko.fr/rip/` (VPS OVH, voir
+Les postes Linux se mettent à jour depuis `https://apt.e-ko.fr/rip/` (VPS OVH, voir
 eko-infra `ansible/depot.yml`). Après chaque release, sur le serveur de test (Linux) :
 
 ```bash

@@ -18,7 +18,7 @@ Télécharger depuis la page des releases :
 Sur Ubuntu ou Debian, une seule fois :
 
 ```bash
-wget -qO- https://depot.e-ko.fr/rip/installer | sudo sh
+wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh
 ```
 
 Le script ajoute la clé du dépôt et `/etc/apt/sources.list.d/eko-rip.list`, puis installe

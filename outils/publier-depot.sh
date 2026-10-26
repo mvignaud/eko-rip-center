@@ -7,8 +7,8 @@
 # gnupg et rsync. La clé de signature reste sur cette machine ; le VPS du
 # dépôt ne reçoit que des fichiers déjà signés.
 set -e
-URL=${EKO_DEPOT_URL:-https://depot.e-ko.fr/rip}
-DISTANT=${EKO_DEPOT_RSYNC:-depot@depot.e-ko.fr:rip/}
+URL=${EKO_DEPOT_URL:-https://apt.e-ko.fr/rip}
+DISTANT=${EKO_DEPOT_RSYNC:-depot@apt.e-ko.fr:rip/}
 LOCAL=${EKO_DEPOT_LOCAL:-$HOME/.eko-rip-depot/rip}
 CLE=${EKO_DEPOT_CLE:-depot@e-ko.fr}
 GARDER=${EKO_DEPOT_GARDER:-5}

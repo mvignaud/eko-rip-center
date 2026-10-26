@@ -16,8 +16,8 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
-- **Dépôt APT des postes Linux** sur `https://depot.e-ko.fr/rip/` : installation par
-  `wget -qO- https://depot.e-ko.fr/rip/installer | sudo sh`, puis mises à jour par
+- **Dépôt APT des postes Linux** sur `https://apt.e-ko.fr/rip/` : installation par
+  `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`, puis mises à jour par
   `sudo apt update && sudo apt upgrade`. Publication : `outils/publier-depot.sh`.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes.*
