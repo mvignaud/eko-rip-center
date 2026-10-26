@@ -539,7 +539,9 @@ const textes = {
     machines_enregistrees: "Machines enregistrées.",
     note_machines: "Graphtec : régler la machine en HP-GL (Menu > Interface > Command), pas 0,025 mm. Roland VP : découpe par le réseau, à éprouver à l'atelier ; l'impression Roland viendra après capture. Epson SC-S80600 : connexion Réseau (TCP), hôte = adresse de l'imprimante, port 9100 = pilote direct (CMJN séparé en 9 encres et tramé ; blanc et argent en Dossier pour l'instant) ; renseigner le SNMP pour arrêter la sortie sur une alerte (capot ouvert…). Dossier = plaques copiées, rien n'est imprimé.",
     modeles: { epson_sc_s80600: "Epson SC-S80600 (impression)", mutoh_kona: "Mutoh Kona (découpe)", graphtec_fc7000: "Graphtec FC7000 (découpe)", roland_versacamm: "Roland VersaCAMM VP (impression + découpe)" },
-    connexions: { serie: "Série / USB-série", reseau: "Réseau (TCP)", fichier: "Périphérique (USB…)", dossier: "Dossier" },
+    connexions: { serie: "Série / USB-série", reseau: "Réseau (TCP)", ipp: "IPP (CUPS, imprimante réseau)", rip_eko: "Renvoi vers un autre RIP E-KO", fichier: "Périphérique (USB…)", dossier: "Dossier" },
+    chemin_ipp: "Chemin", uri_ipp: "Adresse IPP", note_ipp: "IPP : le flux de la machine part tel quel (Print-Job, format brut). Avec CUPS, une file « raw » : chemin /printers/<nom de la file>, port 631. Imprimante IPP : souvent /ipp/print.",
+    machine_distante: "Machine de l'autre RIP", jeton_renvoi: "Jeton de renvoi", note_renvoi: "Le flux part à l'autre E-KO RIP Center, qui le passe à sa machine (son identifiant). Jeton : sur l'autre serveur, sudo eko-rip-serveur renvoi jeton.",
     importer: "Importer", o_imprimer: "Imprimer", o_decouper: "Découper", o_bat: "BAT", vues: "Vues", machines_titre: "Machines",
     reglages_titre: "Réglages enregistrés", aucun_reglage_enregistre: "Aucun pour l'instant.", aucune_selection: "Sélectionner un travail dans la liste.",
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
@@ -779,6 +781,10 @@ const textes = {
       identifiant_inconnu: "Identifiant inconnu : un identifiant ne se choisit pas, il est attribué par le serveur.",
       supports_invalides: "Supports invalides : nom unique (60 caractères), encres connues sans blanc et argent ensemble, au moins un mode (90 à 2880 dpi, 1 à 64 passes, encre totale de 100 à 400 %).",
       pdf_illisible: "PDF illisible : impossible d'en séparer les pages. Le réenregistrer depuis l'application d'origine.",
+      jeton_renvoi_requis: "Renvoi refusé : jeton absent ou faux (sur ce serveur : eko-rip-serveur renvoi jeton).",
+      renvoi_vide: "Renvoi sans flux.",
+      renvoi_sans_connexion: "Cette machine sort en dossier : elle ne peut pas recevoir de renvoi.",
+      renvoi_echoue: "La machine n'a pas pris le flux renvoyé.",
       polices_manquantes: "Polices non incorporées : le réglage demande de refuser le fichier. Incorporer les polices ou vectoriser le texte.",
       regles_invalides: "Règles invalides : motif non vide sans « / », bornes de format ordonnées (0 à 100 000 mm), réglage existant.",
       mire_invalide: "Mire invalide : 5 à 101 plages, encres en lettres et chiffres.",
@@ -824,7 +830,9 @@ const textes = {
     machines_enregistrees: "Machines saved.",
     note_machines: "Graphtec: set the machine to HP-GL (Menu > Interface > Command), 0.025 mm step. Roland VP: cutting over the network, to be tried at the workshop; Roland printing will follow a capture. Epson SC-S80600: Network (TCP) connection, host = the printer's address, port 9100 = direct driver (CMYK split into 9 inks and screened; white and silver through Folder for now); fill in SNMP to stop the output on an alert (cover open…). Folder = plates copied, nothing is printed.",
     modeles: { epson_sc_s80600: "Epson SC-S80600 (print)", mutoh_kona: "Mutoh Kona (cut)", graphtec_fc7000: "Graphtec FC7000 (cut)", roland_versacamm: "Roland VersaCAMM VP (print + cut)" },
-    connexions: { serie: "Serial / USB-serial", reseau: "Network (TCP)", fichier: "Device (USB…)", dossier: "Folder" },
+    connexions: { serie: "Serial / USB-serial", reseau: "Network (TCP)", ipp: "IPP (CUPS, network printer)", rip_eko: "Forward to another E-KO RIP", fichier: "Device (USB…)", dossier: "Folder" },
+    chemin_ipp: "Path", uri_ipp: "IPP address", note_ipp: "IPP: the machine's stream is sent as is (Print-Job, raw format). With CUPS, a raw queue: path /printers/<queue name>, port 631. IPP printer: often /ipp/print.",
+    machine_distante: "Machine on the other RIP", jeton_renvoi: "Forwarding token", note_renvoi: "The stream goes to the other E-KO RIP Center, which passes it to its machine (its id). Token: on the other server, sudo eko-rip-serveur renvoi jeton.",
     importer: "Import", o_imprimer: "Print", o_decouper: "Cut", o_bat: "Proof", vues: "Views", machines_titre: "Machines",
     reglages_titre: "Saved presets", aucun_reglage_enregistre: "None yet.", aucune_selection: "Select a job in the list.",
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
@@ -1064,6 +1072,10 @@ const textes = {
       identifiant_inconnu: "Unknown identifier: identifiers are assigned by the server, never chosen.",
       supports_invalides: "Invalid media: unique name (60 characters), known inks without white and metallic together, at least one mode (90 to 2880 dpi, 1 to 64 passes, total ink 100 to 400 %).",
       pdf_illisible: "Unreadable PDF: its pages cannot be split. Save it again from the original application.",
+      jeton_renvoi_requis: "Forwarding refused: missing or wrong token (on this server: eko-rip-serveur renvoi jeton).",
+      renvoi_vide: "Forwarding without a stream.",
+      renvoi_sans_connexion: "This machine outputs to a folder: it cannot receive forwarded streams.",
+      renvoi_echoue: "The machine did not take the forwarded stream.",
       polices_manquantes: "Fonts not embedded: the preset asks to refuse the file. Embed the fonts or outline the text.",
       regles_invalides: "Invalid rules: non-empty pattern without \"/\", ordered size bounds (0 to 100,000 mm), existing preset.",
       mire_invalide: "Invalid chart: 5 to 101 patches, inks in letters and digits.",
@@ -3729,7 +3741,7 @@ function afficherLateral() {
 
 /** Éditeur du catalogue (Système > Machines). */
 const MODELES = ["epson_sc_s80600", "mutoh_kona", "graphtec_fc7000", "roland_versacamm"];
-const CONNEXIONS = ["serie", "reseau", "fichier", "dossier"];
+const CONNEXIONS = ["serie", "reseau", "ipp", "rip_eko", "fichier", "dossier"];
 const REPERAGES = ["aucun", "manuel", "cadre", "cadre_code", "cadre_multi"];
 function afficherEditeurMachines() {
   const f = $("editeur-machines");
@@ -3741,10 +3753,22 @@ function afficherEditeurMachines() {
     const champ = (n, v, attrs = {}) => el("input", { name: n, value: v ?? "", ...attrs });
     const choix = (n, valeurs, v, textes) => el("select", { name: n }, ...valeurs.map((x) => el("option", { value: x, selected: x === v }, textes[x] || x)));
     const details = el("div", { className: "ligne bas" });
+    // IPP (roadmap 9.4) : l'adresse complète se lit sous les champs, telle qu'envoyée.
+    const champsIpp = () => {
+      const h = champ("hote", c.hote || ""), p = champ("port_tcp", c.type === "ipp" ? c.port : 631, { type: "number", min: 1, max: 65535 }), ch = champ("chemin_ipp", c.chemin || "/printers/", { placeholder: "/printers/Epson" });
+      const uri = el("span", { className: "meta" });
+      const maj = () => { const v = ch.value.trim(); uri.textContent = `ipp://${h.value.trim() || "…"}:${p.value || 631}${v.startsWith("/") ? v : `/${v}`}`; };
+      [h, p, ch].forEach((x) => x.addEventListener("input", maj)); maj();
+      return [el("label", { title: T().note_ipp }, T().hote, h), el("label", {}, T().port_tcp, p), el("label", {}, T().chemin_ipp, ch), el("label", {}, T().uri_ipp, uri)];
+    };
     const majConnexion = (type) => {
       details.replaceChildren(...({
         serie: [el("label", {}, T().port, champ("port", c.port || "/dev/ttyUSB0")), el("label", {}, "stty", champ("stty", c.stty || "9600 cs8 -cstopb -parenb crtscts raw -echo"))],
         reseau: [el("label", {}, T().hote, champ("hote", c.hote || "")), el("label", {}, T().port_tcp, champ("port_tcp", typeof c.port === "number" ? c.port : 9100, { type: "number", min: 1, max: 65535 }))],
+        ipp: champsIpp(),
+        rip_eko: [el("label", { title: T().note_renvoi }, T().hote, champ("hote", c.hote || "")), el("label", {}, T().port_tcp, champ("port_tcp", c.type === "rip_eko" ? c.port : 8640, { type: "number", min: 1, max: 65535 })),
+          el("label", { title: T().note_renvoi }, T().machine_distante, champ("machine_distante", c.machine || "", { placeholder: "epson", style: "width: 9em" })),
+          el("label", { title: T().note_renvoi }, T().jeton_renvoi, champ("jeton", c.jeton || "", { type: "password", autocomplete: "off" }))],
         fichier: [el("label", {}, T().chemin, champ("chemin", c.chemin || "/dev/usb/lp0"))],
         dossier: [el("span", { className: "meta" }, T().connexion_dossier)],
       })[type]);
@@ -3851,7 +3875,7 @@ $("editeur-machines").addEventListener("submit", async (e) => {
     // Variante : complétée plus bas depuis sa machine d'origine (le serveur la recopie aussi).
     if (b.dataset.variante) return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), variante_de: b.dataset.variante, reperage: q("reperage") || null };
     const type = q("type");
-    const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
+    const connexion = { type, ...(type === "serie" ? { port: q("port"), stty: q("stty") } : type === "reseau" ? { hote: q("hote"), port: +q("port_tcp") } : type === "ipp" ? { hote: q("hote"), port: +q("port_tcp"), chemin: q("chemin_ipp") } : type === "rip_eko" ? { hote: q("hote"), port: +q("port_tcp"), machine: q("machine_distante"), jeton: q("jeton") } : type === "fichier" ? { chemin: q("chemin") } : {}) };
     return { id: q("id"), uuid: b.dataset.uuid || null, nom: q("nom"), modele: q("modele"), laize_mm: +q("laize"), connexion, snmp: q("snmp") || null, pas_mm: q("pas") ? +q("pas") : null, decalage_mm: [+q("decalage_x") || 0, +q("decalage_y") || 0], origine_impression_mm: [+q("origine_x") || 0, +q("origine_y") || 0], m2_heure: q("cadence") ? +q("cadence") : null, pool: q("pool") || null,
       parametres_decoupe: [...b.querySelectorAll(".ligne-coupe")].map((r) => {
         const v = (n) => r.querySelector(`[name=${n}]`).value;
