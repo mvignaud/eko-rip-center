@@ -66,3 +66,7 @@ cargo test
 ```
 
 Le test de rendu demande Ghostscript.
+
+La CI (`.github/workflows/ci.yml`) ne se lance plus qu'à la main, faute de minutes GitHub
+Actions. Avant de pousser, lancer `./outils/verifier.sh` : il refait ses contrôles (syntaxe
+des pages, doublons de traduction, clippy, tests du serveur), sans construire le `.deb`.
