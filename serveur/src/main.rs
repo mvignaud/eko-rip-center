@@ -31,6 +31,7 @@ mod pont;
 mod plotter;
 mod render;
 mod reglages;
+mod regles;
 mod releves;
 mod reperage;
 mod sauvegarde;
@@ -370,6 +371,8 @@ async fn main() {
     for r in &liste_reglages {
         etat::assurer_dossier(&reglages::dossier_entree(&config.donnees, &r.nom));
     }
+    // Dossier des règles (roadmap 9.1) : créé d'office, il n'existait pas avant.
+    let _ = std::fs::create_dir_all(regles::dossier(&config.donnees));
     for m in catalogue.iter().filter(|m| m.connexion == machines::Connexion::Dossier) {
         etat::assurer_dossier(&config.donnees.join("sorties").join(&m.id));
     }
@@ -417,6 +420,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/reglages/export", get(exporter_reglages))
         .route("/api/reglages/import", axum::routing::post(importer_reglages))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
+        .route("/api/regles", get(lire_regles).post(enregistrer_regles))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
@@ -1552,6 +1556,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         consommation: Some(consommation::lire_reglages(&etat.config.donnees)),
         tons_directs: Some(tons::lire_table(&etat.config.donnees)),
         pont: Some(erp::lire(&etat.config.donnees).sauve()),
+        regles: Some(regles::lire(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1616,6 +1621,10 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         liste.push(r);
     }
+    let noms: Vec<String> = liste.iter().map(|r| r.nom.clone()).collect();
+    if let Some(Err(code)) = s.regles.as_deref().map(|r| regles::verifier(r, &noms)) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
     let connus = reglages::lire(&etat.config.donnees);
     reglages::identifier(&mut liste, &connus);
     let _verrou = etat.reglages.lock().await;
@@ -1648,6 +1657,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
             (c.url, c.actif, c.instance) = (p.url.clone(), p.actif && p.url.is_some() && c.secret_hmac.is_some(), p.instance.or(c.instance));
             erp::ecrire(&etat.config.donnees, &c)?;
             pont::reveiller();
+        }
+        if let Some(r) = &s.regles {
+            regles::ecrire(&etat.config.donnees, r)?;
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -2280,6 +2292,24 @@ async fn lister_reglages(State(etat): State<Partage>) -> Json<Vec<reglages::Regl
     Json(reglages::lire(&etat.config.donnees))
 }
 
+/// Règles du dossier `entrees-auto/` (roadmap 9.1), dans leur ordre d'essai.
+async fn lire_regles(State(etat): State<Partage>) -> Json<Vec<regles::Regle>> {
+    Json(regles::lire(&etat.config.donnees))
+}
+
+/// Remplace toutes les règles ; chacune doit citer un réglage enregistré.
+async fn enregistrer_regles(State(etat): State<Partage>, Json(r): Json<Vec<regles::Regle>>) -> Response {
+    let _verrou = etat.reglages.lock().await;
+    let noms: Vec<String> = reglages::lire(&etat.config.donnees).into_iter().map(|x| x.nom).collect();
+    if let Err(code) = regles::verifier(&r, &noms) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    match regles::ecrire(&etat.config.donnees, &r) {
+        Ok(()) => Json(r).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
 /// Crée ou remplace un réglage (même nom) ; son dossier surveillé est créé.
 async fn enregistrer_reglage(State(etat): State<Partage>, Json(r): Json<reglages::Reglage>) -> Response {
     if !reglages::nom_valide(&r.nom) {
@@ -2482,16 +2512,18 @@ async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
 }
 
 /// Dossiers surveillés : toutes les 5 s, chaque fichier stable de `entrees/<réglage>/`
-/// devient un travail avec ce réglage ; un refus range le fichier dans `refuses/`.
+/// devient un travail avec ce réglage, et chaque fichier de `entrees-auto/` un travail avec
+/// le réglage de la première règle qui le prend (roadmap 9.1) ; un refus range le fichier
+/// dans `refuses/`.
 async fn surveiller(etat: Partage) {
     let mut vus = std::collections::HashMap::new();
     loop {
         tokio::time::sleep(Duration::from_secs(5)).await;
         let donnees = etat.config.donnees.clone();
         let liste = reglages::lire(&donnees);
+        let auto = regles::dossier(&donnees);
         let mut fichiers = vec![];
-        for r in &liste {
-            let dossier = reglages::dossier_entree(&donnees, &r.nom);
+        for dossier in liste.iter().map(|r| reglages::dossier_entree(&donnees, &r.nom)).chain([auto.clone()]) {
             // Disparu en marche : recréé et signalé, la surveillance continue.
             if !etat::assurer_dossier(&dossier) {
                 continue;
@@ -2505,9 +2537,17 @@ async fn surveiller(etat: Partage) {
             }
         }
         for chemin in reglages::stables(&mut vus, fichiers) {
-            let Some(r) = chemin.parent().and_then(|d| d.file_name()).and_then(|n| n.to_str()).and_then(|n| liste.iter().find(|r| r.nom == n)) else { continue };
-            if let Err(raison) = prendre_fichier(&etat, &chemin, r.demande.clone()).await {
-                eprintln!("dossier surveillé {} : {} refusé : {raison}", r.nom, chemin.display());
+            let resultat = if chemin.parent() == Some(auto.as_path()) {
+                match reglage_par_regle(&donnees, &chemin, &liste).await {
+                    Ok(r) => prendre_fichier(&etat, &chemin, r.demande.clone()).await.map_err(|e| format!("règle → {} : {e}", r.nom)),
+                    Err(e) => Err(e),
+                }
+            } else {
+                let Some(r) = chemin.parent().and_then(|d| d.file_name()).and_then(|n| n.to_str()).and_then(|n| liste.iter().find(|r| r.nom == n)) else { continue };
+                prendre_fichier(&etat, &chemin, r.demande.clone()).await
+            };
+            if let Err(raison) = resultat {
+                eprintln!("dossier surveillé : {} refusé : {raison}", chemin.display());
                 let refuses = chemin.with_file_name("refuses");
                 let _ = std::fs::create_dir_all(&refuses);
                 if let Some(nom) = chemin.file_name() {
@@ -2518,6 +2558,17 @@ async fn surveiller(etat: Partage) {
             }
         }
     }
+}
+
+/// Réglage d'un fichier de `entrees-auto/` : première règle qui le prend, par son nom et,
+/// pour un PDF, le format de sa première page.
+async fn reglage_par_regle<'a>(donnees: &std::path::Path, chemin: &std::path::Path, liste: &'a [reglages::Reglage]) -> Result<&'a reglages::Reglage, String> {
+    let nom = chemin.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+    let c = chemin.to_path_buf();
+    let format = tokio::task::spawn_blocking(move || regles::format_pdf(&c)).await.ok().flatten();
+    let regles = regles::lire(donnees);
+    let r = regles::choisir(&regles, &nom, format).ok_or_else(|| "aucune_regle : aucune règle ne prend ce fichier".to_string())?;
+    liste.iter().find(|x| x.nom == r.reglage).ok_or_else(|| format!("aucune_regle : réglage « {} » introuvable", r.reglage))
 }
 
 /// Fichier d'un dossier surveillé → nouveau travail. Le fichier est déplacé dans le
@@ -4631,6 +4682,53 @@ mod tests {
             let lu = super::couches_decoupe::json(appel(&e, "GET", "/api/tons-directs", None, None).await).await;
             assert_eq!((lu["intention"].clone(), lu["tons"][7]["lab"].clone()), (serde_json::json!(1), serde_json::json!([50.0, 7.0, -7.0])));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 9.1 : `BACHE_*.pdf` → réglage Bâche ; un grand format → réglage XXL ; un
+        /// fichier qu'aucune règle ne prend est refusé ; une règle vers un réglage inconnu aussi.
+        #[tokio::test]
+        async fn regles_du_dossier_automatique() {
+            use lopdf::{Document, Object, dictionary};
+            let e = etat("regles");
+            let d = &e.config.donnees;
+            let reglage = |nom: &str| reglages::Reglage { uuid: None, nom: nom.into(), demande: Demande::default() };
+            reglages::ecrire(d, &[reglage("Bâche"), reglage("XXL"), reglage("Vinyle")]).unwrap();
+            let regles = serde_json::json!([
+                { "motif": "BACHE_*", "reglage": "Bâche" },
+                { "motif": "*.pdf", "grand_cote_mm": [2000, 100000], "reglage": "XXL" },
+                { "motif": "*.pdf", "reglage": "Vinyle" },
+            ]);
+            assert_eq!(appel(&e, "POST", "/api/regles", None, Some(regles)).await.status(), StatusCode::OK);
+            let faux = serde_json::json!([{ "motif": "*", "reglage": "Inconnu" }]);
+            assert_eq!(super::couches_decoupe::json(appel(&e, "POST", "/api/regles", None, Some(faux)).await).await["code"], "regles_invalides");
+            assert_eq!(super::couches_decoupe::json(appel(&e, "GET", "/api/regles", None, None).await).await[1]["grand_cote_mm"], serde_json::json!([2000.0, 100000.0]));
+            let pdf = |l: f32, h: f32| {
+                let mut doc = Document::with_version("1.7");
+                let pages = doc.new_object_id();
+                let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real(l), Object::Real(h)] });
+                doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+                let c = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+                doc.trailer.set("Root", c);
+                let mut v = vec![];
+                doc.save_to(&mut v).unwrap();
+                v
+            };
+            let auto = regles::dossier(d);
+            std::fs::create_dir_all(&auto).unwrap();
+            let liste = reglages::lire(d);
+            let essai = |nom: &str, octets: Vec<u8>| {
+                let chemin = auto.join(nom);
+                std::fs::write(&chemin, octets).unwrap();
+                let liste = liste.clone();
+                async move { reglage_par_regle(d, &chemin, &liste).await.map(|r| r.nom.clone()) }
+            };
+            assert_eq!(essai("BACHE_client-12.pdf", pdf(8504.0, 2835.0)).await.unwrap(), "Bâche", "le motif passe avant le format");
+            assert_eq!(essai("affiche.pdf", pdf(2835.0, 8504.0)).await.unwrap(), "XXL", "3 m de haut");
+            assert_eq!(essai("a3.pdf", pdf(842.0, 1191.0)).await.unwrap(), "Vinyle");
+            assert!(essai("photo.jpg", vec![0xff, 0xd8, 0xff]).await.unwrap_err().starts_with("aucune_regle"));
+            regles::ecrire(d, &[regles::Regle { motif: "*".into(), petit_cote_mm: None, grand_cote_mm: None, reglage: "Supprimé".into() }]).unwrap();
+            assert!(essai("x.pdf", pdf(100.0, 100.0)).await.unwrap_err().contains("Supprimé"));
+            std::fs::remove_dir_all(d).unwrap();
         }
 
         /// Roadmap 8.11 : préréglages listés, mire CGATS, limite proposée, et un mode qui porte

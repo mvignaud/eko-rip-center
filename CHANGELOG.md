@@ -25,9 +25,12 @@ parité ; d'ici là, 0.Y.Z.
 - **Limite d'encre totale proposée** à partir d'aplats mesurés (L*), à valider à la main,
   et **mire de linéarisation CGATS** resserrée dans les hautes lumières.
 - Feuille de route de parité et notes rangées dans `docs/feuille-de-route/`.
+- **Dossier automatique `entrees-auto/`** (feuille de route 9.1) : le réglage vient de la
+  première règle qui prend le fichier, par motif de nom (`BACHE_*`) et format de la première
+  page d'un PDF ; règles éditées dans Système et gardées dans la sauvegarde.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart.*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules.*
 
 ## [0.26.0] — 2026-10-25
 

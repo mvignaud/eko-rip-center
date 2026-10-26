@@ -568,6 +568,20 @@ server. A PDF, AI, SVG, TIFF, PNG or JPEG dropped there becomes a job with that 
 complete (size stable for 5 s). A rejected file is moved to `refuses/`, with a
 `.refus.txt` file giving the reason.
 
+**Automatic folder**: `/var/lib/eko-rip/entrees-auto/` picks the preset itself, from the
+**Automatic folder rules** (administrator, System). They are tried top to bottom (**↑**
+moves a rule up), and the first that matches gives its preset:
+
+- **Name pattern**: `*` for any characters, `?` for a single one, case ignored. `BACHE_*`
+  takes `BACHE_client-12.pdf`, not `affiche_BACHE.pdf`.
+- **Short side** and **long side** (mm, optional): the size of a PDF's first page, in
+  either orientation. An empty bound means 0 or 100 m. A size rule never takes a file whose
+  size is not read (image, SVG, PDF over 512 MB): put a rule without size after it.
+
+Example: `BACHE_*` → Banner; `*.pdf`, long side from 2000 to empty → Large format; `*` →
+Vinyl. A file no rule takes goes to `entrees-auto/refuses/` with its reason. The rules are
+part of the configuration backup.
+
 **Export, import** (administrator, System > Configuration backup): **Export presets**
 downloads all saved presets, for another server; **Import presets** takes in those of an
 export. **If the name exists**: **rename ("name 2")** or **overwrite**. Everything is

@@ -1,5 +1,5 @@
 //! Sauvegarde de la configuration en un seul fichier JSON : catalogue des machines, tarifs,
-//! réglages enregistrés, supports et modes, profils ICC (en hexadécimal) et réglage du pont ERP
+//! réglages enregistrés et règles du dossier automatique, supports et modes, profils ICC (en hexadécimal) et réglage du pont ERP
 //! (sans son secret). Ni les comptes (mots de passe
 //! hachés : ils se recréent sur le serveur), ni les travaux, ni la file.
 
@@ -37,6 +37,10 @@ pub struct Sauvegarde {
     /// d'avant le lot R2 : le pont en place est gardé.
     #[serde(default)]
     pub pont: Option<crate::erp::Sauve>,
+    /// Règles du dossier `entrees-auto/` (roadmap 9.1) ; absentes des sauvegardes d'avant :
+    /// les règles en place sont gardées.
+    #[serde(default)]
+    pub regles: Option<Vec<crate::regles::Regle>>,
 }
 
 pub fn hex(octets: &[u8]) -> String {
