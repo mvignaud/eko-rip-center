@@ -32,9 +32,13 @@ parité ; d'ici là, 0.Y.Z.
   plaque, en surimpression ; `Spot1`, `White` ou `Blanc` donne la plaque de blanc ; les
   canaux de sélection de Photoshop sont ignorés. Sens des valeurs à confirmer sur un
   fichier de l'atelier.
+- **Une page par travail** et **Refuser si une police manque** (feuille de route 9.3),
+  cases du panneau d'envoi gardées dans le réglage : un PDF de plusieurs pages devient un
+  travail par page (« fichier (p. 2/5) ») ; un fichier dont une police n'est pas
+  incorporée, hors 14 polices de base, est refusé (`polices_manquantes`).
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates.*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options.*
 
 ## [0.26.0] — 2026-10-25
 

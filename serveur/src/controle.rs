@@ -95,6 +95,19 @@ fn images(doc: &Document, contenu: &[u8], ressources: Option<&Dictionary>, ctm: 
     }
 }
 
+/// Les 14 polices de base du PDF : Ghostscript les remplace par des équivalentes de mêmes
+/// métriques, leur absence ne change pas la mise en page.
+const POLICES_DE_BASE: [&str; 14] = [
+    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic", "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+    "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique", "Symbol", "ZapfDingbats",
+];
+
+/// Polices manquantes pour l'abandon d'un travail (roadmap 9.3) : non incorporées, hors
+/// polices de base.
+pub fn polices_manquantes(alertes: &[Alerte]) -> Vec<String> {
+    alertes.iter().filter(|a| a.code == "police_non_incorporee" && !POLICES_DE_BASE.contains(&a.detail.as_str())).map(|a| a.detail.clone()).collect()
+}
+
 pub fn verifier(pdf: &[u8]) -> Vec<Alerte> {
     let Ok(doc) = Document::load_mem(pdf) else { return vec![] };
     let mut alertes = vec![];
@@ -192,5 +205,13 @@ mod tests {
         assert_eq!(a.len(), 1, "{a:?}");
         // Côté le plus faible : 4 px sur 200/72 pouce = 1,44 ppi.
         assert_eq!(a[0].detail, "image en ligne : 1 ppi");
+    }
+
+    #[test]
+    fn polices_manquantes_hors_polices_de_base() {
+        let a = |detail: &str| Alerte { code: "police_non_incorporee".into(), page: None, detail: detail.into() };
+        let alertes = [a("Helvetica"), a("ArialMT"), a("Times-Bold"), Alerte { code: "image_basse_definition".into(), page: Some(1), detail: "Im : 20 ppi".into() }, a("Futura")];
+        assert_eq!(polices_manquantes(&alertes), ["ArialMT", "Futura"]);
+        assert!(polices_manquantes(&verifier(&pdf_a_risques())).is_empty(), "Helvetica seule : rien ne manque");
     }
 }
