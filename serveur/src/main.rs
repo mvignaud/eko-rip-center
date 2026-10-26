@@ -971,6 +971,11 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         if r.canaux_ignores > 0 {
             alertes.push(controle::Alerte { code: "image_canaux_ignores".into(), page: None, detail: r.canaux_ignores.to_string() });
         }
+        // Sens des valeurs des canaux en plus encore à confirmer sur un vrai fichier : la
+        // plaque est signalée pour être regardée avant d'imprimer.
+        if !r.tons_directs.is_empty() {
+            alertes.push(controle::Alerte { code: "image_tons_directs".into(), page: None, detail: r.tons_directs.join(", ") });
+        }
     }
     if !fiche.valide() {
         return Err(mauvais("fiche_invalide", None));

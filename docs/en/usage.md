@@ -35,7 +35,14 @@ Accepted formats: PDF, AI (saved with “Create PDF Compatible File”), SVG (cu
 in the file (none: 72 ppi, and the job says so), in CMYK, RGB or greyscale, 8 or 16 bits,
 with its ICC profile; transparency lays no ink. Maximum file size: 8 GB
 (`EKO_RIP_MAX_MO`). Not supported yet: palette, YCbCr, Lab or planar TIFF, interlaced PNG
-(refused with a message); a TIFF's spot colour channels are ignored and flagged.
+(refused with a message).
+
+**A TIFF's spot colour channels**: each becomes its own plate, laid over the colours
+without erasing them. Its name is the channel's name in Photoshop (no name: `Spot1`,
+`Spot2`…). A channel named `White`, `Blanc`, `WH` or `Spot1` (case, spaces and `_`
+ignored) gives the white plate. Photoshop selection channels (masks) are not printed. The
+job lists the plates taken: look at them before the first print, the value direction
+(light channel = no ink) has not yet been checked on a file from the workshop.
 
 ## Automatic rotation and settings after import
 
@@ -972,8 +979,8 @@ factors are in the configuration backup.
 - White and silver through the direct Epson driver: they go out to a folder.
 - Printing on the Roland.
 - The Kona type 3 frame (multi-segment) has not been tried on the machine yet.
-- A TIFF's spot colour channels (white, varnish): ignored for now; transparency as a white
-  plate will come with roadmap 9.12.
+- A TIFF's spot colour channels: the value direction is still to check on a real
+  Photoshop TIFF; transparency as a white plate will come with roadmap 9.12.
 - The Epson swatch book's `MT-*` metallic colours are not converted yet.
 
 ## Glossary

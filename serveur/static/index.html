@@ -677,7 +677,8 @@ const textes = {
     coupe_auto: "Couper dès l'arrivée", note_coupe_auto: "Décoché : chaque découpe arrive suspendue dans la file de la machine et part quand l'opérateur la reprend (« Reprendre »).", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
       image_sans_resolution: (d) => `L'image ne donne pas sa résolution : posée à ${d}. Vérifier la taille, ou la régler dans Réglages (échelle).`,
-      image_canaux_ignores: (d) => `${d} canal(aux) en plus dans le TIFF (tons directs) ignoré(s) pour l'instant : seules les couleurs sont imprimées.`,
+      image_canaux_ignores: (d) => `${d} canal(aux) de sélection du TIFF (masques Photoshop) ignoré(s) : ils ne s'impriment pas.`,
+      image_tons_directs: (d) => `Tons directs du TIFF repris en plaques : ${d}. Vérifier la plaque avant d'imprimer (un canal clair à l'écran doit être sans encre).`,
       police_non_incorporee: (d) => `Police non incorporée : ${d} — une autre sera prise au rendu. Vectoriser le texte ou incorporer la police.`,
       image_basse_definition: (d, p) => `Image peu définie, page ${p} : ${d} (moins de 100 ppi à la taille imprimée).`,
       rotation_auto: (d) => `Tourné de 90° pour tenir dans la laize de l'imprimante (${d}).`,
@@ -959,7 +960,8 @@ const textes = {
     coupe_auto: "Cut on arrival", note_coupe_auto: "Unticked: each cut arrives on hold in the machine's queue and goes when the operator resumes it (\"Resume\").", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
       image_sans_resolution: (d) => `The image does not give its resolution: placed at ${d}. Check the size, or set it in Settings (scale).`,
-      image_canaux_ignores: (d) => `${d} extra channel(s) in the TIFF (spot colours) ignored for now: only the colours are printed.`,
+      image_canaux_ignores: (d) => `${d} selection channel(s) of the TIFF (Photoshop masks) ignored: they are not printed.`,
+      image_tons_directs: (d) => `TIFF spot colours taken as plates: ${d}. Check the plate before printing (a channel that looks light on screen must carry no ink).`,
       police_non_incorporee: (d) => `Font not embedded: ${d} — another one will be used at rendering. Outline the text or embed the font.`,
       image_basse_definition: (d, p) => `Low-resolution image, page ${p}: ${d} (under 100 ppi at printed size).`,
       rotation_auto: (d) => `Turned 90° to fit the printer's roll width (${d}).`,
