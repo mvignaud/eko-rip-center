@@ -598,6 +598,22 @@ sur le serveur. Un PDF, AI, SVG, TIFF, PNG ou JPEG déposé dedans devient un tr
 que sa copie est terminée (taille stable pendant 5 s). Un fichier refusé est rangé dans
 `refuses/`, avec un fichier `.refus.txt` qui donne la raison.
 
+**Dossier automatique** : `/var/lib/eko-rip/entrees-auto/` choisit le réglage lui-même,
+d'après les **Règles du dossier automatique** (administrateur, Système). Elles sont
+essayées de haut en bas (**↑** pour remonter une règle), et la première qui correspond
+donne son réglage :
+
+- **Motif du nom** : `*` pour n'importe quels caractères, `?` pour un seul, sans tenir
+  compte des majuscules. `BACHE_*` prend `BACHE_client-12.pdf`, pas `affiche_BACHE.pdf`.
+- **Petit côté** et **grand côté** (mm, facultatifs) : le format de la première page d'un
+  PDF, quelle que soit son orientation. Une borne vide vaut 0 ou 100 m. Une règle de format
+  ne prend jamais un fichier dont le format n'est pas lu (image, SVG, PDF de plus de
+  512 Mo) : mettre une règle sans format après elle.
+
+Exemple : `BACHE_*` → Bâche ; `*.pdf`, grand côté de 2000 à vide → Grand format ; `*` →
+Vinyle. Un fichier qu'aucune règle ne prend va dans `entrees-auto/refuses/` avec sa raison.
+Les règles sont dans la sauvegarde de la configuration.
+
 **Exporter, importer** (administrateur, Système > Sauvegarde de la configuration) :
 **Exporter les réglages** télécharge tous les réglages enregistrés, pour un autre serveur ;
 **Importer des réglages** reprend ceux d'un export. **Si le nom existe** : **renommer
