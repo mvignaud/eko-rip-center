@@ -36,9 +36,14 @@ parité ; d'ici là, 0.Y.Z.
   cases du panneau d'envoi gardées dans le réglage : un PDF de plusieurs pages devient un
   travail par page (« fichier (p. 2/5) ») ; un fichier dont une police n'est pas
   incorporée, hors 14 polices de base, est refusé (`polices_manquantes`).
+- **Ports IPP et renvoi** (feuille de route 9.4) : une machine peut sortir par IPP
+  (Print-Job brut vers une file CUPS ou une imprimante, adresse `ipp://…` montrée à
+  l'écran) ou par renvoi vers un autre E-KO RIP Center, qui passe le flux à sa machine
+  (jeton `eko-rip-serveur renvoi jeton`, jamais réaffiché). L'Epson imprime en direct par
+  les deux.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options.*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP.*
 
 ## [0.26.0] — 2026-10-25
 

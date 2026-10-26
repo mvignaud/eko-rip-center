@@ -117,7 +117,7 @@ pub fn empreinte(jeton: &str) -> String {
 }
 
 /// Comparaison en temps constant (longueurs publiques).
-fn egal(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn egal(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 

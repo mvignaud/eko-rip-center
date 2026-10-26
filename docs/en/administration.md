@@ -95,6 +95,24 @@ administrator left: an account declared without a role becomes one.
   to `sorties/epson/`. The media width, state and alerts are read over SNMP when the
   address is set (the server speaks SNMP itself, nothing to install): without SNMP, the
   direct driver cannot stop a print on an alert.
+- **IPP**: the machine's stream (the Epson's ESC/P2, a cutter's HP-GL) goes out as an IPP
+  Print-Job, raw format. With CUPS, create a **raw** queue (no driver):
+  `lpadmin -p epson -v socket://<ip>:9100 -E`, then path `/printers/epson`, port 631. The
+  screen shows the full address (`ipp://host:631/printers/epson`). Check:
+  `lpstat -h <host> -p`. The RIP waits for CUPS's answer: a stopped or missing queue fails
+  the output with the IPP refusal spelled out.
+- **Forward to another E-KO RIP**: the stream goes to another E-KO RIP Center server,
+  which passes it as is to its machine (its id, e.g. `epson`), without queueing it again.
+  On the receiving server, create the token (shown once; `retirer` closes forwarding,
+  `etat` says whether it is open):
+
+  ```bash
+  sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur renvoi jeton
+  ```
+
+  then paste it into the **Forward** machine of the sending server (host, port 8640). The
+  token is never shown again on screen; it only opens the forwarding route. The stream
+  travels unencrypted on the local network: keep it between the shop's servers.
 
 ## ERP bridge
 

@@ -50,6 +50,41 @@ pub enum Connexion {
     Fichier { chemin: PathBuf },
     /// Pas de pilote : la sortie est copiée dans `<données>/sorties/<machine>/`.
     Dossier,
+    /// IPP (Print-Job) vers une file CUPS ou une imprimante : `ipp://hote:port/chemin`.
+    Ipp {
+        hote: String,
+        #[serde(default = "port_ipp")]
+        port: u16,
+        chemin: String,
+    },
+    /// Renvoi vers un autre E-KO RIP Center, qui passe le flux à sa machine `machine`
+    /// (jeton créé là-bas par `eko-rip-serveur renvoi jeton`).
+    RipEko { hote: String, port: u16, machine: String, jeton: String },
+}
+
+fn port_ipp() -> u16 {
+    crate::ports::PORT_IPP
+}
+
+/// Jeton de renvoi tel que l'écran le reçoit : le vrai reste sur le serveur.
+pub const JETON_MASQUE: &str = "••••••••";
+
+impl Connexion {
+    /// Flux envoyé au fil de l'eau par le réseau : pilote direct de l'Epson possible.
+    pub fn flux_direct(&self) -> bool {
+        matches!(self, Connexion::Reseau { .. } | Connexion::Ipp { .. } | Connexion::RipEko { .. })
+    }
+
+    fn valide(&self) -> bool {
+        use crate::ports::{chemin_valide, hote_valide};
+        match self {
+            Connexion::Ipp { hote, port, chemin } => hote_valide(hote) && *port > 0 && chemin_valide(chemin),
+            Connexion::RipEko { hote, port, machine, jeton } => {
+                hote_valide(hote) && *port > 0 && (1..=30).contains(&machine.len()) && machine.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') && (16..=200).contains(&jeton.len()) && jeton.chars().all(|c| c.is_ascii_graphic())
+            }
+            _ => true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -340,6 +375,7 @@ pub fn verifier(machines: &[Machine]) -> Result<(), &'static str> {
             && m.parametres_decoupe.len() <= 20
             && m.parametres_decoupe.iter().all(ParametreDecoupe::valide)
             && m.imbrication.valide()
+            && m.connexion.valide()
     });
     if !bon {
         return Err("machine_invalide");
@@ -473,16 +509,29 @@ pub fn ouvrir_reseau(hote: &str, port: u16) -> Result<std::net::TcpStream, Strin
 pub fn envoyer(c: &Connexion, octets: &[u8]) -> Result<(), String> {
     match c {
         Connexion::Serie { port, stty } => crate::plotter::envoyer(port, stty, octets),
-        Connexion::Reseau { hote, port } => {
-            let mut flux = ouvrir_reseau(hote, *port)?;
-            flux.write_all(octets).map_err(|e| format!("{hote}:{port} : {e}"))?;
-            flux.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())
+        Connexion::Reseau { .. } | Connexion::Ipp { .. } | Connexion::RipEko { .. } => {
+            let mut flux = crate::ports::ouvrir(c, "E-KO RIP Center")?;
+            flux.write_all(octets).map_err(|e| e.to_string())?;
+            flux.finir()
         }
         // Un fichier ordinaire est remplacé d'un coup ; un périphérique (`/dev/…`) s'écrit tel quel.
         Connexion::Fichier { chemin } if chemin.is_file() => ecrire_atomique(chemin, octets),
         Connexion::Fichier { chemin } => std::fs::OpenOptions::new().write(true).open(chemin).and_then(|mut f| f.write_all(octets)).map_err(|e| format!("{} : {e}", chemin.display())),
         Connexion::Dossier => Err("machine sans connexion : sortie en dossier seulement".into()),
     }
+}
+
+/// Envoie un fichier par la connexion de la machine (bloquant) : au fil de l'eau par le
+/// réseau, d'un bloc sinon (découpes, petites).
+pub fn envoyer_fichier(c: &Connexion, chemin: &Path, nom: &str) -> Result<u64, String> {
+    let e = |e: std::io::Error| format!("{} : {e}", chemin.display());
+    if !c.flux_direct() {
+        let o = std::fs::read(chemin).map_err(e)?;
+        return envoyer(c, &o).map(|()| o.len() as u64);
+    }
+    let mut flux = crate::ports::ouvrir(c, nom)?;
+    let n = std::io::copy(&mut std::fs::File::open(chemin).map_err(e)?, &mut flux).map_err(|e| e.to_string())?;
+    flux.finir().map(|()| n)
 }
 
 #[cfg(test)]

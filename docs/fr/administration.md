@@ -119,6 +119,24 @@ aucun administrateur : un compte déclaré sans rôle le devient.
   vont dans `sorties/epson/`. La largeur du média, l'état et les alertes se lisent par
   SNMP si l'adresse est renseignée (le serveur parle SNMP lui-même, rien à installer) :
   sans SNMP, le pilote direct ne peut pas arrêter une impression sur une alerte.
+- **IPP** : le flux de la machine (ESC/P2 de l'Epson, HP-GL d'une découpeuse) part par un
+  Print-Job IPP, au format brut. Avec CUPS, créer une file **raw** (sans pilote) :
+  `lpadmin -p epson -v socket://<ip>:9100 -E`, puis chemin `/printers/epson`, port 631.
+  L'écran montre l'adresse complète (`ipp://hôte:631/printers/epson`). Vérifier :
+  `lpstat -h <hôte> -p`. Le RIP attend la réponse de CUPS : une file arrêtée ou
+  introuvable fait échouer la sortie avec le refus IPP en clair.
+- **Renvoi vers un autre RIP E-KO** : le flux part à un autre serveur E-KO RIP Center, qui
+  le passe tel quel à sa machine (son identifiant, par ex. `epson`), sans le remettre en
+  file. Sur le serveur qui reçoit, créer le jeton (affiché une seule fois ; `retirer` ferme
+  le renvoi, `etat` dit s'il est ouvert) :
+
+  ```bash
+  sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur renvoi jeton
+  ```
+
+  puis le coller dans la machine **Renvoi** du serveur qui envoie (hôte, port 8640). Le
+  jeton n'est jamais réaffiché à l'écran ; il n'ouvre que la route de renvoi. Le flux
+  passe en clair sur le réseau local : à garder entre serveurs de l'atelier.
 
 ## Pont ERP
 

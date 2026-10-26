@@ -28,6 +28,7 @@ mod linearisation;
 mod mosaique;
 mod nid;
 mod pont;
+mod ports;
 mod plotter;
 mod render;
 mod reglages;
@@ -328,6 +329,9 @@ async fn main() {
     if args.first().map(String::as_str) == Some("erp") {
         std::process::exit(commande_erp(&donnees, args.get(1).map(String::as_str)));
     }
+    if args.first().map(String::as_str) == Some("renvoi") {
+        std::process::exit(commande_renvoi(&donnees, args.get(1).map(String::as_str)));
+    }
     let config = Config {
         profils: donnees.join("profils"),
         donnees,
@@ -410,6 +414,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/systeme", get(systeme))
         .route("/api/machines", get(lister_machines).post(enregistrer_machines))
         .route("/api/machines/{id}/media", get(media_machine))
+        .route("/api/renvoi/{id}", axum::routing::post(recevoir_renvoi))
         .route("/api/machines/{id}/consommation", get(consommation_machine))
         .route("/api/machines/{id}/supports", get(lister_supports).post(enregistrer_supports))
         .route("/api/machines/{id}/charge", get(lire_charge).post(saisir_charge))
@@ -1562,12 +1567,77 @@ fn machine(etat: &Etat, id: &str) -> Option<machines::Machine> {
 }
 
 async fn lister_machines(State(etat): State<Partage>) -> Json<Vec<machines::Machine>> {
-    Json(etat.machines.read().unwrap().clone())
+    let mut liste = etat.machines.read().unwrap().clone();
+    for m in &mut liste {
+        if let machines::Connexion::RipEko { jeton, .. } = &mut m.connexion {
+            *jeton = machines::JETON_MASQUE.into();
+        }
+    }
+    Json(liste)
+}
+
+/// Renvoi reçu d'un autre E-KO RIP Center (roadmap 9.4) : le flux, déjà dans la langue de
+/// la machine, part tel quel par sa connexion, sans passer par la file ; la réponse dit
+/// si la machine l'a pris. Le flux passe par le disque : la connexion de la machine ne
+/// s'ouvre qu'une fois tout reçu.
+async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>, mut corps: Multipart) -> Response {
+    let Some(m) = machine(&etat, &id) else { return refus(StatusCode::NOT_FOUND, "introuvable", Some(id)) };
+    if m.connexion == machines::Connexion::Dossier {
+        return refus(StatusCode::CONFLICT, "renvoi_sans_connexion", Some(m.nom));
+    }
+    let rep = etat.config.donnees.join("renvoi");
+    let chemin = rep.join(format!("{}.bin", Uuid::new_v4()));
+    let (mut nom, mut recu) = (String::from("renvoi"), false);
+    let lu: Result<(), String> = async {
+        tokio::fs::create_dir_all(&rep).await.map_err(|e| e.to_string())?;
+        while let Some(mut champ) = corps.next_field().await.map_err(|e| e.to_string())? {
+            match champ.name() {
+                Some("nom") => nom = champ.text().await.map_err(|e| e.to_string())?.chars().take(255).collect(),
+                Some("flux") => {
+                    let mut f = tokio::fs::File::create(&chemin).await.map_err(|e| e.to_string())?;
+                    while let Some(morceau) = champ.chunk().await.map_err(|e| e.to_string())? {
+                        tokio::io::AsyncWriteExt::write_all(&mut f, &morceau).await.map_err(|e| e.to_string())?;
+                    }
+                    tokio::io::AsyncWriteExt::flush(&mut f).await.map_err(|e| e.to_string())?;
+                    recu = true;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    .await;
+    let reponse = match lu {
+        Err(e) => refus(StatusCode::BAD_REQUEST, "envoi_interrompu", Some(e)),
+        Ok(()) if !recu => refus(StatusCode::BAD_REQUEST, "renvoi_vide", None),
+        Ok(()) => {
+            let (c, f, n) = (m.connexion.clone(), chemin.clone(), nom.clone());
+            match tokio::task::spawn_blocking(move || machines::envoyer_fichier(&c, &f, &n)).await {
+                Ok(Ok(octets)) => {
+                    eprintln!("renvoi « {nom} » : {octets} octets passés à {}", m.id);
+                    Json(serde_json::json!({ "machine": m.id, "octets": octets })).into_response()
+                }
+                Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "renvoi_echoue", Some(e)),
+                Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+            }
+        }
+    };
+    let _ = tokio::fs::remove_file(&chemin).await;
+    reponse
 }
 
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
 async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
     let connues = etat.machines.read().unwrap().clone();
+    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé.
+    for m in &mut liste {
+        if let machines::Connexion::RipEko { jeton, .. } = &mut m.connexion
+            && jeton == machines::JETON_MASQUE
+            && let Some(machines::Connexion::RipEko { jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+        {
+            *jeton = garde.clone();
+        }
+    }
     if let Err(code) = machines::verifier(&liste).and_then(|()| {
         machines::accorder_variantes(&mut liste);
         machines::identifier(&mut liste, &connues)
@@ -2183,6 +2253,10 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
     // Pont ERP (exception accordée par le gérant le 24/10) : le jeton de l'ERP ouvre ses
     // seules routes ; elles restent fermées sans lui, même quand l'accès humain est libre.
     let bearer = requete.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "));
+    // Renvoi d'un autre RIP (roadmap 9.4) : son jeton n'ouvre que cette route.
+    if chemin.starts_with("/api/renvoi/") {
+        return if bearer.is_some_and(|j| ports::jeton_valide(&etat.config.donnees, j)) { suite.run(requete).await } else { refus(StatusCode::UNAUTHORIZED, "jeton_renvoi_requis", None) };
+    }
     if chemin.starts_with(erp::PREFIXE) {
         return if bearer.is_some_and(|j| erp::jeton_valide(&erp::lire(&etat.config.donnees), j)) { suite.run(requete).await } else { refus(StatusCode::UNAUTHORIZED, "jeton_erp_requis", None) };
     }
@@ -2265,6 +2339,34 @@ async fn nouvelle_instance(State(etat): State<Partage>) -> Response {
     }
     pont::reveiller();
     Json(pont::etat_public(donnees)).into_response()
+}
+
+/// `eko-rip-serveur renvoi jeton|retirer|etat` : jeton que les autres RIP présentent pour
+/// envoyer à nos machines (roadmap 9.4), affiché une seule fois.
+fn commande_renvoi(donnees: &std::path::Path, action: Option<&str>) -> i32 {
+    let mut c = ports::lire(donnees);
+    let nouveau = erp::aleatoire();
+    match action {
+        Some("jeton") => c.jeton_sha256 = Some(erp::empreinte(&nouveau)),
+        Some("retirer") => c.jeton_sha256 = None,
+        Some("etat") => {
+            println!("jeton de renvoi : {}", if c.jeton_sha256.is_some() { "déclaré" } else { "aucun (renvoi fermé)" });
+            return 0;
+        }
+        _ => {
+            eprintln!("usage : eko-rip-serveur renvoi jeton|retirer|etat");
+            return 2;
+        }
+    }
+    if let Err(e) = std::fs::create_dir_all(donnees).and_then(|_| ports::ecrire(donnees, &c)) {
+        eprintln!("renvoi.json : {e}");
+        return 1;
+    }
+    if c.jeton_sha256.is_some() {
+        println!("{nouveau}");
+        eprintln!("À recopier maintenant dans la machine « Renvoi » de l'autre RIP : il ne sera plus affiché. Le précédent ne vaut plus.");
+    }
+    0
 }
 
 /// `eko-rip-serveur erp jeton|secret|etat` : crée le jeton de l'ERP ou le secret HMAC
@@ -3553,7 +3655,7 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         Impression if p.plaques.len() == p.plaques_decoupe.len() => return refus(StatusCode::CONFLICT, "rien_a_imprimer", None),
         Impression if m.modele == machines::Modele::EpsonScS80600 => {
             // Le pilote direct (réseau) n'a pas encore le blanc ni l'argent ; le dossier, si.
-            let controle = if matches!(m.connexion, machines::Connexion::Reseau { .. }) { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
+            let controle = if m.connexion.flux_direct() { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
             if let Err(e) = controle(&p.plaques, t.demande.couches) {
                 return refus(StatusCode::CONFLICT, "envoi_impossible", Some(e));
             }
@@ -4094,7 +4196,7 @@ async fn repartir(etat: Partage) {
 async fn executer(etat: Partage, s: file::Sortie) {
     let echec = |e: String| ("sortie_echouee", e);
     let m = machine(&etat, &s.machine);
-    let direct = m.as_ref().filter(|m| s.operation() == machines::Operation::Impression && matches!(m.connexion, machines::Connexion::Reseau { .. }));
+    let direct = m.as_ref().filter(|m| s.operation() == machines::Operation::Impression && m.connexion.flux_direct());
     let du = match direct {
         Some(m) => relever_maintenant(&etat, m).await,
         None => None,
@@ -4104,7 +4206,7 @@ async fn executer(etat: Partage, s: file::Sortie) {
         None => Err(echec(format!("machine « {} » absente du catalogue", s.machine))),
         Some(m) => match (s.operation(), m.connexion.clone()) {
             (machines::Operation::Impression, machines::Connexion::Dossier) => sortir_les_plaques(&etat, &s, m.modele).await.map(|()| None).map_err(echec),
-            (machines::Operation::Impression, machines::Connexion::Reseau { hote, port }) if m.modele == machines::Modele::EpsonScS80600 => imprimer_sur_l_epson(&etat, &s, &m, hote, port).await.map(Some),
+            (machines::Operation::Impression, c) if m.modele == machines::Modele::EpsonScS80600 && c.flux_direct() => imprimer_sur_l_epson(&etat, &s, &m, c).await.map(Some),
             (machines::Operation::Impression, _) => Err(echec(format!("pilote d'impression à venir pour {}", m.nom))),
             (machines::Operation::Decoupe, _) => envoyer_la_decoupe(&etat, &s, m).await.map(|()| None).map_err(echec),
         },
@@ -4209,7 +4311,7 @@ const RELEVE_IMPRESSION: Duration = Duration::from_secs(5);
 /// l'envoi et jusqu'à la fin de l'impression (`hrPrinterStatus` quitte « imprime ») : une
 /// alerte bloquante coupe la connexion et fait échouer la sortie. Un relevé sans réponse
 /// ne fait rien échouer : il ne dit rien.
-async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, hote: String, port: u16) -> Result<epson::Points, (&'static str, String)> {
+async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, c: machines::Connexion) -> Result<epson::Points, (&'static str, String)> {
     let echec = |e: String| ("sortie_echouee", e);
     let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or(echec("travail ou page disparu".into()))?;
     epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches).map_err(|e| ("envoi_impossible", e))?;
@@ -4246,12 +4348,14 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     {
         return Err(("imprimante_en_alerte", a));
     }
-    let connexion = tokio::task::spawn_blocking(move || machines::ouvrir_reseau(&hote, port)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
-    let coupure = connexion.try_clone().map_err(|e| echec(e.to_string()))?;
+    // Réseau brut (9100), IPP ou autre RIP (roadmap 9.4) : le même flux ESC/P2.
+    let nom = t.nom.clone();
+    let connexion = tokio::task::spawn_blocking(move || ports::ouvrir(&c, &nom)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
+    let coupure = connexion.coupure().map_err(|e| echec(e.to_string()))?;
     let mut envoi = tokio::task::spawn_blocking(move || {
         let (w, points) = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation, &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
         let c = w.into_inner().map_err(|e| format!("envoi du flux : {}", e.error()))?;
-        c.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())?;
+        c.finir()?;
         Ok(points)
     });
     let Some(h) = m.snmp.clone() else { return envoi.await.map_err(|e| echec(e.to_string()))?.map_err(echec) };
@@ -4559,6 +4663,57 @@ mod tests {
                 None => Body::empty(),
             };
             routes(e.clone()).oneshot(r.body(corps).unwrap()).await.unwrap()
+        }
+
+        /// Renvoi vers un autre RIP (roadmap 9.4) : le flux part par la connexion de la
+        /// machine de l'autre RIP ; sans le bon jeton, ou vers une machine inconnue, refusé.
+        /// Le jeton ne sort jamais vers l'écran.
+        #[tokio::test]
+        async fn renvoi_vers_un_autre_rip() {
+            let b = etat("renvoi");
+            let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port_machine = ecoute.local_addr().unwrap().port();
+            let recu = std::thread::spawn(move || {
+                let (mut f, _) = ecoute.accept().unwrap();
+                let mut o = vec![];
+                std::io::Read::read_to_end(&mut f, &mut o).unwrap();
+                o
+            });
+            b.machines.write().unwrap()[1].connexion = machines::Connexion::Reseau { hote: "127.0.0.1".into(), port: port_machine };
+            let id = b.machines.read().unwrap()[1].id.clone();
+            let jeton = erp::aleatoire();
+            ports::ecrire(&b.config.donnees, &ports::ConfigRenvoi { jeton_sha256: Some(erp::empreinte(&jeton)) }).unwrap();
+            let serveur = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = serveur.local_addr().unwrap().port();
+            tokio::spawn(axum::serve(serveur, routes(b.clone())).into_future());
+            let vers = |machine: &str, jeton: &str| machines::Connexion::RipEko { hote: "127.0.0.1".into(), port, machine: machine.into(), jeton: jeton.into() };
+            let envoyer = |c: machines::Connexion, o: Vec<u8>| tokio::task::spawn_blocking(move || machines::envoyer(&c, &o));
+            let flux: Vec<u8> = (0..200_000u32).flat_map(|i| i.to_le_bytes()).collect();
+            envoyer(vers(&id, &jeton), flux.clone()).await.unwrap().unwrap();
+            assert_eq!(recu.join().unwrap(), flux, "flux passé tel quel à la machine");
+            let e = envoyer(vers(&id, &"0".repeat(64)), b"x".to_vec()).await.unwrap().unwrap_err();
+            assert!(e.contains("401") && e.contains("jeton_renvoi_requis"), "{e}");
+            // Gros flux refusé d'emblée : le refus reste lisible, pas seulement « connexion rompue ».
+            let e = envoyer(vers(&id, &"0".repeat(64)), vec![0; 64 << 20]).await.unwrap().unwrap_err();
+            assert!(e.contains("jeton_renvoi_requis"), "{e}");
+            let e = envoyer(vers("inconnue", &jeton), b"x".to_vec()).await.unwrap().unwrap_err();
+            assert!(e.contains("404") && e.contains("introuvable"), "{e}");
+            // Sortie en dossier : rien pour recevoir le flux.
+            let dossier = b.machines.read().unwrap().iter().find(|m| m.connexion == machines::Connexion::Dossier).map(|m| m.id.clone());
+            if let Some(d) = dossier {
+                let e = envoyer(vers(&d, &jeton), b"x".to_vec()).await.unwrap().unwrap_err();
+                assert!(e.contains("409") && e.contains("renvoi_sans_connexion"), "{e}");
+            }
+
+            // Machine de renvoi sur ce serveur : jeton masqué à la lecture, gardé à l'écriture.
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            b.machines.write().unwrap()[1].connexion = vers(&id, &jeton);
+            let v = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
+            assert_eq!(v[1]["connexion"]["jeton"], machines::JETON_MASQUE);
+            assert!(!v.to_string().contains(&jeton));
+            assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
+            assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            std::fs::remove_dir_all(&b.config.donnees).unwrap();
         }
 
         /// Un navigateur ne voit qu'une page d'état ; l'API et l'interface sont aux clients.
