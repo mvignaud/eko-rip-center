@@ -1,8 +1,10 @@
 name: CI
 
+# Lancement manuel seulement : le compte n'a plus de minutes GitHub Actions.
+# Remettre les déclencheurs d'origine quand les crédits reviennent.
+# Déclencheur d'origine : push sur main.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always

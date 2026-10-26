@@ -46,8 +46,12 @@ Puis ouvrir `http://<serveur>:8640` depuis un poste.
 | `EKO_RIP_MAX_MO` | `8192` | taille maximale d'un fichier reçu |
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu |
 
-Le serveur n'a pas d'authentification : il ne doit être joignable que depuis le
-réseau de l'atelier.
+Tant qu'aucun compte n'est déclaré, l'accès à l'écran reste libre (l'écran l'affiche en
+rouge) : déclarer au moins un compte avec `eko-rip-serveur utilisateur ajouter <nom>`
+pour le fermer (voir [les comptes](docs/fr/installation-serveur.md#comptes)). Les
+dossiers surveillés ne demandent pas de compte, et les routes `/api/erp/` n'acceptent
+que le jeton de l'ERP. Dans tous les cas, le serveur ne doit être joignable que depuis
+le réseau de l'atelier.
 
 ### Client
 
@@ -62,3 +66,7 @@ cargo test
 ```
 
 Le test de rendu demande Ghostscript.
+
+La CI (`.github/workflows/ci.yml`) ne se lance plus qu'à la main, faute de minutes GitHub
+Actions. Avant de pousser, lancer `./outils/verifier.sh` : il refait ses contrôles (syntaxe
+des pages, doublons de traduction, clippy, tests du serveur), sans construire le `.deb`.
