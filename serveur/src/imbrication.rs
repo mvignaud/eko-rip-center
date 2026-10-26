@@ -422,6 +422,22 @@ pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize],
     Ok(sortie)
 }
 
+/// Un PDF d'une page par page du document (roadmap 9.3, une page par travail).
+pub fn pages_separees(pdf: &[u8]) -> Result<Vec<Vec<u8>>, String> {
+    let doc = Document::load_mem(pdf).map_err(|e| e.to_string())?;
+    let n = doc.get_pages().len() as u32;
+    (1..=n)
+        .map(|k| {
+            let mut d = doc.clone();
+            d.delete_pages(&(1..=n).filter(|p| *p != k).collect::<Vec<_>>());
+            d.prune_objects();
+            let mut v = vec![];
+            d.save_to(&mut v).map_err(|e| e.to_string())?;
+            Ok(v)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -663,5 +679,28 @@ pub(crate) mod tests {
             assert_eq!(lire(plaque, cx, cy), 0, "{plaque} absent au centre de l'élément {}", p.indice);
         }
         std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    #[test]
+    fn une_page_par_pdf() {
+        let pages = [(100.0, 50.0), (60.0, 120.0), (80.0, 80.0)];
+        let mut doc = Document::with_version("1.4");
+        let parent = doc.new_object_id();
+        let enfants: Vec<Object> = pages.iter().map(|&(l, h)| doc.add_object(dictionary! { "Type" => "Page", "Parent" => parent, "MediaBox" => vec![0.into(), 0.into(), Object::Real(l), Object::Real(h)] }).into()).collect();
+        doc.objects.insert(parent, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => enfants, "Count" => 3 }));
+        let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => parent });
+        doc.trailer.set("Root", cat);
+        let mut v = vec![];
+        doc.save_to(&mut v).unwrap();
+        let separees = pages_separees(&v).unwrap();
+        assert_eq!(separees.len(), 3);
+        for (pdf, &(l, h)) in separees.iter().zip(&pages) {
+            let d = Document::load_mem(pdf).unwrap();
+            let ids: Vec<_> = d.get_pages().into_values().collect();
+            assert_eq!(ids.len(), 1);
+            let boite = d.get_dictionary(ids[0]).unwrap().get(b"MediaBox").unwrap().as_array().unwrap().clone();
+            assert_eq!((boite[2].as_float().unwrap(), boite[3].as_float().unwrap()), (l, h));
+        }
+        assert!(pages_separees(b"pas un pdf").is_err());
     }
 }

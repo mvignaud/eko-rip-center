@@ -407,7 +407,7 @@ Dépend de : 2.2, 2.3 (séparation et tramage), 1.1 (le mode porte les étapes).
 |---|---|---|---|
 | 9.1 | P1 | ✅ FAIT le 26/10 (regles.rs : dossier `entrees-auto/`, motif `*`/`?` et petit/grand côté de la 1re page PDF → réglage, éditeur dans Système, sauvegarde) — Règles de dossiers surveillés (préfixe, taille → réglage) — « R » du tableau de bord | test : `BACHE_*.pdf` → réglage Bâche |
 | 9.2 | **P1** | ✅ FAIT le 25/10 (images → PDF en flux, taille réelle, CMJN/RVB/gris 8-16 bits, alpha en masque, ICC, JPEG tel quel ; 8 Go max) ; canaux de tons directs du TIFF FAITS le 26/10 (plaque par canal en surimpression, noms Photoshop 1045/1006, sélections 1077/1007 ignorées, `Spot1`/`White`/`Blanc` → White) ; sens des valeurs à confirmer sur un vrai TIFF Photoshop 🏭 — Formats d'entrée TIFF (8/16 bits, CMJN + spots), JPEG, PNG — confirmé le 24/10 (reçus en plus du PDF) | test : TIFF CMJN + canal `Spot1` → plaque blanc |
-| 9.3 | P2 | Une page par travail (case du réglage) ; abandon si polices manquantes (option du réglage) | tests |
+| 9.3 | P2 | ✅ FAIT le 26/10 (cases `page_par_travail` et `abandon_polices` du réglage : pages 2 à n en travaux « (p. k/n) », refus `polices_manquantes` hors 14 polices de base) — Une page par travail (case du réglage) ; abandon si polices manquantes (option du réglage) | tests |
 | 9.4 | P2 | Port IPP (hôte + chemin, aperçu de l'URI) ; port « renvoi vers un autre RIP E-KO » | test sur un serveur IPP de test (CUPS) |
 | 9.5 | P2 | Épreuve sur une 2e machine (copie « -BAT », original en attente) | test file |
 | 9.6 | P2 | Compteurs de file : poids du tampon, % disque | écran |

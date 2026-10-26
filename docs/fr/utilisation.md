@@ -622,6 +622,18 @@ Exemple : `BACHE_*` → Bâche ; `*.pdf`, grand côté de 2000 à vide → Grand
 Vinyle. Un fichier qu'aucune règle ne prend va dans `entrees-auto/refuses/` avec sa raison.
 Les règles sont dans la sauvegarde de la configuration.
 
+Deux cases du panneau d'envoi, gardées dans le réglage, servent surtout aux dossiers
+surveillés :
+
+- **Une page par travail** : un PDF de plusieurs pages devient un travail par page, nommés
+  « fichier.pdf (p. 1/5) », « fichier.pdf (p. 2/5) »… avec les mêmes réglages. Sans effet
+  sur une planche imbriquée.
+- **Refuser si une police manque** : le fichier est refusé (rangé dans `refuses/` pour un
+  dossier surveillé) dès qu'une police n'est pas incorporée, avec la liste des polices.
+  Les 14 polices de base du PDF (Helvetica, Times, Courier, Symbol, ZapfDingbats) ne
+  comptent pas : le rendu les remplace par des polices de mêmes dimensions. Sans la case,
+  le fichier passe avec une alerte.
+
 **Exporter, importer** (administrateur, Système > Sauvegarde de la configuration) :
 **Exporter les réglages** télécharge tous les réglages enregistrés, pour un autre serveur ;
 **Importer des réglages** reprend ceux d'un export. **Si le nom existe** : **renommer

@@ -141,6 +141,13 @@ pub struct Demande {
     /// Fond sous les repères (roadmap 4.15), pour un support sombre ou transparent.
     #[serde(default)]
     pub fond_reperes: Option<reperage::FondReperes>,
+    /// Un PDF de plusieurs pages devient un travail par page (roadmap 9.3).
+    #[serde(default)]
+    pub page_par_travail: bool,
+    /// Refuser un PDF dont une police n'est pas incorporée (hors les 14 polices de base,
+    /// que Ghostscript remplace par leurs équivalentes métriques) (roadmap 9.3).
+    #[serde(default)]
+    pub abandon_polices: bool,
 }
 
 fn vrai() -> bool {
@@ -167,7 +174,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false }
     }
 }
 

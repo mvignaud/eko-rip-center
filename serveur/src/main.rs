@@ -877,6 +877,14 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
             }
             "quantite" if valeur.is_empty() => Ok(()),
             "quantite" => valeur.parse().map(|v| fiche.quantite = v).map_err(|_| erreur("fiche_invalide")),
+            "page_par_travail" => {
+                d.page_par_travail = valeur == "oui";
+                Ok(())
+            }
+            "abandon_polices" => {
+                d.abandon_polices = valeur == "oui";
+                Ok(())
+            }
             "echeance" if valeur.is_empty() => Ok(()),
             "echeance" => valeur.parse().map(|v| fiche.echeance = Some(v)).map_err(|_| erreur("fiche_invalide")),
             _ => Ok(()),
@@ -956,14 +964,38 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
             return Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", Some(format!("≈ {} Mo nécessaires, {} Mo libres, seuil {} Mo", besoin >> 20, libre >> 20, etat.config.seuil_libre >> 20)))));
         }
     }
-    let alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
+    let mut alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
         let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
         tokio::task::spawn_blocking(move || controle::verifier(&pdf)).await.unwrap_or_default()
     } else {
         vec![]
     };
+    // Abandon si une police manque (roadmap 9.3) : tout le document, avant de le couper en pages.
+    if d.abandon_polices {
+        let manquantes = controle::polices_manquantes(&alertes);
+        if !manquantes.is_empty() {
+            return Err(mauvais("polices_manquantes", Some(manquantes.join(", "))));
+        }
+    }
+    // Une page par travail (roadmap 9.3) : les pages 2 à n deviennent des travaux à part,
+    // créés après celui-ci ; ce travail garde la page 1.
+    let mut autres_pages = vec![];
+    let mut nom = nom;
+    if d.page_par_travail && format == Format::Pdf && imbrication.is_none() {
+        let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
+        let pages = tokio::task::spawn_blocking(move || imbrication::pages_separees(&pdf)).await.map_err(|e| interne(e.to_string()))?.map_err(|e| mauvais("pdf_illisible", Some(e)))?;
+        let n = pages.len();
+        if n > 1 {
+            let mut pages = pages.into_iter();
+            let premiere = pages.next().unwrap_or_default();
+            tokio::fs::write(rep.join(format.fichier()), &premiere).await.map_err(|e| interne(e.to_string()))?;
+            autres_pages = pages.enumerate().map(|(k, p)| (format!("{nom} (p. {}/{n})", k + 2), p)).collect();
+            nom = format!("{nom} (p. 1/{n})");
+            // Les alertes ne portent plus que sur la page gardée.
+            alertes = controle::verifier(&premiere);
+        }
+    }
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
-    let mut alertes = alertes;
     if let Some(r) = &remarques_image {
         if r.sans_resolution {
             alertes.push(controle::Alerte { code: "image_sans_resolution".into(), page: None, detail: format!("{} ppi · {:.0} × {:.0} mm", images::PPI_PAR_DEFAUT, r.largeur_mm, r.hauteur_mm) });
@@ -1003,6 +1035,20 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
+    for (nom_page, pdf) in autres_pages {
+        let id = Uuid::new_v4();
+        let rep_page = dossier(&etat.config.donnees, id);
+        let ecrit = std::fs::create_dir_all(&rep_page).and_then(|()| std::fs::write(rep_page.join("source.tmp"), &pdf));
+        let d = Demande { page_par_travail: false, ..travail.demande.clone() };
+        let r = match ecrit {
+            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), None)).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
+            Err(e) => Err(e.to_string()),
+        };
+        if let Err(e) = r {
+            eprintln!("une page par travail : {nom_page} refusée : {e}");
+            let _ = std::fs::remove_dir_all(&rep_page);
+        }
+    }
     Ok(travail)
 }
 
@@ -5987,6 +6033,70 @@ mod tests {
                 let coupe = boite_hpgl(&fichier_plt(&rep, n));
                 assert!(proches(coupe, [r, r, l_mm - r, h_mm - r], 0.02), "page {n} : coupe {coupe:?}");
             }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Une page par travail (roadmap 9.3) : un PDF de trois pages donne trois travaux,
+        /// chacun d'une page et nommé d'après elle.
+        #[tokio::test]
+        async fn une_page_par_travail() {
+            let e = etat("page-par-travail");
+            let pages = [
+                PageEssai { media: [0.0, 0.0, 100.0 * MM, 50.0 * MM], crop: None, rotate: 0 },
+                PageEssai { media: [0.0, 0.0, 60.0 * MM, 120.0 * MM], crop: None, rotate: 0 },
+                PageEssai { media: [0.0, 0.0, 80.0 * MM, 80.0 * MM], crop: None, rotate: 0 },
+            ];
+            let t = rendre(&e, pdf_pages(&pages), Demande { dpi: 36, page_par_travail: true, ..Default::default() }).await;
+            assert_eq!((t.nom.as_str(), t.pages.len()), ("essai.pdf (p. 1/3)", 1));
+            let mut autres = vec![];
+            for _ in 0..600 {
+                autres = lire_tous(&e.config.donnees).into_iter().filter(|a| a.id != t.id).collect::<Vec<_>>();
+                if autres.len() == 2 && autres.iter().all(|a| !actif(&a.statut)) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            autres.sort_by(|a, b| a.nom.cmp(&b.nom));
+            assert_eq!(autres.iter().map(|a| a.nom.as_str()).collect::<Vec<_>>(), ["essai.pdf (p. 2/3)", "essai.pdf (p. 3/3)"]);
+            for (a, l_mm) in autres.iter().zip([60.0, 80.0]) {
+                assert!(matches!(a.statut, Statut::Termine), "{:?}", a.erreur);
+                assert!(!a.demande.page_par_travail);
+                assert_eq!(a.pages.len(), 1);
+                let ((l, _), _) = encre(&dossier(&e.config.donnees, a.id), 1, "Cyan", 36);
+                assert!((l - l_mm).abs() <= 25.4 / 36.0, "{} : {l} mm", a.nom);
+            }
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Abandon si une police manque (roadmap 9.3) : refusé avant le rendu, sauf pour les
+        /// 14 polices de base.
+        #[tokio::test]
+        async fn abandon_si_police_manquante() {
+            let e = etat("abandon-polices");
+            let pdf = |police: &str| {
+                let mut doc = Document::with_version("1.4");
+                let f = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => police });
+                let c = doc.add_object(Stream::new(dictionary! {}, b"BT /F1 12 Tf 10 50 Td (essai) Tj ET".to_vec()));
+                let pages = doc.new_object_id();
+                let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), 144.into(), 144.into()], "Contents" => c, "Resources" => dictionary! { "Font" => dictionary! { "F1" => f } } });
+                doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+                let cat = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+                doc.trailer.set("Root", cat);
+                let mut o = vec![];
+                doc.save_to(&mut o).unwrap();
+                o
+            };
+            let d = Demande { dpi: 36, abandon_polices: true, ..Default::default() };
+            let id = Uuid::new_v4();
+            let rep = dossier(&e.config.donnees, id);
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source.tmp"), pdf("ArialMT")).unwrap();
+            let (statut, (code, detail)) = creer_travail(&e, id, "essai.pdf".into(), Format::Pdf, d.clone()).await.err().expect("refusé");
+            assert_eq!((statut, code, detail.as_deref()), (StatusCode::BAD_REQUEST, "polices_manquantes", Some("ArialMT")));
+            // Sans l'option, le même fichier passe avec une alerte ; Helvetica passe avec elle.
+            let t = rendre(&e, pdf("ArialMT"), Demande { abandon_polices: false, ..d.clone() }).await;
+            assert!(t.alertes.iter().any(|a| a.code == "police_non_incorporee"), "{:?}", t.alertes);
+            rendre(&e, pdf("Helvetica"), d).await;
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

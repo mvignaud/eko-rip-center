@@ -589,6 +589,15 @@ Example: `BACHE_*` → Banner; `*.pdf`, long side from 2000 to empty → Large f
 Vinyl. A file no rule takes goes to `entrees-auto/refuses/` with its reason. The rules are
 part of the configuration backup.
 
+Two boxes of the upload panel, kept in the preset, are mostly for hot folders:
+
+- **One page per job**: a multi-page PDF becomes one job per page, named
+  "file.pdf (p. 1/5)", "file.pdf (p. 2/5)"… with the same settings. No effect on a nest.
+- **Refuse if a font is missing**: the file is refused (moved to `refuses/` for a hot
+  folder) as soon as a font is not embedded, with the list of fonts. The 14 standard PDF
+  fonts (Helvetica, Times, Courier, Symbol, ZapfDingbats) do not count: rendering swaps
+  them for fonts of the same metrics. Without the box, the file goes through with a warning.
+
 **Export, import** (administrator, System > Configuration backup): **Export presets**
 downloads all saved presets, for another server; **Import presets** takes in those of an
 export. **If the name exists**: **rename ("name 2")** or **overwrite**. Everything is
