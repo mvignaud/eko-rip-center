@@ -80,6 +80,27 @@ L'interface vient du serveur : les clients affichent les nouveautés dès que le
 est à jour. Mettre à jour un client ne sert que pour le client lui-même (fenêtre,
 connexion au serveur).
 
+## Publier sur le dépôt APT
+
+Les postes Linux se mettent à jour depuis `https://apt.e-ko.fr/rip/` (VPS OVH, voir
+eko-infra `ansible/depot.yml`). Après chaque release, sur le serveur de test (Linux) :
+
+```bash
+~/eko-depot/outils/publier-depot.sh "E-KO RIP Center_<version>_amd64.deb" eko-rip-serveur_<version>-1_amd64.deb
+```
+
+(`~/eko-depot/outils/` est une copie de `outils/` de ce dépôt.) Publier **les deux paquets à
+chaque release**, le client et le serveur. Un serveur RIP qui a ajouté le dépôt avec le script
+d'installation se met alors à jour, lui aussi, par `apt upgrade`.
+
+Le script range les paquets dans `~/.eko-rip-depot/rip`, refait les index, les signe et
+envoie le tout par rsync (compte `depot`, limité au dossier du dépôt). Il garde les cinq
+dernières versions de chaque paquet (`EKO_DEPOT_GARDER`).
+
+La clé de signature (`depot@e-ko.fr`) est créée au premier envoi dans le trousseau GPG de
+cette machine, et seulement là. **La sauvegarder** (`gpg --export-secret-keys
+depot@e-ko.fr`) : sans elle, les postes refusent toute mise à jour signée par une autre.
+
 ## Comptes
 
 Voir [installer le serveur](installation-serveur.md#comptes). Mot de passe oublié :
