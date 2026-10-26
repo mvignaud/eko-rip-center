@@ -86,8 +86,12 @@ Les postes Linux se mettent à jour depuis `https://apt.e-ko.fr/rip/` (VPS OVH, 
 eko-infra `ansible/depot.yml`). Après chaque release, sur le serveur de test (Linux) :
 
 ```bash
-outils/publier-depot.sh E-KO.RIP.Center_<version>_amd64.deb eko-rip-serveur_<version>-1_amd64.deb
+~/eko-depot/outils/publier-depot.sh "E-KO RIP Center_<version>_amd64.deb" eko-rip-serveur_<version>-1_amd64.deb
 ```
+
+(`~/eko-depot/outils/` est une copie de `outils/` de ce dépôt.) Publier **les deux paquets à
+chaque release**, le client et le serveur. Un serveur RIP qui a ajouté le dépôt avec le script
+d'installation se met alors à jour, lui aussi, par `apt upgrade`.
 
 Le script range les paquets dans `~/.eko-rip-depot/rip`, refait les index, les signe et
 envoie le tout par rsync (compte `depot`, limité au dossier du dépôt). Il garde les cinq
