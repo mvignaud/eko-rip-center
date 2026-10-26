@@ -804,6 +804,30 @@ sizes of the screening), to calibrate. Prices stay in “Ink and media costs”,
 name. Each media and each mode keeps a stable identifier: renaming does not
 change it.
 
+Two more optional fields, in any order after the passes, set the mode's light-ink
+separation (direct Epson driver): `Poster = 720 dpi / 8 / sharp / 260 %`.
+
+- **Light-ink switch**: where the dark ink takes over from the light one (Lc, Lm, Lk).
+  **soft**: full light ink up to 30 % density, long hand-over up to 70 %, some light ink
+  kept under the dark; the least grain, for gradients and skin seen up close.
+  **balanced** (default): light ink alone up to 24 %, hand-over up to 54 %. **sharp**:
+  light ink capped at 60 %, hand-over from 18 to 33 %; less ink and faster drying, for
+  displays seen from afar. Our values, to confirm on paper.
+- **Total ink** (`260 %`, 100 to 400 %): the maximum sum of the 9 inks at one point
+  (300 % without it).
+
+**Proposed ink limit.** Print patches of increasing total ink (for instance 100 to 400 %
+in 20 % steps), measure their L*, then send the series to
+`POST /api/linearisation/limite-proposee` (`{"mesures": [[100, 58.0], [120, 47.2], …]}`).
+The answer proposes the limit: the last step that still darkens by at least 1 L* per
+extra 10 % of ink, rounded down to 5 %; a step that gets lighter (bronzing, bleeding)
+stops it. Nothing is saved: read the returned gains, check the patch once dry, then enter
+the limit in the mode.
+
+**Linearisation chart**: `GET /api/linearisation/mire.cgats?n=21` (option
+`encres=C,Lc,M`) gives a CGATS chart with one patch per ink and step, denser in the
+highlights: 8 patches under 20 % out of 21, against 4 for an even ramp.
+
 **When sending**, **Media and print mode**: the mode sets the rendering resolution; the
 media links to the price list. **— resolution set by hand —** keeps the panel's
 resolution. Changing mode on a received job renders again.

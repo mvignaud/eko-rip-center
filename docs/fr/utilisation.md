@@ -850,6 +850,31 @@ de départ choisies par nous (proportionnelles aux trois tailles de point du tra
 étalonner. Les prix restent dans « Coûts d'encre et de support », reliés par le nom. Chaque support et
 chaque mode garde un identifiant stable : le renommer ne le change pas.
 
+Deux autres champs facultatifs, dans n'importe quel ordre après les passes, règlent la
+séparation des encres claires du mode (pilote direct de l'Epson) :
+`Affiche = 720 dpi / 8 / franche / 260 %`.
+
+- **Bascule des claires** : où la foncée prend le relais de la claire (Lc, Lm, Lk).
+  **douce** : claire pleine jusqu'à 30 % de densité, relais long jusqu'à 70 %, un peu de
+  claire gardée sous la foncée ; le moins de grain, pour les dégradés et la peau vus de
+  près. **équilibrée** (par défaut) : claire seule jusqu'à 24 %, relais jusqu'à 54 %.
+  **franche** : claire limitée à 60 %, relais de 18 à 33 % ; moins d'encre et un séchage
+  plus rapide, pour l'affichage vu de loin. Valeurs à nous, à confirmer sur papier.
+- **Encre totale** (`260 %`, de 100 à 400 %) : la somme maximale des 9 encres en un point
+  (300 % sans elle).
+
+**Limite d'encre proposée.** Imprimer des aplats d'encre totale croissante (par exemple
+de 100 à 400 % par pas de 20 %), mesurer leur L*, puis envoyer la série à
+`POST /api/linearisation/limite-proposee` (`{"mesures": [[100, 58.0], [120, 47.2], …]}`).
+La réponse propose la limite : le dernier palier qui fonce encore d'au moins 1 L* par
+10 % d'encre en plus, arrondi aux 5 % inférieurs ; un palier qui s'éclaircit (bronzage,
+bavure) l'arrête. Rien n'est enregistré : relire les gains renvoyés, vérifier l'aplat au
+séchage, puis saisir la limite dans le mode.
+
+**Mire de linéarisation** : `GET /api/linearisation/mire.cgats?n=21` (option
+`encres=C,Lc,M`) donne une mire CGATS d'une plage par encre et par palier, resserrée dans
+les hautes lumières : 8 plages sous 20 % sur 21, contre 4 pour une rampe régulière.
+
 **À l'envoi**, **Support et mode d'impression** : le mode impose la résolution du rendu ;
 le support relie aux tarifs. **— résolution choisie à la main —** garde la résolution du
 panneau. Changer de mode sur un travail reçu refait le rendu.

@@ -24,6 +24,7 @@ mod file;
 mod forme;
 mod images;
 mod imbrication;
+mod linearisation;
 mod mosaique;
 mod nid;
 mod pont;
@@ -427,6 +428,9 @@ fn routes(etat: Partage) -> Router {
         .route("/api/tons-directs", get(lire_tons).post(enregistrer_tons))
         .route("/api/tons-directs/import", axum::routing::post(importer_tons))
         .route("/api/tons-directs/inconnus", get(lire_tons_inconnus))
+        .route("/api/separation/bascules", get(lister_bascules))
+        .route("/api/linearisation/mire.cgats", get(mire_de_linearisation))
+        .route("/api/linearisation/limite-proposee", axum::routing::post(proposer_limite))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
@@ -623,6 +627,45 @@ async fn enregistrer_reglages_consommation(State(etat): State<Partage>, Json(r):
     match consommation::ecrire_reglages(&etat.config.donnees, &r) {
         Ok(()) => Json(r).into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Préréglages de bascule des claires (roadmap 8.11) et leur couple, pour l'écran.
+async fn lister_bascules() -> Json<serde_json::Value> {
+    let v: Vec<_> = separation::Bascule::TOUTES.iter().map(|b| serde_json::json!({ "nom": b, "couple": b.appliquer(separation::Couple::default()) })).collect();
+    Json(serde_json::json!(v))
+}
+
+#[derive(Deserialize)]
+struct DemandeMire {
+    /// Encres séparées par des virgules ; par défaut les 9 de l'Epson.
+    encres: Option<String>,
+    n: Option<usize>,
+}
+
+/// Mire de linéarisation CGATS, paliers resserrés sous 20 % (roadmap 8.11).
+async fn mire_de_linearisation(axum::extract::Query(q): axum::extract::Query<DemandeMire>) -> Response {
+    let encres = q.encres.unwrap_or_else(|| separation::ENCRES.iter().map(|e| e.nom()).collect::<Vec<_>>().join(","));
+    let encres: Vec<&str> = encres.split(',').map(str::trim).filter(|e| !e.is_empty()).collect();
+    match linearisation::mire_cgats(&encres, q.n.unwrap_or(21)) {
+        Ok(t) => ([(header::CONTENT_TYPE, "text/plain; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"mire-linearisation.txt\"")], t).into_response(),
+        Err(code) => refus(StatusCode::BAD_REQUEST, code, None),
+    }
+}
+
+#[derive(Deserialize)]
+struct DemandeLimite {
+    /// Aplats mesurés : (encre totale %, L*).
+    mesures: Vec<(f64, f64)>,
+    seuil: Option<f64>,
+}
+
+/// Limite d'encre totale proposée (roadmap 8.11) ; rien n'est enregistré : l'opérateur la
+/// relit et la saisit dans le mode.
+async fn proposer_limite(Json(d): Json<DemandeLimite>) -> Response {
+    match linearisation::limite_proposee(&d.mesures, d.seuil.unwrap_or(linearisation::SEUIL_DEFAUT)) {
+        Ok(p) => Json(p).into_response(),
+        Err(code) => refus(StatusCode::BAD_REQUEST, code, None),
     }
 }
 
@@ -4070,6 +4113,10 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches).map_err(|e| ("envoi_impossible", e))?;
     let rep = dossier(&etat.config.donnees, s.travail);
     let plaques = epson::PLAQUES_CMJN.map(|n| render::chemin_plaque(&rep, s.page, n));
+    // Séparation portée par le mode du travail (roadmap 8.11), sinon celle par défaut.
+    let catalogue = supports::lire(&etat.config.donnees, "epson");
+    let mode = catalogue.supports.iter().flat_map(|x| &x.modes).find(|x| t.demande.mode_uuid.is_some() && x.id == t.demande.mode_uuid);
+    let separation = separation::Separation::du_mode(mode.and_then(|x| x.bascule), mode.and_then(|x| x.limite_totale));
     let dpi = t.demande.dpi;
     let points = |mm: f64| (mm / 25.4 * dpi as f64).floor().max(0.0) as u32;
     let travail = escp2::Travail {
@@ -4100,7 +4147,7 @@ async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machi
     let connexion = tokio::task::spawn_blocking(move || machines::ouvrir_reseau(&hote, port)).await.map_err(|e| echec(e.to_string()))?.map_err(echec)?;
     let coupure = connexion.try_clone().map_err(|e| echec(e.to_string()))?;
     let mut envoi = tokio::task::spawn_blocking(move || {
-        let (w, points) = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation::Separation::default(), &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
+        let (w, points) = epson::imprimer(plaques.each_ref().map(PathBuf::as_path), travail, &separation, &tramage::Tramage::default(), std::io::BufWriter::new(connexion))?;
         let c = w.into_inner().map_err(|e| format!("envoi du flux : {}", e.error()))?;
         c.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())?;
         Ok(points)
@@ -4583,6 +4630,36 @@ mod tests {
             assert_eq!(r["code"], "nom_reserve");
             let lu = super::couches_decoupe::json(appel(&e, "GET", "/api/tons-directs", None, None).await).await;
             assert_eq!((lu["intention"].clone(), lu["tons"][7]["lab"].clone()), (serde_json::json!(1), serde_json::json!([50.0, 7.0, -7.0])));
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 8.11 : préréglages listés, mire CGATS, limite proposée, et un mode qui porte
+        /// sa bascule et son encre totale.
+        #[tokio::test]
+        async fn separation_par_mode_et_linearisation() {
+            let e = etat("linearisation");
+            let b = super::couches_decoupe::json(appel(&e, "GET", "/api/separation/bascules", None, None).await).await;
+            assert_eq!((b[0]["nom"].as_str(), b[2]["couple"]["max"].as_f64()), (Some("douce"), Some(0.6f32 as f64)));
+            let r = appel(&e, "GET", "/api/linearisation/mire.cgats?n=21", None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let t = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            assert!(t.contains("NUMBER_OF_SETS 189"), "9 encres × 21 paliers");
+            assert_eq!(appel(&e, "GET", "/api/linearisation/mire.cgats?n=3", None, None).await.status(), StatusCode::BAD_REQUEST);
+            let mesures: Vec<(f64, f64)> = (0..=15).map(|i| (100.0 + 20.0 * i as f64, 18.0 + 40.0 * (-(20.0 * i as f64) / 70.0).exp())).collect();
+            let p = super::couches_decoupe::json(appel(&e, "POST", "/api/linearisation/limite-proposee", None, Some(serde_json::json!({ "mesures": mesures }))).await).await;
+            assert_eq!(p["limite"], 220.0);
+            let r = super::couches_decoupe::json(appel(&e, "POST", "/api/linearisation/limite-proposee", None, Some(serde_json::json!({ "mesures": [[100, 50]] }))).await).await;
+            assert_eq!(r["code"], "mesures_invalides");
+            // Le mode garde sa bascule et son encre totale ; hors bornes, refusé.
+            let mut c = supports::lire(&e.config.donnees, "epson");
+            c.supports[0].modes[0].bascule = Some(separation::Bascule::Douce);
+            c.supports[0].modes[0].limite_totale = Some(260.0);
+            let r = appel(&e, "POST", "/api/machines/epson/supports", None, Some(serde_json::json!(c.supports))).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let lu = supports::lire(&e.config.donnees, "epson");
+            assert_eq!((lu.supports[0].modes[0].bascule, lu.supports[0].modes[0].limite_totale), (Some(separation::Bascule::Douce), Some(260.0)));
+            c.supports[0].modes[0].limite_totale = Some(500.0);
+            assert_eq!(appel(&e, "POST", "/api/machines/epson/supports", None, Some(serde_json::json!(c.supports))).await.status(), StatusCode::BAD_REQUEST);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
@@ -5263,7 +5340,7 @@ mod tests {
             let e = etat("mode-travail");
             let donnees = e.config.donnees.clone();
             let mut c = supports::lire(&donnees, "epson");
-            c.supports[0].modes.push(supports::ModeImpression { id: None, nom: "Brouillon 90".into(), dpi: [90, 90], passes: 2, chauffage_c: None, gouttes_pl: None });
+            c.supports[0].modes.push(supports::ModeImpression { id: None, nom: "Brouillon 90".into(), dpi: [90, 90], passes: 2, chauffage_c: None, gouttes_pl: None, bascule: None, limite_totale: None });
             let connus = supports::lire(&donnees, "epson").supports;
             assert!(supports::attribuer_ids(&mut c.supports, &connus));
             supports::ecrire(&donnees, &c).unwrap();
@@ -6181,7 +6258,7 @@ mod tests {
 
             // 6.9 : volumes de goutte du mode, éditables ; deux fois plus gros, deux fois plus d'encre.
             let mut catalogue = supports::lire(&e.config.donnees, "epson");
-            catalogue.supports[0].modes.push(supports::ModeImpression { id: None, nom: "360 étalonné".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: Some([10.0, 20.0, 30.0]) });
+            catalogue.supports[0].modes.push(supports::ModeImpression { id: None, nom: "360 étalonné".into(), dpi: [360, 360], passes: 4, chauffage_c: None, gouttes_pl: Some([10.0, 20.0, 30.0]), bascule: None, limite_totale: None });
             let connus = supports::lire(&e.config.donnees, "epson").supports;
             supports::attribuer_ids(&mut catalogue.supports, &connus);
             supports::ecrire(&e.config.donnees, &catalogue).unwrap();
