@@ -15,6 +15,18 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Épreuve TIFF après RIP** (feuille de route 9.13) : bouton **Épreuve TIFF** et route
+  `/api/travaux/{id}/pages/{n}/epreuve.tif` ; TIFF des plaques rendues en valeurs machine
+  (CMJN, profil du support) ou colorimétrique (RVB), tons directs gardés en canaux,
+  aplatis ou supprimés, plafond de taille (la définition baisse, la taille physique reste
+  exacte, pour certifier les cotes d'un lé). Réglage `epreuve` pour la faire d'office
+  après le rendu, et **épreuve seule** (`epreuve_seule`) : rien ne part à l'impression.
+
+*Added: TIFF proof after RIP (device CMYK or colorimetric RGB, spot colours as channels,
+flattened or removed, size cap keeping exact physical size), made on demand or after
+rendering, and a proof-only option that never prints.*
+
 ## [0.28.0] — 2026-10-28
 
 ### Ajouté

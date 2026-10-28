@@ -146,6 +146,32 @@ l'épreuve. Une fois le BAT accepté, **Reprendre** l'original ; refusé, l'**An
 L'épreuve se fait en impression seulement, sur une autre machine que celle demandée (ni
 du même pool). Le choix reste tant qu'on ne le change pas : revenir à **Sans BAT**.
 
+## Épreuve TIFF
+
+Le bouton **Épreuve TIFF** de la barre d'outils télécharge un TIFF de la page vue, fait
+à partir des plaques rendues, c'est-à-dire de ce qui part à la machine. La page est à sa
+taille exacte : l'épreuve sert aussi à vérifier les cotes d'un lé avant de l'imprimer.
+
+Réglages, dans la section **Épreuve TIFF** du panneau d'envoi (gardés dans un réglage
+enregistré) :
+
+- **Couleur** : **Machine (CMJN)**, les valeurs d'encre telles qu'envoyées, avec le profil
+  du support s'il y en a un ; ou **Colorimétrique (RVB)**, converti par le profil du support
+  (intention colorimétrique relative), pour voir le rendu à l'écran.
+- **Tons directs** (blanc, argent, vernis…) : **gardés en canaux** (relus comme tons
+  directs par Photoshop et par le RIP), **aplatis dans la couleur** (d'après une couleur
+  d'affichage : blanc en gris clair, argent en gris), ou **supprimés**. Les tons de
+  découpe n'y sont jamais.
+- **Taille maximale** (1 à 3500 Mo, non compressée) : au-delà, la définition baisse (un
+  point pour 2 × 2, 3 × 3… points), la taille physique reste exacte.
+- **Faire l'épreuve TIFF de chaque page après le rendu** : elle est prête à télécharger
+  dès la fin du rendu. Sinon, le bouton la fait à la demande.
+- **Épreuve seule** : l'épreuve est faite après le rendu et rien ne part à l'impression
+  (ni mise en file automatique, ni bouton Imprimer ; la mise en file d'une impression est
+  refusée). Le travail peut encore être découpé.
+
+Une épreuve qui échoue n'arrête pas le travail : elle est signalée dans ses alertes.
+
 ## Éditeur visuel (visionneuse)
 
 Un clic sur une vignette (composite, plaque, découpe) de l'inspecteur l'ouvre en grand.

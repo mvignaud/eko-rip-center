@@ -247,6 +247,19 @@ fn ecrire_pdf(dst: &Path, img: &Image, mut flux: impl FnMut(&mut dyn Write, Flux
     f.flush().map_err(interne)
 }
 
+/// PDF d'une page d'image CMJN 8 bits (épreuve TIFF, roadmap 9.13) : `flux(w, None)` écrit
+/// les pixels CMJN entrelacés (255 = pleine encre), puis `flux(w, Some(k))` le ton direct
+/// n° k de `tons` (255 = pleine encre), posé en surimpression.
+pub(crate) fn pdf_cmjn(dst: &Path, largeur: u32, hauteur: u32, ppi: f64, icc: Option<Vec<u8>>, tons: Vec<TonDirect>, mut flux: impl FnMut(&mut dyn Write, Option<usize>) -> Result<(), String>) -> Result<(), String> {
+    let img = Image { largeur, hauteur, ppi: (ppi, ppi), espace: "DeviceCMYK", composantes: 4, bits: 8, icc, decode: None, dct: None, alpha: false, spots: tons, plaque_alpha: None };
+    ecrire_pdf(dst, &img, |w, f| match f {
+        Flux::Couleur => flux(w, None).map_err(|e| ("erreur_interne", e)),
+        Flux::Spot(k) => flux(w, Some(k)).map_err(|e| ("erreur_interne", e)),
+        Flux::Masque | Flux::Alpha => Ok(()),
+    })
+    .map_err(|(_, e)| e)
+}
+
 /// Une ligne de pixels entrelacés (`canaux` échantillons de `octets` octets) → la couleur
 /// (les `couleur` premiers) dans `c` et l'alpha (`alpha`, s'il y en a un) dans `a`.
 fn separer(ligne: &[u8], canaux: usize, couleur: usize, alpha: Option<usize>, octets: usize, c: &mut Vec<u8>, a: &mut Vec<u8>) {
@@ -278,7 +291,7 @@ struct InfosTiff {
 }
 
 /// Ton direct d'un canal en plus : nom de plaque, couleur d'affichage CMJN (0..=1).
-type TonDirect = (String, [f64; 4]);
+pub(crate) type TonDirect = (String, [f64; 4]);
 
 type Decodeur = tiff::decoder::Decoder<Retouche<BufReader<File>>>;
 
