@@ -41,6 +41,9 @@ pub struct Sauvegarde {
     /// les règles en place sont gardées.
     #[serde(default)]
     pub regles: Option<Vec<crate::regles::Regle>>,
+    /// Motif de nom à balises du même dossier (roadmap 9.10) ; absent : gardé.
+    #[serde(default)]
+    pub balises: Option<crate::balises::Config>,
 }
 
 pub fn hex(octets: &[u8]) -> String {

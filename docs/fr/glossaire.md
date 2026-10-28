@@ -14,6 +14,7 @@ chaque fonction est dans [l'utilisation](utilisation.md).
 | **Réglage** | Preset | Jeu de choix enregistré sous un nom (résolution, support, blanc, découpe, repérage…), appliqué à l'envoi ou par un dossier surveillé. |
 | **Dossier surveillé** | Hot folder | Dossier du serveur dont chaque fichier déposé devient un travail, avec le réglage du dossier (`entrees/<réglage>/`). |
 | **Règle** | Rule | Dans `entrees-auto/`, choisit le réglage d'un fichier d'après son nom ou le format de sa page. |
+| **Motif à balises** | Tagged name pattern | Dans `entrees-auto/`, forme du nom de fichier (`{nom}__{machine}__{reglage}__{copies}`) qui donne réglage, machine, copies… |
 | **Fiche travail** | Job ticket | N° de commande, client, société, quantité, échéance, notes et opérateur d'un travail. |
 | **Sortie** | Output | Une page d'un travail envoyée à une machine (impression ou découpe), dans la file d'attente. |
 | **File d'attente** | Queue | Les sorties à passer, machine par machine, dans l'ordre ; une machine passe une sortie à la fois. |

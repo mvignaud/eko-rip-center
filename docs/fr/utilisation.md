@@ -633,6 +633,30 @@ Exemple : `BACHE_*` → Bâche ; `*.pdf`, grand côté de 2000 à vide → Grand
 Vinyle. Un fichier qu'aucune règle ne prend va dans `entrees-auto/refuses/` avec sa raison.
 Les règles sont dans la sauvegarde de la configuration.
 
+**Motif à balises du nom** (même éditeur, facultatif) : le nom du fichier porte lui-même le
+réglage et le reste. Avec `{nom}__{machine}__{reglage}__{copies}`,
+`Affiche__epson__bache__30.pdf` donne le réglage Bâche, l'Epson et 30 copies. Chaque balise
+prend le texte jusqu'au séparateur qui la suit ; la dernière va jusqu'à l'extension. Le
+séparateur double `__` est conseillé : un `_` seul se trouve souvent dans les noms. Deux
+balises doivent être séparées, et chacune ne sert qu'une fois.
+
+| Balise | Effet |
+|---|---|
+| `{nom}` | Texte libre, sans effet. |
+| `{reglage}` | Réglage enregistré, sans tenir compte des majuscules, accents, espaces, `-` ni `_` (`bache` = « Bâche »). |
+| `{machine}` | Machine du catalogue, par identifiant ou par nom : imprimante de la mise en file automatique, ou découpeuse du travail. |
+| `{support}` | Support de l'Epson, par nom. |
+| `{copies}` | Quantité de la fiche travail (1 à 100 000). |
+| `{repetition}` | Nombre d'impressions de chaque page mises en file d'office (1 à 100). |
+| `{laize}` | Laize de la mosaïque du réglage, en mm (`1600` ou `1600mm`). |
+| `{echelle}` | Échelle en % (`200`, `12,5%`). |
+| `{largeur}` / `{hauteur}` | Taille voulue en mm, pour un PDF : l'échelle en découle (la plus petite des deux si les deux sont données). |
+
+Un nom qui ne suit pas le motif, ou une valeur qui ne se lit pas, n'est pas refusé : le
+travail passe par les règles et porte une alerte (« Nom hors du motif à balises », « Balise du nom non reconnue »),
+aussi écrite dans le journal du serveur. Sans `{reglage}` reconnu, ce sont les règles qui
+choisissent le réglage ; si aucune ne prend le fichier, la raison du refus donne ces alertes.
+
 Deux cases du panneau d'envoi, gardées dans le réglage, servent surtout aux dossiers
 surveillés :
 

@@ -32,6 +32,7 @@ mod ports;
 mod plotter;
 mod render;
 mod reglages;
+mod balises;
 mod regles;
 mod releves;
 mod reperage;
@@ -445,6 +446,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/reglages/import", axum::routing::post(importer_reglages))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/regles", get(lire_regles).post(enregistrer_regles))
+        .route("/api/balises", get(lire_balises).post(enregistrer_balises))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
         .route("/api/travaux/{id}/editer", axum::routing::post(editer))
@@ -935,7 +937,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("fond_reperes_invalide", None)).await;
     }
     d.fond_reperes = fond.0.then_some(reperage::FondReperes { cmjn: fond.3.filter(|_| fond.2), ..fond.1 });
-    match creer_travail_avec(&etat, id, nom, format, d, fiche, Origine::Aucune).await {
+    match creer_travail_avec(&etat, id, nom, format, d, fiche, Origine::Aucune, vec![]).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
     }
@@ -945,7 +947,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
 /// mosaïque, `job.json`, puis traitement en tâche de fond. Commun à l'écran, aux planches
 /// et aux dossiers surveillés. En cas de refus, le dossier reste à effacer par l'appelant.
 async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande) -> Result<Travail, (StatusCode, Refus)> {
-    creer_travail_avec(etat, id, nom, format, d, Fiche::default(), Origine::Aucune).await
+    creer_travail_avec(etat, id, nom, format, d, Fiche::default(), Origine::Aucune, vec![]).await
 }
 
 /// D'où vient un travail, quand ce n'est pas d'un simple envoi.
@@ -961,7 +963,9 @@ enum Origine {
 }
 
 /// `creer_travail` avec sa fiche (roadmap 5.6) et son origine.
-async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine) -> Result<Travail, (StatusCode, Refus)> {
+/// `depart` : alertes connues avant le rendu (balises du nom de fichier, roadmap 9.10).
+#[allow(clippy::too_many_arguments)]
+async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine, depart: Vec<controle::Alerte>) -> Result<Travail, (StatusCode, Refus)> {
     let estimation = matches!(origine, Origine::Estimation(_));
     let (imbrication, couches_decoupe, erp) = match origine {
         Origine::Aucune => (None, vec![], None),
@@ -1047,6 +1051,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         }
     }
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
+    alertes.extend(depart.iter().cloned());
     if let Some(r) = &remarques_image {
         if r.sans_resolution {
             alertes.push(controle::Alerte { code: "image_sans_resolution".into(), page: None, detail: format!("{} ppi · {:.0} × {:.0} mm", images::PPI_PAR_DEFAUT, r.largeur_mm, r.hauteur_mm) });
@@ -1095,7 +1100,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         let ecrit = std::fs::create_dir_all(&rep_page).and_then(|()| std::fs::write(rep_page.join("source.tmp"), &pdf));
         let d = Demande { page_par_travail: false, ..travail.demande.clone() };
         let r = match ecrit {
-            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), travail.erp.clone().map_or(Origine::Aucune, Origine::Erp))).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
+            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), travail.erp.clone().map_or(Origine::Aucune, Origine::Erp), depart.clone())).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
             Err(e) => Err(e.to_string()),
         };
         if let Err(e) = r {
@@ -1727,6 +1732,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         tons_directs: Some(tons::lire_table(&etat.config.donnees)),
         pont: Some(erp::lire(&etat.config.donnees).sauve()),
         regles: Some(regles::lire(&etat.config.donnees)),
+        balises: Some(balises::lire(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1795,6 +1801,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     if let Some(Err(code)) = s.regles.as_deref().map(|r| regles::verifier(r, &noms)) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
+    if let Some(Err(code)) = s.balises.as_ref().map(balises::verifier) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
     let connus = reglages::lire(&etat.config.donnees);
     reglages::identifier(&mut liste, &connus);
     let _verrou = etat.reglages.lock().await;
@@ -1830,6 +1839,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         if let Some(r) = &s.regles {
             regles::ecrire(&etat.config.donnees, r)?;
+        }
+        if let Some(b) = &s.balises {
+            balises::ecrire(&etat.config.donnees, b)?;
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -2512,6 +2524,21 @@ async fn enregistrer_regles(State(etat): State<Partage>, Json(r): Json<Vec<regle
     }
 }
 
+/// Motif de nom à balises du dossier `entrees-auto/` (roadmap 9.10).
+async fn lire_balises(State(etat): State<Partage>) -> Json<balises::Config> {
+    Json(balises::lire(&etat.config.donnees))
+}
+
+async fn enregistrer_balises(State(etat): State<Partage>, Json(c): Json<balises::Config>) -> Response {
+    if let Err(code) = balises::verifier(&c) {
+        return refus(StatusCode::BAD_REQUEST, code, Some(c.motif));
+    }
+    match balises::ecrire(&etat.config.donnees, &c) {
+        Ok(()) => Json(c).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
 /// Crée ou remplace un réglage (même nom) ; son dossier surveillé est créé.
 async fn enregistrer_reglage(State(etat): State<Partage>, Json(r): Json<reglages::Reglage>) -> Response {
     if !reglages::nom_valide(&r.nom) {
@@ -2744,13 +2771,13 @@ async fn surveiller(etat: Partage) {
         }
         for chemin in reglages::stables(&mut vus, fichiers) {
             let resultat = if chemin.parent() == Some(auto.as_path()) {
-                match reglage_par_regle(&donnees, &chemin, &liste).await {
-                    Ok(r) => prendre_fichier(&etat, &chemin, r.demande.clone()).await.map_err(|e| format!("règle → {} : {e}", r.nom)),
+                match preparer_auto(&etat, &chemin, &liste).await {
+                    Ok((nom, d, fiche, alertes)) => prendre_fichier(&etat, &chemin, d, fiche, alertes).await.map_err(|e| format!("réglage {nom} : {e}")),
                     Err(e) => Err(e),
                 }
             } else {
                 let Some(r) = chemin.parent().and_then(|d| d.file_name()).and_then(|n| n.to_str()).and_then(|n| liste.iter().find(|r| r.nom == n)) else { continue };
-                prendre_fichier(&etat, &chemin, r.demande.clone()).await
+                prendre_fichier(&etat, &chemin, r.demande.clone(), Fiche::default(), vec![]).await
             };
             if let Err(raison) = resultat {
                 eprintln!("dossier surveillé : {} refusé : {raison}", chemin.display());
@@ -2777,9 +2804,123 @@ async fn reglage_par_regle<'a>(donnees: &std::path::Path, chemin: &std::path::Pa
     liste.iter().find(|x| x.nom == r.reglage).ok_or_else(|| format!("aucune_regle : réglage « {} » introuvable", r.reglage))
 }
 
+fn alerte(code: &str, detail: String) -> controle::Alerte {
+    controle::Alerte { code: code.into(), page: None, detail }
+}
+
+/// Fichier de `entrees-auto/` : son nom lu avec le motif à balises (roadmap 9.10), puis son
+/// réglage (balise `{reglage}`, sinon les règles) et ce que les autres balises y changent.
+/// Rend le nom du réglage, la demande, la fiche et les alertes de lecture ; chaque alerte est
+/// aussi écrite au journal du service. `Err` : raison du refus, alertes comprises.
+async fn preparer_auto(etat: &Partage, chemin: &std::path::Path, liste: &[reglages::Reglage]) -> Result<(String, Demande, Fiche, Vec<controle::Alerte>), String> {
+    use balises::Balise;
+    let donnees = &etat.config.donnees;
+    let nom = chemin.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_string();
+    let motif = balises::lire(donnees).motif;
+    let mut alertes = vec![];
+    let valeurs = if motif.is_empty() {
+        vec![]
+    } else {
+        balises::extraire(&motif, &nom).unwrap_or_else(|| {
+            alertes.push(alerte("nom_non_conforme", motif.clone()));
+            vec![]
+        })
+    };
+    let valeur = |b: Balise| valeurs.iter().find(|(x, _)| *x == b).map(|(_, v)| v.clone());
+    let invalide = |b: Balise, v: &str| alerte("balise_invalide", format!("{} : « {v} »", b.nom()));
+    let par_balise = valeur(Balise::Reglage).and_then(|v| {
+        let r = liste.iter().find(|r| balises::cle(&r.nom) == balises::cle(&v));
+        if r.is_none() {
+            alertes.push(invalide(Balise::Reglage, &v));
+        }
+        r
+    });
+    let journal = |alertes: &[controle::Alerte]| alertes.iter().map(|a| format!("{} ({})", a.code, a.detail)).collect::<Vec<_>>().join(" ; ");
+    let r = match par_balise {
+        Some(r) => r,
+        None => reglage_par_regle(donnees, chemin, liste).await.map_err(|e| if alertes.is_empty() { e } else { format!("{e} ; {}", journal(&alertes)) })?,
+    };
+    let (mut d, mut fiche) = (r.demande.clone(), Fiche::default());
+    for (b, v) in &valeurs {
+        let bon = match b {
+            Balise::Nom | Balise::Reglage => true,
+            Balise::Machine => {
+                let c = etat.machines.read().unwrap();
+                match c.iter().find(|m| balises::cle(&m.id) == balises::cle(v) || balises::cle(&m.nom) == balises::cle(v)) {
+                    Some(m) if m.fait(machines::Operation::Impression) => {
+                        d.imprimante = Some(m.id.clone());
+                        true
+                    }
+                    Some(m) => {
+                        d.decoupeuse = Some(m.id.clone());
+                        true
+                    }
+                    None => false,
+                }
+            }
+            Balise::Support => match supports::lire(donnees, "epson").supports.into_iter().find(|s| balises::cle(&s.nom) == balises::cle(v)) {
+                Some(s) => {
+                    // Le mode du réglage reste s'il est de ce support ; sinon la résolution du réglage.
+                    if !s.modes.iter().any(|m| m.id.is_some() && m.id == d.mode_uuid) {
+                        d.mode_uuid = None;
+                    }
+                    d.support_uuid = s.id;
+                    true
+                }
+                None => false,
+            },
+            Balise::Copies => balises::entier(v, 100_000).map(|n| fiche.quantite = n).is_some(),
+            Balise::Repetition => balises::entier(v, reglages::REPETITION_MAX).map(|n| d.repetition = n).is_some(),
+            Balise::Laize => match (balises::nombre(v, "mm").filter(|l| (50.0..=5000.0).contains(l)), d.mosaique.as_mut()) {
+                (Some(l), Some(m)) => {
+                    m.laize_mm = l;
+                    true
+                }
+                (Some(_), None) => {
+                    alertes.push(alerte("balise_sans_effet", format!("laize : « {v} »")));
+                    true
+                }
+                (None, _) => false,
+            },
+            Balise::Echelle => balises::nombre(v, "%").filter(|e| (1.0..=1000.0).contains(e)).map(|e| (d.edition.echelle, d.edition.echelle_xy) = (e, None)).is_some(),
+            Balise::Largeur | Balise::Hauteur => balises::nombre(v, "mm").is_some_and(|x| x > 0.0 && x <= 100_000.0),
+        };
+        if !bon {
+            alertes.push(invalide(*b, v));
+        }
+    }
+    // Largeur et hauteur voulues : l'échelle en découle, proportions gardées (la plus petite
+    // des deux si elles ne s'accordent pas).
+    let voulu = |b: Balise| valeur(b).and_then(|v| balises::nombre(&v, "mm")).filter(|x| *x > 0.0 && *x <= 100_000.0);
+    let (largeur, hauteur) = (voulu(Balise::Largeur), voulu(Balise::Hauteur));
+    if largeur.is_some() || hauteur.is_some() {
+        let c = chemin.to_path_buf();
+        let page = tokio::task::spawn_blocking(move || regles::dimensions_pdf(&c)).await.ok().flatten();
+        match page {
+            Some([l, h]) => {
+                let echelles: Vec<f64> = [largeur.map(|x| x / l * 100.0), hauteur.map(|x| x / h * 100.0)].into_iter().flatten().collect();
+                let e = echelles.iter().copied().fold(f64::INFINITY, f64::min);
+                if echelles.iter().any(|x| (x - e).abs() > e * 0.01) {
+                    alertes.push(alerte("balise_proportions", format!("{:.0} × {:.0} mm", l * e / 100.0, h * e / 100.0)));
+                }
+                if (1.0..=1000.0).contains(&e) {
+                    (d.edition.echelle, d.edition.echelle_xy) = ((e * 100.0).round() / 100.0, None);
+                } else {
+                    alertes.push(alerte("balise_invalide", format!("échelle : {e:.0} %")));
+                }
+            }
+            None => alertes.push(alerte("balise_sans_effet", "largeur, hauteur : format de page inconnu".into())),
+        }
+    }
+    for a in &alertes {
+        eprintln!("dossier automatique : {nom} : {} {}", a.code, a.detail);
+    }
+    Ok((r.nom.clone(), d, fiche, alertes))
+}
+
 /// Fichier d'un dossier surveillé → nouveau travail. Le fichier est déplacé dans le
 /// dossier du travail ; en cas de refus, il est remis à sa place pour être rangé.
-async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande) -> Result<(), String> {
+async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande, fiche: Fiche, depart: Vec<controle::Alerte>) -> Result<(), String> {
     let mut debut = vec![0u8; EN_TETE];
     let n = std::io::Read::read(&mut std::fs::File::open(chemin).map_err(|e| e.to_string())?, &mut debut).map_err(|e| e.to_string())?;
     let format = reconnaitre(&debut[..n]).map_err(|(code, _)| code.to_string())?;
@@ -2788,7 +2929,7 @@ async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande) -
     let rep = dossier(&etat.config.donnees, id);
     std::fs::create_dir_all(&rep).map_err(|e| e.to_string())?;
     std::fs::rename(chemin, rep.join("source.tmp")).map_err(|e| e.to_string())?;
-    match creer_travail(etat, id, nom, format, d).await {
+    match creer_travail_avec(etat, id, nom, format, d, fiche, Origine::Aucune, depart).await {
         Ok(_) => Ok(()),
         Err((_, (code, detail))) => {
             let _ = std::fs::rename(rep.join("source.tmp"), chemin).or_else(|_| std::fs::rename(rep.join(format.fichier()), chemin));
@@ -3009,7 +3150,7 @@ async fn prendre_envois_recus(etat: &Partage) {
         let fiche = Fiche { commande: r.ref_erp.clone(), quantite: r.copies, echeance: r.echeance, ..Default::default() };
         let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone() };
         let origine = if r.estimation { Origine::Estimation(lien) } else { Origine::Erp(lien) };
-        match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, origine).await {
+        match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, origine, vec![]).await {
             Ok(_) => pont::oublier_recu(&donnees, r.id),
             Err((_, (code, detail))) => {
                 let _ = std::fs::remove_dir_all(&rep);
@@ -3068,7 +3209,7 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
         let c = etat.machines.read().unwrap();
         let i = match &t.imbrication {
             Some(b) => c.iter().find(|m| m.id == b.machine),
-            None => c.iter().find(|m| m.fait(machines::Operation::Impression)),
+            None => t.demande.imprimante.as_ref().and_then(|id| c.iter().find(|m| &m.id == id && m.fait(machines::Operation::Impression))).or_else(|| c.iter().find(|m| m.fait(machines::Operation::Impression))),
         };
         let choisie = t.demande.decoupeuse.as_ref().and_then(|id| c.iter().find(|m| &m.id == id && m.fait(machines::Operation::Decoupe)));
         let d = choisie.or_else(|| i.filter(|m| m.fait(machines::Operation::Decoupe))).or_else(|| c.iter().find(|m| m.fait(machines::Operation::Decoupe)));
@@ -3085,7 +3226,9 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
             f.sorties.push(s);
         };
         if let (true, Some(m)) = (imprime, &imprimante) {
-            ajouter(m, machines::Operation::Impression, a.suspendre);
+            for _ in 0..t.demande.repetition.max(1) {
+                ajouter(m, machines::Operation::Impression, a.suspendre);
+            }
         }
         if let (true, Some(m)) = (a.decouper && a_couper(t, p), &decoupeuse) {
             for mut s in sorties_de_coupe(t, i + 1, p, &m.id, m) {
@@ -4275,7 +4418,7 @@ async fn lancer_imbrication(etat: &Partage, m: &machines::Machine, g: Groupe) ->
     }
     let nom = format!("Imbrication {} — {} page(s)", m.nom, plan.retenus.len());
     let imbriquee = Imbriquee { machine: m.id.clone(), sorties: prises.iter().map(|(i, _)| *i).collect() };
-    match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Origine::Planche(imbriquee, couches_planche(&g, plan))).await {
+    match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Origine::Planche(imbriquee, couches_planche(&g, plan)), vec![]).await {
         Ok(t) => Ok(t),
         Err(r) => {
             let _ = tokio::fs::remove_dir_all(&rep).await;
@@ -5266,6 +5409,72 @@ mod tests {
             assert!(essai("photo.jpg", vec![0xff, 0xd8, 0xff]).await.unwrap_err().starts_with("aucune_regle"));
             regles::ecrire(d, &[regles::Regle { motif: "*".into(), petit_cote_mm: None, grand_cote_mm: None, reglage: "Supprimé".into() }]).unwrap();
             assert!(essai("x.pdf", pdf(100.0, 100.0)).await.unwrap_err().contains("Supprimé"));
+            std::fs::remove_dir_all(d).unwrap();
+        }
+
+        /// Roadmap 9.10 : `Affiche__epson__bache__30.pdf` → réglage Bâche, 30 copies, Epson ;
+        /// un nom hors motif passe par les règles avec une alerte ; une balise fausse aussi.
+        #[tokio::test]
+        async fn motif_de_nom_a_balises() {
+            use lopdf::{Document, Object, dictionary};
+            let e = etat("balises");
+            let d = &e.config.donnees;
+            let reglage = |nom: &str| reglages::Reglage { uuid: None, nom: nom.into(), demande: Demande::default() };
+            reglages::ecrire(d, &[reglage("Bâche"), reglage("Vinyle")]).unwrap();
+            let json = |r: Response| super::couches_decoupe::json(r);
+            let faux = serde_json::json!({ "motif": "{nom}{copies}" });
+            assert_eq!(json(appel(&e, "POST", "/api/balises", None, Some(faux)).await).await["code"], "motif_balises_invalide");
+            let motif = serde_json::json!({ "motif": "{nom}__{machine}__{reglage}__{copies}" });
+            assert_eq!(appel(&e, "POST", "/api/balises", None, Some(motif.clone())).await.status(), StatusCode::OK);
+            assert_eq!(json(appel(&e, "GET", "/api/balises", None, None).await).await, motif);
+            // A3 portrait : 297 × 420 mm.
+            let mut doc = Document::with_version("1.7");
+            let pages = doc.new_object_id();
+            let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real(841.89), Object::Real(1190.55)] });
+            doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+            let c = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+            doc.trailer.set("Root", c);
+            let mut a3 = vec![];
+            doc.save_to(&mut a3).unwrap();
+            let auto = regles::dossier(d);
+            std::fs::create_dir_all(&auto).unwrap();
+            let liste = reglages::lire(d);
+            let essai = |nom: &str| {
+                let chemin = auto.join(nom);
+                std::fs::write(&chemin, &a3).unwrap();
+                let (liste, e) = (liste.clone(), e.clone());
+                async move { preparer_auto(&e, &chemin, &liste).await }
+            };
+            let codes = |a: &[controle::Alerte]| a.iter().map(|x| x.code.clone()).collect::<Vec<_>>();
+            let (nom, demande, fiche, alertes) = essai("Affiche__epson__bache__30.pdf").await.unwrap();
+            assert_eq!((nom.as_str(), demande.imprimante.as_deref(), fiche.quantite), ("Bâche", Some("epson"), 30));
+            assert!(alertes.is_empty(), "{alertes:?}");
+            // Hors motif, sans règle : refusé, la raison dit pourquoi.
+            let refus = essai("photo.pdf").await.unwrap_err();
+            assert!(refus.starts_with("aucune_regle") && refus.contains("nom_non_conforme"), "{refus}");
+            regles::ecrire(d, &[regles::Regle { motif: "*".into(), petit_cote_mm: None, grand_cote_mm: None, reglage: "Vinyle".into() }]).unwrap();
+            let (nom, _, _, alertes) = essai("photo.pdf").await.unwrap();
+            assert_eq!((nom.as_str(), codes(&alertes)), ("Vinyle", vec!["nom_non_conforme".to_string()]), "importé avec une alerte");
+            // Réglage inconnu → règles ; copies fausses ; une découpeuse en machine.
+            let (nom, demande, fiche, alertes) = essai("Affiche__kona__inconnu__abc.pdf").await.unwrap();
+            assert_eq!((nom.as_str(), demande.decoupeuse.as_deref(), demande.imprimante, fiche.quantite), ("Vinyle", Some("kona"), None, 0));
+            assert_eq!(alertes.iter().map(|a| a.detail.as_str()).collect::<Vec<_>>(), ["reglage : « inconnu »", "copies : « abc »"]);
+            // Largeur voulue : l'échelle en découle ; avec une hauteur qui ne s'accorde pas, la
+            // plus petite gagne et le dit.
+            balises::ecrire(d, &balises::Config { motif: "{nom}__{largeur}__{hauteur}__{repetition}".into() }).unwrap();
+            let (_, demande, _, alertes) = essai("Plan__594mm__840__3.pdf").await.unwrap();
+            assert_eq!((demande.edition.echelle, demande.repetition), (200.0, 3));
+            assert!(alertes.is_empty(), "{alertes:?}");
+            let (_, demande, _, alertes) = essai("Plan__594__420__1.pdf").await.unwrap();
+            assert_eq!((demande.edition.echelle, codes(&alertes)), (100.0, vec!["balise_proportions".to_string()]));
+            // La répétition met autant d'impressions de chaque page en file, sur l'imprimante dite.
+            let id = Uuid::new_v4();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Plan", "statut": "termine", "erreur": null, "cree_le": 0,
+                "auto": { "imprimer": true }, "repetition": 3, "imprimante": "epson",
+                "pages": [{ "plaques": ["Cyan"], "traces_decoupe": 0, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            mettre_en_file_auto(&e, &t, None);
+            let sorties = e.file.lock().unwrap().sorties.clone();
+            assert_eq!(sorties.iter().map(|s| s.machine.as_str()).collect::<Vec<_>>(), ["epson"; 3]);
             std::fs::remove_dir_all(d).unwrap();
         }
 
@@ -7312,7 +7521,7 @@ mod tests {
             // Import par le dossier surveillé du réglage : même rendu, au pixel près.
             let fichier = reglages::dossier_entree(&e.config.donnees, "Vinyle").join("arrivee.pdf");
             std::fs::write(&fichier, deux_aplats()).unwrap();
-            prendre_fichier(&e, &fichier, r.demande).await.unwrap();
+            prendre_fichier(&e, &fichier, r.demande, Fiche::default(), vec![]).await.unwrap();
             let travaux = dossier(&e.config.donnees, Uuid::nil()).parent().unwrap().to_path_buf();
             let id = std::fs::read_dir(&travaux).unwrap().flatten().filter_map(|d| d.file_name().to_str()?.parse::<Uuid>().ok()).find(|i| ![brut.id, t.id].contains(i)).unwrap();
             let mut fini = None;

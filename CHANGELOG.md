@@ -67,9 +67,15 @@ parité ; d'ici là, 0.Y.Z.
 - **Épreuve sur une 2e machine** (feuille de route 9.5) : liste **BAT sur…** de la page ;
   la copie « nom-BAT » part sur la machine d'épreuve, l'original attend suspendu
   (« Attend le BAT ») jusqu'à **Reprendre**.
+- **Motif à balises du nom** (feuille de route 9.10) pour `entrees-auto/` :
+  `{nom}__{machine}__{reglage}__{copies}` lit dans `Affiche__epson__bache__30.pdf` le
+  réglage, la machine et les copies ; aussi `{support}`, `{repetition}`, `{laize}`,
+  `{echelle}`, `{largeur}`, `{hauteur}`. Un nom hors motif passe par les règles avec une
+  alerte, jamais refusé en silence ; motif édité dans Système (`/api/balises`), gardé dans
+  la sauvegarde.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. ERP bridge: jobs sent by the ERP (signed download, SHA-256 checked) ERP actions on the queue (hold, resume, cancel, priority, due date) and estimates of an order or of a file before sending (area, ink per plate, duration, nested roll length; no amounts).*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. Tagged file name pattern for the automatic folder (preset, machine, media, copies, repetition, roll width, scale, size). ERP bridge: jobs sent by the ERP (signed download, SHA-256 checked), ERP actions on the queue (hold, resume, cancel, priority, due date) and estimates of an order or of a file before sending (area, ink per plate, duration, nested roll length; no amounts).*
 
 ## [0.26.0] — 2026-10-25
 

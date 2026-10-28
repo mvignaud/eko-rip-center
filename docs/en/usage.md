@@ -600,6 +600,30 @@ Example: `BACHE_*` → Banner; `*.pdf`, long side from 2000 to empty → Large f
 Vinyl. A file no rule takes goes to `entrees-auto/refuses/` with its reason. The rules are
 part of the configuration backup.
 
+**Tagged name pattern** (same editor, optional): the file name itself carries the preset
+and more. With `{nom}__{machine}__{reglage}__{copies}`, `Affiche__epson__bache__30.pdf`
+gives the Banner preset, the Epson and 30 copies. Each tag takes the text up to the
+separator that follows it; the last one runs up to the extension. The double `__`
+separator is advised: a single `_` often appears in names. Two tags must be separated, and
+each is used once. Tag names are the French ones below.
+
+| Tag | Effect |
+|---|---|
+| `{nom}` | Free text (name), no effect. |
+| `{reglage}` | Saved preset, ignoring case, accents, spaces, `-` and `_` (`bache` = "Bâche"). |
+| `{machine}` | Catalogue machine, by identifier or name: printer of the automatic queuing, or cutter of the job. |
+| `{support}` | Epson media, by name. |
+| `{copies}` | Job ticket quantity (1 to 100,000). |
+| `{repetition}` | Prints of each page queued straight away (1 to 100). |
+| `{laize}` | Roll width of the preset's tiling, in mm (`1600` or `1600mm`). |
+| `{echelle}` | Scale in % (`200`, `12,5%`). |
+| `{largeur}` / `{hauteur}` | Wanted width / height in mm, for a PDF: the scale follows (the smaller one when both are given). |
+
+A name that does not follow the pattern, or a value that cannot be read, is not refused:
+the job goes through the rules and carries a warning ("Name off the tagged pattern", "Name tag not
+recognised"), also written to the server log. Without a recognised `{reglage}`, the rules pick
+the preset; if none takes the file, the refusal reason lists these warnings.
+
 Two boxes of the upload panel, kept in the preset, are mostly for hot folders:
 
 - **One page per job**: a multi-page PDF becomes one job per page, named
