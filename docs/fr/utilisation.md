@@ -856,7 +856,8 @@ choix **Après coupe** (voir [Découpe](#découpe)).
 
 ## Machines
 
-**Système > Machines** : le catalogue des machines de l'atelier. Pour chacune : un
+**Système > Machines** : le catalogue des machines de l'atelier (une fiche par modèle :
+[aide par machine](machines.md)). Pour chacune : un
 identifiant (minuscules, chiffres, `-`), un nom, le modèle (Epson SC-S80600, Mutoh Kona,
 Graphtec FC7000, Roland VersaCAMM VP), la laize, la connexion (série ou USB-série,
 réseau TCP, périphérique comme `/dev/usb/lp0`, ou dossier), l'adresse SNMP pour lire le
@@ -1066,15 +1067,4 @@ le facteur de chacune. Rétention et facteurs sont dans la sauvegarde de la conf
 
 ## Glossaire
 
-- **Plaque** : image 8 bits d'une encre (0 = pleine encre, 255 = pas d'encre).
-- **Ton direct** : couleur nommée du PDF (`White`, `Silver`, `CutContour`…), sortie sur
-  sa propre plaque au lieu d'être mélangée au CMJN.
-- **Laize** : largeur utile du rouleau.
-- **Lé** : bande verticale d'une mosaïque, au plus large comme la laize.
-- **Tuile** : un morceau d'une mosaïque en colonnes × rangées ; chaque tuile est une page.
-- **Couche de découpe** : les tracés d'un même nom de ton, coupés ensemble avec un même
-  réglage.
-- **Mode d'impression** : résolution, passes et chauffage d'un support.
-- **Sortie** : une page d'un travail envoyée à une machine, dans la file d'attente.
-- **Variante** : copie d'une découpeuse avec son propre jeu de repères.
-- **Dossier surveillé** : dossier du serveur dont chaque fichier déposé devient un travail.
+Les mots de l'écran, avec leur équivalent anglais : [glossaire](glossaire.md).

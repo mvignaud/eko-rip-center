@@ -19,7 +19,9 @@ seule ; le lien de chaque version est dans
 [l'installation du serveur](docs/fr/installation-serveur.md#0-pc-dédié--image-dinstallation-ubuntu).
 Dernière image : 0.16.0.
 
-Documentation : [français](docs/fr/) · [English](docs/en/) ·
+Documentation : [français](docs/fr/) · [English](docs/en/) · aide par machine
+([fr](docs/fr/machines.md), [en](docs/en/machines.md)) · glossaire ([fr](docs/fr/glossaire.md),
+[en](docs/en/glossary.md)) ·
 [changelog](CHANGELOG.md). Administration et questions fréquentes :
 [administration](docs/fr/administration.md) · [running the server](docs/en/administration.md).
 
