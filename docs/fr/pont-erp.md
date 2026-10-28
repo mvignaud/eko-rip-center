@@ -1,4 +1,4 @@
-# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1, R2 et R3)
+# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 à R3.2)
 
 Ce document fixe ce qu'un ERP peut attendre d'E-KO RIP Center. Le lot R1 pose les
 fondations : identifiants, accès machine à machine, signature des événements, modèle
@@ -198,8 +198,11 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
   Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
   jamais un événement refusé.
 - `travaux` : les travaux envoyés par l'ERP (lot R3, § 7).
-- `annulations`, `estimations` : lus, ignorés tant que leur forme n'est pas fixée (lots R4,
-  R5) ; le journal du serveur le dit (« non prises en charge »).
+- `actions` : annuler, suspendre, reprendre, priorité, échéance (lot R3.2, § 8). Elles
+  remplacent l'ancien champ `annulations`, qui n'est plus appliqué (signalé au journal du
+  serveur s'il arrive non vide).
+- `estimations` : lu, ignoré tant que sa forme n'est pas fixée (lot R4) ; le journal du
+  serveur le dit (« non prises en charge »).
 
 ### 6.4 Instances
 
@@ -304,3 +307,31 @@ d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `
 - **Doublons** : un envoi pris ou refusé n'est jamais repris, même reproposé ; il est
   oublié 30 jours après que l'ERP a cessé de le proposer. Une panne (réseau, 5xx, disque)
   n'est pas un refus : l'envoi est repris au cycle suivant.
+
+## 8. Actions de l'ERP sur la file (lot R3.2)
+
+Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "ref_erp", "action",
+"echeance" }`, `action` parmi `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
+(`echeance`, en secondes Unix, exigée pour cette dernière seulement).
+
+- **Portée** : une action vise tous les travaux nés d'un envoi de l'ERP qui portent ce
+  `ref_erp`, et leurs sorties (impression et découpe) encore en file. Un travail créé au RIP
+  n'est jamais touché, même s'il porte la même commande dans sa fiche.
+- **Sorties modifiables** : en attente ou suspendues. Une sortie lancée, terminée, ou posée
+  sur une planche imbriquée est laissée telle quelle et comptée dans `non_modifiables`.
+- **Effet** :
+  - `suspendre` : les sorties en attente passent suspendues ; un travail du dossier qui
+    arrive ensuite part suspendu.
+  - `reprendre` : les sorties suspendues repartent, sauf une découpe dont l'impression n'est
+    pas terminée. Lève la retenue posée par `suspendre`.
+  - `annuler` : les sorties modifiables sont annulées, et le dossier ne part plus en file. Un
+    travail déjà imprimé ne s'annule pas : il se signale par `code` = `deja_imprime`.
+  - `priorite` : les sorties passent en tête de file, dans leur ordre.
+  - `echeance` : l'échéance de la fiche change (sans toucher à la file).
+- **Accusé** : `travail.action` — `{ "action_id", "ref_erp", "action", "code", "touchees",
+  "non_modifiables" }`. `code` vaut `null` si tout s'est fait, `aucun_travail` si aucun
+  travail de l'ERP ne porte ce `ref_erp`, `deja_imprime` (ci-dessus), ou `action_invalide`
+  (élément mal formé ; `detail` nomme le champ). `touchees` compte les sorties changées, ou
+  les travaux pour `echeance`.
+- **Doublons** : comme les envois (§ 7) — une action prise n'est jamais reprise, même
+  reproposée, et elle est oubliée 30 jours après que l'ERP a cessé de la proposer.

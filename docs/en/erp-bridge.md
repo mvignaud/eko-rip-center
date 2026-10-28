@@ -1,4 +1,4 @@
-# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1, R2 and R3)
+# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 to R3.2)
 
 What an ERP can rely on from E-KO RIP Center. Lot R1 lays the foundations: identifiers,
 machine-to-machine access, event signature, state model; lot R2 (§ 6) the channel: log,
@@ -169,8 +169,10 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   System with its code; the RIP retries after 60 s, then every 5 min. It never skips a
   refused event.
 - `travaux`: jobs sent by the ERP (lot R3, § 7).
-- `annulations`, `estimations`: read, ignored until their shape is set (lots R4, R5); the
-  server log says so ("non prises en charge").
+- `actions`: cancel, hold, resume, priority, due date (lot R3.2, § 8). They replace the old
+  `annulations` field, which is no longer applied (reported in the server log if non-empty).
+- `estimations`: read, ignored until its shape is set (lot R4); the server log says so
+  ("non prises en charge").
 
 ### 6.4 Instances
 
@@ -272,3 +274,30 @@ eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
 - **Duplicates**: a send taken or refused is never taken again, even if offered again; it is
   forgotten 30 days after the ERP stops offering it. An outage (network, 5xx, disk) is not a
   refusal: the send is retried on the next cycle.
+
+## 8. ERP actions on the queue (lot R3.2)
+
+Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp", "action",
+"echeance" }`, `action` one of `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
+(`echeance`, Unix seconds, required for the last one only).
+
+- **Scope**: an action targets every job born from an ERP send that carries this `ref_erp`,
+  and their outputs (print and cut) still in the queue. A job created on the RIP is never
+  touched, even if its job sheet carries the same order.
+- **Outputs that can change**: waiting or held. An output started, finished, or placed on a
+  nested sheet is left as is and counted in `non_modifiables`.
+- **Effect**:
+  - `suspendre`: waiting outputs are held; a job of the order arriving later starts held.
+  - `reprendre`: held outputs restart, except a cut whose print is not finished. Lifts the
+    hold set by `suspendre`.
+  - `annuler`: outputs that can change are cancelled, and the order no longer enters the
+    queue. A job already printed is not cancelled: it is reported with `code` =
+    `deja_imprime`.
+  - `priorite`: outputs move to the head of the queue, in their order.
+  - `echeance`: the job sheet's due date changes (the queue is untouched).
+- **Acknowledgement**: `travail.action` — `{ "action_id", "ref_erp", "action", "code",
+  "touchees", "non_modifiables" }`. `code` is `null` if all went through, `aucun_travail` if
+  no ERP job carries this `ref_erp`, `deja_imprime` (above), or `action_invalide` (malformed
+  item; `detail` names the field). `touchees` counts changed outputs, or jobs for `echeance`.
+- **Duplicates**: like sends (§ 7) — an action taken is never taken again, even if offered
+  again, and is forgotten 30 days after the ERP stops offering it.

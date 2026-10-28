@@ -19,6 +19,9 @@
 //!   désigné. Le premier `travail.etat` porte `envoi_id` : c'est l'accusé. Un envoi qui ne
 //!   peut pas devenir un travail part en `travail.refuse`. Un envoi déjà pris n'est jamais
 //!   repris (`Etat::envois`), même reproposé.
+//! - **Actions de l'ERP** (lot R3.2) : chaque élément nouveau de `actions` est rangé dans
+//!   `<données>/pont/actions/`, puis appliqué par le serveur (`main::appliquer_actions_erp`) aux
+//!   travaux nés d'un envoi du même `ref_erp`. Le résultat part en `travail.action`.
 //!
 //! Règles d'instance convenues avec l'ERP (25/10) : réponse 0 pour une instance jamais
 //! accusée → tout est rejoué depuis 1 ; pour une instance déjà accusée → « remplacé » : plus
@@ -132,6 +135,32 @@ pub struct Etat {
     /// `ref_erp` de chaque travail né d'un envoi, recopié dans ses sorties.
     #[serde(default)]
     pub refs: BTreeMap<Uuid, String>,
+    /// Actions de l'ERP déjà prises (lot R3.2), comme `envois`.
+    #[serde(default)]
+    pub actions: BTreeMap<Uuid, u64>,
+}
+
+/// Ce que l'ERP demande sur les travaux d'un dossier (lot R3.2, feuille de route 7.7).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GenreAction {
+    Suspendre,
+    Reprendre,
+    Annuler,
+    /// Les sorties en attente passent devant les autres, sur leur machine.
+    Priorite,
+    /// Nouvelle échéance de la fiche.
+    Echeance,
+}
+
+/// Une action de l'ERP reçue, qui attend d'être appliquée (`pont/actions/<id>.json`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ActionErp {
+    pub id: Uuid,
+    pub ref_erp: String,
+    pub action: GenreAction,
+    #[serde(default)]
+    pub echeance: Option<u64>,
 }
 
 /// Lien d'un travail à l'ERP (lot R3) : l'envoi qui l'a créé, et le dossier de l'ERP.
@@ -174,6 +203,10 @@ fn maintenant() -> u64 {
 
 fn dossier_recus(donnees: &Path) -> PathBuf {
     dossier(donnees).join("recus")
+}
+
+fn dossier_actions(donnees: &Path) -> PathBuf {
+    dossier(donnees).join("actions")
 }
 
 /// Journal ouvert : son état, sous le verrou.
@@ -606,12 +639,99 @@ pub fn noter_refus(donnees: &Path, envoi: Uuid, ref_erp: Option<&str>, code: &st
     o.fermer();
 }
 
-/// Codes de `travail.refuse`, pour l'ERP seulement (jamais affichés par l'écran).
+/// Codes de `travail.refuse` et `travail.action`, pour l'ERP seulement (jamais affichés par
+/// l'écran).
 pub const REFUS_REGLAGE_INCONNU: &str = "reglage_inconnu";
 pub const REFUS_FICHIER_ILLISIBLE: &str = "fichier_illisible";
 const REFUS_ENVOI_INVALIDE: &str = "envoi_invalide";
 const REFUS_TELECHARGEMENT: &str = "telechargement_impossible";
 const REFUS_EMPREINTE: &str = "empreinte_fausse";
+const ACTION_INVALIDE: &str = "action_invalide";
+pub const ACTION_SANS_TRAVAIL: &str = "aucun_travail";
+pub const ACTION_DEJA_IMPRIME: &str = "deja_imprime";
+
+/// Les actions reçues de l'ERP qui attendent d'être appliquées, dans l'ordre de réception.
+pub fn actions(donnees: &Path) -> Vec<ActionErp> {
+    let Ok(entrees) = std::fs::read_dir(dossier_actions(donnees)) else { return vec![] };
+    let mut v: Vec<(std::time::SystemTime, ActionErp)> = entrees
+        .flatten()
+        .filter_map(|e| {
+            let a = serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok()?;
+            Some((e.metadata().and_then(|m| m.modified()).ok()?, a))
+        })
+        .collect();
+    v.sort_by_key(|(le, a)| (*le, a.id));
+    v.into_iter().map(|(_, a)| a).collect()
+}
+
+/// `travail.action` : le résultat d'une action de l'ERP, puis l'action est oubliée.
+/// `touchees` : sorties (ou travaux, pour l'échéance) changées ; `non_modifiables` : sorties
+/// déjà lancées, terminées ou posées sur une planche, laissées telles quelles.
+pub fn noter_action(donnees: &Path, a: &ActionErp, code: Option<&str>, touchees: usize, non_modifiables: usize) {
+    if let Some(mut o) = ouvrir(donnees) {
+        let d = json!({ "action_id": a.id, "ref_erp": a.ref_erp, "action": a.action, "code": code, "touchees": touchees, "non_modifiables": non_modifiables });
+        if let Err(e) = o.ajouter("travail.action", d) {
+            eprintln!("pont ERP : action non journalisée : {e}");
+        }
+        o.fermer();
+    }
+    let _ = std::fs::remove_file(dossier_actions(donnees).join(format!("{}.json", a.id)));
+}
+
+/// Lit un élément de `actions` (§ 12 du contrat côté ERP).
+fn lire_action(a: &Value) -> Result<ActionErp, &'static str> {
+    let id = a["id"].as_str().and_then(|i| Uuid::parse_str(i).ok()).ok_or("id")?;
+    let ref_erp = a["ref_erp"].as_str().map(str::trim).filter(|v| !v.is_empty() && v.chars().count() <= 200).ok_or("ref_erp")?.to_string();
+    let action: GenreAction = serde_json::from_value(a["action"].clone()).map_err(|_| "action")?;
+    let echeance = a["echeance"].as_u64();
+    if action == GenreAction::Echeance && echeance.is_none() {
+        return Err("echeance");
+    }
+    Ok(ActionErp { id, ref_erp, action, echeance })
+}
+
+/// Les actions proposées par l'ERP : chaque action jamais prise est rangée dans
+/// `pont/actions/` pour le serveur (ou part en `travail.action` refusée si elle ne se lit pas).
+fn prendre_actions(donnees: &Path, actions: &Value) {
+    let liste = actions.as_array().map(Vec::as_slice).unwrap_or_default();
+    let proposees: Vec<Uuid> = liste.iter().filter_map(|a| a["id"].as_str().and_then(|i| Uuid::parse_str(i).ok())).collect();
+    let Some(mut o) = ouvrir(donnees) else { return };
+    let limite = maintenant().saturating_sub(RETENTION_S);
+    o.e.actions.retain(|id, le| *le >= limite || proposees.contains(id));
+    let mut nouvelles = false;
+    for a in liste {
+        let Some(id) = a["id"].as_str().and_then(|i| Uuid::parse_str(i).ok()) else {
+            eprintln!("pont ERP : action sans id lisible, ignorée");
+            continue;
+        };
+        if o.e.actions.contains_key(&id) {
+            continue;
+        }
+        o.e.actions.insert(id, maintenant());
+        match lire_action(a) {
+            Ok(action) => {
+                let ecrit = std::fs::create_dir_all(dossier_actions(donnees)).and_then(|()| crate::etat::ecrire(&dossier_actions(donnees).join(format!("{id}.json")), &action, false));
+                match ecrit {
+                    Ok(()) => nouvelles = true,
+                    Err(e) => {
+                        eprintln!("pont ERP : action {id} non rangée, reprise au prochain cycle : {e}");
+                        o.e.actions.remove(&id);
+                    }
+                }
+            }
+            Err(champ) => {
+                let d = json!({ "action_id": id, "ref_erp": a["ref_erp"].as_str(), "action": a["action"].as_str(), "code": ACTION_INVALIDE, "detail": champ, "touchees": 0, "non_modifiables": 0 });
+                if let Err(e) = o.ajouter("travail.action", d) {
+                    eprintln!("pont ERP : action non journalisée : {e}");
+                }
+            }
+        }
+    }
+    o.fermer();
+    if nouvelles {
+        RECUS.notify_one();
+    }
+}
 
 enum Echec {
     /// L'envoi ne peut pas être pris : `travail.refuse`.
@@ -895,7 +1015,7 @@ pub fn cycle(donnees: &Path, client: &Client, premier: &mut bool) -> Fin {
         return Fin::Erreur;
     };
     let demande = r.corps["catalogue_demande"] == Value::Bool(true);
-    // Annulations, estimations : lots PT6, PT5 côté ERP, pas encore définis.
+    // Estimations : lot PT5 côté ERP, pas encore défini ; `annulations` remplacé par `actions`.
     let non_pris: Vec<String> = ["annulations", "estimations"].iter().filter_map(|k| r.corps[*k].as_array().filter(|a| !a.is_empty()).map(|a| format!("{k} : {}", a.len()))).collect();
     {
         let mut deja = NON_PRIS.lock().unwrap_or_else(|p| p.into_inner());
@@ -926,6 +1046,7 @@ pub fn cycle(donnees: &Path, client: &Client, premier: &mut bool) -> Fin {
     }
     // Les travaux, à la seule instance accusée par l'ERP (il n'en propose qu'à elle).
     prendre_travaux(donnees, client, &base, &secret, &r.corps["travaux"]);
+    prendre_actions(donnees, &r.corps["actions"]);
 
     for _ in 0..LOTS_PAR_CYCLE {
         let lot: Vec<Evenement> = {
@@ -1082,6 +1203,8 @@ mod tests {
         telechargements: usize,
         /// `fichiers/{id}` répond 503 tant que c'est vrai.
         panne: bool,
+        /// `actions` de `en-attente` (lot R3.2).
+        actions: Vec<Value>,
     }
 
     /// Compte la requête ; un 429 demandé est rendu à sa place.
@@ -1195,7 +1318,7 @@ mod tests {
             return reponse(StatusCode::BAD_REQUEST, json!({ "code": "requete_invalide", "detail": null }));
         };
         let d = if e.active == Some(Some(instance)) { e.dernier } else { 0 };
-        reponse(StatusCode::OK, json!({ "contrat": erp::CONTRAT, "instance": instance, "dernier_seq_traite": d, "catalogue_demande": e.catalogue_demande, "travaux": e.travaux, "annulations": [], "estimations": [] }))
+        reponse(StatusCode::OK, json!({ "contrat": erp::CONTRAT, "instance": instance, "dernier_seq_traite": d, "catalogue_demande": e.catalogue_demande, "travaux": e.travaux, "actions": e.actions, "estimations": [] }))
     }
 
     async fn fichier_erp(State(f): State<Faux>, entetes: HeaderMap, uri: Uri, axum::extract::Path(id): axum::extract::Path<String>) -> axum::response::Response {
@@ -1215,7 +1338,7 @@ mod tests {
     }
 
     async fn faux_erp() -> (Faux, String) {
-        let f: Faux = Arc::new(std::sync::Mutex::new(Erp { active: None, dernier: 0, recus: vec![], requetes: 0, posts: 0, catalogue_demande: true, perdre: None, instants: vec![], lots: vec![], trop: None, travaux: vec![], fichiers: BTreeMap::new(), telechargements: 0, panne: false }));
+        let f: Faux = Arc::new(std::sync::Mutex::new(Erp { active: None, dernier: 0, recus: vec![], requetes: 0, posts: 0, catalogue_demande: true, perdre: None, instants: vec![], lots: vec![], trop: None, travaux: vec![], fichiers: BTreeMap::new(), telechargements: 0, panne: false, actions: vec![] }));
         let app = Router::new()
             .route("/rip/atelier/evenements", post(evenements))
             .route("/rip/atelier/en-attente", get(en_attente_erp))
@@ -1348,6 +1471,49 @@ mod tests {
         tourner(&d, false).await;
         assert_eq!(recus(&d).len(), 1);
         assert!(etat(&d).envois.contains_key(&id));
+    }
+
+    fn actions_recues(f: &Faux) -> Vec<(Value, Value)> {
+        f.lock().unwrap().recus.iter().filter(|x| x.genre == "travail.action").map(|x| (x.donnees["action_id"].clone(), x.donnees["code"].clone())).collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn les_actions_proposees_sont_rangees_une_seule_fois_ou_refusees() {
+        let (f, d) = accuse_un_lot("actions").await;
+        let (pause, date, sans_date, inconnue) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        f.lock().unwrap().actions = vec![
+            json!({ "id": pause, "ref_erp": "PROD-2026-00123", "action": "suspendre" }),
+            json!({ "id": date, "ref_erp": "PROD-2026-00123", "action": "echeance", "echeance": 1793600000 }),
+            json!({ "id": sans_date, "ref_erp": "PROD-2026-00123", "action": "echeance" }),
+            json!({ "id": inconnue, "ref_erp": "PROD-2026-00124", "action": "effacer" }),
+            json!({ "ref_erp": "PROD-2026-00125", "action": "annuler" }),
+        ];
+        assert_eq!(tourner(&d, false).await, Fin::Repos);
+        let rangees = actions(&d);
+        assert_eq!(rangees.len(), 2);
+        assert!(rangees.contains(&ActionErp { id: pause, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Suspendre, echeance: None }));
+        assert!(rangees.contains(&ActionErp { id: date, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Echeance, echeance: Some(1793600000) }));
+        assert_eq!(actions_recues(&f), [(json!(sans_date), json!("action_invalide")), (json!(inconnue), json!("action_invalide"))]);
+        let refus = f.lock().unwrap().recus.iter().find(|x| x.donnees["action_id"] == json!(sans_date)).unwrap().donnees.clone();
+        assert_eq!(refus["detail"], "echeance", "le champ fautif est nommé");
+
+        // Appliquée puis reproposée tant que l'ERP n'a pas tiré l'accusé : jamais reprise.
+        let a = rangees.iter().find(|a| a.id == pause).unwrap().clone();
+        noter_action(&d, &a, None, 2, 1);
+        tourner(&d, false).await;
+        assert_eq!(actions(&d).len(), 1, "seule l'échéance attend encore");
+        assert_eq!(actions_recues(&f).len(), 3);
+        let fait = f.lock().unwrap().recus.iter().find(|x| x.donnees["action_id"] == json!(pause)).unwrap().donnees.clone();
+        assert_eq!(fait, json!({ "action_id": pause, "ref_erp": "PROD-2026-00123", "action": "suspendre", "code": null, "touchees": 2, "non_modifiables": 1 }));
+        // Plus proposées : oubliées après la rétention.
+        f.lock().unwrap().actions.clear();
+        {
+            let mut o = ouvrir(&d).unwrap();
+            o.e.actions.values_mut().for_each(|le| *le -= RETENTION_S + 1);
+            o.fermer();
+        }
+        tourner(&d, false).await;
+        assert!(etat(&d).actions.is_empty());
     }
 
     #[test]

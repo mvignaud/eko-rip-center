@@ -81,7 +81,7 @@ Côté ERP, le chantier démarre après la série comptable (sauf lot A0).
 - [x] (28/10, envoi = version ; renvoi = nouvel envoi) R3.1 Réception par référence ERP + version, fichier par lien signé, SHA-256 vérifié,
   idempotente (même réf + version = même travail) ; refus codé stable d'une combinaison
   inexistante (machine × préréglage d'abord, machine × support × mode quand 1.1 existe). (n°5, 7.3)
-- [ ] R3.2 Actions sur la file par référence ERP : suspendre, reprendre, annuler, priorité ;
+- [x] (28/10, `actions` dans en-attente, accusé `travail.action`) R3.2 Actions sur la file par référence ERP : suspendre, reprendre, annuler, priorité ;
   un travail imprimé ne s'annule pas, il se signale. (n°10, 7.7)
 
 ### R4 — Estimation à la demande

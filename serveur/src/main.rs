@@ -153,6 +153,17 @@ struct Travail {
     /// Envoyé par l'ERP (lot R3) : l'envoi et le dossier, repris dans chaque événement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     erp: Option<pont::Lien>,
+    /// Suspendu ou annulé par l'ERP (lot R3.2) : les sorties mises en file d'office ensuite
+    /// partent suspendues, ou ne partent pas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    retenue_erp: Option<RetenueErp>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum RetenueErp {
+    Suspendu,
+    Annule,
 }
 
 /// Fiche travail (roadmap 5.6) : ce que l'atelier sait de la commande. Champs vides : non
@@ -1055,6 +1066,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         pages_exclues: vec![],
         imbrication,
         erp,
+        retenue_erp: None,
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -2774,6 +2786,78 @@ async fn prendre_envois(etat: Partage) {
     loop {
         pont::attendre_recus(Duration::from_secs(30)).await;
         prendre_envois_recus(&etat).await;
+        appliquer_actions_erp(&etat);
+    }
+}
+
+/// Actions de l'ERP sur les travaux d'un dossier (lot R3.2, feuille de route 7.7), chacune
+/// sur tous les travaux de même `ref_erp`. Une sortie lancée, terminée ou posée sur une
+/// planche ne change pas : un travail imprimé ne s'annule pas, il se signale
+/// (`deja_imprime`). Reprendre ne relance pas une découpe qui attend la fin de son
+/// impression (le support doit d'abord passer de machine).
+fn appliquer_actions_erp(etat: &Etat) {
+    let donnees = &etat.config.donnees;
+    for a in pont::actions(donnees) {
+        let mut travaux: Vec<Travail> = lire_tous(donnees).into_iter().filter(|t| t.erp.as_ref().is_some_and(|l| l.ref_erp == a.ref_erp)).collect();
+        if travaux.is_empty() {
+            pont::noter_action(donnees, &a, Some(pont::ACTION_SANS_TRAVAIL), 0, 0);
+            continue;
+        }
+        let ids: Vec<Uuid> = travaux.iter().map(|t| t.id).collect();
+        let retenue = match a.action {
+            pont::GenreAction::Suspendre => Some(Some(RetenueErp::Suspendu)),
+            pont::GenreAction::Annuler => Some(Some(RetenueErp::Annule)),
+            pont::GenreAction::Reprendre => Some(None),
+            _ => None,
+        };
+        let (mut touchees, mut non_modifiables) = (0, 0);
+        for t in &mut travaux {
+            let avant = (t.retenue_erp, t.fiche.echeance);
+            if let Some(r) = retenue {
+                t.retenue_erp = r;
+            }
+            if a.action == pont::GenreAction::Echeance {
+                t.fiche.echeance = a.echeance;
+                touchees += 1;
+            }
+            if (t.retenue_erp, t.fiche.echeance) != avant
+                && let Err(e) = ecrire(donnees, t)
+            {
+                eprintln!("action de l'ERP {} : travail {} non écrit : {e}", a.id, t.id);
+            }
+        }
+        if a.action != pont::GenreAction::Echeance {
+            let mut f = etat.file.lock().unwrap();
+            let a_imprimer = |f: &file::File, s: &file::Sortie| f.sorties.iter().any(|x| x.travail == s.travail && x.page == s.page && x.operation() == machines::Operation::Impression && x.etat != file::Etat::Terminee);
+            let concernees: Vec<Uuid> = f.sorties.iter().filter(|s| ids.contains(&s.travail) && !s.archivee && !matches!(s.etat, file::Etat::Annulee | file::Etat::Echec)).map(|s| s.id).collect();
+            // En tête dans l'ordre inverse : les sorties gardent leur ordre entre elles.
+            for id in concernees.iter().rev() {
+                let Some(s) = f.sorties.iter().find(|s| s.id == *id).cloned() else { continue };
+                let modifiable = matches!(s.etat, file::Etat::EnAttente | file::Etat::Suspendue);
+                if !modifiable {
+                    non_modifiables += 1;
+                    continue;
+                }
+                let action = match a.action {
+                    pont::GenreAction::Suspendre if s.etat == file::Etat::EnAttente => Some(file::Action::Suspendre),
+                    pont::GenreAction::Reprendre if s.etat == file::Etat::Suspendue && !(s.operation() == machines::Operation::Decoupe && a_imprimer(&f, &s)) => Some(file::Action::Reprendre),
+                    pont::GenreAction::Annuler => Some(file::Action::Annuler),
+                    pont::GenreAction::Priorite => Some(file::Action::EnTete),
+                    _ => None,
+                };
+                if let Some(action) = action
+                    && f.agir(s.id, action, maintenant()).is_ok()
+                {
+                    touchees += 1;
+                }
+            }
+            if let Err(e) = f.ecrire(donnees) {
+                eprintln!("action de l'ERP {} : file non enregistrée : {e}", a.id);
+            }
+        }
+        reprendre_les_imbriquees(etat);
+        let code = (a.action == pont::GenreAction::Annuler && non_modifiables > 0).then_some(pont::ACTION_DEJA_IMPRIME);
+        pont::noter_action(donnees, &a, code, touchees, non_modifiables);
     }
 }
 
@@ -2860,10 +2944,11 @@ fn png(octets: Vec<u8>) -> Response {
 /// `seule` : cette page seulement (page recochée, roadmap 5.12). Les pages exclues n'y vont
 /// pas ; une planche d'imbrication va sur sa machine.
 fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
-    let a = t.demande.auto;
-    if !a.imprimer && !a.decouper {
+    let mut a = t.demande.auto;
+    if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) {
         return;
     }
+    a.suspendre |= t.retenue_erp == Some(RetenueErp::Suspendu);
     // Première machine du catalogue qui imprime ; pour découper, elle-même si elle découpe
     // aussi (imprimante-découpeuse), sinon la première découpeuse.
     // La découpeuse affectée au travail, si elle est au catalogue.
@@ -4705,6 +4790,7 @@ mod tests {
             pages_exclues: vec![],
             imbrication: None,
             erp: None,
+            retenue_erp: None,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -5605,6 +5691,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5671,6 +5758,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5746,6 +5834,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5797,6 +5886,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5919,6 +6009,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5982,6 +6073,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -6024,6 +6116,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -7251,6 +7344,7 @@ mod tests {
                 pages_exclues: vec![],
                 imbrication: None,
                 erp: None,
+                retenue_erp: None,
             };
             let rep = dossier(d, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -8320,6 +8414,110 @@ mod tests {
             assert_eq!(lire_tous(&d).iter().filter(|x| x.erp.is_some()).count(), 1);
             assert_eq!(journal(&e).iter().filter(|x| x.genre == "travail.refuse").count(), 2);
             std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        fn travail_erp(ref_erp: Option<&str>, auto: bool) -> Travail {
+            let id = Uuid::new_v4();
+            Travail {
+                id,
+                nom: "bache.pdf".into(),
+                format: Format::Pdf,
+                demande: Demande { auto: reglages::Auto { imprimer: auto, ..Default::default() }, ..Default::default() },
+                statut: Statut::Termine,
+                code_erreur: None,
+                erreur: None,
+                pages: vec![Page { plaques: vec!["Cyan".into()], ..Default::default() }],
+                alertes: vec![],
+                cree_le: maintenant(),
+                couches_decoupe: vec![],
+                mise_coupe: Default::default(),
+                fiche: Default::default(),
+                pages_exclues: vec![],
+                imbrication: None,
+                erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into() }),
+                retenue_erp: None,
+            }
+        }
+
+        fn agir(e: &Partage, action: pont::GenreAction, ref_erp: &str, echeance: Option<u64>) -> Value {
+            let a = pont::ActionErp { id: Uuid::new_v4(), ref_erp: ref_erp.into(), action, echeance };
+            let rep = e.config.donnees.join("pont").join("actions");
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join(format!("{}.json", a.id)), serde_json::to_vec(&a).unwrap()).unwrap();
+            appliquer_actions_erp(e);
+            assert!(pont::actions(&e.config.donnees).is_empty(), "action appliquée puis oubliée");
+            let j = journal(e);
+            let r = j.iter().rev().find(|x| x.genre == "travail.action").expect("travail.action");
+            assert_eq!(r.donnees["action_id"], json!(a.id));
+            r.donnees.clone()
+        }
+
+        fn etats(e: &Partage) -> Vec<(Uuid, file::Etat)> {
+            e.file.lock().unwrap().sorties.iter().map(|s| (s.id, s.etat)).collect()
+        }
+
+        #[tokio::test]
+        async fn les_actions_de_l_erp_agissent_sur_les_sorties_du_dossier() {
+            use pont::GenreAction::*;
+            let e = etat("actions-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let (t, autre) = (travail_erp(Some("PROD-2026-00123"), false), travail_erp(None, false));
+            for x in [&t, &autre] {
+                std::fs::create_dir_all(dossier(&d, x.id)).unwrap();
+                ecrire(&d, x).unwrap();
+            }
+            let sortie = |t: &Travail, op, page, etat| file::Sortie { etat, ..file::Sortie::nouvelle(if op == machines::Operation::Impression { "epson" } else { "kona" }, op, t.id, &t.nom, page, maintenant()) };
+            let u1 = sortie(&autre, machines::Operation::Impression, 1, file::Etat::EnAttente);
+            let s1 = sortie(&t, machines::Operation::Impression, 1, file::Etat::EnAttente);
+            let s2 = sortie(&t, machines::Operation::Impression, 2, file::Etat::EnCours);
+            let s3 = sortie(&t, machines::Operation::Decoupe, 1, file::Etat::Suspendue);
+            let (u1, s1, s2, s3) = (u1.id, s1.id, s2.id, s3.id);
+            e.file.lock().unwrap().sorties = vec![sortie(&autre, machines::Operation::Impression, 1, file::Etat::EnAttente), sortie(&t, machines::Operation::Impression, 1, file::Etat::EnAttente), sortie(&t, machines::Operation::Impression, 2, file::Etat::EnCours), sortie(&t, machines::Operation::Decoupe, 1, file::Etat::Suspendue)]
+                .into_iter()
+                .zip([u1, s1, s2, s3])
+                .map(|(s, id)| file::Sortie { id, ..s })
+                .collect();
+            let etat_de = |id: Uuid| etats(&e).into_iter().find(|(x, _)| *x == id).unwrap().1;
+            let resultat = |v: &Value| (v["code"].clone(), v["touchees"].clone(), v["non_modifiables"].clone());
+
+            // Suspendre : la sortie en attente seulement ; celle en cours reste, et se compte.
+            assert_eq!(resultat(&agir(&e, Suspendre, "PROD-2026-00123", None)), (Value::Null, json!(1), json!(1)));
+            assert_eq!((etat_de(s1), etat_de(s2), etat_de(u1)), (file::Etat::Suspendue, file::Etat::EnCours, file::Etat::EnAttente));
+            assert_eq!(lire_travail(&d, t.id).unwrap().retenue_erp, Some(RetenueErp::Suspendu));
+            // Reprendre : l'impression repart ; la découpe attend toujours la fin de l'impression.
+            assert_eq!(resultat(&agir(&e, Reprendre, "PROD-2026-00123", None)), (Value::Null, json!(1), json!(1)));
+            assert_eq!((etat_de(s1), etat_de(s3)), (file::Etat::EnAttente, file::Etat::Suspendue));
+            assert_eq!(lire_travail(&d, t.id).unwrap().retenue_erp, None);
+            // Priorité : les sorties du dossier passent devant celle de l'autre travail, dans leur ordre.
+            assert_eq!(resultat(&agir(&e, Priorite, "PROD-2026-00123", None)), (Value::Null, json!(2), json!(1)));
+            let ordre: Vec<Uuid> = etats(&e).into_iter().map(|(id, _)| id).filter(|id| [u1, s1].contains(id)).collect();
+            assert_eq!(ordre, [s1, u1]);
+            // Échéance : la fiche de chaque travail du dossier.
+            assert_eq!(resultat(&agir(&e, Echeance, "PROD-2026-00123", Some(1793700000))), (Value::Null, json!(1), json!(0)));
+            assert_eq!(lire_travail(&d, t.id).unwrap().fiche.echeance, Some(1793700000));
+            assert_eq!(lire_travail(&d, autre.id).unwrap().fiche.echeance, None);
+            // Annuler : ce qui reste à passer ; l'impression en cours se signale.
+            assert_eq!(resultat(&agir(&e, Annuler, "PROD-2026-00123", None)), (json!("deja_imprime"), json!(2), json!(1)));
+            assert_eq!((etat_de(s1), etat_de(s2), etat_de(s3), etat_de(u1)), (file::Etat::Annulee, file::Etat::EnCours, file::Etat::Annulee, file::Etat::EnAttente));
+            // Un dossier sans travail au RIP.
+            assert_eq!(resultat(&agir(&e, Suspendre, "PROD-2026-99999", None)), (json!("aucun_travail"), json!(0), json!(0)));
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        #[test]
+        fn un_travail_retenu_par_l_erp_part_suspendu_ou_ne_part_pas() {
+            let e = etat("retenue-erp");
+            let mut t = travail_erp(Some("PROD-2026-00123"), true);
+            mettre_en_file_auto(&e, &t, None);
+            assert_eq!(etats(&e).iter().map(|(_, x)| *x).collect::<Vec<_>>(), [file::Etat::EnAttente], "sans retenue : en attente");
+            t.retenue_erp = Some(RetenueErp::Suspendu);
+            mettre_en_file_auto(&e, &t, None);
+            assert_eq!(etats(&e).last().unwrap().1, file::Etat::Suspendue);
+            t.retenue_erp = Some(RetenueErp::Annule);
+            mettre_en_file_auto(&e, &t, None);
+            assert_eq!(etats(&e).len(), 2, "annulé : rien de plus en file");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
     }
 }
