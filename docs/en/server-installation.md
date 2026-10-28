@@ -17,7 +17,10 @@ and the image are built for that architecture.
 **CPU and memory**: rendering (Ghostscript) is the heaviest part. Suggested starting point:
 4 cores and 16 GB of memory; more for banners of several tens of m² at high resolution.
 These figures are advice, not a measurement: the render time limit (`EKO_RIP_DELAI_S`,
-30 min by default) quickly tells whether the computer is too small.
+30 min by default) quickly tells whether the computer is too small. For reference, the
+workshop's test server runs on a Pentium G645T (2 cores, 2012), 16 GB of memory and a
+640 GB spinning disk with no separate partition: it is enough for tests; it is a floor,
+not a target.
 
 **Dedicated SSD for the data**: an SSD reserved for the data folder (`/var/lib/eko-rip`),
 separate from the system disk:
