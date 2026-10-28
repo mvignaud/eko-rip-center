@@ -15,6 +15,8 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.27.0] — 2026-10-28
+
 ### Ajouté
 - **Estimation d'un dossier pour l'ERP** (pont, lot R4 ; feuille de route 7.6) : à la
   demande de l'ERP, le RIP répond par `travail.estimation` avec les chiffres de la fiche des
