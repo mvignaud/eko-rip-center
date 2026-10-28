@@ -337,7 +337,16 @@ Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "re
 
 ## 9. Estimation d'un dossier (lot R4)
 
-Forme d'un élément de `estimations` : § 13 du contrat côté ERP — `{ "id", "ref_erp" }`.
+Forme d'un élément de `estimations` : § 13 du contrat côté ERP — `{ "id", "ref_erp" }` pour
+un dossier déjà reçu, ou la forme d'un élément de `travaux` (§ 7 : `prereglage_uuid`,
+`copies`, `fichier`) pour un fichier à estimer avant l'envoi (devis).
+
+- **Fichier à estimer (devis)** : téléchargé comme un envoi (signé, SHA-256 vérifié), rendu
+  avec le réglage désigné dans un travail caché — ni dans la liste ni dans la file, même en
+  impression automatique, sans `travail.etat`, toutes ses pages ensemble — puis estimé comme
+  ci-dessous et effacé. Un fichier qui ne se télécharge pas ou ne se rend pas répond par
+  `travail.estimation` avec le code du refus (`empreinte_fausse`, `reglage_inconnu`,
+  `pdf_illisible`, `rendu_echoue`…) et son `detail`, jamais par `travail.refuse`.
 
 - **Portée** : les travaux rendus nés d'un envoi de l'ERP qui portent ce `ref_erp` (§ 7). Un
   travail en échec est laissé de côté ; un travail encore en rendu fait attendre la demande

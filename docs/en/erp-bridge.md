@@ -303,7 +303,16 @@ Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp
 
 ## 9. Estimating an order (lot R4)
 
-Shape of an `estimations` item: § 13 of the ERP-side contract — `{ "id", "ref_erp" }`.
+Shape of an `estimations` item: § 13 of the ERP-side contract — `{ "id", "ref_erp" }` for an
+order already received, or the shape of a `travaux` item (§ 7: `prereglage_uuid`, `copies`,
+`fichier`) for a file to estimate before sending (quote).
+
+- **File to estimate (quote)**: downloaded like a send (signed, SHA-256 checked), rendered
+  with the named setting in a hidden job — neither listed nor queued, even with automatic
+  printing, no `travail.etat`, all its pages together — then estimated as below and
+  deleted. A file that cannot be downloaded or rendered replies with `travail.estimation`
+  carrying the refusal code (`empreinte_fausse`, `reglage_inconnu`, `pdf_illisible`,
+  `rendu_echoue`…) and its `detail`, never with `travail.refuse`.
 
 - **Scope**: the rendered jobs born from an ERP send carrying this `ref_erp` (§ 7). A failed
   job is left out; a job still rendering makes the request wait for the next round (30 s at

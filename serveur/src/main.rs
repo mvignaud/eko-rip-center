@@ -157,6 +157,10 @@ struct Travail {
     /// partent suspendues, ou ne partent pas.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     retenue_erp: Option<RetenueErp>,
+    /// Rendu pour une estimation de l'ERP seulement (lot R4, devis) : ni file, ni liste, ni
+    /// `travail.etat` ; effacé une fois l'estimation répondue.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    estimation: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -487,14 +491,23 @@ fn dossier(donnees: &std::path::Path, id: Uuid) -> PathBuf {
     donnees.join("travaux").join(id.to_string())
 }
 
-/// Écrit `job.json` ; un changement d'état part vers l'ERP (`travail.etat`, pont actif).
+/// Écrit `job.json` ; un changement d'état part vers l'ERP (`travail.etat`, pont actif),
+/// sauf pour un rendu d'estimation.
 fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
     etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)?;
-    pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le, t.erp.as_ref());
+    if !t.estimation {
+        pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le, t.erp.as_ref());
+    }
     Ok(())
 }
 
+/// Les travaux de l'atelier, les plus récents d'abord (sans les rendus d'estimation).
 fn lire_tous(donnees: &std::path::Path) -> Vec<Travail> {
+    lire_tous_avec(donnees).into_iter().filter(|t| !t.estimation).collect()
+}
+
+/// Tous les `job.json`, rendus d'estimation compris.
+fn lire_tous_avec(donnees: &std::path::Path) -> Vec<Travail> {
     let Ok(entrees) = std::fs::read_dir(donnees.join("travaux")) else { return vec![] };
     let mut v: Vec<Travail> = entrees
         .filter_map(|e| etat::lire(&e.ok()?.path().join("job.json")).ok().flatten())
@@ -505,7 +518,7 @@ fn lire_tous(donnees: &std::path::Path) -> Vec<Travail> {
 
 /// Un rendu coupé par un arrêt du serveur ne reprend pas tout seul : on le dit.
 fn reprendre_travaux_interrompus(donnees: &std::path::Path) {
-    for mut t in lire_tous(donnees) {
+    for mut t in lire_tous_avec(donnees) {
         if matches!(t.statut, Statut::EnAttente | Statut::EnCours) {
             t.statut = Statut::Echec;
             t.code_erreur = Some("interrompu".into());
@@ -943,14 +956,17 @@ enum Origine {
     Planche(Imbriquee, Vec<decoupe::Couche>),
     /// Envoi de l'ERP (lot R3).
     Erp(pont::Lien),
+    /// Fichier à estimer pour l'ERP (lot R4, devis) : rendu à part, jamais en file.
+    Estimation(pont::Lien),
 }
 
 /// `creer_travail` avec sa fiche (roadmap 5.6) et son origine.
 async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine) -> Result<Travail, (StatusCode, Refus)> {
+    let estimation = matches!(origine, Origine::Estimation(_));
     let (imbrication, couches_decoupe, erp) = match origine {
         Origine::Aucune => (None, vec![], None),
         Origine::Planche(i, c) => (Some(i), c, None),
-        Origine::Erp(l) => (None, vec![], Some(l)),
+        Origine::Erp(l) | Origine::Estimation(l) => (None, vec![], Some(l)),
     };
     let rep = dossier(&etat.config.donnees, id);
     let mauvais = |code: &'static str, detail: Option<String>| (StatusCode::BAD_REQUEST, (code, detail));
@@ -973,6 +989,8 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         return Err(mauvais("svg_decoupe_seulement", None));
     }
     let mut d = d;
+    // Une estimation garde toutes ses pages dans un seul travail caché.
+    d.page_par_travail &= !estimation;
     supports::appliquer(&mut d, &supports::lire(&etat.config.donnees, "epson")).map_err(|code| mauvais(code, None))?;
     d.verifier(&couleur::lister(&etat.config.profils)).map_err(|code| mauvais(code, None))?;
     tokio::fs::rename(rep.join("source.tmp"), rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
@@ -1067,6 +1085,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         imbrication,
         erp,
         retenue_erp: None,
+        estimation,
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -2792,8 +2811,9 @@ async fn prendre_envois(etat: Partage) {
 }
 
 /// Estimations demandées par l'ERP (lot R4, feuille de route 7.6), chacune sur les travaux
-/// rendus d'un dossier (`ref_erp`). Un dossier dont un travail est encore en rendu attend le
-/// tour suivant ; sans travail rendu : `aucun_travail`.
+/// rendus d'un dossier (`ref_erp`), ou sur un fichier rendu à part pour un devis. Un dossier
+/// dont un travail est encore en rendu attend le tour suivant ; sans travail rendu :
+/// `aucun_travail`.
 fn estimer_pour_l_erp(etat: &Etat) {
     let donnees = &etat.config.donnees;
     for e in pont::estimations(donnees) {
@@ -2807,6 +2827,17 @@ fn estimer_pour_l_erp(etat: &Etat) {
             continue;
         }
         pont::noter_estimation(donnees, &e, None, chiffres_estimation(etat, &rendus));
+    }
+    // Fichiers à estimer (devis) : rendus à part, répondus puis effacés.
+    for t in lire_tous_avec(donnees).into_iter().filter(|t| t.estimation) {
+        let Some(l) = &t.erp else { continue };
+        let e = pont::DemandeEstimation { id: t.id, ref_erp: l.ref_erp.clone() };
+        match t.statut {
+            Statut::EnAttente | Statut::EnCours => continue,
+            Statut::Echec => pont::noter_estimation(donnees, &e, Some(t.code_erreur.as_deref().unwrap_or("rendu_echoue")), serde_json::json!({ "detail": t.erreur })),
+            Statut::Termine => pont::noter_estimation(donnees, &e, None, chiffres_estimation(etat, &[&t])),
+        }
+        let _ = std::fs::remove_dir_all(dossier(donnees, t.id));
     }
 }
 
@@ -2946,7 +2977,11 @@ async fn prendre_envois_recus(etat: &Partage) {
             continue;
         }
         let refus = |code: &str, detail: Option<String>| {
-            pont::noter_refus(&donnees, r.id, Some(&r.ref_erp), code, detail.as_deref());
+            if r.estimation {
+                pont::noter_estimation(&donnees, &pont::DemandeEstimation { id: r.id, ref_erp: r.ref_erp.clone() }, Some(code), serde_json::json!({ "detail": detail }));
+            } else {
+                pont::noter_refus(&donnees, r.id, Some(&r.ref_erp), code, detail.as_deref());
+            }
             pont::oublier_recu(&donnees, r.id);
         };
         let Some(reglage) = reglages::lire(&donnees).into_iter().find(|x| x.uuid == Some(r.prereglage_uuid)) else {
@@ -2973,7 +3008,8 @@ async fn prendre_envois_recus(etat: &Partage) {
         }
         let fiche = Fiche { commande: r.ref_erp.clone(), quantite: r.copies, echeance: r.echeance, ..Default::default() };
         let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone() };
-        match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, Origine::Erp(lien)).await {
+        let origine = if r.estimation { Origine::Estimation(lien) } else { Origine::Erp(lien) };
+        match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, origine).await {
             Ok(_) => pont::oublier_recu(&donnees, r.id),
             Err((_, (code, detail))) => {
                 let _ = std::fs::remove_dir_all(&rep);
@@ -3021,7 +3057,7 @@ fn png(octets: Vec<u8>) -> Response {
 /// pas ; une planche d'imbrication va sur sa machine.
 fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
     let mut a = t.demande.auto;
-    if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) {
+    if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) || t.estimation {
         return;
     }
     a.suspendre |= t.retenue_erp == Some(RetenueErp::Suspendu);
@@ -4867,6 +4903,7 @@ mod tests {
             imbrication: None,
             erp: None,
             retenue_erp: None,
+            estimation: false,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -5768,6 +5805,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5835,6 +5873,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5911,6 +5950,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5963,6 +6003,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -6086,6 +6127,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -6150,6 +6192,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -6193,6 +6236,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -7421,6 +7465,7 @@ mod tests {
                 imbrication: None,
                 erp: None,
                 retenue_erp: None,
+                estimation: false,
             };
             let rep = dossier(d, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -8459,7 +8504,7 @@ mod tests {
             let preset = Uuid::new_v4();
             reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, ..Default::default() } }]).unwrap();
             let pdf = pdf_pages(&[PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 }]);
-            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None };
+            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None, estimation: false };
             let (bon, sans_reglage, illisible) = (recu(3), pont::Recu { prereglage_uuid: Uuid::new_v4(), ..recu(1) }, recu(1));
             deposer(&e, &bon, &pdf);
             deposer(&e, &sans_reglage, &pdf);
@@ -8512,6 +8557,7 @@ mod tests {
                 imbrication: None,
                 erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into() }),
                 retenue_erp: None,
+                estimation: false,
             }
         }
 
@@ -8666,6 +8712,41 @@ mod tests {
             assert!(estimer(&e, "PROD-2026-00125").is_none());
             // Aucun travail de l'ERP rendu pour ce dossier.
             assert_eq!(estimer(&e, "PROD-2026-00126").unwrap(), json!({ "estimation_id": journal(&e).last().unwrap().donnees["estimation_id"], "ref_erp": "PROD-2026-00126", "code": "aucun_travail" }));
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        #[tokio::test]
+        async fn un_fichier_a_estimer_est_rendu_a_part_estime_puis_efface() {
+            let e = etat("devis-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let preset = Uuid::new_v4();
+            let auto = reglages::Auto { imprimer: true, ..Default::default() };
+            reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, page_par_travail: true, auto, ..Default::default() } }]).unwrap();
+            let page = || PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 };
+            let pdf = pdf_pages(&[page(), page()]);
+            let devis = pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "devis.pdf".into(), prereglage_uuid: preset, copies: 3, echeance: None, sha256: None, estimation: true };
+            let sans_reglage = pont::Recu { id: Uuid::new_v4(), prereglage_uuid: Uuid::new_v4(), ..devis.clone() };
+            deposer(&e, &devis, &pdf);
+            deposer(&e, &sans_reglage, &pdf);
+            prendre_envois_recus(&e).await;
+
+            assert!(lire_tous(&d).is_empty(), "un devis n'est pas un travail de l'atelier");
+            let t = lire_travail(&d, devis.id).expect("rendu caché");
+            assert!(t.estimation && !t.demande.page_par_travail, "une page par travail ne coupe pas un devis");
+            attendre_le_rendu(&e, devis.id).await;
+            assert_eq!(lire_travail(&d, devis.id).unwrap().pages.len(), 2, "ses deux pages restent ensemble");
+            assert!(e.file.lock().unwrap().sorties.is_empty(), "jamais en file, même en impression automatique");
+            assert!(!journal(&e).iter().any(|x| x.genre == "travail.etat" || x.genre == "travail.refuse"), "ni travail.etat ni travail.refuse");
+
+            estimer_pour_l_erp(&e);
+            let j = journal(&e);
+            let reponse = |id: Uuid| j.iter().find(|x| x.genre == "travail.estimation" && x.donnees["estimation_id"] == json!(id)).map(|x| x.donnees.clone()).expect("travail.estimation");
+            let r = reponse(devis.id);
+            assert_eq!((r["code"].clone(), r["ref_erp"].clone(), r["travaux"].clone(), r["pages"].clone(), r["copies"].clone()), (Value::Null, json!("PROD-2026-00123"), json!(1), json!(2), json!(6)), "{r}");
+            assert!(r["surface_m2"].as_f64().unwrap() > 0.0 && r["longueur_mm"].is_number(), "{r}");
+            assert_eq!(reponse(sans_reglage.id)["code"], json!("reglage_inconnu"));
+            assert!(!dossier(&d, devis.id).exists(), "effacé une fois répondu");
             std::fs::remove_dir_all(&d).unwrap();
         }
     }

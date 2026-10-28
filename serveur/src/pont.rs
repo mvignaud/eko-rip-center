@@ -197,6 +197,9 @@ pub struct Recu {
     /// SHA-256 du fichier donné par l'ERP (hexadécimal), vérifié au téléchargement.
     #[serde(default)]
     pub sha256: Option<String>,
+    /// Fichier à estimer (lot R4, devis) : rendu à part, jamais un travail de la file.
+    #[serde(default)]
+    pub estimation: bool,
 }
 
 fn dossier(donnees: &Path) -> PathBuf {
@@ -752,6 +755,8 @@ struct Rangement<T> {
     lire: fn(&Value) -> Result<T, &'static str>,
     /// Événement d'une demande illisible, et ses données (le champ fautif en `detail`).
     refus: fn(Uuid, &Value, &'static str) -> (&'static str, Value),
+    /// Les éléments de la liste qui sont de cette sorte.
+    garder: fn(&Value) -> bool,
 }
 
 const ACTIONS: Rangement<ActionErp> = Rangement {
@@ -759,6 +764,7 @@ const ACTIONS: Rangement<ActionErp> = Rangement {
     prises: |e| &mut e.actions,
     lire: lire_action,
     refus: |id, a, champ| ("travail.action", json!({ "action_id": id, "ref_erp": a["ref_erp"].as_str(), "action": a["action"].as_str(), "code": ACTION_INVALIDE, "detail": champ, "touchees": 0, "non_modifiables": 0 })),
+    garder: |_| true,
 };
 
 const ESTIMATIONS: Rangement<DemandeEstimation> = Rangement {
@@ -766,6 +772,8 @@ const ESTIMATIONS: Rangement<DemandeEstimation> = Rangement {
     prises: |e| &mut e.estimations,
     lire: lire_estimation,
     refus: |id, a, champ| ("travail.estimation", json!({ "estimation_id": id, "ref_erp": a["ref_erp"].as_str(), "code": ESTIMATION_INVALIDE, "detail": champ })),
+    // Celles qui portent un fichier (devis) passent par le téléchargement, comme `travaux`.
+    garder: |a| a.get("fichier").is_none_or(Value::is_null),
 };
 
 /// Les demandes proposées par l'ERP : chaque demande jamais prise est rangée pour le serveur
@@ -779,7 +787,7 @@ fn ranger<T: Serialize>(donnees: &Path, liste: &Value, r: &Rangement<T>) {
     (r.prises)(&mut o.e).retain(|id, le| *le >= limite || proposees.contains(id));
     let rep = (r.dossier)(donnees);
     let mut nouvelles = false;
-    for a in liste {
+    for a in liste.iter().filter(|a| (r.garder)(a)) {
         let Some(id) = a["id"].as_str().and_then(|i| Uuid::parse_str(i).ok()) else {
             eprintln!("pont ERP : demande sans id lisible, ignorée");
             continue;
@@ -830,7 +838,7 @@ fn lire_envoi(t: &Value) -> Result<(Recu, String), String> {
         v => Some(v.as_str().filter(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit())).ok_or("fichier.sha256")?.to_ascii_lowercase()),
     };
     let nom = t["fichier"]["nom"].as_str().or(t["nom"].as_str()).unwrap_or("sans nom").chars().filter(|c| !c.is_control() && *c != '/' && *c != '\\').take(200).collect::<String>();
-    Ok((Recu { id, ref_erp, nom, prereglage_uuid, copies, echeance, sha256 }, chemin))
+    Ok((Recu { id, ref_erp, nom, prereglage_uuid, copies, echeance, sha256, estimation: false }, chemin))
 }
 
 /// Télécharge le fichier d'un envoi dans `recus/<id>/source`, vérifie son SHA-256 s'il est
@@ -870,17 +878,27 @@ fn telecharger(donnees: &Path, client: &Client, base: &str, secret: &str, r: &Re
     Ok(())
 }
 
-/// Les travaux proposés par l'ERP : chaque envoi jamais pris est téléchargé (ou refusé s'il
-/// ne se lit pas). Les envois pris que l'ERP ne propose plus sont oubliés après la rétention.
-fn prendre_travaux(donnees: &Path, client: &Client, base: &str, secret: &str, travaux: &Value) {
-    let liste = travaux.as_array().map(Vec::as_slice).unwrap_or_default();
+/// Les travaux proposés par l'ERP (ou, `estimation`, les fichiers à estimer pour un devis,
+/// lot R4) : chaque envoi jamais pris est téléchargé (ou refusé s'il ne se lit pas). Les
+/// envois pris que l'ERP ne propose plus sont oubliés après la rétention.
+fn prendre_travaux(donnees: &Path, client: &Client, base: &str, secret: &str, travaux: &Value, estimation: bool) {
+    let liste: Vec<&Value> = travaux.as_array().map(Vec::as_slice).unwrap_or_default().iter().filter(|t| !estimation || !(ESTIMATIONS.garder)(t)).collect();
+    let pris_de: fn(&mut Etat) -> &mut BTreeMap<Uuid, u64> = if estimation { |e| &mut e.estimations } else { |e| &mut e.envois };
+    let refuser = |id: Uuid, ref_erp: Option<&str>, code: &str, detail: Option<&str>| {
+        if estimation {
+            noter_estimation(donnees, &DemandeEstimation { id, ref_erp: ref_erp.unwrap_or_default().into() }, Some(code), json!({ "detail": detail }));
+        } else {
+            noter_refus(donnees, id, ref_erp, code, detail);
+        }
+    };
     let proposes: Vec<Uuid> = liste.iter().filter_map(|t| t["id"].as_str().and_then(|i| Uuid::parse_str(i).ok())).collect();
     let pris = {
         let Some(mut o) = ouvrir(donnees) else { return };
         let limite = maintenant().saturating_sub(RETENTION_S);
-        let avant = o.e.envois.len();
-        o.e.envois.retain(|id, le| *le >= limite || proposes.contains(id));
-        let pris = o.e.envois.clone();
+        let avant = pris_de(&mut o.e).len();
+        // Les estimations sans fichier, rangées à part, gardent leur trace jusqu'à la rétention.
+        pris_de(&mut o.e).retain(|id, le| *le >= limite || proposes.contains(id) || estimation);
+        let pris = pris_de(&mut o.e).clone();
         if pris.len() != avant {
             o.fermer();
         }
@@ -896,11 +914,17 @@ fn prendre_travaux(donnees: &Path, client: &Client, base: &str, secret: &str, tr
             continue;
         }
         let (r, chemin) = match lire_envoi(t) {
-            Ok(x) => x,
+            Ok((r, chemin)) => (Recu { estimation, ..r }, chemin),
             Err(champ) => {
                 // Sans `id` lisible, l'ERP ne peut rien rattacher : on le dit au journal seulement.
                 match id {
-                    Some(id) => noter_refus(donnees, id, t["ref_erp"].as_str(), REFUS_ENVOI_INVALIDE, Some(&champ)),
+                    Some(id) => {
+                        if estimation && let Some(mut o) = ouvrir(donnees) {
+                            o.e.estimations.insert(id, maintenant());
+                            o.fermer();
+                        }
+                        refuser(id, t["ref_erp"].as_str(), if estimation { ESTIMATION_INVALIDE } else { REFUS_ENVOI_INVALIDE }, Some(&champ));
+                    }
                     None => eprintln!("pont ERP : travail sans id lisible, ignoré"),
                 }
                 continue;
@@ -910,14 +934,18 @@ fn prendre_travaux(donnees: &Path, client: &Client, base: &str, secret: &str, tr
         match telecharger(donnees, client, base, secret, &r, &chemin) {
             Ok(()) => {
                 if let Some(mut o) = ouvrir(donnees) {
-                    o.e.envois.insert(r.id, maintenant());
+                    pris_de(&mut o.e).insert(r.id, maintenant());
                     o.fermer();
                 }
                 RECUS.notify_one();
             }
             Err(Echec::Refus(code, detail)) => {
                 oublier_recu(donnees, r.id);
-                noter_refus(donnees, r.id, Some(&r.ref_erp), code, Some(&detail));
+                if estimation && let Some(mut o) = ouvrir(donnees) {
+                    o.e.estimations.insert(r.id, maintenant());
+                    o.fermer();
+                }
+                refuser(r.id, Some(&r.ref_erp), code, Some(&detail));
             }
             Err(Echec::PlusTard(e)) => {
                 eprintln!("pont ERP : envoi {} non téléchargé, repris au prochain cycle : {e}", r.id);
@@ -1122,7 +1150,8 @@ pub fn cycle(donnees: &Path, client: &Client, premier: &mut bool) -> Fin {
         o.fermer();
     }
     // Les travaux, à la seule instance accusée par l'ERP (il n'en propose qu'à elle).
-    prendre_travaux(donnees, client, &base, &secret, &r.corps["travaux"]);
+    prendre_travaux(donnees, client, &base, &secret, &r.corps["travaux"], false);
+    prendre_travaux(donnees, client, &base, &secret, &r.corps["estimations"], true);
     ranger(donnees, &r.corps["actions"], &ACTIONS);
     ranger(donnees, &r.corps["estimations"], &ESTIMATIONS);
 
@@ -1510,7 +1539,7 @@ mod tests {
         let recus = recus(&d);
         assert_eq!(recus.len(), 1, "seul l'envoi lisible et servi est reçu");
         let (r, fichier) = &recus[0];
-        assert_eq!(r, &Recu { id: bon, ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies: 2, echeance: Some(1793600000), sha256: Some(empreinte) });
+        assert_eq!(r, &Recu { id: bon, ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies: 2, echeance: Some(1793600000), sha256: Some(empreinte), estimation: false });
         assert_eq!(std::fs::read(fichier).unwrap(), b"%PDF-1.4 essai");
         // Les refus partent dans le même cycle, journalisés avant l'envoi des lots.
         assert_eq!(refus_recus(&f), [(json!(mauvais), json!("envoi_invalide")), (json!(absent), json!("telechargement_impossible")), (json!(abime), json!("empreinte_fausse"))]);
@@ -1613,6 +1642,34 @@ mod tests {
         let reponse = f.lock().unwrap().recus.iter().find(|x| x.donnees["estimation_id"] == json!(bonne)).unwrap().donnees.clone();
         assert_eq!(reponse, json!({ "estimation_id": bonne, "ref_erp": "PROD-2026-00123", "code": null, "copies": 3, "ml": 12.5 }));
         assert_eq!(etat(&d).estimations.len(), 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn un_fichier_a_estimer_est_telecharge_a_part_une_seule_fois() {
+        let (f, d) = accuse_un_lot("devis").await;
+        let (bon, abime, preset) = (Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        {
+            let mut e = f.lock().unwrap();
+            e.fichiers.insert(bon.to_string(), b"%PDF-1.4 devis".to_vec());
+            e.fichiers.insert(abime.to_string(), b"%PDF-1.4 abime".to_vec());
+            let mut faux = travail_erp(abime, "PROD-2026-00124", preset, 1);
+            faux["fichier"]["sha256"] = json!(erp::hex(&Sha256::digest(b"autre chose")));
+            e.estimations = vec![travail_erp(bon, "PROD-2026-00123", preset, 4), faux, json!({ "id": Uuid::new_v4(), "ref_erp": "PROD-2026-00125" })];
+        }
+        tourner(&d, false).await;
+        let recus = recus(&d);
+        assert_eq!(recus.len(), 1);
+        assert!(recus[0].0.estimation && recus[0].0.id == bon && recus[0].0.copies == 4, "reçu comme fichier à estimer");
+        assert_eq!(estimations(&d).len(), 1, "seule la demande sans fichier est rangée pour le dossier");
+        let reponses: Vec<(Value, Value)> = f.lock().unwrap().recus.iter().filter(|x| x.genre == "travail.estimation").map(|x| (x.donnees["estimation_id"].clone(), x.donnees["code"].clone())).collect();
+        assert_eq!(reponses, [(json!(abime), json!("empreinte_fausse"))]);
+        assert!(refus_recus(&f).is_empty(), "jamais un travail.refuse pour un devis");
+        let s = etat(&d);
+        assert!(s.estimations.contains_key(&bon) && s.estimations.contains_key(&abime) && s.envois.is_empty());
+        // Reproposé : ni retéléchargé, ni répondu deux fois.
+        tourner(&d, false).await;
+        assert_eq!(f.lock().unwrap().telechargements, 2);
+        assert_eq!(f.lock().unwrap().recus.iter().filter(|x| x.genre == "travail.estimation").count(), 1);
     }
 
     #[test]

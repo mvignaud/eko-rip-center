@@ -20,6 +20,8 @@ parité ; d'ici là, 0.Y.Z.
   demande de l'ERP, le RIP répond par `travail.estimation` avec les chiffres de la fiche des
   travaux rendus du dossier, copies comprises (surface, encre par plaque, durée), et la
   longueur de rouleau de toutes les copies imbriquées sur la laize chargée. Aucun montant.
+  Pour un devis, l'ERP peut aussi envoyer un fichier à estimer : le RIP le rend à part (ni
+  liste ni file), l'estime de la même façon, puis l'efface.
 - **Actions de l'ERP sur la file** (pont, lot R3.2 ; feuille de route 7.7) : l'ERP peut
   suspendre, reprendre, annuler, passer en tête ou changer l'échéance d'un dossier
   (`ref_erp`). Le RIP l'applique aux sorties encore en attente ou suspendues de ses travaux,
@@ -67,7 +69,7 @@ parité ; d'ici là, 0.Y.Z.
   (« Attend le BAT ») jusqu'à **Reprendre**.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. ERP bridge: jobs sent by the ERP (signed download, SHA-256 checked) ERP actions on the queue (hold, resume, cancel, priority, due date) and order estimates (area, ink per plate, duration, nested roll length; no amounts).*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. ERP bridge: jobs sent by the ERP (signed download, SHA-256 checked) ERP actions on the queue (hold, resume, cancel, priority, due date) and estimates of an order or of a file before sending (area, ink per plate, duration, nested roll length; no amounts).*
 
 ## [0.26.0] — 2026-10-25
 
