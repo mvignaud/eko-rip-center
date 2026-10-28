@@ -16,6 +16,11 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Réception des travaux de l'ERP** (pont, lot R3 ; feuille de route 7.3) : le RIP télécharge
+  les fichiers que l'ERP lui envoie (signés, SHA-256 vérifié), en fait des travaux au réglage
+  enregistré désigné, avec la référence du dossier, les copies et l'échéance dans la fiche,
+  et l'accuse à l'ERP ; un envoi impossible part en `travail.refuse` avec son code. Un envoi
+  reproposé ne fait jamais deux travaux.
 - **Dépôt APT des postes Linux** sur `https://apt.e-ko.fr/rip/` : installation par
   `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`, puis mises à jour par
   `sudo apt update && sudo apt upgrade`. Publication : `outils/publier-depot.sh`.

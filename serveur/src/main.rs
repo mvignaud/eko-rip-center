@@ -150,6 +150,9 @@ struct Travail {
     /// remplace.
     #[serde(default)]
     imbrication: Option<Imbriquee>,
+    /// Envoyé par l'ERP (lot R3) : l'envoi et le dossier, repris dans chaque événement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    erp: Option<pont::Lien>,
 }
 
 /// Fiche travail (roadmap 5.6) : ce que l'atelier sait de la commande. Champs vides : non
@@ -396,6 +399,7 @@ async fn main() {
     tokio::spawn(purger(etat.clone()));
     tokio::spawn(relever(etat.clone()));
     tokio::spawn(pont::boucle(etat.config.donnees.clone()));
+    tokio::spawn(prendre_envois(etat.clone()));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -475,7 +479,7 @@ fn dossier(donnees: &std::path::Path, id: Uuid) -> PathBuf {
 /// Écrit `job.json` ; un changement d'état part vers l'ERP (`travail.etat`, pont actif).
 fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
     etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)?;
-    pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le);
+    pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le, t.erp.as_ref());
     Ok(())
 }
 
@@ -907,7 +911,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("fond_reperes_invalide", None)).await;
     }
     d.fond_reperes = fond.0.then_some(reperage::FondReperes { cmjn: fond.3.filter(|_| fond.2), ..fond.1 });
-    match creer_travail_avec(&etat, id, nom, format, d, fiche, None).await {
+    match creer_travail_avec(&etat, id, nom, format, d, fiche, Origine::Aucune).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
     }
@@ -917,13 +921,26 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
 /// mosaïque, `job.json`, puis traitement en tâche de fond. Commun à l'écran, aux planches
 /// et aux dossiers surveillés. En cas de refus, le dossier reste à effacer par l'appelant.
 async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande) -> Result<Travail, (StatusCode, Refus)> {
-    creer_travail_avec(etat, id, nom, format, d, Fiche::default(), None).await
+    creer_travail_avec(etat, id, nom, format, d, Fiche::default(), Origine::Aucune).await
 }
 
-/// `creer_travail` avec sa fiche (roadmap 5.6) et, pour une planche de la file, ce qu'elle
-/// imbrique et les couches de découpe reprises des travaux posés.
-async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, planche: Option<(Imbriquee, Vec<decoupe::Couche>)>) -> Result<Travail, (StatusCode, Refus)> {
-    let (imbrication, couches_decoupe) = planche.map_or((None, vec![]), |(i, c)| (Some(i), c));
+/// D'où vient un travail, quand ce n'est pas d'un simple envoi.
+enum Origine {
+    Aucune,
+    /// Planche de la file : ce qu'elle imbrique, et les couches de découpe reprises des
+    /// travaux posés.
+    Planche(Imbriquee, Vec<decoupe::Couche>),
+    /// Envoi de l'ERP (lot R3).
+    Erp(pont::Lien),
+}
+
+/// `creer_travail` avec sa fiche (roadmap 5.6) et son origine.
+async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine) -> Result<Travail, (StatusCode, Refus)> {
+    let (imbrication, couches_decoupe, erp) = match origine {
+        Origine::Aucune => (None, vec![], None),
+        Origine::Planche(i, c) => (Some(i), c, None),
+        Origine::Erp(l) => (None, vec![], Some(l)),
+    };
     let rep = dossier(&etat.config.donnees, id);
     let mauvais = |code: &'static str, detail: Option<String>| (StatusCode::BAD_REQUEST, (code, detail));
     let interne = |e: String| (StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e)));
@@ -1037,6 +1054,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         fiche,
         pages_exclues: vec![],
         imbrication,
+        erp,
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     tokio::spawn(traiter(etat.clone(), travail.clone()));
@@ -1046,7 +1064,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         let ecrit = std::fs::create_dir_all(&rep_page).and_then(|()| std::fs::write(rep_page.join("source.tmp"), &pdf));
         let d = Demande { page_par_travail: false, ..travail.demande.clone() };
         let r = match ecrit {
-            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), None)).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
+            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), travail.erp.clone().map_or(Origine::Aucune, Origine::Erp))).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
             Err(e) => Err(e.to_string()),
         };
         if let Err(e) = r {
@@ -2749,6 +2767,62 @@ async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande) -
     }
 }
 
+/// Envois de l'ERP téléchargés par le pont (lot R3) → travaux, avec le réglage enregistré
+/// désigné. Le travail prend l'uuid de l'envoi : après une coupure, un envoi déjà devenu
+/// travail n'en refait pas un second. Un refus part à l'ERP (`travail.refuse`).
+async fn prendre_envois(etat: Partage) {
+    loop {
+        pont::attendre_recus(Duration::from_secs(30)).await;
+        prendre_envois_recus(&etat).await;
+    }
+}
+
+async fn prendre_envois_recus(etat: &Partage) {
+    let donnees = etat.config.donnees.clone();
+    for (r, fichier) in pont::recus(&donnees) {
+        let rep = dossier(&donnees, r.id);
+        if rep.join("job.json").exists() {
+            pont::oublier_recu(&donnees, r.id);
+            continue;
+        }
+        let refus = |code: &str, detail: Option<String>| {
+            pont::noter_refus(&donnees, r.id, Some(&r.ref_erp), code, detail.as_deref());
+            pont::oublier_recu(&donnees, r.id);
+        };
+        let Some(reglage) = reglages::lire(&donnees).into_iter().find(|x| x.uuid == Some(r.prereglage_uuid)) else {
+            refus(pont::REFUS_REGLAGE_INCONNU, Some(r.prereglage_uuid.to_string()));
+            continue;
+        };
+        let mut debut = vec![0u8; EN_TETE];
+        let lu = std::fs::File::open(&fichier).and_then(|mut f| std::io::Read::read(&mut f, &mut debut));
+        let format = match lu.map(|n| reconnaitre(&debut[..n])) {
+            Ok(Ok(f)) => f,
+            Ok(Err((code, detail))) => {
+                refus(code, detail);
+                continue;
+            }
+            Err(e) => {
+                refus(pont::REFUS_FICHIER_ILLISIBLE, Some(e.to_string()));
+                continue;
+            }
+        };
+        let deplace = std::fs::create_dir_all(&rep).and_then(|()| std::fs::rename(&fichier, rep.join("source.tmp")));
+        if let Err(e) = deplace {
+            eprintln!("envoi de l'ERP {} : non pris, repris plus tard : {e}", r.id);
+            continue;
+        }
+        let fiche = Fiche { commande: r.ref_erp.clone(), quantite: r.copies, echeance: r.echeance, ..Default::default() };
+        let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone() };
+        match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, Origine::Erp(lien)).await {
+            Ok(_) => pont::oublier_recu(&donnees, r.id),
+            Err((_, (code, detail))) => {
+                let _ = std::fs::remove_dir_all(&rep);
+                refus(code, detail);
+            }
+        }
+    }
+}
+
 async fn lister_profils(State(etat): State<Partage>) -> Json<Vec<couleur::Profil>> {
     Json(couleur::lister(&etat.config.profils))
 }
@@ -4004,7 +4078,7 @@ async fn lancer_imbrication(etat: &Partage, m: &machines::Machine, g: Groupe) ->
     }
     let nom = format!("Imbrication {} — {} page(s)", m.nom, plan.retenus.len());
     let imbriquee = Imbriquee { machine: m.id.clone(), sorties: prises.iter().map(|(i, _)| *i).collect() };
-    match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Some((imbriquee, couches_planche(&g, plan)))).await {
+    match creer_travail_avec(etat, id, nom, Format::Pdf, demande_planche(&g), fiche_planche(&g, plan), Origine::Planche(imbriquee, couches_planche(&g, plan))).await {
         Ok(t) => Ok(t),
         Err(r) => {
             let _ = tokio::fs::remove_dir_all(&rep).await;
@@ -4630,6 +4704,7 @@ mod tests {
             fiche: Default::default(),
             pages_exclues: vec![],
             imbrication: None,
+            erp: None,
         };
         let travaux = [t(31, Statut::Termine), t(29, Statut::Termine), t(40, Statut::EnCours), t(45, Statut::Echec)];
         let ids = a_purger(&travaux, 100 * jour, 30);
@@ -5529,6 +5604,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5594,6 +5670,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5668,6 +5745,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -5718,6 +5796,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5839,6 +5918,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5901,6 +5981,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -5942,6 +6023,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(&donnees, t.id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -7168,6 +7250,7 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
+                erp: None,
             };
             let rep = dossier(d, t.id);
             std::fs::create_dir_all(rep.join("prod")).unwrap();
@@ -8167,6 +8250,76 @@ mod tests {
             assert_eq!(appel(&e, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(e.machines.read().unwrap()[0].imbrication.longueur_cible_mm, Some(2000.0));
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+    }
+
+    /// Lot R3 : un envoi de l'ERP téléchargé par le pont devient un travail de même uuid, au
+    /// réglage désigné ; sinon il part en `travail.refuse`.
+    mod envois_erp {
+        use super::controle_d_acces::etat;
+        use super::regression_geometrie::{PageEssai, pdf_pages};
+        use super::*;
+        use serde_json::{Value, json};
+
+        fn deposer(e: &Partage, r: &pont::Recu, octets: &[u8]) {
+            let rep = e.config.donnees.join("pont").join("recus").join(r.id.to_string());
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join("source"), octets).unwrap();
+            std::fs::write(rep.join("envoi.json"), serde_json::to_vec(r).unwrap()).unwrap();
+        }
+
+        fn journal(e: &Partage) -> Vec<erp::Evenement> {
+            std::fs::read_to_string(e.config.donnees.join("pont").join("journal.jsonl")).unwrap_or_default().lines().map(|l| serde_json::from_str(l).unwrap()).collect()
+        }
+
+        async fn attendre_le_rendu(e: &Partage, id: Uuid) {
+            for _ in 0..600 {
+                if lire_travail(&e.config.donnees, id).is_some_and(|t| !actif(&t.statut)) {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+
+        #[tokio::test]
+        async fn un_envoi_devient_un_travail_de_meme_uuid_ou_un_refus() {
+            let e = etat("envois-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let preset = Uuid::new_v4();
+            reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, ..Default::default() } }]).unwrap();
+            let pdf = pdf_pages(&[PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 }]);
+            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None };
+            let (bon, sans_reglage, illisible) = (recu(3), pont::Recu { prereglage_uuid: Uuid::new_v4(), ..recu(1) }, recu(1));
+            deposer(&e, &bon, &pdf);
+            deposer(&e, &sans_reglage, &pdf);
+            deposer(&e, &illisible, b"ni PDF ni image");
+            prendre_envois_recus(&e).await;
+
+            let t = lire_travail(&d, bon.id).expect("travail créé sous l'uuid de l'envoi");
+            assert_eq!(t.erp, Some(pont::Lien { envoi: bon.id, ref_erp: "PROD-2026-00123".into() }));
+            assert_eq!((t.fiche.commande.as_str(), t.fiche.quantite, t.fiche.echeance, t.nom.as_str(), t.demande.dpi), ("PROD-2026-00123", 3, Some(1793600000), "bache.pdf", 36));
+            assert!(pont::recus(&d).is_empty(), "tout est pris ou refusé");
+            assert!(lire_travail(&d, sans_reglage.id).is_none() && lire_travail(&d, illisible.id).is_none());
+            assert!(!dossier(&d, illisible.id).exists(), "un refus ne laisse pas de dossier de travail");
+
+            let j = journal(&e);
+            let accuse = j.iter().find(|x| x.genre == "travail.etat" && x.donnees["travail_uuid"] == json!(bon.id)).expect("travail.etat du travail");
+            assert_eq!((accuse.donnees["envoi_id"].clone(), accuse.donnees["ref_erp"].clone()), (json!(bon.id), json!("PROD-2026-00123")));
+            let refus: Vec<(Value, Value)> = j.iter().filter(|x| x.genre == "travail.refuse").map(|x| (x.donnees["envoi_id"].clone(), x.donnees["code"].clone())).collect();
+            assert_eq!(refus.len(), 2, "{refus:?}");
+            assert!(refus.contains(&(json!(sans_reglage.id), json!("reglage_inconnu"))), "{refus:?}");
+            assert!(refus.iter().any(|(id, code)| *id == json!(illisible.id) && code.is_string()), "{refus:?}");
+
+            // Coupure entre la création et le ménage : le dossier de réception revient, aucun
+            // second travail n'est créé.
+            attendre_le_rendu(&e, bon.id).await;
+            deposer(&e, &bon, &pdf);
+            prendre_envois_recus(&e).await;
+            assert!(pont::recus(&d).is_empty());
+            assert_eq!(lire_tous(&d).iter().filter(|x| x.erp.is_some()).count(), 1);
+            assert_eq!(journal(&e).iter().filter(|x| x.genre == "travail.refuse").count(), 2);
+            std::fs::remove_dir_all(&d).unwrap();
         }
     }
 }

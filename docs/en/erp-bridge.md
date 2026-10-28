@@ -1,4 +1,4 @@
-# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 and R2)
+# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1, R2 and R3)
 
 What an ERP can rely on from E-KO RIP Center. Lot R1 lays the foundations: identifiers,
 machine-to-machine access, event signature, state model; lot R2 (§ 6) the channel: log,
@@ -168,8 +168,9 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   everything after it. Any other error (401, 403, 404, 422, 429, 5xx, network) is shown in
   System with its code; the RIP retries after 60 s, then every 5 min. It never skips a
   refused event.
-- `travaux`, `annulations`, `estimations`: read, ignored until their shape is set (lots R3
-  to R5); the server log says so ("non prises en charge").
+- `travaux`: jobs sent by the ERP (lot R3, § 7).
+- `annulations`, `estimations`: read, ignored until their shape is set (lots R4, R5); the
+  server log says so ("non prises en charge").
 
 ### 6.4 Instances
 
@@ -200,6 +201,12 @@ identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uu
 { "travail_uuid": "…", "ref_erp": null, "etat": "termine", "code_erreur": null, "pages": 2 }
 ```
 
+A job created from an ERP send (§ 7) also carries `envoi_id`, and its reference:
+
+```json
+{ "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
+```
+
 `sortie.etat` — on each output state change:
 
 ```json
@@ -223,7 +230,8 @@ identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uu
   measured, `estime` from the dots laid by the direct driver, `null`: none).
 - `encre_ml` is the real ink split at the end time (splitting a drop among several prints
   may refine it later in the RIP reports).
-- `ref_erp` is `null` until jobs are received from the ERP (lot R3).
+- `ref_erp`: the order reference for a job sent by the ERP (§ 7), copied into its outputs
+  and consumption; `null` for a job created in the RIP.
 
 `machine.etat` (roadmap 7.9) — state read from a printer (SNMP, every minute), published only
 when it changes (the time alone does not count):
@@ -242,3 +250,25 @@ when it changes (the time alone does not count):
 - `alertes`: the machine's texts, as is, blocking or not.
 - `bac_encre_usagee_pourcent`: `null` until it is read on the Epson.
 - No on-demand send yet: the ERP keeps the last `machine.etat` received.
+
+## 7. Jobs sent by the ERP (lot R3)
+
+Shape of a `travaux` item: § 11 of the ERP-side contract (`docs/onyx/pont-erp-cote-erp.md` in
+eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`, `echeance`,
+`fichier { chemin, nom, taille, sha256 }`.
+
+- **Download**: on each `en-attente`, every send never taken is downloaded with
+  `GET <base><fichier.chemin>`, signed like `en-attente`, at most 5 per cycle and 4 GB. The
+  file is checked against `sha256` when the ERP gives it, then kept in
+  `<data>/pont/recus/<id>/` until it becomes a job.
+- **Creation**: the job takes the send's uuid, the saved setting named by
+  `prereglage_uuid`, and its job sheet: order = `ref_erp`, quantity = `copies`, due date. A
+  server stopped between creation and clean-up does not create a second job.
+- **Acknowledgement**: the job's first `travail.etat` carries `envoi_id` (§ 6.5).
+- **Refusal**: `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes:
+  `envoi_invalide` (malformed item; `detail` names the field), `telechargement_impossible`
+  (404), `empreinte_fausse`, `reglage_inconnu`, and job-creation refusals (`format_inconnu`,
+  `pdf_illisible`, `polices_manquantes`…).
+- **Duplicates**: a send taken or refused is never taken again, even if offered again; it is
+  forgotten 30 days after the ERP stops offering it. An outage (network, 5xx, disk) is not a
+  refusal: the send is retried on the next cycle.

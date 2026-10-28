@@ -101,7 +101,7 @@ pub fn assurer_instance(donnees: &Path) {
     }
 }
 
-fn hex(o: &[u8]) -> String {
+pub(crate) fn hex(o: &[u8]) -> String {
     o.iter().map(|b| format!("{b:02x}")).collect()
 }
 

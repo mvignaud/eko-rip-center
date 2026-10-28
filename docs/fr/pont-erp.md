@@ -1,4 +1,4 @@
-# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 et R2)
+# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1, R2 et R3)
 
 Ce document fixe ce qu'un ERP peut attendre d'E-KO RIP Center. Le lot R1 pose les
 fondations : identifiants, accès machine à machine, signature des événements, modèle
@@ -197,8 +197,9 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
   ce qui suit. Toute autre erreur (401, 403, 404, 422, 429, 5xx, réseau) est affichée dans
   Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
   jamais un événement refusé.
-- `travaux`, `annulations`, `estimations` : lus, ignorés tant que leur forme n'est pas fixée
-  (lots R3 à R5) ; le journal du serveur le dit (« non prises en charge »).
+- `travaux` : les travaux envoyés par l'ERP (lot R3, § 7).
+- `annulations`, `estimations` : lus, ignorés tant que leur forme n'est pas fixée (lots R4,
+  R5) ; le journal du serveur le dit (« non prises en charge »).
 
 ### 6.4 Instances
 
@@ -232,6 +233,12 @@ l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_deco
 { "travail_uuid": "…", "ref_erp": null, "etat": "termine", "code_erreur": null, "pages": 2 }
 ```
 
+Un travail né d'un envoi de l'ERP (§ 7) porte en plus `envoi_id`, et sa référence :
+
+```json
+{ "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
+```
+
 `sortie.etat` — à chaque changement d'état d'une sortie :
 
 ```json
@@ -255,7 +262,8 @@ l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_deco
   `estime` par les points posés du pilote direct, `null` : aucune).
 - `encre_ml` est l'encre réelle répartie au moment de la fin (la répartition d'une baisse
   entre plusieurs impressions peut s'affiner ensuite dans les rapports du RIP).
-- `ref_erp` vaut `null` jusqu'à la réception des travaux de l'ERP (lot R3).
+- `ref_erp` : la référence du dossier pour un travail envoyé par l'ERP (§ 7), recopiée dans
+  ses sorties et ses consommations ; `null` pour un travail créé au RIP.
 
 `machine.etat` (roadmap 7.9) — état relevé d'une imprimante (SNMP, toutes les minutes), publié
 seulement quand il change (l'heure seule ne compte pas) :
@@ -274,3 +282,25 @@ seulement quand il change (l'heure seule ne compte pas) :
 - `alertes` : textes de la machine, tels quels, bloquants ou non.
 - `bac_encre_usagee_pourcent` : `null` tant qu'il n'est pas lu sur l'Epson.
 - Aucun envoi à la demande pour l'instant : l'ERP garde le dernier `machine.etat` reçu.
+
+## 7. Travaux envoyés par l'ERP (lot R3)
+
+Forme d'un élément de `travaux` : § 11 du contrat côté ERP (`docs/onyx/pont-erp-cote-erp.md`
+d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
+`echeance`, `fichier { chemin, nom, taille, sha256 }`.
+
+- **Téléchargement** : à chaque `en-attente`, chaque envoi jamais pris est téléchargé par
+  `GET <base><fichier.chemin>`, signé comme `en-attente`, 5 par cycle au plus, 4 Go au plus.
+  Le fichier est vérifié par son `sha256` quand l'ERP le donne, puis gardé dans
+  `<données>/pont/recus/<id>/` jusqu'à devenir un travail.
+- **Création** : le travail prend l'uuid de l'envoi, le réglage enregistré désigné par
+  `prereglage_uuid`, et sa fiche : commande = `ref_erp`, quantité = `copies`, échéance. Un
+  serveur coupé entre la création et le ménage ne refait pas de second travail.
+- **Accusé** : le premier `travail.etat` du travail porte `envoi_id` (§ 6.5).
+- **Refus** : `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes :
+  `envoi_invalide` (élément mal formé ; `detail` nomme le champ), `telechargement_impossible`
+  (404), `empreinte_fausse`, `reglage_inconnu`, et les refus de création d'un travail
+  (`format_inconnu`, `pdf_illisible`, `polices_manquantes`…).
+- **Doublons** : un envoi pris ou refusé n'est jamais repris, même reproposé ; il est
+  oublié 30 jours après que l'ERP a cessé de le proposer. Une panne (réseau, 5xx, disque)
+  n'est pas un refus : l'envoi est repris au cycle suivant.
