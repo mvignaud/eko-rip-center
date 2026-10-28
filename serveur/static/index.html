@@ -152,6 +152,8 @@
   .bandeau-machines { margin-bottom: 14px; }
   .bandeau-machines tr[aria-current=true] { background: var(--accent-doux); }
   .bandeau-machines .encres { display: flex; gap: 3px; }
+  .compteurs-file { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 6px 10px 8px; }
+  .compteurs-file .jauge { flex: 0 1 160px; margin-top: 0; }
   .bandeau-machines .jauge-encre { height: 22px; width: 8px; }
   .bandeau-machines .encre span { display: none; }
   .zone-file { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; align-items: start; }
@@ -547,7 +549,7 @@ const textes = {
     col_nom: "Nom", col_etat: "État", col_format: "Format (mm)", col_pages: "Pages", col_support: "Support", col_prix: "Prix de revient", col_date: "Date",
     laize_mm: (l) => `laize ${l} mm`, imprimer_sur: (n) => `Imprimer sur ${n}`, sans_bat: "Sans BAT", bat_sur: (n) => `BAT sur ${n}`, note_bat_sur: "Épreuve : une copie « -BAT » part sur cette machine ; l'impression demandée attend, suspendue. La reprendre (« Reprendre ») une fois le BAT accepté.", bat_en_file: "BAT en file ; l'original attend, suspendu.", attend_bat: (m, e) => `Attend le BAT (${m} : ${e})`, decouper_sur: (n) => `Découper sur ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} en file sur ${m}.`,
-    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", afficher_seulement: (n) => `N'afficher que ${n}`, voir_machine: "État de la machine", configurer_machine: "Configurer (Système)", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
+    nav_travaux: "Travaux", nav_file: "File d'attente", nav_systeme: "Système", nav_production: "Production", afficher_seulement: (n) => `N'afficher que ${n}`, voir_machine: "État de la machine", configurer_machine: "Configurer (Système)", onglets: { travail: "Travail", machine: "Machine", reglages: "Réglages", journal: "Journal" }, note_onglet_reglages: "Déposer un fichier sur un réglage l'importe avec ce réglage ; un clic ouvre l'import avec lui.", journal_ecran_vide: "Rien pour l'instant.", aucune_machine: "Aucune machine.", a_imprimer: "À imprimer", afficher_pour: "Afficher", toutes_machines: "Toutes les machines", imprimes: (n) => `Imprimés (${n})`, col_machine: "Machine", col_duree: "Durée", col_fin: "Fin", col_releve: "Relevé", prete: "Prête", injoignable: "Injoignable", file_vide: "File vide", en_file: (n) => `${n} en file`, col_support_charge: "Support chargé", col_encres: "Encres", col_file: "File", col_tampon: "Tampon", tampon_file: (p) => `Tampon de la file : ${p}`, disque_occupe: (pc, libre) => `Disque : ${pc} % occupé (${libre} libres)`, rien_a_imprimer: "Rien à imprimer.", aucun_imprime: "Aucune sortie terminée.", non_envoye: "Non envoyé", nouveau_travail: "Nouveau travail",
     deposer_ici: "Déposer un fichier ici", fichier: "PDF, AI ou SVG — ou cliquer pour choisir", resolution: "Résolution", mode: "Mode",
     imprimer: "Imprimer (et découper)", decouper: "Découper seulement",
     traces: "Tracés à découper", tons: "Tons de découpe (CutContour…)", tous: "Tous les tracés", apercu_decoupe: "Découpe",
@@ -839,7 +841,7 @@ const textes = {
     col_nom: "Name", col_etat: "State", col_format: "Size (mm)", col_pages: "Pages", col_support: "Media", col_prix: "Cost price", col_date: "Date",
     laize_mm: (l) => `roll width ${l} mm`, imprimer_sur: (n) => `Print on ${n}`, sans_bat: "No proof", bat_sur: (n) => `Proof on ${n}`, note_bat_sur: "Proof: a \"-BAT\" copy goes to this machine; the requested print waits, on hold. Resume it (\"Resume\") once the proof is approved.", bat_en_file: "Proof queued; the original waits, on hold.", attend_bat: (m, e) => `Waiting for the proof (${m}: ${e})`, decouper_sur: (n) => `Cut on ${n}`,
     mis_en_file_n: (n, m) => `${n} page${n > 1 ? "s" : ""} queued on ${m}.`,
-    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", afficher_seulement: (n) => `Show only ${n}`, voir_machine: "Machine state", configurer_machine: "Configure (System)", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
+    nav_travaux: "Jobs", nav_file: "Queue", nav_systeme: "System", nav_production: "Production", afficher_seulement: (n) => `Show only ${n}`, voir_machine: "Machine state", configurer_machine: "Configure (System)", onglets: { travail: "Job", machine: "Machine", reglages: "Settings", journal: "Log" }, note_onglet_reglages: "Drop a file on a setting to import it with that setting; a click opens the import with it.", journal_ecran_vide: "Nothing yet.", aucune_machine: "No machine.", a_imprimer: "To print", afficher_pour: "Show", toutes_machines: "All machines", imprimes: (n) => `Printed (${n})`, col_machine: "Machine", col_duree: "Time", col_fin: "Finished", col_releve: "Reading", prete: "Ready", injoignable: "Unreachable", file_vide: "Queue empty", en_file: (n) => `${n} queued`, col_support_charge: "Loaded media", col_encres: "Inks", col_file: "Queue", col_tampon: "Spool", tampon_file: (p) => `Queue spool: ${p}`, disque_occupe: (pc, libre) => `Disk: ${pc}% used (${libre} free)`, rien_a_imprimer: "Nothing to print.", aucun_imprime: "No finished output.", non_envoye: "Not sent", nouveau_travail: "New job",
     deposer_ici: "Drop a file here", fichier: "PDF, AI or SVG — or click to choose", resolution: "Resolution", mode: "Mode",
     imprimer: "Print (and cut)", decouper: "Cut only",
     traces: "Paths to cut", tons: "Cut spot colours (CutContour…)", tous: "All paths", apercu_decoupe: "Cut",
@@ -1493,6 +1495,8 @@ function formulairePont() {
 }
 
 let infoSysteme = null;
+/** Poids lisible : en Mo sous le Go. */
+const octets = (o) => (o < 1e9 ? `${Math.max(o / 1e6, o ? 0.1 : 0).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${langue === "fr" ? "Mo" : "MB"}` : go(o));
 const go = (o) => `${(o / 1e9).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${langue === "fr" ? "Go" : "GB"}`;
 let reglagesDecoupe = null, tonsDirects = null, tonsInconnus = null;
 async function chargerSysteme() {
@@ -1509,6 +1513,7 @@ function afficherSysteme() {
     const jauge = el("div", { className: basse ? "jauge basse" : "jauge" }, el("div", { style: `width: ${Math.round((1 - part) * 100)}%` }));
     dl.append(el("dt", {}, T().disque), el("dd", { className: basse ? "erreur" : "" }, T().libre_sur(go(s.disque_libre), go(s.disque_total)), jauge));
   }
+  dl.append(el("dt", {}, T().col_tampon), el("dd", {}, octets(s.tampon || 0)));
   if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => a.dossier ? T().dossier_absent(a.fichier, a.reprise) : T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
   $("systeme").replaceChildren(...[dl, formulaireDecoupe(), formulaireTons()].filter(Boolean));
   afficherPont(true);
@@ -2883,6 +2888,10 @@ function glisserLes(pt) {
 let travaux = [], sorties = [], imbrications = [];
 /** Vue Production : machine affichée (vide = toutes) et sortie choisie dans les tableaux. */
 let filtreMachine = "", sortieChoisie = null;
+/** Compteurs de file (roadmap 9.6) : poids du tampon et disque, relus avec la file. */
+let compteursFile = null;
+/** Part du disque des données occupée, en % entier ; `null` si inconnue. */
+const partOccupee = (c) => (c?.disque_total ? Math.round((1 - c.disque_libre / c.disque_total) * 100) : null);
 $("recherche").addEventListener("input", () => afficherTravaux());
 $("filtre-machine").addEventListener("change", () => { filtreMachine = $("filtre-machine").value; afficherTravaux(); });
 const saisieDansListe = () => $("inspecteur").contains(document.activeElement) && document.activeElement.tagName === "INPUT";
@@ -2891,8 +2900,9 @@ async function rafraichir() {
   const lire = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   // Planches en préparation (roadmap 5.4) : lues seulement pour la file, s'il y a lieu.
   const avecNid = vueCourante() === "travaux" && catalogue.some((m) => (m.imbrication?.strategie || "un_par_un") !== "un_par_un");
-  const [t, s, n] = await Promise.all([lire("/api/travaux"), lire("/api/file"), avecNid ? lire("/api/imbrications") : Promise.resolve([])]);
+  const [t, s, n, c] = await Promise.all([lire("/api/travaux"), lire("/api/file"), avecNid ? lire("/api/imbrications") : Promise.resolve([]), vueCourante() === "travaux" ? lire("/api/systeme") : Promise.resolve(null)]);
   if (t) travaux = t;
+  if (c) compteursFile = c;
   if (n) imbrications = n;
   if (s) { signalerFins(sorties, s); sorties = s; }
   const aPasser = sorties.filter((x) => ["en_attente", "en_cours", "suspendue"].includes(x.etat)).length;
@@ -2900,7 +2910,7 @@ async function rafraichir() {
   afficherLateral();
   // Reconstruire seulement si quelque chose a changé : un clic en cours ne doit pas tomber
   // sur un bouton remplacé entre l'appui et le relâchement.
-  const empreinte = JSON.stringify([t, s, n, vueCourante()]);
+  const empreinte = JSON.stringify([t, s, n, vueCourante(), c && [c.tampon, partOccupee(c)]]);
   if (empreinte === derniereEmpreinte) return;
   derniereEmpreinte = empreinte;
   afficherVue();
@@ -3181,6 +3191,7 @@ function afficherBandeau() {
     const actives = sorties.filter((s) => (s.machine === m.id || (m.pool && s.machine === m.pool)) && aPasser(s));
     const enCours = actives.find((s) => s.etat === "en_cours");
     const reste = actives.reduce((a, s) => a + (s.duree_min || 0), 0);
+    const poids = actives.reduce((a, s) => a + (s.poids || 0), 0);
     const epson = m.id === "epson";
     const injoignable = epson && erreurMedia && erreurMedia.code !== "media_non_configure";
     const etat = enCours ? `${T().etats.en_cours} · ${enCours.nom}` : injoignable ? T().injoignable : actives.length ? T().en_file(actives.length) : T().prete;
@@ -3189,15 +3200,26 @@ function afficherBandeau() {
     const encres = e?.encres?.length ? el("div", { className: "encres" }, ...e.encres.map(([nom, pc]) =>
       el("div", { className: "encre", title: `${nom} ${pc} %` }, el("div", { className: "jauge-encre" }, el("div", { className: pc <= 15 ? "niveau-encre bas" : "niveau-encre", style: `height: ${pc}%` })), el("span", {}, nom)))) : "—";
     const ligne = el("tr", {}, el("td", {}, el("div", { className: "nom" }, m.nom)), el("td", { className: injoignable ? "erreur" : "" }, etat), el("td", {}, charge), el("td", {}, encres),
-      el("td", { className: "num" }, String(actives.length)), el("td", { className: "num" }, reste > 0 ? duree(reste) : "—"));
+      el("td", { className: "num" }, String(actives.length)), el("td", { className: "num" }, poids > 0 ? octets(poids) : "—"), el("td", { className: "num" }, reste > 0 ? duree(reste) : "—"));
     ligne.setAttribute("aria-current", String(filtreMachine === m.id));
     ligne.addEventListener("click", () => { filtreMachine = filtreMachine === m.id ? "" : m.id; afficherTravaux(); });
     ligne.addEventListener("contextmenu", (e) => menuMachine(e, m));
     return ligne;
   });
   $("bandeau-machines").replaceChildren(el("table", { className: "tableau" },
-    el("thead", {}, el("tr", {}, ...[T().col_machine, T().col_etat, T().col_support_charge, T().col_encres, T().col_file, T().col_duree].map((x, k) => el("th", { className: k >= 4 ? "num" : "" }, x)))),
-    el("tbody", {}, ...lignes)));
+    el("thead", {}, el("tr", {}, ...[T().col_machine, T().col_etat, T().col_support_charge, T().col_encres, T().col_file, T().col_tampon, T().col_duree].map((x, k) => el("th", { className: k >= 4 ? "num" : "" }, x)))),
+    el("tbody", {}, ...lignes)), ligneCompteurs());
+}
+
+/** Sous le bandeau : tampon de toute la file et occupation du disque des données ; en rouge
+ *  quand le libre passe sous le seuil de purge, ou sous 10 % sans seuil. */
+function ligneCompteurs() {
+  const c = compteursFile, part = partOccupee(c);
+  if (!c) return null;
+  const bas = part !== null && (c.seuil_libre ? c.disque_libre < c.seuil_libre : part > 90);
+  const disque = part === null ? [] : [el("span", { className: bas ? "erreur" : "" }, T().disque_occupe(part, octets(c.disque_libre))),
+    el("div", { className: bas ? "jauge basse" : "jauge" }, el("div", { style: `width: ${part}%` }))];
+  return el("div", { id: "compteurs-file", className: "meta compteurs-file" }, el("span", {}, T().tampon_file(octets(c.tampon || 0))), ...disque);
 }
 
 /** Panneau d'inspection : le travail choisi dans le tableau, en détail. */
