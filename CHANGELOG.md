@@ -15,6 +15,8 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.28.0] — 2026-10-28
+
 ### Ajouté
 - **Canal alpha → plaque blanc ou vernis** (feuille de route 9.12) : réglage « Canal alpha »
   de la section Blanc ; le détourage d'un PNG ou d'un TIFF donne une plaque `White` ou
