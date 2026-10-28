@@ -150,6 +150,12 @@ causes: protected or damaged PDF, `EKO_RIP_DELAI_S` exceeded on a very large fil
 disk (System). Missing fonts and low-resolution images are flagged on upload by the
 preflight.
 
+**Very large formats.** A page whose rendering would exceed 3 GB (for instance a 1.6 × 3 m
+banner at 720 dpi) is rendered in horizontal bands, then its plates are joined back: it
+takes longer, but there is nothing to set. A joined plate over 3.5 GB is written as
+BigTIFF. Plan the space: a plate weighs up to width × height in dots, close to 4 GB per
+ink for that banner, before compression.
+
 **File too large.** Above `EKO_RIP_MAX_MO` (8192 MB by default). Raise it in
 `/etc/default/eko-rip-serveur`, then restart.
 

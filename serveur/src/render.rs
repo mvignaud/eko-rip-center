@@ -43,7 +43,7 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
         tokio::fs::create_dir_all(d).await.map_err(|e| e.to_string())?;
     }
 
-    ghostscript(gs, pdf, "tiffsep", dpi, options, &prod.join("plaque-%03d.tif"), delai).await?;
+    rendre_prod(gs, pdf, &prod, dpi, options, delai, Limites::DEFAUT).await?;
     ghostscript(gs, pdf, "tiffsep", DPI_APERCU, options, &apercu.join("plaque-%03d.tif"), delai).await?;
 
     let mut pages = plaques_par_page(&prod)?;
@@ -100,6 +100,237 @@ pub async fn rendre(gs: &str, pdf: &Path, dossier: &Path, dpi: u32, options: &[S
         }
     }
     Ok(Rendu { pages, tons_fondus: recettes.into_keys().collect() })
+}
+
+/// Seuils du rendu par bandes (roadmap 9.16), en octets non compressés.
+#[derive(Clone, Copy)]
+struct Limites {
+    /// Composite CMJN de `tiffsep` (4 octets par point) au-delà duquel une page est rendue
+    /// par bandes : Ghostscript l'écrit en TIFF classique, qui ne dépasse pas 4 Go
+    /// (`UseBigTIFF` ignoré par ce périphérique, mesuré le 25/10 sur gs 10.08).
+    composite: u64,
+    /// Composite d'une bande.
+    bande: u64,
+    /// Plaque recollée au-delà de laquelle elle est écrite en BigTIFF.
+    tiff_classique: u64,
+}
+
+impl Limites {
+    const DEFAUT: Limites = Limites { composite: 3 << 30, bande: 1 << 30, tiff_classique: 3_584 << 20 };
+}
+
+/// Plaques de production (`prod/plaque-NNN(encre).tif`). Une page dont le composite
+/// dépasserait la limite est rendue par bandes horizontales (une MediaBox par bande, sur la
+/// grille de points de la page entière), puis ses plaques sont recollées bande par bande ;
+/// les autres pages se rendent d'un trait, une à une.
+async fn rendre_prod(gs: &str, pdf: &Path, prod: &Path, dpi: u32, options: &[String], delai: Duration, l: Limites) -> Result<(), String> {
+    let source = pdf.to_path_buf();
+    let boites = tokio::task::spawn_blocking(move || boites_pages(&source)).await.map_err(|e| e.to_string())??;
+    let points = |pt: f64| (pt * dpi as f64 / 72.0).round().max(1.0) as u64;
+    let grande = |b: &[f64; 4]| points(b[2] - b[0]) * points(b[3] - b[1]) * 4 > l.composite;
+    if !boites.iter().any(grande) {
+        return ghostscript(gs, pdf, "tiffsep", dpi, options, &prod.join("plaque-%03d.tif"), delai).await;
+    }
+    for (i, b) in boites.iter().enumerate() {
+        let n = i + 1;
+        let tmp = prod.join(format!("bandes-{n:03}"));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
+        let resultat = if grande(b) {
+            rendre_par_bandes(gs, pdf, n, *b, prod, &tmp, dpi, options, delai, l).await
+        } else {
+            let page = [format!("-dFirstPage={n}"), format!("-dLastPage={n}")];
+            let opts: Vec<String> = options.iter().cloned().chain(page).collect();
+            match ghostscript(gs, pdf, "tiffsep", dpi, &opts, &tmp.join("plaque-%03d.tif"), delai).await {
+                Ok(()) => renommer_page(&tmp, prod, n),
+                Err(e) => Err(e),
+            }
+        };
+        let _ = std::fs::remove_dir_all(&tmp);
+        resultat?;
+    }
+    Ok(())
+}
+
+/// MediaBox de chaque page (déjà normalisée : ni CropBox ni /Rotate, voir
+/// `imbrication::normaliser_pages`).
+fn boites_pages(pdf: &Path) -> Result<Vec<[f64; 4]>, String> {
+    let doc = lopdf::Document::load(pdf).map_err(|e| format!("PDF illisible : {e}"))?;
+    doc.get_pages()
+        .into_iter()
+        .map(|(n, id)| {
+            let mut d = doc.get_dictionary(id).map_err(|e| e.to_string())?;
+            let boite = loop {
+                if let Ok(b) = d.get(b"MediaBox") {
+                    break doc.dereference(b).map_err(|e| e.to_string())?.1.as_array().map_err(|e| e.to_string())?.clone();
+                }
+                let parent = d.get(b"Parent").and_then(lopdf::Object::as_reference).map_err(|_| format!("page {n} sans MediaBox"))?;
+                d = doc.get_dictionary(parent).map_err(|e| e.to_string())?;
+            };
+            let v: Vec<f64> = boite.iter().filter_map(|o| o.as_float().map(f64::from).ok().or(o.as_i64().ok().map(|i| i as f64))).collect();
+            match v[..] {
+                [a, b, c, d] => Ok([a.min(c), b.min(d), a.max(c), b.max(d)]),
+                _ => Err(format!("page {n} : MediaBox illisible")),
+            }
+        })
+        .collect()
+}
+
+/// `tmp/plaque-001(…).tif` → `prod/plaque-NNN(…).tif`.
+fn renommer_page(tmp: &Path, prod: &Path, n: usize) -> Result<(), String> {
+    for e in std::fs::read_dir(tmp).map_err(|e| e.to_string())?.flatten() {
+        let Ok(f) = e.file_name().into_string() else { continue };
+        if let Some(reste) = f.strip_prefix("plaque-001") {
+            std::fs::rename(e.path(), prod.join(format!("{}{reste}", prefixe(n)))).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+/// Page `n` rendue par bandes de `l.bande` au plus, comptées depuis le bas sur la grille de
+/// la page entière (la dernière, en haut, prend le reste) : chaque bande tombe sur des
+/// lignes entières de points et le recollage est exact.
+#[allow(clippy::too_many_arguments)]
+async fn rendre_par_bandes(gs: &str, pdf: &Path, n: usize, b: [f64; 4], prod: &Path, tmp: &Path, dpi: u32, options: &[String], delai: Duration, l: Limites) -> Result<(), String> {
+    let pt = 72.0 / dpi as f64;
+    let largeur = (((b[2] - b[0]) / pt).round() as u64).max(1);
+    let hauteur = (((b[3] - b[1]) / pt).round() as u64).max(1);
+    let lignes = (l.bande / (largeur * 4)).max(1);
+    let source = pdf.to_path_buf();
+    let page = tokio::task::spawn_blocking(move || std::fs::read(&source).map_err(|e| e.to_string()).and_then(|o| crate::imbrication::pages_separees(&o)))
+        .await
+        .map_err(|e| e.to_string())??
+        .into_iter()
+        .nth(n - 1)
+        .ok_or(format!("pas de page {n}"))?;
+    // (dossier, lignes) de chaque bande, du haut vers le bas de l'image.
+    let mut bandes = vec![];
+    let mut bas = 0;
+    while bas < hauteur {
+        let haut = (bas + lignes).min(hauteur);
+        let y_haut = if haut == hauteur { b[3] } else { b[1] + haut as f64 * pt };
+        let boite = [b[0], b[1] + bas as f64 * pt, b[2], y_haut];
+        let dossier = tmp.join(format!("{bas:09}"));
+        std::fs::create_dir_all(&dossier).map_err(|e| e.to_string())?;
+        let chemin = dossier.join("bande.pdf");
+        let p = page.clone();
+        let c = chemin.clone();
+        tokio::task::spawn_blocking(move || pdf_bande(&p, boite, &c)).await.map_err(|e| e.to_string())??;
+        ghostscript(gs, &chemin, "tiffsep", dpi, options, &dossier.join("plaque-%03d.tif"), delai).await?;
+        let _ = std::fs::remove_file(&chemin);
+        // Composite de la bande : inutile au recollage.
+        let _ = std::fs::remove_file(dossier.join("plaque-001.tif"));
+        bandes.push((dossier, (haut - bas) as u32));
+        bas = haut;
+    }
+    bandes.reverse();
+    let mut noms: Vec<String> = vec![];
+    for (d, _) in &bandes {
+        noms.extend(plaques_par_page(d).unwrap_or_default().into_iter().flatten());
+    }
+    noms.sort();
+    noms.dedup();
+    if noms.is_empty() {
+        return Err("Ghostscript n'a produit aucune plaque".into());
+    }
+    let (prod, bandes) = (prod.to_path_buf(), std::sync::Arc::new(bandes));
+    for nom in noms {
+        let (sortie, bandes) = (prod.join(format!("{}({nom}).tif", prefixe(n))), bandes.clone());
+        let grosse = largeur * hauteur > l.tiff_classique;
+        tokio::task::spawn_blocking(move || recoller(&bandes, &nom, largeur as u32, hauteur as u32, dpi, grosse, &sortie)).await.map_err(|e| e.to_string())??;
+    }
+    Ok(())
+}
+
+/// PDF d'une page dont la MediaBox est réduite à `boite`.
+fn pdf_bande(page: &[u8], boite: [f64; 4], sortie: &Path) -> Result<(), String> {
+    let mut doc = lopdf::Document::load_mem(page).map_err(|e| e.to_string())?;
+    let id = *doc.get_pages().get(&1).ok_or("page absente")?;
+    let d = doc.get_dictionary_mut(id).map_err(|e| e.to_string())?;
+    d.set("MediaBox", boite.iter().map(|&v| lopdf::Object::Real(v as f32)).collect::<Vec<_>>());
+    for cle in [&b"CropBox"[..], b"BleedBox", b"TrimBox", b"ArtBox"] {
+        d.remove(cle);
+    }
+    doc.save(sortie).map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// Plaque `nom` recollée depuis les bandes (du haut vers le bas), écrite par morceaux
+/// compressés en LZW, comme celles de Ghostscript : la page entière n'est jamais en
+/// mémoire. Une bande sans cette plaque n'a pas d'encre (255).
+fn recoller(bandes: &[(PathBuf, u32)], nom: &str, largeur: u32, hauteur: u32, dpi: u32, grosse: bool, sortie: &Path) -> Result<(), String> {
+    let f = std::io::BufWriter::new(std::fs::File::create(sortie).map_err(|e| e.to_string())?);
+    let r = if grosse {
+        ecrire_plaque(tiff::encoder::TiffEncoder::new_big(f).map_err(|e| e.to_string())?, bandes, nom, largeur, hauteur, dpi, true)
+    } else {
+        ecrire_plaque(tiff::encoder::TiffEncoder::new(f).map_err(|e| e.to_string())?, bandes, nom, largeur, hauteur, dpi, false)
+    };
+    r.map_err(|e| format!("plaque {nom} : {e}"))
+}
+
+/// Écrit les morceaux puis l'en-tête de l'image à la main : `ImageEncoder::write_strip` de
+/// `tiff` 0.11 annonce la compression sans l'appliquer.
+fn ecrire_plaque<K: tiff::encoder::TiffKind>(mut enc: tiff::encoder::TiffEncoder<std::io::BufWriter<std::fs::File>, K>, bandes: &[(PathBuf, u32)], nom: &str, largeur: u32, hauteur: u32, dpi: u32, grosse: bool) -> Result<(), String> {
+    use tiff::tags::Tag;
+    let err = |e: tiff::TiffError| e.to_string();
+    let mut dir = enc.image_directory().map_err(err)?;
+    // Morceaux d'environ 1 Mo.
+    let par_morceau = ((1 << 20) / largeur.max(1)).clamp(1, hauteur);
+    let morceau = par_morceau as usize * largeur as usize;
+    let (mut positions, mut longueurs): (Vec<u64>, Vec<u64>) = (vec![], vec![]);
+    let mut ecrire = |dir: &mut tiff::encoder::DirectoryEncoder<'_, _, K>, brut: &[u8]| -> Result<(), String> {
+        let lzw = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8).encode(brut).map_err(|e| e.to_string())?;
+        positions.push(dir.write_data(&lzw[..]).map_err(err)?);
+        longueurs.push(lzw.len() as u64);
+        Ok(())
+    };
+    let mut tampon: Vec<u8> = Vec::with_capacity(morceau);
+    for (dossier, lignes) in bandes {
+        let attendu = *lignes as usize * largeur as usize;
+        let chemin = dossier.join(format!("{}({nom}).tif", prefixe(1)));
+        let octets = if chemin.exists() {
+            let f = std::io::BufReader::new(std::fs::File::open(&chemin).map_err(|e| e.to_string())?);
+            let mut d = tiff::decoder::Decoder::new(f).map_err(err)?.with_limits(tiff::decoder::Limits::unlimited());
+            match d.read_image().map_err(err)? {
+                tiff::decoder::DecodingResult::U8(v) if v.len() == attendu => v,
+                _ => return Err(format!("bande {} de taille inattendue", chemin.display())),
+            }
+        } else {
+            vec![255; attendu]
+        };
+        let mut reste = &octets[..];
+        while !reste.is_empty() {
+            let pris = (morceau - tampon.len()).min(reste.len());
+            tampon.extend_from_slice(&reste[..pris]);
+            reste = &reste[pris..];
+            if tampon.len() == morceau {
+                ecrire(&mut dir, &tampon)?;
+                tampon.clear();
+            }
+        }
+    }
+    if !tampon.is_empty() {
+        ecrire(&mut dir, &tampon)?;
+    }
+    dir.write_tag(Tag::ImageWidth, largeur).map_err(err)?;
+    dir.write_tag(Tag::ImageLength, hauteur).map_err(err)?;
+    dir.write_tag(Tag::BitsPerSample, 8u16).map_err(err)?;
+    dir.write_tag(Tag::Compression, 5u16).map_err(err)?;
+    dir.write_tag(Tag::PhotometricInterpretation, 1u16).map_err(err)?;
+    dir.write_tag(Tag::SamplesPerPixel, 1u16).map_err(err)?;
+    dir.write_tag(Tag::RowsPerStrip, par_morceau).map_err(err)?;
+    if grosse {
+        dir.write_tag(Tag::StripOffsets, &positions[..]).map_err(err)?;
+        dir.write_tag(Tag::StripByteCounts, &longueurs[..]).map_err(err)?;
+    } else {
+        let court = |v: &[u64]| v.iter().map(|&x| u32::try_from(x).map_err(|_| "TIFF classique dépassé".to_string())).collect::<Result<Vec<u32>, _>>();
+        dir.write_tag(Tag::StripOffsets, &court(&positions)?[..]).map_err(err)?;
+        dir.write_tag(Tag::StripByteCounts, &court(&longueurs)?[..]).map_err(err)?;
+    }
+    let r = tiff::encoder::Rational { n: dpi, d: 1 };
+    dir.write_tag(Tag::XResolution, r.clone()).map_err(err)?;
+    dir.write_tag(Tag::YResolution, r).map_err(err)?;
+    dir.write_tag(Tag::ResolutionUnit, 2u16).map_err(err)?;
+    dir.finish().map_err(err)
 }
 
 pub(crate) async fn ghostscript(gs: &str, pdf: &Path, device: &str, dpi: u32, options: &[String], sortie: &Path, delai: Duration) -> Result<(), String> {
@@ -289,6 +520,113 @@ mod tests {
         assert!(px[0] > 150 && px[2] < 120, "composite rouge : {px:?}");
         assert!(!dossier.join("apercu-lab.pdf").exists());
         std::fs::remove_dir_all(&dossier).unwrap();
+    }
+
+    /// PDF de pages (MediaBox, contenu), avec l'espace `/W` = ton direct `White`.
+    fn pdf_pages(pages: &[([f64; 4], &str)]) -> Vec<u8> {
+        let mut objets = vec!["<< /Type /Catalog /Pages 2 0 R >>".to_string()];
+        let enfants: Vec<String> = (0..pages.len()).map(|i| format!("{} 0 R", 4 + 2 * i)).collect();
+        objets.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", enfants.join(" "), pages.len()));
+        objets.push("[/Separation /White /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 0.1] /N 1 >>]".to_string());
+        for (i, (b, contenu)) in pages.iter().enumerate() {
+            objets.push(format!("<< /Type /Page /Parent 2 0 R /MediaBox [{} {} {} {}] /Contents {} 0 R /Resources << /ColorSpace << /W 3 0 R >> >> >>", b[0], b[1], b[2], b[3], 5 + 2 * i));
+            objets.push(format!("<< /Length {} >>\nstream\n{contenu}endstream", contenu.len()));
+        }
+        let mut pdf = String::from("%PDF-1.4\n");
+        let mut positions = vec![];
+        for (i, o) in objets.iter().enumerate() {
+            positions.push(pdf.len());
+            pdf += &format!("{} 0 obj\n{o}\nendobj\n", i + 1);
+        }
+        let xref = pdf.len();
+        pdf += &format!("xref\n0 {}\n0000000000 65535 f \n", objets.len() + 1);
+        for p in positions {
+            pdf += &format!("{p:010} 00000 n \n");
+        }
+        pdf += &format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objets.len() + 1);
+        pdf.into_bytes()
+    }
+
+    /// Plaques d'une page (nom → pixels), et les dimensions.
+    fn plaques(prod: &Path, page: usize) -> BTreeMap<String, (u32, u32, Vec<u8>)> {
+        plaques_par_page(prod).unwrap()[page - 1]
+            .iter()
+            .map(|n| {
+                let img = image::open(chemin_plaque(prod.parent().unwrap(), page, n)).unwrap().to_luma8();
+                (n.clone(), (img.width(), img.height(), img.into_raw()))
+            })
+            .collect()
+    }
+
+    /// Roadmap 9.16 : une page rendue par bandes (petites ici, seuils abaissés) donne les
+    /// mêmes plaques, point pour point, que d'un trait ; les pages d'à côté gardent leur
+    /// numéro ; un ton direct présent dans une seule bande a sa plaque entière.
+    #[tokio::test]
+    async fn rendu_par_bandes_identique() {
+        let racine = std::env::temp_dir().join(format!("eko-rip-bandes-{}", std::process::id()));
+        // Hauteur non entière en points, diagonales et cercle à cheval sur les bandes, blanc en haut seulement.
+        let grande = "0.3 0.7 0 0.1 k 0 0 m 300 500.6 l 300 0 l f\n0 0 1 0 k 150 250 m 250 250 250 350 150 350 c 50 350 50 250 150 250 c f\n/W cs 1 scn 20 440 260 50 re f\n0 0 0 1 k 0 0 3 500.6 re f\n";
+        let petite = "1 0 0 0 k 10 10 50 50 re f\n";
+        let pdf = racine.join("source.pdf");
+        std::fs::create_dir_all(&racine).unwrap();
+        std::fs::write(&pdf, pdf_pages(&[([0.0, 0.0, 100.0, 100.0], petite), ([0.0, 0.0, 300.0, 500.6], grande), ([0.0, 0.0, 80.0, 60.0], petite)])).unwrap();
+        let rendre_dans = |nom: &str, l: Limites| {
+            let prod = racine.join(nom).join("prod");
+            let pdf = pdf.clone();
+            async move {
+                std::fs::create_dir_all(&prod).unwrap();
+                rendre_prod("gs", &pdf, &prod, 72, &[], Duration::from_secs(60), l).await.unwrap_or_else(|e| panic!("{prod:?} : {e}"));
+                prod
+            }
+        };
+        let entier = rendre_dans("entier", Limites::DEFAUT).await;
+        // Seuil entre les pages 1 et 2 ; bandes de 37 lignes (300 points de large).
+        let limites = Limites { composite: 100 * 100 * 4, bande: 300 * 4 * 37, tiff_classique: u64::MAX };
+        let bandes = rendre_dans("bandes", limites).await;
+        for page in 1..=3 {
+            let (a, b) = (plaques(&entier, page), plaques(&bandes, page));
+            assert_eq!(a.keys().collect::<Vec<_>>(), b.keys().collect::<Vec<_>>(), "page {page}");
+            for (nom, (l, h, px)) in &a {
+                let (l2, h2, px2) = &b[nom];
+                assert_eq!((l, h), (l2, h2), "page {page} {nom}");
+                let ecarts = px.iter().zip(px2).filter(|(x, y)| x != y).count();
+                assert_eq!(ecarts, 0, "page {page} {nom} : {ecarts} points différents");
+            }
+        }
+        assert_eq!(plaques(&bandes, 2)["White"].2.iter().filter(|&&v| v == 0).count(), 260 * 50, "blanc entier");
+        assert!(std::fs::read_dir(&bandes).unwrap().flatten().all(|e| e.file_type().unwrap().is_file()), "dossiers de bandes effacés");
+        // Au-delà du TIFF classique : BigTIFF, lisible pareil.
+        let gros = rendre_dans("bigtiff", Limites { tiff_classique: 0, ..limites }).await;
+        let entete = std::fs::read(chemin_plaque(gros.parent().unwrap(), 2, "Cyan")).unwrap();
+        assert_eq!(&entete[..4], b"II\x2b\x00", "BigTIFF");
+        assert_eq!(plaques(&gros, 2)["Cyan"], plaques(&entier, 2)["Cyan"]);
+        std::fs::remove_dir_all(&racine).unwrap();
+    }
+
+    /// Roadmap 9.16, à la taille réelle : bâche 1,6 × 3 m à 720 dpi (composite ≈ 15 Go).
+    /// Long (plusieurs minutes) et gourmand en disque : `cargo test -- --ignored bache`.
+    #[tokio::test]
+    #[ignore]
+    async fn bache_1600_x_3000_a_720_dpi() {
+        let racine = std::env::temp_dir().join(format!("eko-rip-bache-{}", std::process::id()));
+        let prod = racine.join("prod");
+        std::fs::create_dir_all(&prod).unwrap();
+        let (l, h) = (1600.0 * 72.0 / 25.4, 3000.0 * 72.0 / 25.4);
+        let contenu = format!("0.6 0.2 0 0 k 0 0 {l} {h} re f\n0 1 0 0 k 0 0 m {l} {h} l {l} 0 l f\n/W cs 1 scn 100 {} 500 500 re f\n", h - 600.0);
+        let pdf = racine.join("source.pdf");
+        std::fs::write(&pdf, pdf_pages(&[([0.0, 0.0, l, h], &contenu)])).unwrap();
+        rendre_prod("gs", &pdf, &prod, 720, &[], Duration::from_secs(3600), Limites::DEFAUT).await.unwrap();
+        let (lp, hp) = ((1600.0 / 25.4 * 720.0f64).round() as u32, (3000.0 / 25.4 * 720.0f64).round() as u32);
+        for nom in ["Black", "Cyan", "Magenta", "White", "Yellow"] {
+            let chemin = chemin_plaque(&racine, 1, nom);
+            let taille = std::fs::metadata(&chemin).unwrap().len();
+            let entete = std::fs::read(&chemin).map(|o| o[..4].to_vec()).unwrap();
+            assert!(taille < 4 << 30 || entete == b"II\x2b\x00", "{nom} : {taille} octets en TIFF classique");
+            let d = tiff::decoder::Decoder::new(std::fs::File::open(&chemin).unwrap()).unwrap().dimensions().unwrap();
+            assert_eq!(d, (lp, hp), "{nom}");
+        }
+        assert!(!prod.join("plaque-001.tif").exists(), "pas de composite");
+        std::fs::remove_dir_all(&racine).unwrap();
     }
 
     /// Un profil de sortie convertit les couleurs : le cyan à 20 % ne reste pas tel quel.
