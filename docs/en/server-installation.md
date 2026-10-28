@@ -3,8 +3,61 @@
 The server runs on Linux. Printers and cutters are connected to it; workshop
 computers reach it over the network.
 
-Four ways to install it. Then: [running the server](administration.md) (data,
+First: the [PC requirements](#server-pc-requirements). Four ways to install it. Then: [running the server](administration.md) (data,
 backups, updates, FAQ).
+
+## Server PC requirements
+
+The server receives the files, renders them and talks to the machines: it is the computer
+that must not stop. For each machine, see [help by machine](machines.md).
+
+**System**: Ubuntu 24.04 LTS (or a recent Debian), 64-bit **x86 (amd64)** PC: the packages
+and the image are built for that architecture.
+
+**CPU and memory**: rendering (Ghostscript) is the heaviest part. Suggested starting point:
+4 cores and 16 GB of memory; more for banners of several tens of m² at high resolution.
+These figures are advice, not a measurement: the render time limit (`EKO_RIP_DELAI_S`,
+30 min by default) quickly tells whether the computer is too small. For reference, the
+workshop's test server runs on a Pentium G645T (2 cores, 2012), 16 GB of memory and a
+640 GB spinning disk with no separate partition: it is enough for tests; it is a floor,
+not a target.
+
+**Dedicated SSD for the data**: an SSD reserved for the data folder (`/var/lib/eko-rip`),
+separate from the system disk:
+
+- a render weighs **≈ 1 GB per m² at 600 dpi** (a quarter at 300 dpi, four times more at
+  1,200 dpi): a 1.6 × 10 m banner at 600 dpi is ≈ 16 GB;
+- the server keeps `EKO_RIP_SEUIL_LIBRE_MO` free (5 GB by default): below it, it purges the
+  oldest inactive jobs and refuses a job that would not fit;
+- allow at least **500 GB**, more if jobs are kept long (`EKO_RIP_CONSERVATION_JOURS`);
+  the Production view shows the queue's spool and how full the disk is.
+
+A dedicated disk stops a large render from filling the system, and can be replaced or
+enlarged without reinstalling. Mount it on `/var/lib/eko-rip` (or point `EKO_RIP_DATA` to
+it) before the first start.
+
+**UPS**: plug the server, the switch and, if possible, the router into a UPS. A power cut
+stops the running render (the job fails as "interrupted", to retry) and an output being
+sent (it fails, to redo: a cut does not resume halfway). State files survive the cut
+(previous version kept, see [administration](administration.md#where-the-data-lives)), but
+nothing replaces a clean shutdown: pick a UPS that lasts a few minutes and tells the
+server to shut down (for instance with `nut`).
+
+**Fixed IP addresses**: reserve them on the router (fixed DHCP lease) or set them by hand.
+
+| Device | Why |
+|---|---|
+| RIP server | clients, shared folders (Samba), another RIP forwarding to it and the ERP reach it by its address |
+| Epson | direct driver (port 9100) and SNMP reading (`EKO_RIP_EPSON_SNMP`) |
+| Network cutters (Graphtec, Roland) | host entered in System > Machines |
+| CUPS server, other E-KO RIP | host of the IPP and Forward connections |
+
+**Network**: cable rather than Wi-Fi between the server and the machines. The server
+listens on port **8640** (clients, forwarding), never to be opened to the Internet; it
+reaches the machines (9100, 631 for IPP, SNMP on UDP 161) and, outbound over HTTPS, the
+ERP and the APT repository. Samba (445) only if the hot folders are shared.
+
+**USB ports**: one free port per USB cutter (Kona); the service is in the `dialout` group.
 
 ## 0. Dedicated PC: Ubuntu installation image
 
