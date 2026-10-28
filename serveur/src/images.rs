@@ -53,6 +53,9 @@ pub struct Remarques {
     pub canaux_ignores: usize,
     /// Tons directs repris d'un TIFF, nom de leur plaque, dans l'ordre des canaux.
     pub tons_directs: Vec<String>,
+    /// Plaque tirée du canal alpha (roadmap 9.12), quand le réglage la demande et que
+    /// l'image a un canal alpha.
+    pub plaque_alpha: Option<&'static str>,
     /// Taille de la page produite, en mm.
     pub largeur_mm: f64,
     pub hauteur_mm: f64,
@@ -61,11 +64,14 @@ pub struct Remarques {
 /// Refus : (code, détail).
 pub type Refus = (&'static str, String);
 
-/// Convertit l'image `src` en PDF d'une page dans `dst`.
-pub fn vers_pdf(src: &Path, dst: &Path, g: Genre) -> Result<Remarques, Refus> {
+/// Convertit l'image `src` en PDF d'une page dans `dst`. `plaque_alpha` : nom de la plaque
+/// (blanc ou vernis) qui reprend le canal alpha d'un PNG ou d'un TIFF, posée en
+/// surimpression après les tons directs ; un ton direct du même nom déjà dans le fichier
+/// passe avant (pas de seconde plaque).
+pub fn vers_pdf(src: &Path, dst: &Path, g: Genre, plaque_alpha: Option<&'static str>) -> Result<Remarques, Refus> {
     let r = match g {
-        Genre::Tiff => tiff_vers_pdf(src, dst),
-        Genre::Png => png_vers_pdf(src, dst),
+        Genre::Tiff => tiff_vers_pdf(src, dst, plaque_alpha),
+        Genre::Png => png_vers_pdf(src, dst, plaque_alpha),
         Genre::Jpeg => jpeg_vers_pdf(src, dst),
     };
     if r.is_err() {
@@ -102,14 +108,18 @@ struct Image {
     alpha: bool,
     /// Tons directs posés en surimpression : nom de plaque, couleur d'affichage CMJN (0..=1).
     spots: Vec<TonDirect>,
+    /// Plaque qui reprend le canal alpha tel quel (sans masque), posée en dernier.
+    plaque_alpha: Option<&'static str>,
 }
 
-/// Flux à écrire : l'image couleur, le masque de transparence, ou le ton direct n° k.
+/// Flux à écrire : l'image couleur, le masque de transparence, le ton direct n° k, ou le
+/// canal alpha de la plaque blanc ou vernis.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Flux {
     Couleur,
     Masque,
     Spot(usize),
+    Alpha,
 }
 
 /// Nom PDF : caractères hors ASCII visible et délimiteurs en `#xx`.
@@ -135,7 +145,8 @@ impl Write for Compteur {
 }
 
 /// Écrit le PDF : `flux` écrit l'image couleur, puis le masque de transparence (si
-/// `img.alpha`), puis chaque ton direct. Les longueurs sont connues d'avance.
+/// `img.alpha`), puis chaque ton direct, puis la plaque alpha. Les longueurs sont connues
+/// d'avance.
 fn ecrire_pdf(dst: &Path, img: &Image, mut flux: impl FnMut(&mut dyn Write, Flux) -> Result<(), Refus>) -> Result<(), Refus> {
     let mut f = Compteur { w: BufWriter::new(File::create(dst).map_err(interne)?), n: 0 };
     let (lpt, hpt) = (img.largeur as f64 * 72.0 / img.ppi.0, img.hauteur as f64 * 72.0 / img.ppi.1);
@@ -144,11 +155,16 @@ fn ecrire_pdf(dst: &Path, img: &Image, mut flux: impl FnMut(&mut dyn Write, Flux
     let mut positions: Vec<(usize, u64)> = vec![];
     f.write_all(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n").map_err(interne)?;
     // Tons directs : objets 8, 9…, posés après l'image en surimpression (les autres encres
-    // restent dessous).
-    let spots: String = (0..img.spots.len()).map(|k| format!(" /S{k} Do")).collect();
-    let contenu = if img.spots.is_empty() { format!("q {lpt:.4} 0 0 {hpt:.4} 0 0 cm /Im Do Q") } else { format!("q {lpt:.4} 0 0 {hpt:.4} 0 0 cm /Im Do /Sur gs{spots} Q") };
-    let xobjets: String = (0..img.spots.len()).map(|k| format!(" /S{k} {} 0 R", 8 + k)).collect();
-    let etats = if img.spots.is_empty() { "" } else { " /ExtGState << /Sur << /OP true /op true /OPM 1 >> >>" };
+    // restent dessous) ; la plaque alpha suit, objet 8 + nombre de tons.
+    let n_alpha = 8 + img.spots.len();
+    let mut spots: String = (0..img.spots.len()).map(|k| format!(" /S{k} Do")).collect();
+    let mut xobjets: String = (0..img.spots.len()).map(|k| format!(" /S{k} {} 0 R", 8 + k)).collect();
+    if img.plaque_alpha.is_some() {
+        spots += " /A Do";
+        xobjets += &format!(" /A {n_alpha} 0 R");
+    }
+    let contenu = if spots.is_empty() { format!("q {lpt:.4} 0 0 {hpt:.4} 0 0 cm /Im Do Q") } else { format!("q {lpt:.4} 0 0 {hpt:.4} 0 0 cm /Im Do /Sur gs{spots} Q") };
+    let etats = if spots.is_empty() { "" } else { " /ExtGState << /Sur << /OP true /op true /OPM 1 >> >>" };
     for (n, corps) in [
         (1, "<< /Type /Catalog /Pages 2 0 R >>".to_string()),
         (2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string()),
@@ -203,6 +219,17 @@ fn ecrire_pdf(dst: &Path, img: &Image, mut flux: impl FnMut(&mut dyn Write, Flux
         flux(&mut f, Flux::Spot(k))?;
         if f.n - avant != lb {
             return Err(illisible(format!("canal « {nom} » tronqué")));
+        }
+        f.write_all(b"\nendstream\nendobj\n").map_err(interne)?;
+    }
+    if let Some(nom) = img.plaque_alpha {
+        // Pas de masque : la plaque est l'alpha lui-même (bord adouci compris).
+        positions.push((n_alpha, f.n));
+        write!(f, "{n_alpha} 0 obj\n<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace [/Separation /{} /DeviceCMYK << /FunctionType 2 /Domain [0 1] /C0 [0 0 0 0] /C1 [0 0 0 0.1] /N 1 >>] /BitsPerComponent {} /Length {lb} >>\nstream\n", img.largeur, img.hauteur, nom_pdf(nom), img.bits).map_err(interne)?;
+        let avant = f.n;
+        flux(&mut f, Flux::Alpha)?;
+        if f.n - avant != lb {
+            return Err(illisible("canal alpha tronqué"));
         }
         f.write_all(b"\nendstream\nendobj\n").map_err(interne)?;
     }
@@ -528,7 +555,7 @@ fn lignes_tiff(src: &Path, mut sur_ligne: impl FnMut(&[u8]) -> Result<(), Refus>
     Ok(())
 }
 
-fn tiff_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
+fn tiff_vers_pdf(src: &Path, dst: &Path, plaque_alpha: Option<&'static str>) -> Result<Remarques, Refus> {
     let i = infos_tiff(&mut ouvrir_tiff(src)?)?;
     let ignores = i.extras.iter().filter(|(_, s)| s.is_none()).count();
     let spots: Vec<(usize, TonDirect)> = i.extras.iter().filter_map(|(k, s)| Some((*k, s.clone()?))).collect();
@@ -545,8 +572,11 @@ fn tiff_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
             Ok(())
         })?;
     }
+    // La plaque alpha reprend le canal même partout opaque (image rectangulaire).
+    let alpha_brut = i.alpha;
+    let plaque_alpha = plaque_alpha.filter(|p| alpha_brut.is_some() && !spots.iter().any(|(_, (n, _))| n == p));
     let i = InfosTiff { alpha: i.alpha.filter(|_| !opaque), ..i };
-    let img = Image { largeur: i.largeur, hauteur: i.hauteur, ppi, espace: i.espace, composantes: i.couleur as u32, bits: i.bits, icc: i.icc.clone(), decode: None, dct: None, alpha: i.alpha.is_some(), spots: spots.iter().map(|(_, s)| s.clone()).collect() };
+    let img = Image { largeur: i.largeur, hauteur: i.hauteur, ppi, espace: i.espace, composantes: i.couleur as u32, bits: i.bits, icc: i.icc.clone(), decode: None, dct: None, alpha: i.alpha.is_some(), spots: spots.iter().map(|(_, s)| s.clone()).collect(), plaque_alpha };
     let passe = |w: &mut dyn Write, f: Flux| -> Result<(), Refus> {
         let (mut c, mut a) = (vec![], vec![]);
         lignes_tiff(src, |l| {
@@ -565,17 +595,22 @@ fn tiff_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
                     }
                     w.write_all(&a).map_err(interne)
                 }
+                Flux::Alpha => {
+                    separer(l, i.canaux, 0, alpha_brut, octets, &mut c, &mut a);
+                    w.write_all(&a).map_err(interne)
+                }
             }
         })
     };
     ecrire_pdf(dst, &img, passe)?;
     let mut r = remarques(&img, i.ppi.is_none(), ignores);
+    r.plaque_alpha = img.plaque_alpha;
     r.tons_directs = img.spots.iter().map(|(n, _)| n.clone()).collect();
     Ok(r)
 }
 
 fn remarques(img: &Image, sans_resolution: bool, canaux_ignores: usize) -> Remarques {
-    Remarques { sans_resolution, canaux_ignores, tons_directs: vec![], largeur_mm: img.largeur as f64 * 25.4 / img.ppi.0, hauteur_mm: img.hauteur as f64 * 25.4 / img.ppi.1 }
+    Remarques { sans_resolution, canaux_ignores, tons_directs: vec![], plaque_alpha: None, largeur_mm: img.largeur as f64 * 25.4 / img.ppi.0, hauteur_mm: img.hauteur as f64 * 25.4 / img.ppi.1 }
 }
 
 // --- PNG ---
@@ -587,7 +622,7 @@ fn lecteur_png(src: &Path) -> Result<png::Reader<BufReader<File>>, Refus> {
     d.read_info().map_err(illisible)
 }
 
-fn png_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
+fn png_vers_pdf(src: &Path, dst: &Path, plaque_alpha: Option<&'static str>) -> Result<Remarques, Refus> {
     let r = lecteur_png(src)?;
     let info = r.info();
     if info.interlaced {
@@ -608,7 +643,8 @@ fn png_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
     let octets = bits as usize / 8;
     drop(r);
     // Alpha partout opaque : pas de masque (voir le TIFF).
-    let mut alpha = (canaux > couleur).then_some(couleur);
+    let alpha_brut = (canaux > couleur).then_some(couleur);
+    let mut alpha = alpha_brut;
     if let Some(a) = alpha {
         let mut r = lecteur_png(src)?;
         let mut opaque = true;
@@ -620,19 +656,22 @@ fn png_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
         }
         alpha = alpha.filter(|_| !opaque);
     }
-    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: couleur as u32, bits, icc, decode: None, dct: None, alpha: alpha.is_some(), spots: vec![] };
+    let plaque_alpha = plaque_alpha.filter(|_| alpha_brut.is_some());
+    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: couleur as u32, bits, icc, decode: None, dct: None, alpha: alpha.is_some(), spots: vec![], plaque_alpha };
     let passe = |w: &mut dyn Write, f: Flux| -> Result<(), Refus> {
-        let garder_alpha = f == Flux::Masque;
+        let garder_alpha = matches!(f, Flux::Masque | Flux::Alpha);
         let mut r = lecteur_png(src)?;
         let (mut c, mut a) = (vec![], vec![]);
         while let Some(l) = r.next_row().map_err(illisible)? {
-            separer(l.data(), canaux, couleur, alpha, octets, &mut c, &mut a);
+            separer(l.data(), canaux, couleur, alpha_brut, octets, &mut c, &mut a);
             w.write_all(if garder_alpha { &a } else { &c }).map_err(interne)?;
         }
         Ok(())
     };
     ecrire_pdf(dst, &img, passe)?;
-    Ok(remarques(&img, ppi.is_none(), 0))
+    let mut r = remarques(&img, ppi.is_none(), 0);
+    r.plaque_alpha = img.plaque_alpha;
+    Ok(r)
 }
 
 // --- JPEG ---
@@ -702,7 +741,7 @@ fn jpeg_vers_pdf(src: &Path, dst: &Path) -> Result<Remarques, Refus> {
     };
     // Photoshop écrit le CMJN d'un JPEG inversé (marqueur Adobe) : le PDF le redresse.
     let decode = (n == 4 && adobe).then_some("[1 0 1 0 1 0 1 0]");
-    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: n, bits: 8, icc, decode, dct: Some(taille), alpha: false, spots: vec![] };
+    let img = Image { largeur, hauteur, ppi: ppi.unwrap_or((PPI_PAR_DEFAUT, PPI_PAR_DEFAUT)), espace, composantes: n, bits: 8, icc, decode, dct: Some(taille), alpha: false, spots: vec![], plaque_alpha: None };
     ecrire_pdf(dst, &img, |w, _| {
         f.rewind().map_err(illisible)?;
         std::io::copy(&mut f, w).map(|_| ()).map_err(interne)
@@ -747,7 +786,7 @@ mod tests {
         im.resolution(tiff::tags::ResolutionUnit::Inch, tiff::encoder::Rational { n: 300, d: 1 });
         im.write_data(&[255u8, 0, 0, 0].repeat(600 * 300)).unwrap();
         let pdf = d.join("a.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert_eq!((r.largeur_mm.round(), r.hauteur_mm.round(), r.sans_resolution), (51.0, 25.0, false));
         let t = crate::imbrication::taille_page(&std::fs::read(&pdf).unwrap(), 1).unwrap();
         assert_eq!((t.largeur.round(), t.hauteur.round()), (144.0, 72.0), "2 × 1 pouces");
@@ -765,7 +804,7 @@ mod tests {
         let px: Vec<u16> = (0..20 * 10).flat_map(|i| if i % 20 < 10 { [65535, 0, 0, 65535] } else { [65535, 0, 0, 0] }).collect();
         e.write_image::<tiff::encoder::colortype::RGBA16>(20, 10, &px).unwrap();
         let pdf = d.join("b.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert!(r.sans_resolution, "pas de résolution : 72 ppi supposés");
         assert!(plaques(&pdf, &d, 72, 3, 5)[1] < 60, "rouge opaque : magenta posé");
         assert_eq!(plaques(&pdf, &d, 72, 16, 5), [255, 255, 255, 255], "transparent : rien");
@@ -789,7 +828,7 @@ mod tests {
         im.encoder().write_tag(tiff::tags::Tag::Unknown(34377), &res[..]).unwrap();
         im.write_data(&[255u8, 0, 0, 255].repeat(600 * 300)).unwrap();
         let pdf = d.join("ps.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert_eq!((r.largeur_mm.round(), r.hauteur_mm.round(), r.sans_resolution), (51.0, 25.0, false), "300 ppi de Photoshop");
         let o = std::fs::read(&pdf).unwrap();
         assert!(!o.windows(6).any(|w| w == b"/SMask"), "alpha opaque : pas de masque");
@@ -846,7 +885,7 @@ mod tests {
         let px: Vec<u8> = (0..20 * 10).flat_map(|i| [255, 0, 0, 0, if i % 20 < 10 { 255 } else { 0 }]).collect();
         im.write_data(&px).unwrap();
         let pdf = d.join("s.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert_eq!((r.tons_directs.clone(), r.canaux_ignores), (vec!["White".to_string()], 0));
         assert_eq!(plaques(&pdf, &d, 72, 3, 5), [0, 255, 255, 255], "cyan gardé sous le blanc");
         assert_eq!((plaque(&d, "White", 3, 5), plaque(&d, "White", 16, 5)), (0, 255), "blanc plein à gauche seulement");
@@ -877,7 +916,7 @@ mod tests {
         im.encoder().write_tag(tiff::tags::Tag::Unknown(34377), &res[..]).unwrap();
         im.write_data(&[0u8, 0, 0, 0, 255, 255].repeat(64)).unwrap();
         let pdf = d.join("n.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert_eq!((r.tons_directs.clone(), r.canaux_ignores), (vec!["PANTONE 485 C".to_string()], 1));
         let o = std::fs::read(&pdf).unwrap();
         assert!(o.windows(19).any(|w| w == b"/PANTONE#20485#20C "), "nom PDF échappé");
@@ -901,7 +940,7 @@ mod tests {
         let px: Vec<u8> = (0..20 * 10).flat_map(|i| [255, 255, 255, if i % 20 < 10 { 0 } else { 255 }]).collect();
         im.write_data(&px).unwrap();
         let pdf = d.join("r.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Tiff).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Tiff, None).unwrap();
         assert_eq!(r.tons_directs, ["White"]);
         plaques(&pdf, &d, 72, 3, 5);
         assert_eq!((plaque(&d, "White", 3, 5), plaque(&d, "White", 16, 5)), (0, 255));
@@ -921,10 +960,77 @@ mod tests {
         w.write_image_data(&[0u8, 0, 255, 255].repeat(300 * 150)).unwrap();
         w.finish().unwrap();
         let pdf = d.join("c.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Png).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Png, None).unwrap();
         assert_eq!((r.largeur_mm.round(), r.hauteur_mm.round()), (25.0, 13.0));
         let p = plaques(&pdf, &d, 10, 3, 2);
         assert!(p[0] < 80 && p[2] > 200, "bleu : cyan posé, pas de jaune : {p:?}");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    /// Roadmap 9.12 : PNG détouré (disque opaque sur fond transparent) avec la plaque alpha
+    /// en blanc : la plaque White suit le masque alpha à 1 px près, la couleur reste
+    /// détourée. En vernis : plaque Varnish, pas de White.
+    #[test]
+    fn png_detoure_plaque_blanc_et_vernis() {
+        let d = dossier();
+        let src = d.join("e.png");
+        let (l, h) = (120u32, 80u32);
+        let dedans = |x: u32, y: u32| (x as f64 - 60.0).powi(2) + (y as f64 - 40.0).powi(2) < 30.0f64.powi(2);
+        let mut e = png::Encoder::new(BufWriter::new(File::create(&src).unwrap()), l, h);
+        e.set_color(png::ColorType::Rgba);
+        e.set_depth(png::BitDepth::Eight);
+        let mut w = e.write_header().unwrap();
+        let px: Vec<u8> = (0..l * h).flat_map(|i| [255, 0, 0, if dedans(i % l, i / l) { 255 } else { 0 }]).collect();
+        w.write_image_data(&px).unwrap();
+        w.finish().unwrap();
+        let pdf = d.join("e.pdf");
+        let r = vers_pdf(&src, &pdf, Genre::Png, Some(crate::blanc::PLAQUE)).unwrap();
+        assert_eq!(r.plaque_alpha, Some("White"));
+        plaques(&pdf, &d, 72, 0, 0);
+        let blanc = image::open(d.join("p(White).tif")).unwrap().to_luma8();
+        let magenta = image::open(d.join("p(Magenta).tif")).unwrap().to_luma8();
+        assert_eq!(blanc.dimensions(), (l, h));
+        let pres = |x: u32, y: u32, v: bool| (x.saturating_sub(1)..=(x + 1).min(l - 1)).any(|a| (y.saturating_sub(1)..=(y + 1).min(h - 1)).any(|b| dedans(a, b) == v));
+        let mut ecarts = 0;
+        for y in 0..h {
+            for x in 0..l {
+                let encre = blanc.get_pixel(x, y)[0] < 128;
+                if encre != dedans(x, y) {
+                    ecarts += 1;
+                    assert!(pres(x, y, encre), "({x}, {y}) : plaque blanc à plus de 1 px du masque");
+                }
+            }
+        }
+        assert!(ecarts < 2 * 30 * 7, "{ecarts} pixels de bord");
+        assert_eq!((blanc.get_pixel(60, 40)[0], blanc.get_pixel(3, 3)[0]), (0, 255), "plein au centre, rien hors du disque");
+        assert_eq!((magenta.get_pixel(60, 40)[0] < 60, magenta.get_pixel(3, 3)[0]), (true, 255), "couleur détourée");
+
+        let v = dossier();
+        let pdf = v.join("v.pdf");
+        assert_eq!(vers_pdf(&src, &pdf, Genre::Png, Some(crate::blanc::VERNIS)).unwrap().plaque_alpha, Some("Varnish"));
+        plaques(&pdf, &v, 72, 0, 0);
+        assert_eq!((plaque(&v, "Varnish", 60, 40), plaque(&v, "Varnish", 3, 3)), (0, 255));
+        assert!(!v.join("p(White).tif").exists());
+        std::fs::remove_dir_all(&d).unwrap();
+        std::fs::remove_dir_all(&v).unwrap();
+    }
+
+    /// TIFF RVBA partout opaque : pas de masque (rendu rapide), mais la plaque alpha demandée
+    /// couvre toute l'image ; sans canal alpha (JPEG), rien.
+    #[test]
+    fn plaque_alpha_opaque_et_sans_alpha() {
+        let d = dossier();
+        let src = d.join("o.tif");
+        let mut e = tiff::encoder::TiffEncoder::new(File::create(&src).unwrap()).unwrap();
+        e.write_image::<tiff::encoder::colortype::RGBA8>(20, 10, &[0u8, 0, 255, 255].repeat(200)).unwrap();
+        let pdf = d.join("o.pdf");
+        assert_eq!(vers_pdf(&src, &pdf, Genre::Tiff, Some("White")).unwrap().plaque_alpha, Some("White"));
+        assert!(!std::fs::read(&pdf).unwrap().windows(6).any(|w| w == b"/SMask"));
+        plaques(&pdf, &d, 72, 0, 0);
+        assert_eq!((plaque(&d, "White", 0, 0), plaque(&d, "White", 19, 9)), (0, 0));
+        let jpg = d.join("j.jpg");
+        image::RgbImage::from_pixel(16, 8, image::Rgb([0, 200, 0])).save(&jpg).unwrap();
+        assert_eq!(vers_pdf(&jpg, &d.join("j.pdf"), Genre::Jpeg, Some("White")).unwrap().plaque_alpha, None);
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -942,7 +1048,7 @@ mod tests {
         o[p + 10..p + 12].copy_from_slice(&200u16.to_be_bytes());
         std::fs::write(&src, &o).unwrap();
         let pdf = d.join("d.pdf");
-        let r = vers_pdf(&src, &pdf, Genre::Jpeg).unwrap();
+        let r = vers_pdf(&src, &pdf, Genre::Jpeg, None).unwrap();
         assert_eq!((r.largeur_mm * 10.0).round() / 10.0, 8.1);
         assert!(std::fs::read(&pdf).unwrap().windows(10).any(|w| w == b"/DCTDecode"));
         let p = plaques(&pdf, &d, 72, 10, 5);

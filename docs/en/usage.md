@@ -44,6 +44,14 @@ ignored) gives the white plate. Photoshop selection channels (masks) are not pri
 job lists the plates taken: look at them before the first print, the value direction
 (light channel = no ink) has not yet been checked on a file from the workshop.
 
+**Alpha channel → white or varnish plate**: in the White section of the send panel, the
+“Alpha channel” setting can also turn a cut-out PNG or TIFF's alpha into a `White` plate or
+a `Varnish` (spot varnish) plate that follows the cut-out exactly: opaque = full ink, soft
+edge included, no choke. A fully opaque alpha gives a plate over the whole image. If the
+TIFF already has a spot channel of the same name, that channel wins. An image without an
+alpha channel (JPEG) gets no such plate. Generated white (underlay, flood) is added on top
+if also chosen.
+
 ## Automatic rotation and settings after import
 
 **Turn by itself when wider than the roll** (ticked by default): if the page,

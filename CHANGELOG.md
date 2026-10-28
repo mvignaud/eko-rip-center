@@ -15,6 +15,13 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Canal alpha → plaque blanc ou vernis** (feuille de route 9.12) : réglage « Canal alpha »
+  de la section Blanc ; le détourage d'un PNG ou d'un TIFF donne une plaque `White` ou
+  `Varnish` qui suit le masque alpha, posée en surimpression.
+
+*Added: alpha channel of a PNG/TIFF → White or Varnish plate following the cut-out.*
+
 ## [0.27.0] — 2026-10-28
 
 ### Ajouté
