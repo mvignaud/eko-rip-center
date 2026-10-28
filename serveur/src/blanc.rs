@@ -12,6 +12,8 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
 pub const PLAQUE: &str = "White";
+/// Plaque de vernis sélectif tirée du canal alpha d'une image (roadmap 9.12).
+pub const VERNIS: &str = "Varnish";
 
 #[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +26,27 @@ pub enum Mode {
     Aplat,
 }
 
+/// Plaque tirée du canal alpha d'une image PNG ou TIFF (roadmap 9.12) : elle suit le
+/// détourage, opaque = pleine encre.
+#[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Alpha {
+    #[default]
+    Aucune,
+    Blanc,
+    Vernis,
+}
+
+impl Alpha {
+    pub fn plaque(self) -> Option<&'static str> {
+        match self {
+            Alpha::Aucune => None,
+            Alpha::Blanc => Some(PLAQUE),
+            Alpha::Vernis => Some(VERNIS),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Blanc {
     #[serde(default)]
@@ -34,6 +57,9 @@ pub struct Blanc {
     /// Encre minimale (en %) qui reçoit du blanc dessous.
     #[serde(default = "seuil_defaut")]
     pub seuil: f64,
+    /// Canal alpha d'une image → plaque blanc ou vernis, à la conversion en PDF.
+    #[serde(default)]
+    pub alpha: Alpha,
 }
 
 fn retraction_defaut() -> f64 {
@@ -46,7 +72,7 @@ fn seuil_defaut() -> f64 {
 
 impl Default for Blanc {
     fn default() -> Self {
-        Blanc { mode: Mode::Aucun, retraction_mm: retraction_defaut(), seuil: seuil_defaut() }
+        Blanc { mode: Mode::Aucun, retraction_mm: retraction_defaut(), seuil: seuil_defaut(), alpha: Alpha::Aucune }
     }
 }
 
@@ -415,7 +441,7 @@ mod tests {
             .unwrap();
         assert!(st.success());
         let sources: Vec<PathBuf> = ["Cyan", "Magenta", "Yellow", "Black"].iter().map(|n| d.join(format!("r({n}).tif"))).collect();
-        let b = Blanc { mode: Mode::SousCouche, retraction_mm: 1.0, seuil: 5.0 };
+        let b = Blanc { mode: Mode::SousCouche, retraction_mm: 1.0, seuil: 5.0, ..Default::default() };
         generer_tiff(&sources, None, &d.join("w.tif"), &b, 100.0).unwrap();
         let w = image::open(d.join("w.tif")).unwrap().to_luma8();
         let cyan = image::open(&sources[0]).unwrap().to_luma8();

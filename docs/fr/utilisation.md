@@ -47,6 +47,14 @@ espaces et `_` ignorés) donne la plaque de blanc. Les canaux de sélection de P
 la première impression, le sens des valeurs (canal clair = sans encre) n'a pas encore été
 vérifié sur un fichier de l'atelier.
 
+**Canal alpha → plaque blanc ou vernis** : dans la section Blanc du panneau d'envoi, le
+réglage « Canal alpha » d'un PNG ou d'un TIFF détouré peut aussi donner une plaque `White`
+(blanc) ou `Varnish` (vernis sélectif) qui suit exactement le détourage : opaque = pleine
+encre, bord adouci compris, sans rétraction. Un alpha partout opaque donne une plaque sur
+toute l'image. Si le TIFF a déjà un canal de ton direct du même nom, c'est ce canal qui
+compte. Une image sans canal alpha (JPEG) n'a pas cette plaque. Le blanc généré
+(sous-couche, aplat) s'y ajoute s'il est choisi aussi.
+
 ## Rotation automatique et réglages après l'import
 
 **Tourner seul si le visuel dépasse la laize** (coché par défaut) : si la page, repérage

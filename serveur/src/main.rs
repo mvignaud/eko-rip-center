@@ -860,6 +860,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
+            "blanc_alpha" => serde_json::from_value(serde_json::Value::String(valeur)).map(|a| d.blanc.alpha = a).map_err(|_| erreur("blanc_invalide")),
             "parametre_decoupe" => {
                 d.parametre_decoupe = Some(valeur).filter(|v| !v.is_empty());
                 Ok(())
@@ -989,7 +990,8 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     let (format, remarques_image) = match format.image() {
         Some(g) => {
             let (src, dst) = (rep.join("source.tmp"), rep.join("source-image.pdf"));
-            let r = tokio::task::spawn_blocking(move || images::vers_pdf(&src, &dst, g)).await.map_err(|e| interne(e.to_string()))?;
+            let plaque_alpha = d.blanc.alpha.plaque();
+            let r = tokio::task::spawn_blocking(move || images::vers_pdf(&src, &dst, g, plaque_alpha)).await.map_err(|e| interne(e.to_string()))?;
             let r = r.map_err(|(code, e)| if code == "erreur_interne" { interne(e) } else { mauvais(code, Some(e)) })?;
             tokio::fs::rename(rep.join("source-image.pdf"), rep.join("source.tmp")).await.map_err(|e| interne(e.to_string()))?;
             (Format::Pdf, Some(r))
@@ -1580,7 +1582,7 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
                 format!("Mode: {}", if d.mode == Mode::Imprimer { "print" } else { "cut only" }),
                 format!("Resolution: {} dpi", d.dpi),
                 format!("Media profile: {}", d.couleur.sortie.as_deref().unwrap_or("default")),
-                format!("White: {}", match d.blanc.mode { blanc::Mode::Aucun => "file's own", blanc::Mode::SousCouche => "underlay", blanc::Mode::Aplat => "flood" }),
+                format!("White: {}{}", match d.blanc.mode { blanc::Mode::Aucun => "file's own", blanc::Mode::SousCouche => "underlay", blanc::Mode::Aplat => "flood" }, match d.blanc.alpha { blanc::Alpha::Aucune => "", blanc::Alpha::Blanc => " · alpha → white", blanc::Alpha::Vernis => " · alpha → varnish" }),
                 format!("Scale: {echelle} % · rotation {}° · mirror {}{}", d.edition.rotation, oui_non(d.edition.miroir), if image_seule { " (image only)" } else { "" }),
                 format!("Grommets: {}", oui_non(d.edition.oeillets.is_some())),
                 format!("Cut paths: {traces}"),
@@ -1590,7 +1592,7 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
                 format!("Mode : {}", if d.mode == Mode::Imprimer { "impression" } else { "découpe seule" }),
                 format!("Résolution : {} dpi", d.dpi),
                 format!("Profil du support : {}", d.couleur.sortie.as_deref().unwrap_or("par défaut")),
-                format!("Blanc : {}", match d.blanc.mode { blanc::Mode::Aucun => "celui du fichier", blanc::Mode::SousCouche => "sous-couche", blanc::Mode::Aplat => "aplat" }),
+                format!("Blanc : {}{}", match d.blanc.mode { blanc::Mode::Aucun => "celui du fichier", blanc::Mode::SousCouche => "sous-couche", blanc::Mode::Aplat => "aplat" }, match d.blanc.alpha { blanc::Alpha::Aucune => "", blanc::Alpha::Blanc => " · alpha → blanc", blanc::Alpha::Vernis => " · alpha → vernis" }),
                 format!("Échelle : {echelle} % · rotation {}° · miroir {}{}", d.edition.rotation, oui_non(d.edition.miroir), if image_seule { " (image seule)" } else { "" }),
                 format!("Œillets : {}", oui_non(d.edition.oeillets.is_some())),
                 format!("Tracés de découpe : {traces}"),
@@ -6397,7 +6399,7 @@ mod tests {
         async fn sous_couche_blanche_de_bout_en_bout() {
             let e = etat("blanc");
             let donnees = e.config.donnees.clone();
-            let blanc = blanc::Blanc { mode: blanc::Mode::SousCouche, retraction_mm: 0.0, seuil: 5.0 };
+            let blanc = blanc::Blanc { mode: blanc::Mode::SousCouche, retraction_mm: 0.0, seuil: 5.0, ..Default::default() };
             let t = Travail {
                 id: Uuid::new_v4(),
                 nom: "blanc.pdf".into(),
