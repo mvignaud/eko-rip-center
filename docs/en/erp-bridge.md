@@ -1,4 +1,4 @@
-# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 to R3.2)
+# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 to R4)
 
 What an ERP can rely on from E-KO RIP Center. Lot R1 lays the foundations: identifiers,
 machine-to-machine access, event signature, state model; lot R2 (§ 6) the channel: log,
@@ -171,8 +171,7 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
 - `travaux`: jobs sent by the ERP (lot R3, § 7).
 - `actions`: cancel, hold, resume, priority, due date (lot R3.2, § 8). They replace the old
   `annulations` field, which is no longer applied (reported in the server log if non-empty).
-- `estimations`: read, ignored until its shape is set (lot R4); the server log says so
-  ("non prises en charge").
+- `estimations`: estimates requested by the ERP (lot R4, § 9).
 
 ### 6.4 Instances
 
@@ -301,3 +300,24 @@ Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp
   item; `detail` names the field). `touchees` counts changed outputs, or jobs for `echeance`.
 - **Duplicates**: like sends (§ 7) — an action taken is never taken again, even if offered
   again, and is forgotten 30 days after the ERP stops offering it.
+
+## 9. Estimating an order (lot R4)
+
+Shape of an `estimations` item: § 13 of the ERP-side contract — `{ "id", "ref_erp" }`.
+
+- **Scope**: the rendered jobs born from an ERP send carrying this `ref_erp` (§ 7). A failed
+  job is left out; a job still rendering makes the request wait for the next round (30 s at
+  most). Excluded pages do not count.
+- **Figures**: those of each page's job sheet, multiplied by the job's copies (its quantity,
+  at least one) — area, ink per plate (cut spot colours excluded), duration on the first
+  printer of the catalogue — and the roll length of all copies nested together on that
+  printer's loaded width, with its nesting setting and margins, without a target length.
+- **Reply**: `travail.estimation` — `{ "estimation_id", "ref_erp", "code", "travaux",
+  "pages", "copies", "surface_m2", "encres": [{ "nom", "ml" }], "ml",
+  "duree_impression_min", "machine_uuid", "laize_mm", "longueur_mm", "les" }`.
+  `longueur_mm` is `null` if a page does not fit the width; `duree_impression_min` is `null`
+  without a known speed; `les` counts tiling panels, copies included.
+- **No amounts**: no ink or media cost (decision D8 of the ERP, which sets its own prices).
+- **Codes**: `null`, `aucun_travail` (no rendered job for this order, no figures),
+  `estimation_invalide` (malformed item; `detail` names the field).
+- **Duplicates**: like actions (§ 8).

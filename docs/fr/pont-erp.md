@@ -1,4 +1,4 @@
-# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 à R3.2)
+# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 à R4)
 
 Ce document fixe ce qu'un ERP peut attendre d'E-KO RIP Center. Le lot R1 pose les
 fondations : identifiants, accès machine à machine, signature des événements, modèle
@@ -201,8 +201,7 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
 - `actions` : annuler, suspendre, reprendre, priorité, échéance (lot R3.2, § 8). Elles
   remplacent l'ancien champ `annulations`, qui n'est plus appliqué (signalé au journal du
   serveur s'il arrive non vide).
-- `estimations` : lu, ignoré tant que sa forme n'est pas fixée (lot R4) ; le journal du
-  serveur le dit (« non prises en charge »).
+- `estimations` : les estimations demandées par l'ERP (lot R4, § 9).
 
 ### 6.4 Instances
 
@@ -335,3 +334,25 @@ Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "re
   les travaux pour `echeance`.
 - **Doublons** : comme les envois (§ 7) — une action prise n'est jamais reprise, même
   reproposée, et elle est oubliée 30 jours après que l'ERP a cessé de la proposer.
+
+## 9. Estimation d'un dossier (lot R4)
+
+Forme d'un élément de `estimations` : § 13 du contrat côté ERP — `{ "id", "ref_erp" }`.
+
+- **Portée** : les travaux rendus nés d'un envoi de l'ERP qui portent ce `ref_erp` (§ 7). Un
+  travail en échec est laissé de côté ; un travail encore en rendu fait attendre la demande
+  au tour suivant (30 s au plus). Les pages exclues ne comptent pas.
+- **Chiffres** : ceux de la fiche de chaque page, multipliés par les copies du travail
+  (sa quantité, une au moins) — surface, encre par plaque (tons de découpe exclus), durée
+  sur la première imprimante du catalogue — et la longueur de rouleau de toutes les copies
+  imbriquées ensemble sur la laize chargée de cette imprimante, avec son réglage
+  d'imbrication et ses marges, sans longueur cible.
+- **Réponse** : `travail.estimation` — `{ "estimation_id", "ref_erp", "code", "travaux",
+  "pages", "copies", "surface_m2", "encres": [{ "nom", "ml" }], "ml",
+  "duree_impression_min", "machine_uuid", "laize_mm", "longueur_mm", "les" }`. `longueur_mm`
+  vaut `null` si une page ne tient pas sur la laize ; `duree_impression_min` sans cadence
+  connue ; `les` compte les lés de mosaïque, copies comprises.
+- **Aucun montant** : ni coût d'encre ni de support (décision D8 de l'ERP, qui fait ses prix).
+- **Codes** : `null`, `aucun_travail` (aucun travail rendu pour ce dossier, sans chiffres),
+  `estimation_invalide` (élément mal formé ; `detail` nomme le champ).
+- **Doublons** : comme les actions (§ 8).

@@ -85,7 +85,7 @@ Côté ERP, le chantier démarre après la série comptable (sauf lot A0).
   un travail imprimé ne s'annule pas, il se signale. (n°10, 7.7)
 
 ### R4 — Estimation à la demande
-- [ ] R4.1 Depuis `/api/planches/apercu` (sans création) : longueur, lés, surface, durée
+- [x] (28/10, sur les travaux rendus d'un dossier reçu ; `estimations` / `travail.estimation`) R4.1 Depuis `/api/planches/apercu` (sans création) : longueur, lés, surface, durée
   (`m2_heure`), encre estimée par canal ; mêmes valeurs que la fiche une fois le travail créé. (n°9, 7.6)
 
 ### R5 — Consommation réelle par travail (dépend du pilote Epson, phase 2)

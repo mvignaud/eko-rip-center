@@ -2787,7 +2787,83 @@ async fn prendre_envois(etat: Partage) {
         pont::attendre_recus(Duration::from_secs(30)).await;
         prendre_envois_recus(&etat).await;
         appliquer_actions_erp(&etat);
+        estimer_pour_l_erp(&etat);
     }
+}
+
+/// Estimations demandées par l'ERP (lot R4, feuille de route 7.6), chacune sur les travaux
+/// rendus d'un dossier (`ref_erp`). Un dossier dont un travail est encore en rendu attend le
+/// tour suivant ; sans travail rendu : `aucun_travail`.
+fn estimer_pour_l_erp(etat: &Etat) {
+    let donnees = &etat.config.donnees;
+    for e in pont::estimations(donnees) {
+        let travaux: Vec<Travail> = lire_tous(donnees).into_iter().filter(|t| t.erp.as_ref().is_some_and(|l| l.ref_erp == e.ref_erp)).collect();
+        if travaux.iter().any(|t| matches!(t.statut, Statut::EnAttente | Statut::EnCours)) {
+            continue;
+        }
+        let rendus: Vec<&Travail> = travaux.iter().filter(|t| matches!(t.statut, Statut::Termine)).collect();
+        if rendus.is_empty() {
+            pont::noter_estimation(donnees, &e, Some(pont::ESTIMATION_SANS_TRAVAIL), serde_json::json!({}));
+            continue;
+        }
+        pont::noter_estimation(donnees, &e, None, chiffres_estimation(etat, &rendus));
+    }
+}
+
+/// Les chiffres d'une estimation : ceux de la fiche de chaque page (surface, encre par
+/// plaque, durée sur la première imprimante, comme `lister`), multipliés par les copies du
+/// travail, pages exclues à part ; et la longueur de rouleau de toutes les copies imbriquées
+/// ensemble sur la laize chargée de cette imprimante, marges de la planche comprises (`null`
+/// si une page ne tient pas sur la laize). Aucun montant : l'ERP fait ses prix (décision D8).
+fn chiffres_estimation(etat: &Etat, travaux: &[&Travail]) -> serde_json::Value {
+    let donnees = &etat.config.donnees;
+    let tarifs = couverture::lire(donnees);
+    let imprimante = etat.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).cloned();
+    let laize = imprimante.as_ref().map(|m| supports::lire_charges(donnees).get(&m.id).and_then(|c| c.laize_mm).map_or(m.laize_mm, |l| l.min(m.laize_mm)));
+    let (mut pages, mut copies, mut surface, mut les) = (0usize, 0usize, 0.0, 0usize);
+    let mut encres: std::collections::BTreeMap<String, f64> = Default::default();
+    let mut duree = Some(0.0);
+    let mut candidats = vec![];
+    for t in travaux {
+        let n = t.fiche.copies();
+        let pdf = (t.format == Format::Pdf).then(|| std::fs::read(dossier(donnees, t.id).join(Format::Pdf.fichier())).ok()).flatten();
+        for (i, p) in t.pages.iter().enumerate().filter(|(i, _)| !t.pages_exclues.contains(&(i + 1))) {
+            pages += 1;
+            copies += n;
+            surface += p.surface_m2 * n as f64;
+            for l in couverture::estimer(p.surface_m2, p.hauteur_mm, &p.couverture, &p.plaques_decoupe, &tarifs, t.demande.support.as_deref()).encres {
+                *encres.entry(l.nom).or_default() += l.ml * n as f64;
+            }
+            if t.demande.mode == Mode::Imprimer {
+                duree = duree.zip(imprimante.as_ref().and_then(|m| m.duree_impression_min(p.hauteur_mm, t.demande.dpi))).map(|(d, m)| d + m * n as f64);
+            }
+            les += if p.tuile.is_some() { n } else { 0 };
+            if let Some(taille) = pdf.as_ref().and_then(|pdf| imbrication::taille_page(pdf, i + 1).ok()) {
+                candidats.push(nid::Candidat { taille, copies: n, le: p.tuile.as_ref().map(|x| x.numero), echeance: t.fiche.echeance, arrivee: t.cree_le });
+            }
+        }
+    }
+    // Toutes les copies sur une planche : ni longueur cible ni rangée pleine.
+    let longueur = imprimante.as_ref().zip(laize).filter(|_| !candidats.is_empty()).and_then(|(m, laize)| {
+        let r = nid::Reglage { longueur_cible_mm: None, longueur_max_mm: None, rangee_pleine: false, ..m.imbrication.clone() };
+        let plan = nid::planifier(&candidats, laize, &r).filter(|p| p.retenus.len() == candidats.len())?;
+        Some(plan.planche.hauteur / imbrication::PT_PAR_MM + r.marge_haut_mm + r.marge_bas_mm)
+    });
+    let arrondi = |v: f64, n: i32| (v * 10f64.powi(n)).round() / 10f64.powi(n);
+    let ml: f64 = encres.values().sum();
+    serde_json::json!({
+        "travaux": travaux.len(),
+        "pages": pages,
+        "copies": copies,
+        "surface_m2": arrondi(surface, 4),
+        "encres": encres.iter().map(|(nom, ml)| serde_json::json!({ "nom": nom, "ml": arrondi(*ml, 2) })).collect::<Vec<_>>(),
+        "ml": arrondi(ml, 2),
+        "duree_impression_min": duree.filter(|_| imprimante.is_some()).map(|d| arrondi(d, 1)),
+        "machine_uuid": imprimante.as_ref().and_then(|m| m.uuid),
+        "laize_mm": laize,
+        "longueur_mm": longueur.map(|l| arrondi(l, 1)),
+        "les": les,
+    })
 }
 
 /// Actions de l'ERP sur les travaux d'un dossier (lot R3.2, feuille de route 7.7), chacune
@@ -8518,6 +8594,79 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             assert_eq!(etats(&e).len(), 2, "annulé : rien de plus en file");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        fn estimer(e: &Partage, ref_erp: &str) -> Option<Value> {
+            let demande = pont::DemandeEstimation { id: Uuid::new_v4(), ref_erp: ref_erp.into() };
+            let rep = e.config.donnees.join("pont").join("estimations");
+            std::fs::create_dir_all(&rep).unwrap();
+            std::fs::write(rep.join(format!("{}.json", demande.id)), serde_json::to_vec(&demande).unwrap()).unwrap();
+            estimer_pour_l_erp(e);
+            let r = journal(e).into_iter().rev().find(|x| x.genre == "travail.estimation" && x.donnees["estimation_id"] == json!(demande.id)).map(|x| x.donnees);
+            assert_eq!(r.is_some(), pont::estimations(&e.config.donnees).is_empty(), "répondue puis oubliée, ou gardée");
+            let _ = std::fs::remove_dir_all(&rep);
+            r
+        }
+
+        /// Un travail de l'ERP rendu : une page de `l` × `h` mm, moitié cyan, PDF sur disque.
+        fn travail_rendu(e: &Partage, ref_erp: &str, l: f64, h: f64, quantite: u32) -> Travail {
+            let mut t = travail_erp(Some(ref_erp), false);
+            t.demande.dpi = 720;
+            t.fiche.quantite = quantite;
+            t.pages = vec![Page { plaques: vec!["Cyan".into()], surface_m2: l * h / 1e6, couverture: [("Cyan".to_string(), 0.5)].into(), largeur_mm: l, hauteur_mm: h, ..Default::default() }];
+            let pt = imbrication::PT_PAR_MM;
+            std::fs::create_dir_all(dossier(&e.config.donnees, t.id)).unwrap();
+            std::fs::write(dossier(&e.config.donnees, t.id).join(Format::Pdf.fichier()), pdf_pages(&[PageEssai { media: [0.0, 0.0, l * pt, h * pt], crop: None, rotate: 0 }])).unwrap();
+            ecrire(&e.config.donnees, &t).unwrap();
+            t
+        }
+
+        #[tokio::test]
+        async fn l_estimation_d_un_dossier_reprend_la_fiche_de_ses_travaux_copies_comprises() {
+            let e = etat("estimation-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let a = travail_rendu(&e, "PROD-2026-00123", 1000.0, 500.0, 2);
+            let b = travail_rendu(&e, "PROD-2026-00123", 400.0, 300.0, 0);
+            let mut exclue = travail_rendu(&e, "PROD-2026-00123", 300.0, 300.0, 1);
+            exclue.pages_exclues = vec![1];
+            ecrire(&d, &exclue).unwrap();
+            let mut echoue = travail_rendu(&e, "PROD-2026-00123", 300.0, 300.0, 1);
+            echoue.statut = Statut::Echec;
+            ecrire(&d, &echoue).unwrap();
+            travail_rendu(&e, "PROD-2026-00999", 300.0, 300.0, 1);
+
+            let r = estimer(&e, "PROD-2026-00123").expect("estimation");
+            // Les mêmes valeurs que la fiche (`lister`), multipliées par les copies du travail.
+            let fiches = lister(State(e.clone())).await.0;
+            let fiche = |t: &Travail| fiches.iter().find(|x| x["id"] == json!(t.id)).unwrap().clone();
+            let ml = |t: &Travail| fiche(t)["pages"][0]["estimation"]["ml"].as_f64().unwrap();
+            let duree = |t: &Travail| fiche(t)["duree_impression_min"].as_f64().unwrap();
+            let arrondi = |v: f64, n: i32| (v * 10f64.powi(n)).round() / 10f64.powi(n);
+            assert_eq!((r["code"].clone(), r["travaux"].clone(), r["pages"].clone(), r["copies"].clone()), (Value::Null, json!(3), json!(2), json!(3)), "{r}");
+            assert_eq!(r["surface_m2"], json!(arrondi(0.5 * 2.0 + 0.12, 4)));
+            assert_eq!(r["ml"], json!(arrondi(ml(&a) * 2.0 + ml(&b), 2)));
+            assert_eq!(r["encres"], json!([{ "nom": "Cyan", "ml": arrondi(ml(&a) * 2.0 + ml(&b), 2) }]));
+            assert_eq!(r["duree_impression_min"], json!(arrondi(duree(&a) * 2.0 + duree(&b), 1)));
+            assert!(r.to_string().find("cout").is_none() && r.get("total").is_none(), "aucun montant (D8) : {r}");
+            // Toutes les copies imbriquées sur la laize de l'Epson : moins long que bout à bout.
+            assert_eq!(r["laize_mm"], json!(1626.0));
+            let longueur = r["longueur_mm"].as_f64().expect("longueur");
+            assert!((500.0..1300.0).contains(&longueur), "{longueur}");
+            assert_eq!(r["les"], json!(0));
+
+            // Trop large pour la laize : pas de longueur, le reste est donné.
+            travail_rendu(&e, "PROD-2026-00124", 2000.0, 500.0, 1);
+            let r = estimer(&e, "PROD-2026-00124").unwrap();
+            assert_eq!((r["longueur_mm"].clone(), r["copies"].clone()), (Value::Null, json!(1)));
+            // Un travail encore en rendu : la demande attend le tour suivant.
+            let mut en_cours = travail_rendu(&e, "PROD-2026-00125", 300.0, 300.0, 1);
+            en_cours.statut = Statut::EnCours;
+            ecrire(&d, &en_cours).unwrap();
+            assert!(estimer(&e, "PROD-2026-00125").is_none());
+            // Aucun travail de l'ERP rendu pour ce dossier.
+            assert_eq!(estimer(&e, "PROD-2026-00126").unwrap(), json!({ "estimation_id": journal(&e).last().unwrap().donnees["estimation_id"], "ref_erp": "PROD-2026-00126", "code": "aucun_travail" }));
+            std::fs::remove_dir_all(&d).unwrap();
         }
     }
 }
