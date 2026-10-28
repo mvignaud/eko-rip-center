@@ -148,11 +148,29 @@ pub struct Demande {
     /// que Ghostscript remplace par leurs équivalentes métriques) (roadmap 9.3).
     #[serde(default)]
     pub abandon_polices: bool,
+    /// Imprimante de la mise en file automatique (identifiant du catalogue) ; absente : la
+    /// première qui imprime. Posée par la balise `{machine}` d'un nom de fichier (roadmap 9.10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub imprimante: Option<String>,
+    /// Impressions de chaque page mises en file d'office (balise `{repetition}`, roadmap 9.10).
+    #[serde(default = "un", skip_serializing_if = "est_un")]
+    pub repetition: u32,
 }
 
 fn vrai() -> bool {
     true
 }
+
+fn un() -> u32 {
+    1
+}
+
+fn est_un(n: &u32) -> bool {
+    *n == 1
+}
+
+/// Répétition d'une impression mise en file d'office : 100 au plus.
+pub const REPETITION_MAX: u32 = 100;
 
 /// Sorties ajoutées d'office à la file quand le rendu est fini.
 #[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
@@ -174,7 +192,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1 }
     }
 }
 
@@ -193,6 +211,9 @@ impl Demande {
         self.fond_reperes.as_ref().map_or(Ok(()), reperage::FondReperes::verifier)?;
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
+        }
+        if self.imprimante.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) || !(1..=REPETITION_MAX).contains(&self.repetition) {
+            return Err("demande_invalide");
         }
         if self.decoupeuse.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) || self.parametre_decoupe.as_ref().is_some_and(|n| n.chars().count() > 40) {
             return Err("decoupeuse_invalide");

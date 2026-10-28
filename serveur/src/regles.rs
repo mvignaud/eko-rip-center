@@ -95,9 +95,15 @@ pub fn ecrire(donnees: &Path, regles: &[Regle]) -> std::io::Result<()> {
 /// sans format peuvent prendre le fichier.
 const FORMAT_MAX_OCTETS: u64 = 512 << 20;
 
-/// Petit et grand côté (mm) de la première page d'un PDF : CropBox, sinon MediaBox, héritées
-/// des nœuds parents comme le veut le format.
+/// Petit et grand côté (mm) de la première page d'un PDF.
 pub fn format_pdf(chemin: &Path) -> Option<[f64; 2]> {
+    let [l, h] = dimensions_pdf(chemin)?;
+    Some([l.min(h), l.max(h)])
+}
+
+/// Largeur et hauteur (mm) de la première page d'un PDF : CropBox, sinon MediaBox, héritées
+/// des nœuds parents comme le veut le format.
+pub fn dimensions_pdf(chemin: &Path) -> Option<[f64; 2]> {
     if std::fs::metadata(chemin).ok()?.len() > FORMAT_MAX_OCTETS {
         return None;
     }
@@ -113,8 +119,7 @@ pub fn format_pdf(chemin: &Path) -> Option<[f64; 2]> {
     let v: Vec<f64> = boite.iter().filter_map(|o| doc.dereference(o).ok()?.1.as_float().ok().map(f64::from)).collect();
     let [x0, y0, x1, y1] = v[..] else { return None };
     let mm = |pt: f64| pt.abs() * 25.4 / 72.0;
-    let (l, h) = (mm(x1 - x0), mm(y1 - y0));
-    Some([l.min(h), l.max(h)])
+    Some([mm(x1 - x0), mm(y1 - y0)])
 }
 
 #[cfg(test)]

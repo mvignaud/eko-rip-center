@@ -14,6 +14,7 @@ described in [usage](usage.md).
 | **Preset** | Réglage | A named set of choices (resolution, media, white, cutting, registration…), applied when sending or by a hot folder. |
 | **Hot folder** | Dossier surveillé | Server folder where every dropped file becomes a job, with the folder's preset (`entrees/<preset>/`). |
 | **Rule** | Règle | In `entrees-auto/`, picks a file's preset from its name or page size. |
+| **Tagged name pattern** | Motif à balises | In `entrees-auto/`, shape of the file name (`{nom}__{machine}__{reglage}__{copies}`) giving preset, machine, copies… |
 | **Job ticket** | Fiche travail | A job's order number, customer, company, quantity, due date, notes and operator. |
 | **Output** | Sortie | One page of a job sent to a machine (print or cut), in the queue. |
 | **Queue** | File d'attente | The outputs still to run, machine by machine, in order; a machine runs one output at a time. |
