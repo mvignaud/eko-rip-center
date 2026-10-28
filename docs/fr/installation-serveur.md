@@ -18,7 +18,10 @@ paquets et l'image sont construits pour cette architecture.
 **Processeur et mémoire** : le rendu (Ghostscript) est le plus gourmand. Point de départ
 conseillé : 4 cœurs et 16 Go de mémoire ; plus pour des bâches de plusieurs dizaines de
 m² à haute résolution. Ces chiffres sont un conseil, pas une mesure : le délai d'un rendu
-(`EKO_RIP_DELAI_S`, 30 min par défaut) dit vite si le poste est trop juste.
+(`EKO_RIP_DELAI_S`, 30 min par défaut) dit vite si le poste est trop juste. Pour
+repère, le serveur de test de l'atelier tourne sur un Pentium G645T (2 cœurs, 2012),
+16 Go de mémoire et un disque mécanique de 640 Go sans partition à part : il suffit aux
+essais, c'est un plancher, pas une cible.
 
 **SSD dédié aux données** : un disque SSD réservé au dossier des données
 (`/var/lib/eko-rip`), distinct du disque système :
