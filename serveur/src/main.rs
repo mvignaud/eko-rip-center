@@ -15,6 +15,7 @@ mod edition;
 mod erp;
 mod etat;
 mod epson;
+mod epreuve;
 mod escp2;
 mod etiquette;
 mod filtre;
@@ -466,6 +467,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/linearisation/mire.cgats", get(mire_de_linearisation))
         .route("/api/linearisation/limite-proposee", axum::routing::post(proposer_limite))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
+        .route("/api/travaux/{id}/pages/{page}/epreuve.tif", get(epreuve_tif))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
         .route("/api/travaux/{id}/pages/{page}/apercu-avant.png", get(apercu_avant))
         .route("/api/travaux/{id}/pages/{page}/plaques/{nom}", get(plaque))
@@ -733,6 +735,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let (mut etendre, mut etendre_largeur, mut etendre_seuil) = (false, 1.0f64, 0.5f64);
     let mut fond = (false, reperage::FondReperes { debord_mm: 3.0, aplat: false, cmjn: None }, false, None::<[f64; 4]>);
     let mut fiche = Fiche::default();
+    let (mut epreuve, mut options_epreuve) = (false, epreuve::Options::default());
 
     loop {
         let champ = match form.next_field().await {
@@ -860,6 +863,17 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 Ok(())
             }
             "blanc_seuil" => valeur.parse().map(|v| d.blanc.seuil = v).map_err(|_| erreur("blanc_invalide")),
+            "epreuve" => {
+                epreuve = valeur == "oui";
+                Ok(())
+            }
+            "epreuve_seule" => {
+                d.epreuve_seule = valeur == "oui";
+                Ok(())
+            }
+            "epreuve_couleur" => serde_json::from_value(serde_json::Value::String(valeur)).map(|c| options_epreuve.couleur = c).map_err(|_| erreur("epreuve_invalide")),
+            "epreuve_tons" => serde_json::from_value(serde_json::Value::String(valeur)).map(|t| options_epreuve.tons = t).map_err(|_| erreur("epreuve_invalide")),
+            "epreuve_max_mo" => valeur.parse().map(|v| options_epreuve.max_mo = v).map_err(|_| erreur("epreuve_invalide")),
             "blanc_alpha" => serde_json::from_value(serde_json::Value::String(valeur)).map(|a| d.blanc.alpha = a).map_err(|_| erreur("blanc_invalide")),
             "parametre_decoupe" => {
                 d.parametre_decoupe = Some(valeur).filter(|v| !v.is_empty());
@@ -936,6 +950,7 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let Some(format) = format else {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("aucun_fichier", None)).await;
     };
+    d.epreuve = (epreuve || d.epreuve_seule).then_some(options_epreuve);
     d.mosaique = mosaique.then_some(Mosaique { laize_mm, recouvrement_mm, reperes: reperes_les, hauteur_max_mm, soudure, coupe_milieu, ..Default::default() });
     d.etendre_coupe = etendre.then_some(coupe::Etendre { largeur_mm: etendre_largeur, seuil_mm: etendre_seuil });
     if fond.2 && fond.3.is_none() {
@@ -1467,6 +1482,17 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
             t.erreur = Some(e);
         }
     }
+    // Épreuve TIFF demandée par le réglage (roadmap 9.13) : un échec n'arrête pas le travail,
+    // il le signale.
+    if a_sortir && (t.demande.epreuve.is_some() || t.demande.epreuve_seule) {
+        let o = t.demande.epreuve.unwrap_or_default();
+        for n in 1..=t.pages.len() {
+            let Some(src) = source_epreuve(&etat.config.profils, &rep, &t, n) else { continue };
+            if let Err(e) = epreuve::produire(&etat.config.gs, &src, o, &chemin_epreuve(&rep, n), etat.config.delai).await {
+                t.alertes.push(controle::Alerte { code: "epreuve_echouee".into(), page: Some(n), detail: e });
+            }
+        }
+    }
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
@@ -1538,6 +1564,69 @@ struct ChoixLangue {
 
 /// Bon à tirer du travail : image en épreuve écran du support, découpe superposée,
 /// caractéristiques, cadre « Bon pour accord ». `?langue=en` pour l'anglais.
+/// Épreuve TIFF d'une page (roadmap 9.13), faite d'office (`epreuve-NNN.tif`).
+fn chemin_epreuve(rep: &std::path::Path, page: usize) -> PathBuf {
+    rep.join(format!("epreuve-{page:03}.tif"))
+}
+
+/// Plaques d'une page pour l'épreuve : CMJN, puis les tons directs imprimés (pas ceux de
+/// découpe). `None` : rien d'imprimé (découpe seule).
+fn source_epreuve(profils: &std::path::Path, rep: &std::path::Path, t: &Travail, page: usize) -> Option<epreuve::Source> {
+    let p = t.pages.get(page.checked_sub(1)?)?;
+    if t.demande.mode != Mode::Imprimer || p.plaques.iter().all(|x| p.plaques_decoupe.contains(x)) {
+        return None;
+    }
+    let tons = p.plaques.iter().filter(|x| !epson::PLAQUES_CMJN.contains(&x.as_str()) && !p.plaques_decoupe.contains(x)).map(|x| (x.clone(), render::chemin_plaque(rep, page, x))).collect();
+    Some(epreuve::Source { cmjn: epson::PLAQUES_CMJN.map(|c| render::chemin_plaque(rep, page, c)), tons, dpi: t.demande.dpi as f64, profil: t.demande.couleur.sortie.as_ref().map(|f| profils.join(f)) })
+}
+
+#[derive(Deserialize)]
+struct ChoixEpreuve {
+    couleur: Option<epreuve::Couleur>,
+    tons: Option<epreuve::Tons>,
+    max_mo: Option<u64>,
+}
+
+/// Épreuve TIFF d'une page : celle faite d'office si on ne demande rien d'autre, sinon
+/// faite à la demande (`couleur`, `tons`, `max_mo`), envoyée en flux puis effacée.
+async fn epreuve_tif(State(etat): State<Partage>, Chemin((id, page)): Chemin<(Uuid, usize)>, axum::extract::Query(q): axum::extract::Query<ChoixEpreuve>) -> Response {
+    let donnees = &etat.config.donnees;
+    let Some((t, _)) = lire_page(donnees, id, page) else { return introuvable() };
+    if !matches!(t.statut, Statut::Termine) {
+        return page_absente(donnees, id);
+    }
+    let rep = dossier(donnees, id);
+    let Some(src) = source_epreuve(&etat.config.profils, &rep, &t, page) else { return refus(StatusCode::CONFLICT, "rien_a_imprimer", None) };
+    let base = t.demande.epreuve.unwrap_or_default();
+    let o = epreuve::Options { couleur: q.couleur.unwrap_or(base.couleur), tons: q.tons.unwrap_or(base.tons), max_mo: q.max_mo.unwrap_or(base.max_mo) };
+    if o.verifier().is_err() {
+        return refus(StatusCode::BAD_REQUEST, "epreuve_invalide", None);
+    }
+    let faite = chemin_epreuve(&rep, page);
+    let demandee = q.couleur.is_some() || q.tons.is_some() || q.max_mo.is_some();
+    let (chemin, temporaire) = if faite.exists() && !demandee {
+        (faite, false)
+    } else {
+        let tmp = rep.join(format!("epreuve-{}.tif", Uuid::new_v4()));
+        if let Err(e) = epreuve::produire(&etat.config.gs, &src, o, &tmp, etat.config.delai).await {
+            let _ = std::fs::remove_file(&tmp);
+            return refus(StatusCode::INTERNAL_SERVER_ERROR, "epreuve_echouee", Some(e));
+        }
+        (tmp, true)
+    };
+    let f = match tokio::fs::File::open(&chemin).await {
+        Ok(f) => f,
+        Err(_) => return introuvable(),
+    };
+    // Fichier ouvert : le temporaire peut s'effacer, le flux le lit jusqu'au bout.
+    if temporaire {
+        let _ = std::fs::remove_file(&chemin);
+    }
+    let nom: String = t.nom.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '_' }).take(80).collect();
+    let corps = axum::body::Body::from_stream(tokio_util::io::ReaderStream::new(f));
+    ([(header::CONTENT_TYPE, "image/tiff".to_string()), (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{nom}-p{page}-epreuve.tif\""))], corps).into_response()
+}
+
 async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::extract::Query(q): axum::extract::Query<ChoixLangue>) -> Response {
     let donnees = &etat.config.donnees;
     let Some(t) = lire_travail(donnees, id) else { return introuvable() };
@@ -3214,7 +3303,7 @@ fn png(octets: Vec<u8>) -> Response {
 /// pas ; une planche d'imbrication va sur sa machine.
 fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
     let mut a = t.demande.auto;
-    if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) || t.estimation {
+    if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) || t.estimation || t.demande.epreuve_seule {
         return;
     }
     a.suspendre |= t.retenue_erp == Some(RetenueErp::Suspendu);
@@ -4116,6 +4205,9 @@ async fn mettre_en_file(State(etat): State<Partage>, Json(d): Json<DemandeSortie
         None if m.fait(Impression) => Impression,
         None => Decoupe,
     };
+    if operation == Impression && t.demande.epreuve_seule {
+        return refus(StatusCode::CONFLICT, "epreuve_seule", None);
+    }
     if !m.fait(operation) {
         return refus(StatusCode::CONFLICT, "operation_impossible", None);
     }
@@ -6550,6 +6642,37 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
             panic!("rendu trop long");
+        }
+
+        /// Roadmap 9.13 : épreuve seule. Le rendu fait l'épreuve TIFF à la taille de la page
+        /// (± 0,5 mm), l'impression est refusée ; l'épreuve se télécharge telle quelle ou
+        /// refaite en colorimétrique.
+        #[tokio::test]
+        async fn epreuve_seule_tiff_aux_cotes() {
+            use super::controle_d_acces::appel;
+            let e = etat("epreuve-seule");
+            let pdf = imbrication::tests::pdf(80.0 * MM, 40.0 * MM, "1 0 0 0", (0.0, 0.0));
+            let d = Demande { dpi: 100, epreuve_seule: true, ..Default::default() };
+            let t = rendre(&e, pdf, d).await;
+            let rep = dossier(&e.config.donnees, t.id);
+            let tif = chemin_epreuve(&rep, 1);
+            assert!(tif.exists(), "épreuve faite d'office : {:?}", t.alertes);
+            let i = crate::images::vers_pdf(&tif, &rep.join("relu.pdf"), crate::images::Genre::Tiff, None).unwrap();
+            assert!((i.largeur_mm - 80.0).abs() <= 0.5 && (i.hauteur_mm - 40.0).abs() <= 0.5, "{} × {} mm", i.largeur_mm, i.hauteur_mm);
+            let m = e.machines.read().unwrap().iter().find(|m| m.fait(machines::Operation::Impression)).unwrap().id.clone();
+            let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": t.id, "page": 1, "machine": m, "operation": "impression" }))).await;
+            assert_eq!(r.status(), StatusCode::CONFLICT);
+            assert!(e.file.lock().unwrap().sorties.iter().all(|s| s.travail != t.id), "rien en file");
+            let r = appel(&e, "GET", &format!("/api/travaux/{}/pages/1/epreuve.tif", t.id), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let o = axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap();
+            assert_eq!(o.len() as u64, std::fs::metadata(&tif).unwrap().len(), "celle faite d'office");
+            let r = appel(&e, "GET", &format!("/api/travaux/{}/pages/1/epreuve.tif?couleur=icc&tons=supprimes", t.id), None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert!(axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap().starts_with(b"II*\0"));
+            assert_eq!(appel(&e, "GET", &format!("/api/travaux/{}/pages/1/epreuve.tif?max_mo=0", t.id), None, None).await.status(), StatusCode::BAD_REQUEST);
+            assert!(std::fs::read_dir(&rep).unwrap().flatten().all(|f| !f.file_name().to_string_lossy().starts_with("epreuve-") || f.path() == tif), "temporaires effacés");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         /// Roadmap 9.11 : 8 fichiers déposés dans un dossier surveillé, 4 rendus à la fois, les

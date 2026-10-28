@@ -155,6 +155,12 @@ pub struct Demande {
     /// Impressions de chaque page mises en file d'office (balise `{repetition}`, roadmap 9.10).
     #[serde(default = "un", skip_serializing_if = "est_un")]
     pub repetition: u32,
+    /// Épreuve TIFF faite d'office après le rendu, une par page (roadmap 9.13).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epreuve: Option<crate::epreuve::Options>,
+    /// Épreuve seule : l'épreuve TIFF est faite, rien ne part à l'impression.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub epreuve_seule: bool,
 }
 
 fn vrai() -> bool {
@@ -192,7 +198,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1 }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1, epreuve: None, epreuve_seule: false }
     }
 }
 
@@ -206,6 +212,7 @@ impl Demande {
             m.verifier()?;
         }
         self.blanc.verifier()?;
+        self.epreuve.as_ref().map_or(Ok(()), crate::epreuve::Options::verifier)?;
         self.edition.verifier()?;
         self.etendre_coupe.as_ref().map_or(Ok(()), crate::coupe::Etendre::verifier)?;
         self.fond_reperes.as_ref().map_or(Ok(()), reperage::FondReperes::verifier)?;
@@ -228,6 +235,7 @@ impl Demande {
             self.couleur = couleur::Couleur::default();
             self.mosaique = None;
             self.blanc = blanc::Blanc::default();
+            (self.epreuve, self.epreuve_seule) = (None, false);
             // Rien n'est imprimé : pas d'œillets ni de marge ; échelle, rotation, miroir et
             // contour restent (ils changent la découpe).
             (self.edition.oeillets, self.edition.marge_mm) = (None, 0.0);

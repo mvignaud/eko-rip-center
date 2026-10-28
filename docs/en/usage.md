@@ -138,6 +138,31 @@ the original; rejected, **Cancel** it. Proofs are prints only, on a machine othe
 requested one (nor of the same pool). The choice stays until changed: back to **No
 proof**.
 
+## TIFF proof
+
+The **TIFF proof** toolbar button downloads a TIFF of the page being viewed, made from the
+rendered plates, that is from what goes to the machine. The page is at its exact size: the
+proof also serves to check a panel's dimensions before printing it.
+
+Settings, in the **TIFF proof** section of the send panel (kept in a saved preset):
+
+- **Colour**: **Device (CMYK)**, the ink values as sent, with the media profile if there is
+  one; or **Colorimetric (RGB)**, converted with the media profile (relative colorimetric
+  intent), to see the result on screen.
+- **Spot colours** (white, silver, varnish…): **kept as channels** (read back as spot
+  colours by Photoshop and by the RIP), **flattened into the colour** (from a display
+  colour: white as light grey, silver as grey), or **removed**. Cut tones are never
+  included.
+- **Maximum size** (1 to 3500 MB, uncompressed): above it, the resolution drops (one pixel
+  for 2 × 2, 3 × 3… pixels), the physical size stays exact.
+- **Make the TIFF proof of each page after rendering**: it is ready to download as soon as
+  rendering ends. Otherwise, the button makes it on demand.
+- **Proof only**: the proof is made after rendering and nothing is sent to print (no
+  automatic queueing, no Print button; queueing a print is refused). The job can still be
+  cut.
+
+A proof that fails does not stop the job: it is listed in its alerts.
+
 ## Visual editor (viewer)
 
 Clicking a thumbnail (composite, plate, cut) in the inspector opens it large.

@@ -1006,6 +1006,7 @@ dependencies = [
  "sha2 0.11.1",
  "tiff",
  "tokio",
+ "tokio-util",
  "tower",
  "ureq",
  "usvg",
