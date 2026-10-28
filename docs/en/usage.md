@@ -807,7 +807,7 @@ paths, path sorting and the **After cutting** choice (see [Cutting](#cutting)).
 
 ## Machines
 
-**System > Machines**: the workshop's machine catalogue. For each: an id (lowercase,
+**System > Machines**: the workshop's machine catalogue (one sheet per model: [help by machine](machines.md)). For each: an id (lowercase,
 digits, `-`), a name, the model (Epson SC-S80600, Mutoh Kona, Graphtec FC7000, Roland
 VersaCAMM VP), the roll width, the connection (serial or USB-serial, TCP network, device
 such as `/dev/usb/lp0`, or folder), the SNMP address to read the loaded media, the cut
@@ -1005,14 +1005,4 @@ factors are in the configuration backup.
 
 ## Glossary
 
-- **Plate**: 8-bit image of one ink (0 = full ink, 255 = no ink).
-- **Spot colour**: named colour in the PDF (`White`, `Silver`, `CutContour`…), output on
-  its own plate instead of being mixed into CMYK.
-- **Roll width**: usable width of the roll.
-- **Panel**: vertical strip of a tiled job, at most as wide as the roll.
-- **Tile**: one piece of a tiling in columns × rows; each tile is a page.
-- **Cut layer**: the paths of one spot colour name, cut together with one setting.
-- **Print mode**: resolution, passes and heating of a media.
-- **Output**: one page of a job sent to a machine, in the queue.
-- **Variant**: copy of a cutter with its own set of marks.
-- **Hot folder**: server folder where every dropped file becomes a job.
+The words of the screen, with their French equivalent: [glossary](glossary.md).

@@ -176,7 +176,7 @@ Date : 2026-10-24. État du code : v0.13.0 (CHANGELOG) sur `eko-rip/`.
 | Sauvegarde automatique avant mise à jour, rapport de migration | Absent | |
 | ISO Ubuntu 3 profils, CI d'installation | Fait | CHANGELOG 0.10.0 / 0.11.0 |
 | Accès réservé aux clients | Fait | `main.rs:1264` `client_requis` |
-| Doc admin + FAQ ; glossaire | Fait / Absent | `docs/` |
+| Doc admin + FAQ ; glossaire | Fait | `docs/`, `glossaire.md` (9.7) |
 
 ## 1.8 Rapports / coûts
 
@@ -411,7 +411,7 @@ Dépend de : 2.2, 2.3 (séparation et tramage), 1.1 (le mode porte les étapes).
 | 9.4 | P2 | ✅ FAIT le 26/10 (ports.rs : connexions `ipp` (Print-Job brut, flux par morceaux, aperçu de l'URI) et `rip_eko` (route `/api/renvoi/{machine}` à jeton) ; essai sur un vrai CUPS, file raw) — Port IPP (hôte + chemin, aperçu de l'URI) ; port « renvoi vers un autre RIP E-KO » | test sur un serveur IPP de test (CUPS) |
 | 9.5 | P2 | ✅ FAIT le 26/10 (champ `epreuve` de la mise en file : copie « -BAT » liée par `bat_de`, original `Suspendue`, liste « BAT sur… » de la page) — Épreuve sur une 2e machine (copie « -BAT », original en attente) | test file |
 | 9.6 | P2 | ✅ FAIT le 28/10 (`poids` par sortie dans `/api/file`, `tampon` dans `/api/systeme`, colonne « Tampon » et ligne disque sous le bandeau des machines) — Compteurs de file : poids du tampon, % disque | écran |
-| 9.7 | P3 | Glossaire FR/EN, aide par machine, exigences poste dans la doc (SSD dédié, onduleur, IP fixes) | docs publiées |
+| 9.7 | P3 | ✅ FAIT le 28/10 (`glossaire.md` / `glossary.md`, `machines.md` FR/EN, « Exigences du poste serveur » dans l'installation) — Glossaire FR/EN, aide par machine, exigences poste dans la doc (SSD dédié, onduleur, IP fixes) | docs publiées |
 | 9.8 | P3 | Tableau de bord type Hub (live, historique) — dans l'ERP plutôt que dans le RIP | décision ERP |
 | 9.9 | P3 | Correspondance matière Zünd, rouleau à rouleau, massicot Fotoba<br>+ Caldera C7 : **association support → matière de découpe** par motif (nom, id, type) pour les découpeuses qui ont des matières (Zünd, CAMM-GL avec presets) ; non associé → défaut + alerte (fini : « HEXIS V3000 Vinyle » → matière Vinyle ; support non reconnu → défaut signalé) | si la machine arrive |
 | 9.10 | P2 | (Caldera C4) Étendre 9.1 : **motif de nom de fichier à balises** (copies, machine, réglage, support, laize, échelle, largeur, hauteur, répétition) qui pré-remplit le travail ; double séparateur conseillé ; journal d'extraction en cas d'échec | test : `Affiche__epson__bache__30.pdf` → 30 copies, réglage Bâche ; nom non conforme → travail importé avec alerte, pas d'échec silencieux |

@@ -3,8 +3,62 @@
 Le serveur tourne sous Linux. Les imprimantes et les plotters lui sont branchés ;
 les postes de l'atelier s'y connectent par le réseau.
 
-Quatre façons de l'installer, au choix. Ensuite : [administrer le serveur](administration.md)
+Avant tout : les [exigences du poste](#exigences-du-poste-serveur). Quatre façons de l'installer, au choix. Ensuite : [administrer le serveur](administration.md)
 (données, sauvegardes, mises à jour, questions fréquentes).
+
+## Exigences du poste serveur
+
+Le serveur reçoit les fichiers, fait les rendus et parle aux machines : c'est le poste qui
+ne doit pas s'arrêter. Pour la [fiche de chaque machine](machines.md), voir l'aide par
+machine.
+
+**Système** : Ubuntu 24.04 LTS (ou une Debian récente), PC 64 bits **x86 (amd64)** : les
+paquets et l'image sont construits pour cette architecture.
+
+**Processeur et mémoire** : le rendu (Ghostscript) est le plus gourmand. Point de départ
+conseillé : 4 cœurs et 16 Go de mémoire ; plus pour des bâches de plusieurs dizaines de
+m² à haute résolution. Ces chiffres sont un conseil, pas une mesure : le délai d'un rendu
+(`EKO_RIP_DELAI_S`, 30 min par défaut) dit vite si le poste est trop juste.
+
+**SSD dédié aux données** : un disque SSD réservé au dossier des données
+(`/var/lib/eko-rip`), distinct du disque système :
+
+- un rendu pèse **≈ 1 Go par m² à 600 dpi** (le quart à 300 dpi, quatre fois plus à
+  1 200 dpi) : une bâche de 1,6 × 10 m à 600 dpi, c'est ≈ 16 Go ;
+- le serveur garde `EKO_RIP_SEUIL_LIBRE_MO` libres (5 Go par défaut) : en dessous, il
+  purge les plus vieux travaux inactifs et refuse un travail qui ne tiendrait pas ;
+- compter au moins **500 Go**, plus si les travaux sont gardés longtemps
+  (`EKO_RIP_CONSERVATION_JOURS`) ; la vue Production montre le tampon de la file et la
+  part du disque occupée.
+
+Un disque dédié évite qu'un gros rendu remplisse le système, et se change ou s'agrandit
+sans réinstaller. Le monter sur `/var/lib/eko-rip` (ou pointer `EKO_RIP_DATA` dessus)
+avant la première mise en route.
+
+**Onduleur** : brancher sur un onduleur le serveur, le switch et, si possible, la box ou le
+routeur. Une coupure de courant arrête le rendu en cours (le travail passe en échec
+« interrompu », à relancer) et une sortie en cours d'envoi (elle passe en *Échec*, à
+refaire : une découpe ne reprend pas au milieu). Les fichiers d'état résistent à la coupure
+(version précédente gardée, voir l'[administration](administration.md#où-sont-les-données)),
+mais rien ne remplace un arrêt propre : choisir un onduleur qui tient quelques minutes et
+prévient le serveur pour qu'il s'éteigne (par exemple avec `nut`).
+
+**Adresses IP fixes** : à réserver sur le routeur (bail DHCP fixe) ou à saisir à la main.
+
+| Poste | Pourquoi |
+|---|---|
+| Serveur RIP | les clients, les dossiers partagés (Samba), un autre RIP en renvoi et l'ERP le joignent par son adresse |
+| Epson | pilote direct (port 9100) et lecture SNMP (`EKO_RIP_EPSON_SNMP`) |
+| Découpeuses en réseau (Graphtec, Roland) | hôte saisi dans Système > Machines |
+| Serveur CUPS, autre RIP E-KO | hôte des connexions IPP et Renvoi |
+
+**Réseau** : câble plutôt que Wi-Fi entre le serveur et les machines. Le serveur écoute
+sur le port **8640** (clients, renvoi), à ne jamais ouvrir sur Internet ; il joint les
+machines (9100, 631 pour IPP, SNMP en UDP 161) et, en sortie HTTPS, l'ERP et le dépôt APT.
+Samba (445) seulement si les dossiers surveillés sont partagés.
+
+**Ports USB** : un port libre par découpeuse en USB (Kona) ; le service est dans le groupe
+`dialout`.
 
 ## 0. PC dédié : image d'installation Ubuntu
 
