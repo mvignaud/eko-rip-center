@@ -175,6 +175,12 @@ journal. Causes courantes : PDF protégé ou abîmé, délai `EKO_RIP_DELAI_S` d
 très grand fichier, disque plein (Système). Les polices non incorporées et les images
 trop peu définies sont signalées dès l'envoi par la pré-vérification.
 
+**Très grands formats.** Une page dont le rendu dépasserait 3 Go (par exemple une bâche de
+1,6 × 3 m à 720 dpi) est rendue par bandes horizontales, puis ses plaques sont recollées :
+c'est plus long, mais rien n'est à régler. Une plaque recollée de plus de 3,5 Go est
+écrite en BigTIFF. Prévoir la place : une plaque pèse jusqu'à largeur × hauteur en
+points, soit près de 4 Go par encre pour cette bâche, avant compression.
+
 **« Fichier trop volumineux pour le serveur. »** Au-delà de `EKO_RIP_MAX_MO` (8192 Mo par
 défaut). Le monter dans `/etc/default/eko-rip-serveur`, puis redémarrer.
 
