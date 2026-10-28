@@ -78,14 +78,14 @@ Côté ERP, le chantier démarre après la série comptable (sauf lot A0).
 - [x] (25/10, verrou de test `DECOUPE_GLOBALE`) Test flaky : `sauvegarde_et_restauration_de_la_configuration` réinstalle les réglages de découpe GLOBAUX (decoupe::installer) pendant que d'autres tests tournent — isoler le global par test.
 
 ### R3 — Réception des travaux
-- [ ] R3.1 Réception par référence ERP + version, fichier par lien signé, SHA-256 vérifié,
+- [x] (28/10, envoi = version ; renvoi = nouvel envoi) R3.1 Réception par référence ERP + version, fichier par lien signé, SHA-256 vérifié,
   idempotente (même réf + version = même travail) ; refus codé stable d'une combinaison
   inexistante (machine × préréglage d'abord, machine × support × mode quand 1.1 existe). (n°5, 7.3)
-- [ ] R3.2 Actions sur la file par référence ERP : suspendre, reprendre, annuler, priorité ;
+- [x] (28/10, `actions` dans en-attente, accusé `travail.action`) R3.2 Actions sur la file par référence ERP : suspendre, reprendre, annuler, priorité ;
   un travail imprimé ne s'annule pas, il se signale. (n°10, 7.7)
 
 ### R4 — Estimation à la demande
-- [ ] R4.1 Depuis `/api/planches/apercu` (sans création) : longueur, lés, surface, durée
+- [x] (28/10, sur les travaux rendus d'un dossier reçu ; `estimations` / `travail.estimation`) R4.1 Depuis `/api/planches/apercu` (sans création) : longueur, lés, surface, durée
   (`m2_heure`), encre estimée par canal ; mêmes valeurs que la fiche une fois le travail créé. (n°9, 7.6)
 
 ### R5 — Consommation réelle par travail (dépend du pilote Epson, phase 2)

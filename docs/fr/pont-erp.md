@@ -1,4 +1,4 @@
-# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 et R2)
+# Pont ERP ↔ RIP — contrat `eko-rip-erp/1` (lots R1 à R4)
 
 Ce document fixe ce qu'un ERP peut attendre d'E-KO RIP Center. Le lot R1 pose les
 fondations : identifiants, accès machine à machine, signature des événements, modèle
@@ -197,8 +197,11 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
   ce qui suit. Toute autre erreur (401, 403, 404, 422, 429, 5xx, réseau) est affichée dans
   Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
   jamais un événement refusé.
-- `travaux`, `annulations`, `estimations` : lus, ignorés tant que leur forme n'est pas fixée
-  (lots R3 à R5) ; le journal du serveur le dit (« non prises en charge »).
+- `travaux` : les travaux envoyés par l'ERP (lot R3, § 7).
+- `actions` : annuler, suspendre, reprendre, priorité, échéance (lot R3.2, § 8). Elles
+  remplacent l'ancien champ `annulations`, qui n'est plus appliqué (signalé au journal du
+  serveur s'il arrive non vide).
+- `estimations` : les estimations demandées par l'ERP (lot R4, § 9).
 
 ### 6.4 Instances
 
@@ -232,6 +235,12 @@ l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_deco
 { "travail_uuid": "…", "ref_erp": null, "etat": "termine", "code_erreur": null, "pages": 2 }
 ```
 
+Un travail né d'un envoi de l'ERP (§ 7) porte en plus `envoi_id`, et sa référence :
+
+```json
+{ "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
+```
+
 `sortie.etat` — à chaque changement d'état d'une sortie :
 
 ```json
@@ -255,7 +264,8 @@ l'ERP le demande. Clés : `machines` (imprimantes), `decoupeuses`, `couches_deco
   `estime` par les points posés du pilote direct, `null` : aucune).
 - `encre_ml` est l'encre réelle répartie au moment de la fin (la répartition d'une baisse
   entre plusieurs impressions peut s'affiner ensuite dans les rapports du RIP).
-- `ref_erp` vaut `null` jusqu'à la réception des travaux de l'ERP (lot R3).
+- `ref_erp` : la référence du dossier pour un travail envoyé par l'ERP (§ 7), recopiée dans
+  ses sorties et ses consommations ; `null` pour un travail créé au RIP.
 
 `machine.etat` (roadmap 7.9) — état relevé d'une imprimante (SNMP, toutes les minutes), publié
 seulement quand il change (l'heure seule ne compte pas) :
@@ -274,3 +284,84 @@ seulement quand il change (l'heure seule ne compte pas) :
 - `alertes` : textes de la machine, tels quels, bloquants ou non.
 - `bac_encre_usagee_pourcent` : `null` tant qu'il n'est pas lu sur l'Epson.
 - Aucun envoi à la demande pour l'instant : l'ERP garde le dernier `machine.etat` reçu.
+
+## 7. Travaux envoyés par l'ERP (lot R3)
+
+Forme d'un élément de `travaux` : § 11 du contrat côté ERP (`docs/onyx/pont-erp-cote-erp.md`
+d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
+`echeance`, `fichier { chemin, nom, taille, sha256 }`.
+
+- **Téléchargement** : à chaque `en-attente`, chaque envoi jamais pris est téléchargé par
+  `GET <base><fichier.chemin>`, signé comme `en-attente`, 5 par cycle au plus, 4 Go au plus.
+  Le fichier est vérifié par son `sha256` quand l'ERP le donne, puis gardé dans
+  `<données>/pont/recus/<id>/` jusqu'à devenir un travail.
+- **Création** : le travail prend l'uuid de l'envoi, le réglage enregistré désigné par
+  `prereglage_uuid`, et sa fiche : commande = `ref_erp`, quantité = `copies`, échéance. Un
+  serveur coupé entre la création et le ménage ne refait pas de second travail.
+- **Accusé** : le premier `travail.etat` du travail porte `envoi_id` (§ 6.5).
+- **Refus** : `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes :
+  `envoi_invalide` (élément mal formé ; `detail` nomme le champ), `telechargement_impossible`
+  (404), `empreinte_fausse`, `reglage_inconnu`, et les refus de création d'un travail
+  (`format_inconnu`, `pdf_illisible`, `polices_manquantes`…).
+- **Doublons** : un envoi pris ou refusé n'est jamais repris, même reproposé ; il est
+  oublié 30 jours après que l'ERP a cessé de le proposer. Une panne (réseau, 5xx, disque)
+  n'est pas un refus : l'envoi est repris au cycle suivant.
+
+## 8. Actions de l'ERP sur la file (lot R3.2)
+
+Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "ref_erp", "action",
+"echeance" }`, `action` parmi `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
+(`echeance`, en secondes Unix, exigée pour cette dernière seulement).
+
+- **Portée** : une action vise tous les travaux nés d'un envoi de l'ERP qui portent ce
+  `ref_erp`, et leurs sorties (impression et découpe) encore en file. Un travail créé au RIP
+  n'est jamais touché, même s'il porte la même commande dans sa fiche.
+- **Sorties modifiables** : en attente ou suspendues. Une sortie lancée, terminée, ou posée
+  sur une planche imbriquée est laissée telle quelle et comptée dans `non_modifiables`.
+- **Effet** :
+  - `suspendre` : les sorties en attente passent suspendues ; un travail du dossier qui
+    arrive ensuite part suspendu.
+  - `reprendre` : les sorties suspendues repartent, sauf une découpe dont l'impression n'est
+    pas terminée. Lève la retenue posée par `suspendre`.
+  - `annuler` : les sorties modifiables sont annulées, et le dossier ne part plus en file. Un
+    travail déjà imprimé ne s'annule pas : il se signale par `code` = `deja_imprime`.
+  - `priorite` : les sorties passent en tête de file, dans leur ordre.
+  - `echeance` : l'échéance de la fiche change (sans toucher à la file).
+- **Accusé** : `travail.action` — `{ "action_id", "ref_erp", "action", "code", "touchees",
+  "non_modifiables" }`. `code` vaut `null` si tout s'est fait, `aucun_travail` si aucun
+  travail de l'ERP ne porte ce `ref_erp`, `deja_imprime` (ci-dessus), ou `action_invalide`
+  (élément mal formé ; `detail` nomme le champ). `touchees` compte les sorties changées, ou
+  les travaux pour `echeance`.
+- **Doublons** : comme les envois (§ 7) — une action prise n'est jamais reprise, même
+  reproposée, et elle est oubliée 30 jours après que l'ERP a cessé de la proposer.
+
+## 9. Estimation d'un dossier (lot R4)
+
+Forme d'un élément de `estimations` : § 13 du contrat côté ERP — `{ "id", "ref_erp" }` pour
+un dossier déjà reçu, ou la forme d'un élément de `travaux` (§ 7 : `prereglage_uuid`,
+`copies`, `fichier`) pour un fichier à estimer avant l'envoi (devis).
+
+- **Fichier à estimer (devis)** : téléchargé comme un envoi (signé, SHA-256 vérifié), rendu
+  avec le réglage désigné dans un travail caché — ni dans la liste ni dans la file, même en
+  impression automatique, sans `travail.etat`, toutes ses pages ensemble — puis estimé comme
+  ci-dessous et effacé. Un fichier qui ne se télécharge pas ou ne se rend pas répond par
+  `travail.estimation` avec le code du refus (`empreinte_fausse`, `reglage_inconnu`,
+  `pdf_illisible`, `rendu_echoue`…) et son `detail`, jamais par `travail.refuse`.
+
+- **Portée** : les travaux rendus nés d'un envoi de l'ERP qui portent ce `ref_erp` (§ 7). Un
+  travail en échec est laissé de côté ; un travail encore en rendu fait attendre la demande
+  au tour suivant (30 s au plus). Les pages exclues ne comptent pas.
+- **Chiffres** : ceux de la fiche de chaque page, multipliés par les copies du travail
+  (sa quantité, une au moins) — surface, encre par plaque (tons de découpe exclus), durée
+  sur la première imprimante du catalogue — et la longueur de rouleau de toutes les copies
+  imbriquées ensemble sur la laize chargée de cette imprimante, avec son réglage
+  d'imbrication et ses marges, sans longueur cible.
+- **Réponse** : `travail.estimation` — `{ "estimation_id", "ref_erp", "code", "travaux",
+  "pages", "copies", "surface_m2", "encres": [{ "nom", "ml" }], "ml",
+  "duree_impression_min", "machine_uuid", "laize_mm", "longueur_mm", "les" }`. `longueur_mm`
+  vaut `null` si une page ne tient pas sur la laize ; `duree_impression_min` sans cadence
+  connue ; `les` compte les lés de mosaïque, copies comprises.
+- **Aucun montant** : ni coût d'encre ni de support (décision D8 de l'ERP, qui fait ses prix).
+- **Codes** : `null`, `aucun_travail` (aucun travail rendu pour ce dossier, sans chiffres),
+  `estimation_invalide` (élément mal formé ; `detail` nomme le champ).
+- **Doublons** : comme les actions (§ 8).

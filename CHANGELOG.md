@@ -16,6 +16,22 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Estimation d'un dossier pour l'ERP** (pont, lot R4 ; feuille de route 7.6) : à la
+  demande de l'ERP, le RIP répond par `travail.estimation` avec les chiffres de la fiche des
+  travaux rendus du dossier, copies comprises (surface, encre par plaque, durée), et la
+  longueur de rouleau de toutes les copies imbriquées sur la laize chargée. Aucun montant.
+  Pour un devis, l'ERP peut aussi envoyer un fichier à estimer : le RIP le rend à part (ni
+  liste ni file), l'estime de la même façon, puis l'efface.
+- **Actions de l'ERP sur la file** (pont, lot R3.2 ; feuille de route 7.7) : l'ERP peut
+  suspendre, reprendre, annuler, passer en tête ou changer l'échéance d'un dossier
+  (`ref_erp`). Le RIP l'applique aux sorties encore en attente ou suspendues de ses travaux,
+  laisse telles quelles celles déjà lancées, et répond par `travail.action` ; un dossier déjà
+  imprimé ne s'annule pas, il se signale (`deja_imprime`).
+- **Réception des travaux de l'ERP** (pont, lot R3 ; feuille de route 7.3) : le RIP télécharge
+  les fichiers que l'ERP lui envoie (signés, SHA-256 vérifié), en fait des travaux au réglage
+  enregistré désigné, avec la référence du dossier, les copies et l'échéance dans la fiche,
+  et l'accuse à l'ERP ; un envoi impossible part en `travail.refuse` avec son code. Un envoi
+  reproposé ne fait jamais deux travaux.
 - **Dépôt APT des postes Linux** sur `https://apt.e-ko.fr/rip/` : installation par
   `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`, puis mises à jour par
   `sudo apt update && sudo apt upgrade`. Publication : `outils/publier-depot.sh`.
@@ -59,7 +75,7 @@ parité ; d'ici là, 0.Y.Z.
   la sauvegarde.
 
 *Added: signed online APT repository for Linux clients; `outils/publier-depot.sh` publishes. Per-mode light-ink
-switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. Tagged file name pattern for the automatic folder (preset, machine, media, copies, repetition, roll width, scale, size).*
+switch presets and total ink limit; proposed ink limit from measured patches; highlight-dense linearisation chart. Automatic hot folder with name-pattern and page-size rules. TIFF spot colour channels as plates. One page per job, and refuse files with missing fonts, as preset options. IPP output port and forwarding to another E-KO RIP. Proof copy on a second machine, original held. Queue counters: spool weight per machine, disk use. FR/EN glossary, help by machine, server PC requirements. Tagged file name pattern for the automatic folder (preset, machine, media, copies, repetition, roll width, scale, size). ERP bridge: jobs sent by the ERP (signed download, SHA-256 checked), ERP actions on the queue (hold, resume, cancel, priority, due date) and estimates of an order or of a file before sending (area, ink per plate, duration, nested roll length; no amounts).*
 
 ## [0.26.0] — 2026-10-25
 

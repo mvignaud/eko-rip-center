@@ -1,4 +1,4 @@
-# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 and R2)
+# ERP ↔ RIP bridge — contract `eko-rip-erp/1` (lots R1 to R4)
 
 What an ERP can rely on from E-KO RIP Center. Lot R1 lays the foundations: identifiers,
 machine-to-machine access, event signature, state model; lot R2 (§ 6) the channel: log,
@@ -168,8 +168,10 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   everything after it. Any other error (401, 403, 404, 422, 429, 5xx, network) is shown in
   System with its code; the RIP retries after 60 s, then every 5 min. It never skips a
   refused event.
-- `travaux`, `annulations`, `estimations`: read, ignored until their shape is set (lots R3
-  to R5); the server log says so ("non prises en charge").
+- `travaux`: jobs sent by the ERP (lot R3, § 7).
+- `actions`: cancel, hold, resume, priority, due date (lot R3.2, § 8). They replace the old
+  `annulations` field, which is no longer applied (reported in the server log if non-empty).
+- `estimations`: estimates requested by the ERP (lot R4, § 9).
 
 ### 6.4 Instances
 
@@ -200,6 +202,12 @@ identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uu
 { "travail_uuid": "…", "ref_erp": null, "etat": "termine", "code_erreur": null, "pages": 2 }
 ```
 
+A job created from an ERP send (§ 7) also carries `envoi_id`, and its reference:
+
+```json
+{ "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
+```
+
 `sortie.etat` — on each output state change:
 
 ```json
@@ -223,7 +231,8 @@ identified by `fichier`) and its `nom`; `machine_uuid`, `support_uuid`, `mode_uu
   measured, `estime` from the dots laid by the direct driver, `null`: none).
 - `encre_ml` is the real ink split at the end time (splitting a drop among several prints
   may refine it later in the RIP reports).
-- `ref_erp` is `null` until jobs are received from the ERP (lot R3).
+- `ref_erp`: the order reference for a job sent by the ERP (§ 7), copied into its outputs
+  and consumption; `null` for a job created in the RIP.
 
 `machine.etat` (roadmap 7.9) — state read from a printer (SNMP, every minute), published only
 when it changes (the time alone does not count):
@@ -242,3 +251,82 @@ when it changes (the time alone does not count):
 - `alertes`: the machine's texts, as is, blocking or not.
 - `bac_encre_usagee_pourcent`: `null` until it is read on the Epson.
 - No on-demand send yet: the ERP keeps the last `machine.etat` received.
+
+## 7. Jobs sent by the ERP (lot R3)
+
+Shape of a `travaux` item: § 11 of the ERP-side contract (`docs/onyx/pont-erp-cote-erp.md` in
+eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`, `echeance`,
+`fichier { chemin, nom, taille, sha256 }`.
+
+- **Download**: on each `en-attente`, every send never taken is downloaded with
+  `GET <base><fichier.chemin>`, signed like `en-attente`, at most 5 per cycle and 4 GB. The
+  file is checked against `sha256` when the ERP gives it, then kept in
+  `<data>/pont/recus/<id>/` until it becomes a job.
+- **Creation**: the job takes the send's uuid, the saved setting named by
+  `prereglage_uuid`, and its job sheet: order = `ref_erp`, quantity = `copies`, due date. A
+  server stopped between creation and clean-up does not create a second job.
+- **Acknowledgement**: the job's first `travail.etat` carries `envoi_id` (§ 6.5).
+- **Refusal**: `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes:
+  `envoi_invalide` (malformed item; `detail` names the field), `telechargement_impossible`
+  (404), `empreinte_fausse`, `reglage_inconnu`, and job-creation refusals (`format_inconnu`,
+  `pdf_illisible`, `polices_manquantes`…).
+- **Duplicates**: a send taken or refused is never taken again, even if offered again; it is
+  forgotten 30 days after the ERP stops offering it. An outage (network, 5xx, disk) is not a
+  refusal: the send is retried on the next cycle.
+
+## 8. ERP actions on the queue (lot R3.2)
+
+Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp", "action",
+"echeance" }`, `action` one of `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
+(`echeance`, Unix seconds, required for the last one only).
+
+- **Scope**: an action targets every job born from an ERP send that carries this `ref_erp`,
+  and their outputs (print and cut) still in the queue. A job created on the RIP is never
+  touched, even if its job sheet carries the same order.
+- **Outputs that can change**: waiting or held. An output started, finished, or placed on a
+  nested sheet is left as is and counted in `non_modifiables`.
+- **Effect**:
+  - `suspendre`: waiting outputs are held; a job of the order arriving later starts held.
+  - `reprendre`: held outputs restart, except a cut whose print is not finished. Lifts the
+    hold set by `suspendre`.
+  - `annuler`: outputs that can change are cancelled, and the order no longer enters the
+    queue. A job already printed is not cancelled: it is reported with `code` =
+    `deja_imprime`.
+  - `priorite`: outputs move to the head of the queue, in their order.
+  - `echeance`: the job sheet's due date changes (the queue is untouched).
+- **Acknowledgement**: `travail.action` — `{ "action_id", "ref_erp", "action", "code",
+  "touchees", "non_modifiables" }`. `code` is `null` if all went through, `aucun_travail` if
+  no ERP job carries this `ref_erp`, `deja_imprime` (above), or `action_invalide` (malformed
+  item; `detail` names the field). `touchees` counts changed outputs, or jobs for `echeance`.
+- **Duplicates**: like sends (§ 7) — an action taken is never taken again, even if offered
+  again, and is forgotten 30 days after the ERP stops offering it.
+
+## 9. Estimating an order (lot R4)
+
+Shape of an `estimations` item: § 13 of the ERP-side contract — `{ "id", "ref_erp" }` for an
+order already received, or the shape of a `travaux` item (§ 7: `prereglage_uuid`, `copies`,
+`fichier`) for a file to estimate before sending (quote).
+
+- **File to estimate (quote)**: downloaded like a send (signed, SHA-256 checked), rendered
+  with the named setting in a hidden job — neither listed nor queued, even with automatic
+  printing, no `travail.etat`, all its pages together — then estimated as below and
+  deleted. A file that cannot be downloaded or rendered replies with `travail.estimation`
+  carrying the refusal code (`empreinte_fausse`, `reglage_inconnu`, `pdf_illisible`,
+  `rendu_echoue`…) and its `detail`, never with `travail.refuse`.
+
+- **Scope**: the rendered jobs born from an ERP send carrying this `ref_erp` (§ 7). A failed
+  job is left out; a job still rendering makes the request wait for the next round (30 s at
+  most). Excluded pages do not count.
+- **Figures**: those of each page's job sheet, multiplied by the job's copies (its quantity,
+  at least one) — area, ink per plate (cut spot colours excluded), duration on the first
+  printer of the catalogue — and the roll length of all copies nested together on that
+  printer's loaded width, with its nesting setting and margins, without a target length.
+- **Reply**: `travail.estimation` — `{ "estimation_id", "ref_erp", "code", "travaux",
+  "pages", "copies", "surface_m2", "encres": [{ "nom", "ml" }], "ml",
+  "duree_impression_min", "machine_uuid", "laize_mm", "longueur_mm", "les" }`.
+  `longueur_mm` is `null` if a page does not fit the width; `duree_impression_min` is `null`
+  without a known speed; `les` counts tiling panels, copies included.
+- **No amounts**: no ink or media cost (decision D8 of the ERP, which sets its own prices).
+- **Codes**: `null`, `aucun_travail` (no rendered job for this order, no figures),
+  `estimation_invalide` (malformed item; `detail` names the field).
+- **Duplicates**: like actions (§ 8).
