@@ -158,6 +158,7 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_GS` | `gs` | commande Ghostscript |
 | `EKO_RIP_MAX_MO` | `8192` | taille maximale d'un fichier reçu (PDF, SVG, TIFF, PNG, JPEG), en Mo |
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu, en secondes |
+| `EKO_RIP_RENDUS` | un par cœur, 4 au plus | rendus menés en même temps (1 à 16) ; chacun prend un cœur et de la mémoire, baisser sur un petit poste |
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | travaux effacés après ce nombre de jours (0 : jamais) |
 | `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | espace libre à garder (Mo) : en dessous, les plus vieux travaux inactifs sont purgés et un travail qui ne tiendrait pas est refusé (`espace_insuffisant`) ; 0 : aucun seuil |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | port du plotter de découpe |
