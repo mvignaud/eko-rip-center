@@ -557,7 +557,8 @@ const textes = {
     intention_tons: "Intention des tons directs", intention_serveur: "Celle du serveur (Système)", intention_tons_serveur: "Intention des tons directs (travaux sans choix propre)", tons_intention_enregistree: "Intention des tons directs enregistrée.",
     intention: "Intention", intentions: ["Perceptuelle", "Colorimétrique relative", "Saturation", "Colorimétrique absolue"],
     forcer: "Ignorer les profils du PDF", deposer: "Ajouter un profil ICC…", depose: (n) => `Profil « ${n} » ajouté.`,
-    version: "Version", disque: "Espace libre", conservation: "Conservation des travaux", jours: (j) => (j ? `${j} jours` : "illimitée"),
+    version: "Version", disque: "Espace libre", conservation: "Conservation des travaux", rendus: "Rendus simultanés",
+    rendus_etat: (n, max, att) => `${n} en cours sur ${max}` + (att ? ` · ${att} en attente` : ""), jours: (j) => (j ? `${j} jours` : "illimitée"),
     libre_sur: (libre, total) => `${libre} sur ${total}`,
     connexion: "Connexion à E-KO RIP Center", nom_utilisateur: "Utilisateur", mot_de_passe: "Mot de passe", se_connecter: "Se connecter",
     deconnexion: "Se déconnecter", connecte: (n) => `Connecté : ${n}`,
@@ -855,7 +856,8 @@ const textes = {
     intention_tons: "Spot colour intent", intention_serveur: "The server's (System)", intention_tons_serveur: "Spot colour intent (jobs without their own choice)", tons_intention_enregistree: "Spot colour intent saved.",
     intention: "Intent", intentions: ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"],
     forcer: "Ignore the PDF's profiles", deposer: "Add an ICC profile…", depose: (n) => `Profile “${n}” added.`,
-    version: "Version", disque: "Free space", conservation: "Job retention", jours: (j) => (j ? `${j} days` : "unlimited"),
+    version: "Version", disque: "Free space", conservation: "Job retention", rendus: "Simultaneous renders",
+    rendus_etat: (n, max, att) => `${n} running of ${max}` + (att ? ` · ${att} waiting` : ""), jours: (j) => (j ? `${j} days` : "unlimited"),
     libre_sur: (libre, total) => `${libre} of ${total}`,
     connexion: "Sign in to E-KO RIP Center", nom_utilisateur: "User", mot_de_passe: "Password", se_connecter: "Sign in",
     deconnexion: "Sign out", connecte: (n) => `Signed in: ${n}`,
@@ -1526,6 +1528,7 @@ function afficherSysteme() {
     dl.append(el("dt", {}, T().disque), el("dd", { className: basse ? "erreur" : "" }, T().libre_sur(go(s.disque_libre), go(s.disque_total)), jauge));
   }
   dl.append(el("dt", {}, T().col_tampon), el("dd", {}, octets(s.tampon || 0)));
+  if (s.rendus) dl.append(el("dt", {}, T().rendus), el("dd", {}, T().rendus_etat(s.rendus.en_cours, s.rendus.simultanes, s.rendus.en_attente)));
   if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => a.dossier ? T().dossier_absent(a.fichier, a.reprise) : T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
   $("systeme").replaceChildren(...[dl, formulaireDecoupe(), formulaireTons()].filter(Boolean));
   afficherPont(true);

@@ -151,6 +151,7 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_GS` | `gs` | Ghostscript command |
 | `EKO_RIP_MAX_MO` | `8192` | maximum size of a received file (PDF, SVG, TIFF, PNG, JPEG), in MB |
 | `EKO_RIP_DELAI_S` | `1800` | maximum rendering time, in seconds |
+| `EKO_RIP_RENDUS` | one per core, 4 at most | renders run at the same time (1 to 16); each takes a core and memory, lower it on a small computer |
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | jobs deleted after this many days (0: never) |
 | `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | free space to keep (MB): below it, the oldest inactive jobs are purged and a job that would not fit is refused (`espace_insuffisant`); 0: no threshold |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | cutter port |

@@ -600,6 +600,13 @@ Example: `BACHE_*` → Banner; `*.pdf`, long side from 2000 to empty → Large f
 Vinyl. A file no rule takes goes to `entrees-auto/refuses/` with its reason. The rules are
 part of the configuration backup.
 
+**Several renders at once**: the server renders several jobs at the same time (one per
+core, 4 at most, set by `EKO_RIP_RENDUS`), shown in System > **Simultaneous renders**.
+Arrivals from hot folders and from the ERP are queued in the order they were dropped, even
+when a small file finishes rendering before a large one that came earlier. A file sent by
+hand from the screen goes ahead of the automatic arrivals waiting for rendering, and is
+queued as soon as it is ready.
+
 **Tagged name pattern** (same editor, optional): the file name itself carries the preset
 and more. With `{nom}__{machine}__{reglage}__{copies}`, `Affiche__epson__bache__30.pdf`
 gives the Banner preset, the Epson and 30 copies. Each tag takes the text up to the

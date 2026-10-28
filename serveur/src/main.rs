@@ -34,6 +34,7 @@ mod render;
 mod reglages;
 mod balises;
 mod regles;
+mod rendus;
 mod releves;
 mod reperage;
 mod sauvegarde;
@@ -51,7 +52,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::Arc, time::Duration};
-use tokio::{io::AsyncWriteExt, sync::Semaphore};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use reglages::{Demande, Mode, Mosaique};
 
@@ -301,6 +302,8 @@ struct Config {
     gs: String,
     max_octets: usize,
     delai: Duration,
+    /// Rendus simultanés (`EKO_RIP_RENDUS`, un par cœur et 4 au plus par défaut).
+    rendus: usize,
     /// Profils ICC déposés depuis l'écran.
     profils: PathBuf,
     /// Durée de conservation des travaux, en jours (0 : jamais purgés).
@@ -320,9 +323,8 @@ struct Config {
 
 struct Etat {
     config: Config,
-    // ponytail: un seul rendu à la fois sur le serveur ; un sémaphore par machine quand
-    // plusieurs imprimantes tourneront en parallèle.
-    rendu: Semaphore,
+    /// Rendus en parallèle, dans l'ordre d'arrivée (roadmap 9.11).
+    rendu: rendus::Rendus<Travail>,
     /// File des sorties vers les machines, gardée dans `file.json` à chaque changement.
     file: std::sync::Mutex<file::File>,
     /// Écritures de `reglages.json` l'une après l'autre.
@@ -357,6 +359,7 @@ async fn main() {
         gs: env_ou("EKO_RIP_GS", if cfg!(windows) { "gswin64c" } else { "gs" }),
         max_octets: env_ou("EKO_RIP_MAX_MO", "8192").parse::<usize>().expect("EKO_RIP_MAX_MO") * 1024 * 1024,
         delai: Duration::from_secs(env_ou("EKO_RIP_DELAI_S", "1800").parse().expect("EKO_RIP_DELAI_S")),
+        rendus: std::env::var("EKO_RIP_RENDUS").ok().filter(|v| !v.is_empty()).map_or_else(rendus::par_defaut, |v| v.parse::<usize>().ok().filter(|n| (1..=rendus::MAX).contains(n)).expect("EKO_RIP_RENDUS : 1 à 16")),
         conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
         seuil_libre: env_ou("EKO_RIP_SEUIL_LIBRE_MO", "5120").parse::<u64>().expect("EKO_RIP_SEUIL_LIBRE_MO") * 1024 * 1024,
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
@@ -399,9 +402,10 @@ async fn main() {
     for m in catalogue.iter().filter(|m| m.connexion == machines::Connexion::Dossier) {
         etat::assurer_dossier(&config.donnees.join("sorties").join(&m.id));
     }
+    let rendu = rendus::Rendus::new(config.rendus);
     let etat: Partage = Arc::new(Etat {
         config,
-        rendu: Semaphore::new(1),
+        rendu,
         file: std::sync::Mutex::new(file),
         reglages: tokio::sync::Mutex::new(()),
         sessions: Default::default(),
@@ -952,7 +956,10 @@ async fn creer_travail(etat: &Partage, id: Uuid, nom: String, format: Format, d:
 
 /// D'où vient un travail, quand ce n'est pas d'un simple envoi.
 enum Origine {
+    /// Import à la main (écran) : son rendu passe devant les arrivées automatiques.
     Aucune,
+    /// Dossier surveillé : arrivée automatique, sortie dans l'ordre d'arrivée.
+    Dossier,
     /// Planche de la file : ce qu'elle imbrique, et les couches de découpe reprises des
     /// travaux posés.
     Planche(Imbriquee, Vec<decoupe::Couche>),
@@ -967,8 +974,9 @@ enum Origine {
 #[allow(clippy::too_many_arguments)]
 async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine, depart: Vec<controle::Alerte>) -> Result<Travail, (StatusCode, Refus)> {
     let estimation = matches!(origine, Origine::Estimation(_));
+    let automatique = matches!(origine, Origine::Dossier | Origine::Erp(_) | Origine::Estimation(_));
     let (imbrication, couches_decoupe, erp) = match origine {
-        Origine::Aucune => (None, vec![], None),
+        Origine::Aucune | Origine::Dossier => (None, vec![], None),
         Origine::Planche(i, c) => (Some(i), c, None),
         Origine::Erp(l) | Origine::Estimation(l) => (None, vec![], Some(l)),
     };
@@ -1093,14 +1101,15 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         estimation,
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
-    tokio::spawn(traiter(etat.clone(), travail.clone()));
+    // Inscrit avant de lancer la tâche : l'ordre d'arrivée ne dépend pas de l'ordonnanceur.
+    tokio::spawn(traiter(etat.clone(), travail.clone(), etat.rendu.inscrire(automatique)));
     for (nom_page, pdf) in autres_pages {
         let id = Uuid::new_v4();
         let rep_page = dossier(&etat.config.donnees, id);
         let ecrit = std::fs::create_dir_all(&rep_page).and_then(|()| std::fs::write(rep_page.join("source.tmp"), &pdf));
         let d = Demande { page_par_travail: false, ..travail.demande.clone() };
         let r = match ecrit {
-            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), travail.erp.clone().map_or(Origine::Aucune, Origine::Erp), depart.clone())).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
+            Ok(()) => Box::pin(creer_travail_avec(etat, id, nom_page.clone(), Format::Pdf, d, travail.fiche.clone(), travail.erp.clone().map_or(if automatique { Origine::Dossier } else { Origine::Aucune }, Origine::Erp), depart.clone())).await.map(|_| ()).map_err(|(_, (code, detail))| format!("{code} {}", detail.unwrap_or_default())),
             Err(e) => Err(e.to_string()),
         };
         if let Err(e) = r {
@@ -1325,8 +1334,9 @@ async fn abandon(rep: &std::path::Path, statut: StatusCode, (code, detail): Refu
     refus(statut, code, detail)
 }
 
-async fn traiter(etat: Partage, mut t: Travail) {
-    let _jeton = etat.rendu.acquire().await.unwrap();
+async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
+    let jeton = etat.rendu.attendre(place).await;
+    let mut a_sortir = false;
     let donnees = &etat.config.donnees;
     t.statut = Statut::EnCours;
     let _ = ecrire(donnees, &t);
@@ -1436,7 +1446,7 @@ async fn traiter(etat: Partage, mut t: Travail) {
                 match ecrire_coupes(&rep, &t) {
                     Ok(()) => {
                         t.statut = Statut::Termine;
-                        mettre_en_file_auto(&etat, &t, None);
+                        a_sortir = true;
                     }
                     Err(e) => (t.statut, t.code_erreur, t.erreur) = (Statut::Echec, Some("decoupe_illisible".into()), Some(e.to_string())),
                 }
@@ -1458,6 +1468,8 @@ async fn traiter(etat: Partage, mut t: Travail) {
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
+    // Mise en file automatique à son tour : après les arrivées automatiques d'avant.
+    jeton.terminer(a_sortir.then(|| t.clone()), |t| mettre_en_file_auto(&etat, &t, None));
     // Planche d'imbrication qui n'a pas pu se rendre : ses sorties reviennent.
     if t.imbrication.is_some() && matches!(t.statut, Statut::Echec) {
         reprendre_les_imbriquees(&etat);
@@ -2733,9 +2745,11 @@ async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let donnees = etat.config.donnees.clone();
     let tampon = tokio::task::spawn_blocking(move || poids_tampon(&donnees, &sorties)).await.unwrap_or(0);
+    let occupation = etat.rendu.occupation();
     Json(serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
         "tampon": tampon,
+        "rendus": { "simultanes": etat.rendu.simultanes(), "en_cours": occupation.0, "en_attente": occupation.1 },
         "disque_total": total,
         "disque_libre": libre,
         "conservation_jours": etat.config.conservation_jours,
@@ -2929,7 +2943,7 @@ async fn prendre_fichier(etat: &Partage, chemin: &std::path::Path, d: Demande, f
     let rep = dossier(&etat.config.donnees, id);
     std::fs::create_dir_all(&rep).map_err(|e| e.to_string())?;
     std::fs::rename(chemin, rep.join("source.tmp")).map_err(|e| e.to_string())?;
-    match creer_travail_avec(etat, id, nom, format, d, fiche, Origine::Aucune, depart).await {
+    match creer_travail_avec(etat, id, nom, format, d, fiche, Origine::Dossier, depart).await {
         Ok(_) => Ok(()),
         Err((_, (code, detail))) => {
             let _ = std::fs::rename(rep.join("source.tmp"), chemin).or_else(|_| std::fs::rename(rep.join(format.fichier()), chemin));
@@ -3891,7 +3905,7 @@ async fn refaire(etat: &Partage, mut t: Travail) -> Response {
     if let Err(e) = ecrire(donnees, &t) {
         return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string()));
     }
-    tokio::spawn(traiter(etat.clone(), t.clone()));
+    tokio::spawn(traiter(etat.clone(), t.clone(), etat.rendu.inscrire(false)));
     (StatusCode::ACCEPTED, Json(t)).into_response()
 }
 
@@ -5114,6 +5128,7 @@ mod tests {
                 gs: "gs".into(),
                 max_octets: 1 << 20,
                 delai: Duration::from_secs(5),
+                rendus: 1,
                 conservation_jours: 0,
                 seuil_libre: 0,
                 plotter: "/dev/null".into(),
@@ -5122,7 +5137,7 @@ mod tests {
                 acces_navigateur: false,
             };
             let machines = std::sync::RwLock::new(machines::catalogue_initial(&config.plotter, &config.plotter_stty, None));
-            Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines })
+            Arc::new(Etat { config, rendu: rendus::Rendus::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines })
         }
 
         pub(super) async fn appel(e: &Partage, methode: &str, uri: &str, cookie: Option<&str>, corps: Option<serde_json::Value>) -> Response {
@@ -5587,7 +5602,7 @@ mod tests {
             let e = etat("seuil");
             let mut config = e.config.clone();
             config.seuil_libre = u64::MAX / 2;
-            let e2: Partage = Arc::new(Etat { config, rendu: Semaphore::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(e.machines.read().unwrap().clone()) });
+            let e2: Partage = Arc::new(Etat { config, rendu: rendus::Rendus::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(e.machines.read().unwrap().clone()) });
             let id = Uuid::new_v4();
             let rep = dossier(&e2.config.donnees, id);
             std::fs::create_dir_all(&rep).unwrap();
@@ -6089,7 +6104,7 @@ mod tests {
             std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
             ecrire(&donnees, &t).unwrap();
             assert_eq!(appel(&e, "GET", &format!("/api/travaux/{}/bat.pdf", t.id), None, None).await.status(), StatusCode::CONFLICT);
-            traiter(e.clone(), t.clone()).await;
+            traiter(e.clone(), t.clone(), e.rendu.inscrire(false)).await;
             let r = appel(&e, "GET", &format!("/api/travaux/{}/bat.pdf?langue=en", t.id), None, None).await;
             assert_eq!(r.status(), StatusCode::OK);
             assert_eq!(r.headers()[header::CONTENT_TYPE], "application/pdf");
@@ -6342,7 +6357,7 @@ mod tests {
             std::fs::create_dir_all(&rep).unwrap();
             std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
             ecrire(&donnees, &t).unwrap();
-            traiter(e.clone(), t.clone()).await;
+            traiter(e.clone(), t.clone(), e.rendu.inscrire(false)).await;
             let etats: Vec<_> = e.file.lock().unwrap().sorties.iter().map(|s| (s.machine.clone(), s.etat)).collect();
             assert_eq!(etats, [("epson".to_string(), file::Etat::EnAttente), ("kona".to_string(), file::Etat::Suspendue)]);
             let surface = lire_travail(&donnees, t.id).unwrap().pages[0].surface_m2;
@@ -6408,7 +6423,7 @@ mod tests {
             // Page cyan pleine de 2 × 1 pouce, contour CutContour à 5 pt du bord.
             std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
             ecrire(&donnees, &t).unwrap();
-            traiter(e.clone(), t.clone()).await;
+            traiter(e.clone(), t.clone(), e.rendu.inscrire(false)).await;
             let t = lire_travail(&donnees, t.id).unwrap();
             assert!(matches!(t.statut, Statut::Termine), "{:?}", t.erreur);
             let p = &t.pages[0];
@@ -6451,7 +6466,7 @@ mod tests {
             std::fs::create_dir_all(&rep).unwrap();
             std::fs::write(rep.join("source.pdf"), imbrication::tests::pdf(144.0, 72.0, "1 0 0 0", (0.0, 0.0))).unwrap();
             ecrire(&donnees, &t).unwrap();
-            traiter(e.clone(), t.clone()).await;
+            traiter(e.clone(), t.clone(), e.rendu.inscrire(false)).await;
 
             let tarifs = serde_json::json!({ "encre_defaut": { "ml_m2": 10.0, "prix_litre": 100.0 }, "encres": { "Cyan": { "ml_m2": 20.0, "prix_litre": 200.0 } }, "support_m2": 3.0 });
             assert_eq!(appel(&e, "POST", "/api/tarifs", None, Some(tarifs)).await.status(), StatusCode::OK);
@@ -6533,6 +6548,35 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
             panic!("rendu trop long");
+        }
+
+        /// Roadmap 9.11 : 8 fichiers déposés dans un dossier surveillé, 4 rendus à la fois, les
+        /// premiers plus gros (plus longs à rendre) : la file reçoit les travaux dans l'ordre
+        /// de dépôt.
+        #[tokio::test]
+        async fn rendus_paralleles_dans_l_ordre_de_depot() {
+            let base = etat("rendus-paralleles");
+            let machines = std::sync::RwLock::new(base.machines.read().unwrap().clone());
+            let e: Partage = Arc::new(Etat { config: Config { rendus: 4, ..base.config.clone() }, rendu: rendus::Rendus::new(4), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines });
+            let d = Demande { dpi: 36, auto: reglages::Auto { imprimer: true, ..Default::default() }, ..Default::default() };
+            let depot = e.config.donnees.join("depot");
+            std::fs::create_dir_all(&depot).unwrap();
+            let noms: Vec<String> = (0..8).map(|i| format!("f{i}.pdf")).collect();
+            for (i, nom) in noms.iter().enumerate() {
+                let cote = 3000.0 - i as f64 * 350.0;
+                let chemin = depot.join(nom);
+                std::fs::write(&chemin, pdf_pages(&[PageEssai { media: [0.0, 0.0, cote, cote], crop: None, rotate: 0 }])).unwrap();
+                prendre_fichier(&e, &chemin, d.clone(), Fiche::default(), vec![]).await.unwrap();
+            }
+            for _ in 0..1200 {
+                if e.file.lock().unwrap().sorties.len() == noms.len() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            let ordre: Vec<String> = e.file.lock().unwrap().sorties.iter().map(|s| s.nom.clone()).collect();
+            assert_eq!(ordre, noms);
+            assert_eq!(e.rendu.occupation(), (0, 0));
         }
 
         /// Boîte [x0, y0, x1, y1] en mm des points d'un fichier HP-GL (unités de 0,01 mm).
@@ -7585,7 +7629,7 @@ mod tests {
         /// Le serveur relu depuis son dossier de données, comme après un redémarrage.
         fn redemarrer(e: &Partage) -> Partage {
             let machines = machines::lire(&e.config.donnees).unwrap_or_else(|| e.machines.read().unwrap().clone());
-            Arc::new(Etat { config: e.config.clone(), rendu: Semaphore::new(1), file: std::sync::Mutex::new(file::File::lire(&e.config.donnees)), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(machines) })
+            Arc::new(Etat { config: e.config.clone(), rendu: rendus::Rendus::new(1), file: std::sync::Mutex::new(file::File::lire(&e.config.donnees)), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(machines) })
         }
 
         pub(super) async fn json(r: Response) -> serde_json::Value {

@@ -633,6 +633,13 @@ Exemple : `BACHE_*` → Bâche ; `*.pdf`, grand côté de 2000 à vide → Grand
 Vinyle. Un fichier qu'aucune règle ne prend va dans `entrees-auto/refuses/` avec sa raison.
 Les règles sont dans la sauvegarde de la configuration.
 
+**Plusieurs rendus à la fois** : le serveur rend plusieurs travaux en même temps (un par
+cœur, 4 au plus, réglable par `EKO_RIP_RENDUS`), montrés dans Système > **Rendus
+simultanés**. Les arrivées des dossiers surveillés et de l'ERP partent en file dans leur
+ordre de dépôt, même quand un petit fichier finit son rendu avant un gros arrivé plus tôt.
+Un fichier envoyé à la main depuis l'écran passe devant les arrivées automatiques qui
+attendent leur rendu, et part dès qu'il est prêt.
+
 **Motif à balises du nom** (même éditeur, facultatif) : le nom du fichier porte lui-même le
 réglage et le reste. Avec `{nom}__{machine}__{reglage}__{copies}`,
 `Affiche__epson__bache__30.pdf` donne le réglage Bâche, l'Epson et 30 copies. Chaque balise
