@@ -229,8 +229,11 @@ Vue **Production** (barre du haut ; **Système** à côté), en trois zones :
 
 - **Machines** (en haut) : une ligne par machine, avec son état (prête, en cours et la
   sortie qui passe, injoignable), le support chargé, les niveaux d'encre de l'Epson, le
-  nombre de sorties en file et la durée restante. Un clic n'affiche que cette machine ; un
-  second clic les remet toutes (même choix que **Afficher**).
+  nombre de sorties en file, leur poids dans le tampon (les plaques à envoyer) et la durée
+  restante. Un clic n'affiche que cette machine ; un second clic les remet toutes (même
+  choix que **Afficher**). Sous le tableau : le tampon de toute la file et le disque des
+  données (% occupé, place libre, jauge), en rouge quand le libre passe sous le seuil de
+  purge (`EKO_RIP_SEUIL_LIBRE_MO`). Ces compteurs se relisent avec la file.
 - **À imprimer** : les sorties en file, dans l'ordre de la file, puis les travaux pas encore
   envoyés (« Non envoyé »). Colonnes : vignette, nom, état, machine, format, échéance,
   durée, date. Les planches en préparation s'affichent au-dessus. La colonne de boutons à

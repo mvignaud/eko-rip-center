@@ -217,9 +217,12 @@ and **Whole page (no tiling)** goes back to a single page.
 **Production** view (top bar; **System** next to it), in three areas:
 
 - **Machines** (top): one row per machine, with its state (ready, printing and the output
-  running, unreachable), loaded media, the Epson's ink levels, the number of queued outputs
-  and the time left. A click shows only that machine; a second click shows them all again
-  (same choice as **Show**).
+  running, unreachable), loaded media, the Epson's ink levels, the number of queued outputs,
+  their spool weight (the plates to send) and the time left. A click shows only that
+  machine; a second click shows them all again (same choice as **Show**). Under the table:
+  the whole queue's spool and the data disk (% used, free space, gauge), in red when free
+  space drops below the purge threshold (`EKO_RIP_SEUIL_LIBRE_MO`). These counters refresh
+  with the queue.
 - **To print**: the queued outputs, in queue order, then the jobs not sent yet ("Not
   sent"). Columns: thumbnail, name, state, machine, size, due date, time, date. Nests in
   preparation show above. The button column on the left acts on the chosen output: **To

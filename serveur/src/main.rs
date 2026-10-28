@@ -2651,11 +2651,15 @@ fn plus_vieux_inactifs(travaux: &[Travail]) -> Vec<Uuid> {
     v.into_iter().map(|t| t.id).collect()
 }
 
-/// Espace du disque des données et version.
+/// Espace du disque des données, poids du tampon de la file (roadmap 9.6) et version.
 async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
     let (total, libre) = espace_disque(&etat.config.donnees).await.map_or((None, None), |(t, l)| (Some(t), Some(l)));
+    let sorties = etat.file.lock().unwrap().sorties.clone();
+    let donnees = etat.config.donnees.clone();
+    let tampon = tokio::task::spawn_blocking(move || poids_tampon(&donnees, &sorties)).await.unwrap_or(0);
     Json(serde_json::json!({
         "version": env!("CARGO_PKG_VERSION"),
+        "tampon": tampon,
         "disque_total": total,
         "disque_libre": libre,
         "conservation_jours": etat.config.conservation_jours,
@@ -3569,6 +3573,26 @@ fn raison_de(donnees: &std::path::Path, s: &file::Sortie, tout: &[file::Sortie],
     }
 }
 
+/// Poids dans le tampon d'une sortie (roadmap 9.6) : les plaques que l'impression enverra,
+/// ou le fichier de tracés d'une découpe. Une sortie posée sur une planche ne pèse rien : la
+/// planche, une sortie à part, porte ce poids.
+fn poids_sortie(donnees: &std::path::Path, s: &file::Sortie) -> u64 {
+    let taille = |c: PathBuf| std::fs::metadata(c).map_or(0, |m| m.len());
+    let rep = dossier(donnees, s.travail);
+    if s.etat == file::Etat::Imbriquee {
+        return 0;
+    }
+    if s.operation() == machines::Operation::Decoupe {
+        return taille(fichier_traces(&rep, s.page));
+    }
+    lire_page(donnees, s.travail, s.page).map_or(0, |(_, p)| p.plaques.iter().filter(|n| !p.plaques_decoupe.contains(n)).map(|n| taille(render::chemin_plaque(&rep, s.page, n))).sum())
+}
+
+/// Tampon de la file : poids des sorties encore à passer.
+fn poids_tampon(donnees: &std::path::Path, sorties: &[file::Sortie]) -> u64 {
+    sorties.iter().filter(|s| s.active()).map(|s| poids_sortie(donnees, s)).sum()
+}
+
 async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>> {
     let sorties = etat.file.lock().unwrap().sorties.clone();
     let tout = sorties.clone();
@@ -3586,6 +3610,7 @@ async fn lister_file(State(etat): State<Partage>) -> Json<Vec<serde_json::Value>
                     .and_then(|(m, (t, p))| m.duree_impression_min(p.hauteur_mm, t.demande.dpi));
                 let mut v = serde_json::to_value(&s).unwrap();
                 v["duree_min"] = serde_json::json!(duree);
+                v["poids"] = serde_json::json!(s.active().then(|| poids_sortie(&donnees, &s)));
                 // Fiche travail (roadmap 5.6) visible dans la file ; planche d'une imbriquée.
                 if let Some(t) = lire_travail(&donnees, s.travail) {
                     v["fiche"] = serde_json::to_value(&t.fiche).unwrap();
@@ -5306,6 +5331,43 @@ mod tests {
             // Sans épreuve (champ vide) : comme avant.
             assert_eq!(appel(&e, "POST", "/api/file", None, demande("petite", "", "impression")).await.status(), StatusCode::CREATED);
             assert_eq!(e.file.lock().unwrap().sorties.len(), 3);
+            std::fs::remove_dir_all(&donnees).unwrap();
+        }
+
+        /// Compteurs de file (roadmap 9.6) : poids de chaque sortie à passer, tampon total.
+        #[tokio::test]
+        async fn compteurs_de_file() {
+            let e = etat("compteurs");
+            let donnees = e.config.donnees.clone();
+            let machine = e.machines.read().unwrap()[0].id.clone();
+            let id = Uuid::new_v4();
+            let rep = dossier(&donnees, id);
+            std::fs::create_dir_all(rep.join("prod")).unwrap();
+            // Le ton de découpe n'est jamais envoyé : il ne pèse pas.
+            for (plaque, taille) in [("Cyan", 3000), ("Magenta", 1000), ("CutContour", 500)] {
+                std::fs::write(render::chemin_plaque(&rep, 1, plaque), vec![0u8; taille]).unwrap();
+            }
+            std::fs::write(render::chemin_plaque(&rep, 2, "Magenta"), vec![0u8; 700]).unwrap();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Vitrine", "statut": "termine", "erreur": null, "cree_le": 0,
+                "pages": [{ "plaques": ["Cyan", "Magenta", "CutContour"], "plaques_decoupe": ["CutContour"], "traces_decoupe": 0, "largeur_mm": 100.0, "hauteur_mm": 100.0 },
+                    { "plaques": ["Magenta"], "traces_decoupe": 0, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            ecrire(&donnees, &t).unwrap();
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            let tampon = || async { corps(appel(&e, "GET", "/api/systeme", None, None).await).await["tampon"].clone() };
+            assert_eq!(tampon().await, 0, "file vide");
+            for page in [1, 2] {
+                let r = appel(&e, "POST", "/api/file", None, Some(serde_json::json!({ "travail": id, "page": page, "machine": machine, "operation": "impression" }))).await;
+                assert_eq!(r.status(), StatusCode::CREATED);
+            }
+            let file = corps(appel(&e, "GET", "/api/file", None, None).await).await;
+            assert_eq!(file.as_array().unwrap().iter().map(|s| s["poids"].clone()).collect::<Vec<_>>(), [4000, 700]);
+            assert_eq!(tampon().await, 4700);
+            // Une sortie annulée quitte le tampon.
+            let premiere = e.file.lock().unwrap().sorties[0].id;
+            assert_eq!(appel(&e, "POST", &format!("/api/file/{premiere}/annuler"), None, None).await.status(), StatusCode::NO_CONTENT);
+            let file = corps(appel(&e, "GET", "/api/file", None, None).await).await;
+            assert_eq!(file[0]["poids"], serde_json::Value::Null);
+            assert_eq!(tampon().await, 700);
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 
