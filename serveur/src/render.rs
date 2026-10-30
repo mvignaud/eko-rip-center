@@ -644,4 +644,67 @@ mod tests {
         assert_eq!(pixel(&dossier, 1, "White", 140.0, 72), 0, "un ton direct n'est pas converti");
         std::fs::remove_dir_all(&dossier).unwrap();
     }
+
+    /// Roadmap 9.15 : mire 64 × 64 px en noir à 100 ppi, rendue à 400 dpi (×4). Le
+    /// rééchantillonnage lissé suit bien mieux la mire continue que le plus proche voisin.
+    #[tokio::test]
+    async fn reechantillonnage_lisse_plus_fidele_a_l_agrandissement() {
+        let mire = |u: f64, v: f64| 127.5 + 127.5 * (u * 0.35).sin() * (v * 0.27).cos();
+        let cote = 64usize;
+        let pt = cote as f64 * 72.0 / 100.0;
+        let mut px = Vec::with_capacity(cote * cote * 4);
+        for y in 0..cote {
+            for x in 0..cote {
+                px.extend([0, 0, 0, 255 - mire(x as f64 + 0.5, y as f64 + 0.5).round() as u8]);
+            }
+        }
+        let contenu = format!("q {pt} 0 0 {pt} 0 0 cm /I Do Q");
+        let mut pdf = b"%PDF-1.4\n".to_vec();
+        let mut positions = vec![];
+        let objets: Vec<Vec<u8>> = vec![
+            b"<< /Type /Catalog /Pages 2 0 R >>".to_vec(),
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_vec(),
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pt} {pt}] /Contents 4 0 R /Resources << /XObject << /I 5 0 R >> >> >>").into_bytes(),
+            format!("<< /Length {} >>\nstream\n{contenu}\nendstream", contenu.len()).into_bytes(),
+            [format!("<< /Type /XObject /Subtype /Image /Width {cote} /Height {cote} /ColorSpace /DeviceCMYK /BitsPerComponent 8 /Length {} >>\nstream\n", px.len()).into_bytes(), px, b"\nendstream".to_vec()].concat(),
+        ];
+        for (i, o) in objets.iter().enumerate() {
+            positions.push(pdf.len());
+            pdf.extend(format!("{} 0 obj\n", i + 1).bytes());
+            pdf.extend(o);
+            pdf.extend(b"\nendobj\n");
+        }
+        let xref = pdf.len();
+        pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objets.len() + 1).bytes());
+        for p in positions {
+            pdf.extend(format!("{p:010} 00000 n \n").bytes());
+        }
+        pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objets.len() + 1).bytes());
+
+        let pdf = &pdf;
+        let psnr = |reechantillonnage| async move {
+            let dossier = std::env::temp_dir().join(format!("eko-rip-reech-{reechantillonnage:?}-{}", std::process::id()));
+            std::fs::create_dir_all(&dossier).unwrap();
+            let source = dossier.join("source.pdf");
+            std::fs::write(&source, pdf).unwrap();
+            let options = crate::reglages::Demande { reechantillonnage, ..Default::default() }.options_ghostscript(Path::new("/profils"));
+            rendre("gs", &source, &dossier, 400, &options, Duration::from_secs(60), &Default::default()).await.unwrap();
+            let img = image::open(dossier.join(format!("prod/{}(Black).tif", prefixe(1)))).unwrap().to_luma8();
+            assert_eq!(img.dimensions(), (256, 256));
+            // Bords exclus : chaque filtre y traite la sortie de l'image à sa façon.
+            let (mut somme, mut n) = (0.0, 0.0);
+            for y in 8..248 {
+                for x in 8..248 {
+                    let e = img.get_pixel(x, y)[0] as f64 - mire((x as f64 + 0.5) / 4.0, (y as f64 + 0.5) / 4.0);
+                    somme += e * e;
+                    n += 1.0;
+                }
+            }
+            std::fs::remove_dir_all(&dossier).unwrap();
+            10.0 * (255.0f64 * 255.0 / (somme / n)).log10()
+        };
+        let proche = psnr(crate::reglages::Reechantillonnage::ProcheVoisin).await;
+        let lisse = psnr(crate::reglages::Reechantillonnage::Lisse).await;
+        assert!(lisse > proche + 10.0, "PSNR lissé {lisse:.1} dB, plus proche voisin {proche:.1} dB");
+    }
 }
