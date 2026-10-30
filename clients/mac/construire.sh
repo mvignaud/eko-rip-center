@@ -28,7 +28,11 @@ RACINE="$(cd "$ICI/../.." && pwd)"
 ICONES="$RACINE/clients/icone"
 SORTIE="$ICI/dist"
 NOM="E-KO RIP Center"
-APP="$SORTIE/$NOM.app"
+# Assemblage et signature hors du dossier source : sous ~/Documents (iCloud Drive), File
+# Provider repose aussitôt com.apple.FinderInfo sur le paquet et codesign le refuse.
+ATELIER="$(mktemp -d)"
+trap 'rm -rf "$ATELIER"' EXIT
+APP="$ATELIER/$NOM.app"
 
 # Version du dépôt : première ligne « version = "x.y.z" » de la section [workspace.package].
 VERSION="$(awk '
@@ -145,6 +149,8 @@ rm -rf "$(dirname "$ICONSET")"
 # 5. Signature : Developer ID si disponible (EKO_SIGNATURE, ou le seul certificat
 #    « Developer ID Application » du trousseau), ad hoc sinon.
 SIGNATURE="${EKO_SIGNATURE:-}"
+# codesign refuse les attributs étendus (Finder, provenance) que le dossier source dépose.
+xattr -cr "$APP"
 if [[ -z "$SIGNATURE" ]]; then
     IDENTITES="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p')"
     if [[ -n "$IDENTITES" && "$(printf '%s\n' "$IDENTITES" | wc -l)" -eq 1 ]]; then
@@ -174,13 +180,12 @@ fi
 codesign --verify --deep --strict "$APP"
 
 # 6. Image disque.
-DMG="$SORTIE/${NOM}_${VERSION}_universal.dmg"
-PREPARATION="$(mktemp -d)"
+DMG="$ATELIER/${NOM}_${VERSION}_universal.dmg"
+PREPARATION="$ATELIER/volume"
+mkdir "$PREPARATION"
 cp -R "$APP" "$PREPARATION/"
 ln -s /Applications "$PREPARATION/Applications"
-rm -f "$DMG"
 hdiutil create -volname "$NOM" -srcfolder "$PREPARATION" -ov -format UDZO "$DMG"
-rm -rf "$PREPARATION"
 
 # 7. Signature et notarisation du .dmg (Developer ID seulement ; notarisation si le profil
 #    notarytool « eko-notarisation » existe).
@@ -196,5 +201,10 @@ if [[ -n "$SIGNATURE" ]]; then
     fi
 fi
 
-echo "==> $APP"
-echo "==> $DMG"
+# 8. Copie dans dist/ (l'app copiée y reprend des attributs étendus : c'est le .dmg qui fait foi).
+mkdir -p "$SORTIE"
+rm -rf "$SORTIE/$NOM.app"
+ditto "$APP" "$SORTIE/$NOM.app"
+cp "$DMG" "$SORTIE/"
+echo "==> $SORTIE/$NOM.app"
+echo "==> $SORTIE/$(basename "$DMG")"
