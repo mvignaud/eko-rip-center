@@ -1375,7 +1375,7 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     let rendu = match t.demande.mode {
         Mode::Imprimer => match preparer_impression(&rep, reperage, t.demande.fond_reperes, t.id).await {
             Ok((pdf, mises)) => {
-                let options = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils);
+                let options = t.demande.options_ghostscript(&etat.config.profils);
                 match render::rendre(&etat.config.gs, &pdf, &rep, t.demande.dpi, &options, etat.config.delai, &tons::pour_le_travail(donnees, &t.demande.couleur)).await {
                     Ok(r) => match filtrer(&rep, &r.pages, t.demande.edition.filtre.clone(), t.demande.dpi).await {
                         Ok(()) => ajouter_blanc(&rep, r.pages, t.demande.blanc, t.demande.dpi).await.map(|p| (Some(p), mises, r.tons_fondus)),
@@ -1666,7 +1666,7 @@ async fn bat_pdf(State(etat): State<Partage>, Chemin(id): Chemin<Uuid>, axum::ex
         let plus_grand = tailles.iter().map(|(l, h)| l.max(*h)).fold(1.0, f64::max) / 72.0;
         let dpi = (1800.0 / plus_grand).clamp(10.0, 150.0) as u32;
         tokio::fs::write(tmp.join("bat.pdf"), neutre).await.map_err(|e| e.to_string())?;
-        let epreuve: Vec<String> = couleur::options_ghostscript(&t.demande.couleur, &etat.config.profils).iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
+        let epreuve: Vec<String> = t.demande.options_ghostscript(&etat.config.profils).iter().map(|o| o.replace("-sOutputICCProfile=", "-sProofProfile=")).collect();
         render::ghostscript(&etat.config.gs, &tmp.join("bat.pdf"), "png16m", dpi, &epreuve, &tmp.join("p-%03d.png"), etat.config.delai).await?;
         let mut pages = vec![];
         for (i, d) in decoupes.into_iter().enumerate() {
@@ -4418,6 +4418,7 @@ fn demande_planche(g: &Groupe) -> Demande {
         rotation_auto: false,
         etendre_coupe: d.etendre_coupe,
         fond_reperes: d.fond_reperes,
+        reechantillonnage: d.reechantillonnage,
         auto: reglages::Auto { imprimer: true, decouper: g.decoupeuse.is_some(), suspendre: false },
         ..Default::default()
     }
