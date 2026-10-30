@@ -64,6 +64,12 @@ Hors lot 1 (écrans d'administration, restent dans le client Tauri pour l'instan
 supports, règles, balises, tarifs, tons directs, pont ERP, sauvegarde, éditeur de
 machines, planche d'imbrication, détourage, mise en coupe.
 
+À prévoir dans les clients natifs (pas dans le client Tauri) :
+
+- **9.14** : un client relié à plusieurs serveurs RIP, avec une file unifiée.
+- Réglage du travail « Lissage des images agrandies » : champ `reechantillonnage` de la
+  demande (`proche_voisin` par défaut, ou `lisse`), feuille de route 9.15.
+
 ## Contrat de l'API pour les clients
 
 - Chaque requête porte un User-Agent contenant `EKO-RIP-Client/` (sinon le serveur
