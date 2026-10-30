@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=E-KO RIP Center
+Name[fr]=E-KO RIP Center
+GenericName=RIP d'impression grand format
+GenericName[fr]=RIP d'impression grand format
+Comment=Envoyer des fichiers au RIP, suivre les travaux, les files et les machines
+Comment[fr]=Envoyer des fichiers au RIP, suivre les travaux, les files et les machines
+Exec=e-ko-rip-center %F
+Icon=fr.e-ko.rip-center
+Terminal=false
+Categories=Graphics;
+Keywords=RIP;impression;grand format;traceur;découpe;
+StartupNotify=true
+StartupWMClass=fr.e-ko.rip-center
+MimeType=application/pdf;image/svg+xml;image/tiff;image/png;image/jpeg;

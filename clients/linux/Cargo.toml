@@ -1,0 +1,47 @@
+[package]
+name = "e-ko-rip-center"
+version = "0.29.0"
+edition = "2024"
+license = "LicenseRef-proprietaire"
+publish = false
+description = "Client Linux natif d'E-KO RIP Center (GTK 4 et libadwaita)"
+
+# Crate autonome : pas membre du workspace racine.
+[workspace]
+
+[dependencies]
+adw = { version = "0.9", package = "libadwaita", features = ["v1_4"] }
+async-channel = "2.5.0"
+gtk = { version = "0.11", package = "gtk4", features = ["v4_10"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", features = ["json"] }
+# Passerelle vers les écrans d'administration pas encore natifs (fenêtre Administration).
+webkit = { version = "0.6", package = "webkit6" }
+
+[profile.release]
+lto = true
+strip = true
+
+# Paquet Debian : `cargo deb` dans clients/linux (sur le serveur de test, Ubuntu 26.04).
+# Même nom que l'ancien client Tauri : il le remplace par une simple mise à jour.
+[package.metadata.deb]
+name = "e-ko-rip-center"
+maintainer = "2M Numérique <mathieu.vignaud2@gmail.com>"
+copyright = "2026, 2M Numérique"
+extended-description = "Client Linux natif du RIP E-KO RIP Center (GTK 4 et libadwaita) : envoi des fichiers, suivi des travaux, des files d'attente et des machines du serveur."
+depends = "$auto, libgtk-4-1, libadwaita-1-0 (>= 1.4)"
+section = "graphics"
+priority = "optional"
+assets = [
+    ["target/release/e-ko-rip-center", "usr/bin/", "755"],
+    ["fr.e-ko.rip-center.desktop", "usr/share/applications/", "644"],
+    ["../icone/icone-16.png", "usr/share/icons/hicolor/16x16/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-32.png", "usr/share/icons/hicolor/32x32/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-48.png", "usr/share/icons/hicolor/48x48/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-64.png", "usr/share/icons/hicolor/64x64/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-128.png", "usr/share/icons/hicolor/128x128/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-256.png", "usr/share/icons/hicolor/256x256/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-512.png", "usr/share/icons/hicolor/512x512/apps/fr.e-ko.rip-center.png", "644"],
+    ["../icone/icone-1024.png", "usr/share/icons/hicolor/1024x1024/apps/fr.e-ko.rip-center.png", "644"],
+]

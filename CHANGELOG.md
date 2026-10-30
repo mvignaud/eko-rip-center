@@ -15,7 +15,18 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.29.0] — 2026-10-30
+
 ### Ajouté
+- **Nouveaux clients natifs Mac et Linux** : de vrais logiciels à la place de la page
+  HTML ouverte dans le client Tauri. Sur Mac, une application SwiftUI universelle (Apple
+  Silicon et Intel), signée et notarisée par Apple ; sur Linux, une application GTK 4 /
+  libadwaita, toujours dans le paquet `e-ko-rip-center` du dépôt APT. Fenêtre à trois
+  volets (barre latérale, file des travaux, inspecteur), mode clair et sombre, glisser-déposer
+  des fichiers avec choix du réglage, aperçu, impression, relance, épreuve TIFF, machines,
+  système et notifications de fin de travail. Nouvelle icône. Les écrans d'administration
+  (supports, règles, tarifs, pont ERP, sauvegarde) s'ouvrent pour l'instant par le menu
+  **Administration…**, dans une fenêtre à part ; Windows suivra.
 - **Rééchantillonnage lissé des images** (feuille de route 9.15) : réglage `reechantillonnage`
   de la demande, `proche_voisin` (par défaut, pixels francs) ou `lisse` (filtre cubique de
   Ghostscript) pour les photos et dégradés agrandis. Mire 100 ppi agrandie ×4 : 48,6 dB de
@@ -28,10 +39,15 @@ parité ; d'ici là, 0.Y.Z.
   aplatis ou supprimés, plafond de taille (la définition baisse, la taille physique reste
   exacte, pour certifier les cotes d'un lé). Réglage `epreuve` pour la faire d'office
   après le rendu, et **épreuve seule** (`epreuve_seule`) : rien ne part à l'impression.
+- **Envoi avec un réglage enregistré** : champ `reglage` de `POST /api/travaux` ; le
+  serveur applique lui-même le réglage nommé (refus `reglage_inconnu` sinon). Base des
+  nouveaux clients natifs Mac et Linux (`docs/clients-natifs.md`).
 
 *Added: TIFF proof after RIP (device CMYK or colorimetric RGB, spot colours as channels,
 flattened or removed, size cap keeping exact physical size), made on demand or after
-rendering, and a proof-only option that never prints.*
+rendering, and a proof-only option that never prints. Upload with a saved preset
+(`reglage` field). New native Mac (SwiftUI, signed and notarised) and Linux (GTK 4)
+clients replace the HTML page in the Tauri window; new icon.*
 
 ## [0.28.0] — 2026-10-28
 
