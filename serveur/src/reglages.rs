@@ -161,6 +161,26 @@ pub struct Demande {
     /// Épreuve seule : l'épreuve TIFF est faite, rien ne part à l'impression.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub epreuve_seule: bool,
+    /// Rééchantillonnage des images matricielles agrandies ou réduites au rendu (roadmap 9.15).
+    #[serde(default, skip_serializing_if = "Reechantillonnage::est_defaut")]
+    pub reechantillonnage: Reechantillonnage,
+}
+
+/// Comment Ghostscript passe une image de sa résolution à celle du rendu (roadmap 9.15).
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Reechantillonnage {
+    /// Plus proche voisin : pixels francs, le choix des codes-barres et des aplats nets.
+    #[default]
+    ProcheVoisin,
+    /// Filtre cubique (Mitchell) de Ghostscript : dégradés et photos agrandies sans escaliers.
+    Lisse,
+}
+
+impl Reechantillonnage {
+    fn est_defaut(&self) -> bool {
+        *self == Reechantillonnage::ProcheVoisin
+    }
 }
 
 fn vrai() -> bool {
@@ -198,11 +218,20 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1, epreuve: None, epreuve_seule: false }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1, epreuve: None, epreuve_seule: false, reechantillonnage: Reechantillonnage::ProcheVoisin }
     }
 }
 
 impl Demande {
+    /// Options de Ghostscript du rendu : couleur, puis rééchantillonnage des images.
+    pub fn options_ghostscript(&self, profils: &std::path::Path) -> Vec<String> {
+        let mut o = couleur::options_ghostscript(&self.couleur, profils);
+        if self.reechantillonnage == Reechantillonnage::Lisse {
+            o.push("-dDOINTERPOLATE".into());
+        }
+        o
+    }
+
     /// Contrôle les bornes ; rend le code d'erreur traduit par l'écran.
     pub fn verifier(&self, profils: &[couleur::Profil]) -> Result<(), &'static str> {
         if !(36..=2880).contains(&self.dpi) {

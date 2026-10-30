@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Rééchantillonnage lissé des images** (feuille de route 9.15) : réglage `reechantillonnage`
+  de la demande, `proche_voisin` (par défaut, pixels francs) ou `lisse` (filtre cubique de
+  Ghostscript) pour les photos et dégradés agrandis. Mire 100 ppi agrandie ×4 : 48,6 dB de
+  PSNR contre 30,2 dB. Repris par les planches d'imbrication et le BAT. Réglable par l'API
+  en attendant les nouveaux clients.
+  *Smooth (cubic) image resampling option for upscaled raster images.*
 - **Épreuve TIFF après RIP** (feuille de route 9.13) : bouton **Épreuve TIFF** et route
   `/api/travaux/{id}/pages/{n}/epreuve.tif` ; TIFF des plaques rendues en valeurs machine
   (CMJN, profil du support) ou colorimétrique (RVB), tons directs gardés en canaux,
