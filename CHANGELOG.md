@@ -22,10 +22,14 @@ parité ; d'ici là, 0.Y.Z.
   aplatis ou supprimés, plafond de taille (la définition baisse, la taille physique reste
   exacte, pour certifier les cotes d'un lé). Réglage `epreuve` pour la faire d'office
   après le rendu, et **épreuve seule** (`epreuve_seule`) : rien ne part à l'impression.
+- **Envoi avec un réglage enregistré** : champ `reglage` de `POST /api/travaux` ; le
+  serveur applique lui-même le réglage nommé (refus `reglage_inconnu` sinon). Base des
+  nouveaux clients natifs Mac et Linux (`docs/clients-natifs.md`).
 
 *Added: TIFF proof after RIP (device CMYK or colorimetric RGB, spot colours as channels,
 flattened or removed, size cap keeping exact physical size), made on demand or after
-rendering, and a proof-only option that never prints.*
+rendering, and a proof-only option that never prints. Upload with a saved preset
+(`reglage` field), the base of the new native Mac and Linux clients.*
 
 ## [0.28.0] — 2026-10-28
 
