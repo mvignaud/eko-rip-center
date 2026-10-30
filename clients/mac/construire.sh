@@ -1,7 +1,12 @@
 #!/bin/bash
-# Construit « E-KO RIP Center.app » (universelle arm64 + x86_64, signée ad hoc) puis le
+# Construit « E-KO RIP Center.app » (universelle arm64 + x86_64) puis le
 # .dmg « E-KO RIP Center_<version>_universal.dmg ». À lancer sur un Mac (Xcode ou outils en
 # ligne de commande). Sortie dans clients/mac/dist/.
+#
+# Signature : avec le certificat « Developer ID Application » du trousseau (ou celui nommé par
+# EKO_SIGNATURE), sinon ad hoc. Notarisation si le profil notarytool « eko-notarisation »
+# existe ; à créer une fois à la main (mot de passe d'application de appleid.apple.com) :
+#   xcrun notarytool store-credentials eko-notarisation --apple-id <identifiant> --team-id <TEAMID>
 #
 # La version est lue dans le Cargo.toml racine ([workspace.package] version).
 #
@@ -137,8 +142,35 @@ cp "$ICONES/icone-1024.png" "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET")"
 
-# 5. Signature ad hoc (pas de compte développeur : au premier lancement, clic droit > Ouvrir).
-codesign --force --deep -s - "$APP"
+# 5. Signature : Developer ID si disponible (EKO_SIGNATURE, ou le seul certificat
+#    « Developer ID Application » du trousseau), ad hoc sinon.
+SIGNATURE="${EKO_SIGNATURE:-}"
+if [[ -z "$SIGNATURE" ]]; then
+    IDENTITES="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p')"
+    if [[ -n "$IDENTITES" && "$(printf '%s\n' "$IDENTITES" | wc -l)" -eq 1 ]]; then
+        SIGNATURE="$IDENTITES"
+    fi
+fi
+if [[ -n "$SIGNATURE" ]]; then
+    echo "==> Signature : $SIGNATURE"
+    DROITS="$(mktemp)"
+    # Pas de bac à sable : seul l'accès réseau sortant est déclaré.
+    cat > "$DROITS" <<DROITS
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>
+DROITS
+    codesign --force --options runtime --timestamp --entitlements "$DROITS" -s "$SIGNATURE" "$APP"
+    rm -f "$DROITS"
+else
+    echo "==> Signature AD HOC : aucun certificat Developer ID (au premier lancement, clic droit > Ouvrir)."
+    codesign --force --deep -s - "$APP"
+fi
 codesign --verify --deep --strict "$APP"
 
 # 6. Image disque.
@@ -149,6 +181,20 @@ ln -s /Applications "$PREPARATION/Applications"
 rm -f "$DMG"
 hdiutil create -volname "$NOM" -srcfolder "$PREPARATION" -ov -format UDZO "$DMG"
 rm -rf "$PREPARATION"
+
+# 7. Signature et notarisation du .dmg (Developer ID seulement ; notarisation si le profil
+#    notarytool « eko-notarisation » existe).
+if [[ -n "$SIGNATURE" ]]; then
+    codesign --force --timestamp -s "$SIGNATURE" "$DMG"
+    if xcrun notarytool history --keychain-profile eko-notarisation >/dev/null 2>&1; then
+        echo "==> Notarisation…"
+        xcrun notarytool submit "$DMG" --keychain-profile eko-notarisation --wait
+        xcrun stapler staple "$DMG"
+        spctl -a -vv -t open --context context:primary-signature "$DMG"
+    else
+        echo "==> Pas de notarisation : profil notarytool « eko-notarisation » absent."
+    fi
+fi
 
 echo "==> $APP"
 echo "==> $DMG"
