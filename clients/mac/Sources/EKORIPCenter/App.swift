@@ -27,6 +27,11 @@ struct EKORIPCenterApp: App {
                 Button("Actualiser") { Task { await etat.rafraichir() } }
                     .keyboardShortcut("r")
                     .disabled(etat.phase != .connecte)
+                Button("Administration…") {
+                    if let racine = etat.api?.racine { Administration.ouvrir(racine: racine) }
+                }
+                    .keyboardShortcut(",", modifiers: [.command, .option])
+                    .disabled(etat.phase != .connecte)
                 Divider()
                 Button("Changer de serveur…") { etat.changerServeur() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])

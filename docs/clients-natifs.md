@@ -60,7 +60,8 @@ un aperçu. Interface en français (l'anglais viendra plus tard).
 7. **Notifications** du système quand un travail passe à `termine` ou `echec`, et quand une
    sortie se termine.
 
-Hors lot 1 (écrans d'administration, restent dans le client Tauri pour l'instant) :
+Hors lot 1 (écrans d'administration) : ouverts en attendant par le menu « Administration… »
+de chaque client, qui montre l'écran complet du serveur dans une fenêtre web à part :
 supports, règles, balises, tarifs, tons directs, pont ERP, sauvegarde, éditeur de
 machines, planche d'imbrication, détourage, mise en coupe.
 

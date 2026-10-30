@@ -142,6 +142,7 @@ impl Fenetre {
         titre_pile.add_named(&titre_page, Some("titre"));
 
         let menu = gio::Menu::new();
+        menu.append(Some("Administration…"), Some("win.administration"));
         menu.append(Some("Changer de serveur…"), Some("win.changer-serveur"));
         menu.append(Some("Se déconnecter"), Some("win.deconnecter"));
         let menu_bas = gio::Menu::new();
@@ -311,6 +312,7 @@ impl Fenetre {
             f.recherche.grab_focus();
         });
         ajouter("apropos", |f| f.a_propos());
+        ajouter("administration", |f| f.administration());
         // « Se déconnecter » garde son action en champ : elle s'active selon la session.
         let faible = Rc::downgrade(self);
         self.action_deconnecter.connect_activate(move |_, _| {
@@ -805,6 +807,25 @@ impl Fenetre {
             });
         });
         dialogue.present();
+    }
+
+    /// Écrans d'administration (supports, règles, tarifs, pont ERP, sauvegarde…) pas encore
+    /// natifs : l'écran complet du serveur dans une fenêtre à part, avec la signature du
+    /// client. Passerelle temporaire, à retirer quand ces écrans seront natifs.
+    fn administration(&self) {
+        use webkit::prelude::*;
+        let Some(client) = self.client.borrow().clone() else { return };
+        let vue = webkit::WebView::new();
+        if let Some(r) = WebViewExt::settings(&vue) {
+            r.set_user_agent(Some(&format!("Mozilla/5.0 EKO-RIP-Client/{VERSION} (Linux)")));
+        }
+        vue.load_uri(&format!("{}/", client.base()));
+        let f = adw::Window::builder().title("Administration — E-KO RIP Center").default_width(1200).default_height(820).transient_for(&self.fen).build();
+        let barre = adw::ToolbarView::new();
+        barre.add_top_bar(&adw::HeaderBar::new());
+        barre.set_content(Some(&vue));
+        f.set_content(Some(&barre));
+        f.present();
     }
 
     fn a_propos(&self) {
