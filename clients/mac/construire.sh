@@ -4,6 +4,13 @@
 # ligne de commande). Sortie dans clients/mac/dist/.
 #
 # La version est lue dans le Cargo.toml racine ([workspace.package] version).
+#
+# Avec les seuls outils en ligne de commande 27 (Xcode absent ou non sélectionné), le SDK
+# macOS 27 ne fournit pas le greffon des macros SwiftUI (@State) : compiler avec le SDK 26,
+#   SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ./construire.sh
+# et lancer les tests avec
+#   swift test -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
+# Avec Xcode sélectionné (xcode-select -s, licence acceptée), rien de cela n'est nécessaire.
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
