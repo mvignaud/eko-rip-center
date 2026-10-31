@@ -15,6 +15,8 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.30.0] — 2026-10-31
+
 ### Ajouté
 - **Statistiques anonymes d'installation.** Le serveur et les clients Mac et Linux envoient à
   `platform.e-ko.rip/api/ping`, à l'installation, à chaque mise à jour puis chaque semaine, un
@@ -125,6 +127,11 @@ parité ; d'ici là, 0.Y.Z.
 - Renvoi : un flux reçu d'un autre RIP ne peut plus viser une machine qui renvoie
   elle-même vers un troisième (`renvoi_en_chaine`), notre jeton ne sert plus de relais.
   *No chained forwarding through this RIP.*
+
+*Added: E-KO RIP Cloud (remote access without VPN through platform.e-ko.rip, pairing by
+code, portal), anonymous installation statistics (opt-out), bug reports ("Report a problem"
+in the Mac and Linux clients, opt-in automatic reports with masked server log, GitHub issue
+without log or e-mail), G7 grey calibration and other roadmap items.*
 
 ## [0.29.0] — 2026-10-30
 
