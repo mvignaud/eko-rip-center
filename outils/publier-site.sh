@@ -32,9 +32,13 @@ for langue in fr en; do
   fi
 done
 
+# Droits posés ici et non par --chmod, que l'openrsync de macOS refuse. Sans -p, rsync ne
+# touche pas aux droits de la racine distante (public_html en 750 chez o2switch).
+chmod -R u=rwX,go=rX "$TMP"
+
 # --delete retire les fichiers supprimés du site, mais garde la copie du journal déjà en ligne
 # quand l'ERP n'a pas répondu, et les fichiers propres à l'hébergeur (.well-known, cgi-bin).
-rsync -rlvz --delete --chmod=D755,F644 \
+rsync -rlvz --delete \
   --filter='P changelog.*.json' --filter='P .well-known/' --filter='P cgi-bin/' \
   "$TMP/" "$HOTE:$DOSSIER/"
 
