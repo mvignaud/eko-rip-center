@@ -202,6 +202,10 @@ pub fn calculer(mesures: &[Mesure], engraissement: f64, aplats: Option<&Aplats>)
     if !(0.0..=0.5).contains(&engraissement) || mesures.iter().any(|m| !(0.0..=100.0).contains(&m.pct) || !(0.0..=100.0).contains(&m.l) || !m.a.is_finite() || !m.b.is_finite() || m.a.abs() > 200.0 || m.b.abs() > 200.0) {
         return Err(INVALIDES);
     }
+    // Aplats saisis : finis et bornés, sinon des courbes NaN partiraient dans g7.json.
+    if aplats.is_some_and(|a| [a.c, a.m, a.y].iter().flatten().any(|v| !v.is_finite() || v.abs() > 200.0)) {
+        return Err(INVALIDES);
+    }
     let rampe = |r: Rampe| {
         let mut v: Vec<Mesure> = mesures.iter().copied().filter(|m| m.rampe == r).collect();
         v.sort_by(|a, b| a.pct.total_cmp(&b.pct));
@@ -397,6 +401,9 @@ mod tests {
         hors[3].l = 120.0;
         assert!(calculer(&hors, ENGRAISSEMENT_DEFAUT, None).is_err());
         assert!(calculer(&juste, 0.8, None).is_err());
+        let fous = Aplats { c: [f64::INFINITY, 0.0], ..Aplats::default() };
+        assert!(calculer(&juste, ENGRAISSEMENT_DEFAUT, Some(&fous)).is_err());
+        assert!(calculer(&juste, f64::NAN, None).is_err());
     }
 
     #[test]
