@@ -2894,7 +2894,9 @@ async fn purger(etat: Partage) {
         if etat.config.purger_erp_faits {
             let sorties = etat.file.lock().unwrap().sorties.clone();
             for id in erp_faits(&lire_tous(donnees), &sorties) {
-                if effacer_travail(&etat, id).await {
+                // Relu juste avant d'effacer : relancé ou remis en file entre-temps, il reste.
+                let encore = lire_travail(donnees, id).is_some_and(|t| !erp_faits(std::slice::from_ref(&t), &etat.file.lock().unwrap().sorties).is_empty());
+                if encore && effacer_travail(&etat, id).await {
                     eprintln!("travail {id} de l'ERP purgé (fait)");
                 }
             }
