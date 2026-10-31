@@ -59,6 +59,9 @@ parité ; d'ici là, 0.Y.Z.
   reused when the host or port changes.*
 - La balise `{repetition}` met aussi en file une découpe par impression répétée, plus une
   seule. *Repeated prints each get their cut.*
+- Renvoi : un flux reçu d'un autre RIP ne peut plus viser une machine qui renvoie
+  elle-même vers un troisième (`renvoi_en_chaine`), notre jeton ne sert plus de relais.
+  *No chained forwarding through this RIP.*
 
 ## [0.29.0] — 2026-10-30
 

@@ -1820,6 +1820,11 @@ async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>
     if m.connexion == machines::Connexion::Dossier {
         return refus(StatusCode::CONFLICT, "renvoi_sans_connexion", Some(m.nom));
     }
+    // Pas de renvoi en chaîne : un autre RIP ne passe pas par nous, avec notre jeton, vers
+    // un troisième.
+    if matches!(m.connexion, machines::Connexion::RipEko { .. }) {
+        return refus(StatusCode::CONFLICT, "renvoi_en_chaine", Some(m.nom));
+    }
     let rep = etat.config.donnees.join("renvoi");
     let chemin = rep.join(format!("{}.bin", Uuid::new_v4()));
     let (mut nom, mut recu) = (String::from("renvoi"), false);
@@ -5547,6 +5552,8 @@ mod tests {
             assert!(!v.to_string().contains(&jeton));
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            let e = envoyer(vers(&id, &jeton), b"x".to_vec()).await.unwrap().unwrap_err();
+            assert!(e.contains("409") && e.contains("renvoi_en_chaine"), "pas de renvoi en chaîne : {e}");
             let mut ailleurs = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
             ailleurs[1]["connexion"]["hote"] = "192.0.2.7".into();
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(ailleurs)).await.status(), StatusCode::BAD_REQUEST, "autre hôte : jeton à ressaisir");
