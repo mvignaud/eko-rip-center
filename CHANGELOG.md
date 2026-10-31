@@ -16,6 +16,13 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Statistiques anonymes d'installation.** Le serveur et les clients Mac et Linux envoient à
+  `platform.e-ko.rip/api/ping`, à l'installation, à chaque mise à jour puis chaque semaine, un
+  identifiant aléatoire, le type de poste, l'OS, la version (et pour le serveur le nombre de
+  machines et de réglages), même sans rattachement au cloud. Désactivable dans Système ou par
+  `EKO_TELEMETRIE=0`. La plate-forme tient le registre et ses statistiques
+  (`eko-rip-cloud installations`, `GET /api/installations`). Voir
+  `docs/fr/statistiques-anonymes.md`.
 - **Cloud E-KO RIP, lot 1 : accès à distance sans VPN ni port ouvert.** Nouvelle plate-forme
   `eko-rip-cloud` (paquet à part, `platform.e-ko.rip`) : le serveur RIP lui ouvre un tunnel
   sortant et elle y fait passer les requêtes des postes et de l'app mobile, à

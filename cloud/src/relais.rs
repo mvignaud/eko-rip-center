@@ -9,6 +9,7 @@
 //!   servie par un atelier n'a pas l'origine de la plate-forme et ne peut rien y lire.
 
 use crate::appairage::{self, Appairages, Suivi};
+use crate::installations::{self, Registre};
 use crate::{CHEMIN_TUNNEL, COOKIE_RIP, PROTOCOLE, sites};
 use axum::body::Body;
 use axum::extract::{Path as Chemin, Request, State};
@@ -30,6 +31,8 @@ pub struct Config {
     pub url_publique: String,
     /// Taille maximale d'une requête vers un site.
     pub max_octets: u64,
+    /// Jeton des statistiques d'installations (`GET /api/installations`) ; vide : route fermée.
+    pub jeton_stats: String,
 }
 
 struct Tunnel {
@@ -42,13 +45,16 @@ pub struct Relais {
     config: Config,
     tunnels: Mutex<HashMap<String, Tunnel>>,
     appairages: Mutex<Appairages>,
+    installations: Mutex<Registre>,
     generation: AtomicU64,
 }
 
 pub type Partage = Arc<Relais>;
 
+/// Panique si `installations.json` est illisible (on ne repart pas de zéro en silence).
 pub fn nouveau(config: Config) -> Partage {
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), generation: AtomicU64::new(0) })
+    let registre = installations::lire(&config.donnees).expect("installations.json");
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0) })
 }
 
 impl Relais {
@@ -64,6 +70,8 @@ pub fn routes(relais: Partage) -> Router {
         .route(CHEMIN_TUNNEL, get(ouvrir_tunnel))
         .route("/api/appairage", post(demander_appairage))
         .route("/api/appairage/{demande}", get(suivre_appairage))
+        .route("/api/ping", post(recevoir_ping).layer(axum::extract::DefaultBodyLimit::max(4096)))
+        .route("/api/installations", get(statistiques_installations))
         .route("/s/{site}", any(relayer))
         .route("/s/{site}/", any(relayer))
         .route("/s/{site}/{*reste}", any(relayer))
@@ -77,6 +85,7 @@ pub async fn entretenir(relais: Partage) {
         tokio::time::sleep(Duration::from_secs(60)).await;
         relais.appairages.lock().unwrap().purger();
         appairage::purger_validations(&relais.config.donnees);
+        enregistrer_installations(&relais).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {
             relais.tunnels.lock().unwrap().retain(|id, t| {
                 let garde = sites.iter().any(|s| &s.id == id);
@@ -87,6 +96,38 @@ pub async fn entretenir(relais: Partage) {
             });
         }
     }
+}
+
+/// Écrit `installations.json` s'il a changé (au plus une fois par minute, et à l'arrêt).
+pub async fn enregistrer_installations(relais: &Partage) {
+    let contenu = relais.installations.lock().unwrap().a_ecrire();
+    if let Some(c) = contenu {
+        let donnees = relais.config.donnees.clone();
+        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || installations::ecrire(&donnees, &c)).await {
+            eprintln!("installations.json : {e}");
+        }
+    }
+}
+
+async fn recevoir_ping(State(relais): State<Partage>, Json(p): Json<installations::Ping>) -> Response {
+    match relais.installations.lock().unwrap().noter(&p, crate::maintenant()) {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(installations::Refus::Invalide) => refus(StatusCode::BAD_REQUEST, "ping_invalide"),
+        Err(installations::Refus::Sature) => refus(StatusCode::SERVICE_UNAVAILABLE, "ping_sature"),
+    }
+}
+
+/// `Authorization: Bearer <EKO_CLOUD_JETON_STATS>` ; route absente (404) sans jeton configuré.
+async fn statistiques_installations(State(relais): State<Partage>, entetes: HeaderMap) -> Response {
+    let jeton = &relais.config.jeton_stats;
+    if jeton.is_empty() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let donne = entetes.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+    if !crate::egal_constant(&crate::sha256_hex(donne), &crate::sha256_hex(jeton)) {
+        return refus(StatusCode::UNAUTHORIZED, "non_autorise");
+    }
+    Json(relais.installations.lock().unwrap().statistiques(crate::maintenant())).into_response()
 }
 
 fn refus(statut: StatusCode, code: &'static str) -> Response {

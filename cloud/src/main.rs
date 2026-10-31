@@ -5,8 +5,9 @@
 //!   eko-rip-cloud valider <CODE> [qui]    valide un code d'appairage affiché par un serveur RIP
 //!   eko-rip-cloud sites                   liste les sites
 //!   eko-rip-cloud supprimer <site>        retire un site (son tunnel est coupé dans la minute)
+//!   eko-rip-cloud installations           statistiques anonymes des installations (JSON)
 
-use eko_rip_cloud::{appairage, relais, sites};
+use eko_rip_cloud::{appairage, installations, relais, sites};
 use std::path::PathBuf;
 
 fn env_ou(nom: &str, defaut: &str) -> String {
@@ -62,6 +63,17 @@ async fn main() {
                 2
             }
         }),
+        // Le service écrit le registre au plus une minute après un ping.
+        Some("installations") => std::process::exit(match installations::lire(&donnees) {
+            Ok(r) => {
+                println!("{}", serde_json::to_string_pretty(&r.statistiques(eko_rip_cloud::maintenant())).expect("statistiques"));
+                0
+            }
+            Err(e) => {
+                eprintln!("{e}");
+                1
+            }
+        }),
         Some(autre) => {
             eprintln!("Commande inconnue : {autre}");
             std::process::exit(2);
@@ -74,11 +86,22 @@ async fn main() {
         donnees,
         url_publique: env_ou("EKO_CLOUD_URL", "https://platform.e-ko.rip").trim_end_matches('/').to_string(),
         max_octets: env_ou("EKO_CLOUD_MAX_MO", "2048").parse::<u64>().expect("EKO_CLOUD_MAX_MO") * 1024 * 1024,
+        jeton_stats: env_ou("EKO_CLOUD_JETON_STATS", ""),
     };
     let adresse = env_ou("EKO_CLOUD_ADDR", "127.0.0.1:8650");
     let r = relais::nouveau(config);
     tokio::spawn(relais::entretenir(r.clone()));
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
     println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
-    axum::serve(ecoute, relais::routes(r)).await.expect("service");
+    axum::serve(ecoute, relais::routes(r.clone())).with_graceful_shutdown(arret()).await.expect("service");
+    relais::enregistrer_installations(&r).await;
+}
+
+/// Ctrl-C ou SIGTERM (arrêt par systemd) : on écrit le registre des installations avant de sortir.
+async fn arret() {
+    let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()).expect("signal SIGTERM");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = term.recv() => {}
+    }
 }

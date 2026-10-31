@@ -6,3 +6,6 @@
 #EKO_CLOUD_URL=https://platform.e-ko.rip
 # Taille maximale d'une requête vers un site (Mo).
 #EKO_CLOUD_MAX_MO=2048
+# Jeton des statistiques anonymes d'installations (GET /api/installations, en Bearer) ;
+# vide : route fermée. `eko-rip-cloud installations` les donne aussi sur le VPS.
+#EKO_CLOUD_JETON_STATS=

@@ -86,6 +86,8 @@ final class DelegueApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         if Notifier.disponible {
             UNUserNotificationCenter.current().delegate = self
         }
+        // Ping anonyme d'installation, hors de l'interface : au lancement puis toutes les 6 h.
+        Task.detached(priority: .background) { await Telemetrie.boucle() }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

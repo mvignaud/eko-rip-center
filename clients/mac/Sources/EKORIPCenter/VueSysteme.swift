@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 struct VueSysteme: View {
     @Environment(Etat.self) private var etat
+    @AppStorage(ClesTelemetrie.desactive) private var statistiquesDesactivees = false
 
     private func octets(_ n: Int?) -> String {
         guard let n else { return "inconnu" }
@@ -39,6 +40,16 @@ struct VueSysteme: View {
                         if let n = s.rendus?.simultanes {
                             LabeledContent("Simultanés au plus", value: "\(n)")
                         }
+                    }
+
+                    Section("Confidentialité") {
+                        Toggle("Envoyer des statistiques anonymes d'installation", isOn: Binding(
+                            get: { !statistiquesDesactivees },
+                            set: { statistiquesDesactivees = !$0 }
+                        ))
+                        Text("Un identifiant aléatoire, le type de poste, l'OS et la version, pour compter les installations. Aucune donnée personnelle ni fichier.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     Section("Alertes de dossiers") {

@@ -39,6 +39,7 @@ mod regles;
 mod recalibration;
 mod cellules;
 mod cloud;
+mod telemetrie;
 mod rendus;
 mod releves;
 mod reperage;
@@ -437,6 +438,9 @@ async fn main() {
     // que `garder` en ferme une partie (pont ERP, renvoi, réglages du cloud).
     let par_cloud = routes(etat.clone()).layer(DefaultBodyLimit::max(max)).layer(axum::Extension(cloud::ParCloud));
     tokio::spawn(cloud::boucle(etat.config.donnees.clone(), par_cloud));
+    // Ping anonyme d'installation (à l'installation, à chaque mise à jour, puis chaque semaine).
+    let e = etat.clone();
+    tokio::spawn(telemetrie::boucle(etat.config.donnees.clone(), move || (e.machines.read().unwrap().len(), reglages::lire(&e.config.donnees).len())));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
@@ -516,6 +520,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/pont/instance", axum::routing::post(nouvelle_instance))
         .route("/api/cloud", get(lire_cloud).delete(detacher_cloud))
         .route("/api/cloud/appairage", axum::routing::post(appairer_cloud))
+        .route("/api/telemetrie", get(lire_telemetrie).post(regler_telemetrie))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -2710,6 +2715,27 @@ struct ReglagePont {
     actif: bool,
     #[serde(default)]
     secret: Option<String>,
+}
+
+/// Statistiques anonymes d'installation (Système).
+async fn lire_telemetrie(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(telemetrie::etat_public(&etat.config.donnees))
+}
+
+#[derive(Deserialize)]
+struct ReglageTelemetrie {
+    actif: bool,
+}
+
+/// Coche ou décoche l'envoi (administrateur).
+async fn regler_telemetrie(State(etat): State<Partage>, Json(r): Json<ReglageTelemetrie>) -> Response {
+    let donnees = &etat.config.donnees;
+    let mut e = telemetrie::lire(donnees);
+    e.desactive = !r.actif;
+    match telemetrie::ecrire(donnees, &e) {
+        Ok(()) => Json(telemetrie::etat_public(donnees)).into_response(),
+        Err(_) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", None),
+    }
 }
 
 /// Cloud E-KO RIP (Système) : rattachement, état du tunnel, appairage en cours.
@@ -5722,7 +5748,7 @@ mod tests {
             acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "chef".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
             let plateforme = e.config.donnees.join("plateforme");
             let (site, cle) = eko_rip_cloud::sites::creer(&plateforme, "Atelier", None).unwrap();
-            let relais = eko_rip_cloud::relais::nouveau(eko_rip_cloud::relais::Config { donnees: plateforme, url_publique: "http://plateforme.test".into(), max_octets: 1 << 20 });
+            let relais = eko_rip_cloud::relais::nouveau(eko_rip_cloud::relais::Config { donnees: plateforme, url_publique: "http://plateforme.test".into(), max_octets: 1 << 20, jeton_stats: String::new() });
             let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let base = format!("http://{}", ecoute.local_addr().unwrap());
             tokio::spawn(async move { axum::serve(ecoute, eko_rip_cloud::relais::routes(relais)).await.unwrap() });

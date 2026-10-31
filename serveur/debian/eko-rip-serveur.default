@@ -18,3 +18,7 @@
 #EKO_RIP_EPSON_COMMUNAUTE=public
 # 1 : interface complète aussi dans un navigateur (développement seulement).
 #EKO_RIP_ACCES_NAVIGATEUR=0
+# 0 : aucun ping anonyme d'installation vers la plate-forme E-KO RIP (sinon : à l'installation,
+# à chaque mise à jour puis chaque semaine ; identifiant aléatoire, OS, version, nombre de
+# machines et de réglages). Aussi réglable dans Système.
+#EKO_TELEMETRIE=1

@@ -519,6 +519,7 @@
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
     <section class="panneau systeme"><h2 data-t="pont_erp"></h2><div class="corps" id="pont"></div></section>
     <section class="panneau systeme"><h2 data-t="cloud_titre"></h2><div class="corps" id="cloud"></div></section>
+    <section class="panneau systeme"><h2 data-t="telemetrie_titre"></h2><div class="corps" id="telemetrie"></div></section>
     <section class="panneau admin"><h2 data-t="machines_titre"></h2><form class="corps" id="editeur-machines"></form></section>
     <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
     <section class="panneau"><h2 data-t="journal_titre"></h2><div class="corps" id="journal"></div></section>
@@ -698,6 +699,9 @@ const textes = {
     pont_actif: "Activer le pont", pont_enregistre: "Pont ERP enregistré.", pont_nouvelle_instance: "Tirer une nouvelle instance",
     pont_confirmer_instance: "Tirer une nouvelle instance ? Le journal des événements repart de 1 et l'ERP prendra ce RIP comme une installation neuve (l'autre installation, s'il y en a une, s'arrêtera).",
     pont_instance_tiree: "Nouvelle instance tirée.", pont_note: "Le RIP appelle l'ERP (aucun port ouvert à l'atelier) : catalogue, états des travaux et des sorties, consommation. Le secret n'est jamais réaffiché.",
+    telemetrie_titre: "Statistiques anonymes", telemetrie_case: "Envoyer des statistiques anonymes d'installation",
+    telemetrie_note: "Un identifiant aléatoire, le type de poste, l'OS, la version et le nombre de machines et de réglages, à l'installation, à chaque mise à jour puis une fois par semaine, pour compter les installations E-KO RIP. Aucune donnée personnelle ni fichier.",
+    telemetrie_env: "Désactivé sur ce serveur par EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
     cloud_titre: "Cloud E-KO RIP", cloud_etat: "État", cloud_adresse: "Adresse à distance",
     cloud_statut_inactif: "Non rattaché", cloud_statut_connexion: "Connexion en cours…", cloud_statut_connecte: "Connecté : accessible à distance", cloud_statut_attente: "Coupé, nouvel essai sous une minute",
     cloud_note: "Le serveur ouvre lui-même une connexion sortante vers la plate-forme E-KO RIP Cloud (aucun port ouvert à l'atelier). Hors de l'atelier, les postes et l'app mobile y accèdent avec les comptes de ce serveur.",
@@ -1020,6 +1024,9 @@ const textes = {
     pont_actif: "Enable the bridge", pont_enregistre: "ERP bridge saved.", pont_nouvelle_instance: "Draw a new instance",
     pont_confirmer_instance: "Draw a new instance? The event log restarts from 1 and the ERP will take this RIP as a new installation (the other installation, if any, will stop).",
     pont_instance_tiree: "New instance drawn.", pont_note: "The RIP calls the ERP (no port opened at the workshop): catalogue, job and output states, consumption. The secret is never shown again.",
+    telemetrie_titre: "Anonymous statistics", telemetrie_case: "Send anonymous installation statistics",
+    telemetrie_note: "A random identifier, the kind of station, the OS, the version and the number of machines and presets, at install time, on each update and then once a week, to count E-KO RIP installations. No personal data, no files.",
+    telemetrie_env: "Disabled on this server by EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
     cloud_titre: "E-KO RIP Cloud", cloud_etat: "State", cloud_adresse: "Remote address",
     cloud_statut_inactif: "Not linked", cloud_statut_connexion: "Connecting…", cloud_statut_connecte: "Connected: reachable remotely", cloud_statut_attente: "Disconnected, retrying within a minute",
     cloud_note: "The server itself opens an outgoing connection to the E-KO RIP Cloud platform (no port opened at the workshop). Outside the workshop, workstations and the mobile app reach it with this server's accounts.",
@@ -1627,6 +1634,24 @@ async function chargerSysteme() {
   afficherSysteme();
   chargerPont();
   chargerCloud();
+  chargerTelemetrie();
+}
+
+/** Statistiques anonymes d'installation (Système) : une case, réservée à l'administrateur. */
+async function chargerTelemetrie() {
+  const t = await api("/api/telemetrie");
+  if (t) afficherTelemetrie(t);
+}
+function afficherTelemetrie(t) {
+  const d = T();
+  const caseTel = el("input", { type: "checkbox", checked: t.actif, disabled: t.desactive_par_env });
+  caseTel.addEventListener("change", async () => {
+    const lu = await api("/api/telemetrie", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actif: caseTel.checked }) });
+    if (lu) afficherTelemetrie(lu); else caseTel.checked = !caseTel.checked;
+  });
+  const contenu = [el("label", {}, caseTel, " ", d.telemetrie_case), el("p", { className: "meta" }, d.telemetrie_note)];
+  if (t.desactive_par_env) contenu.push(el("p", { className: "meta" }, d.telemetrie_env));
+  $("telemetrie").replaceChildren(...contenu);
 }
 function afficherSysteme() {
   const s = infoSysteme;

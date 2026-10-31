@@ -9,6 +9,7 @@
 
 pub mod appairage;
 pub mod client;
+pub mod installations;
 pub mod relais;
 pub mod sites;
 

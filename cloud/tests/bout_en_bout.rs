@@ -30,7 +30,7 @@ fn rip() -> Router {
 }
 
 async fn relais_local(donnees: &std::path::Path, max: u64) -> String {
-    let r = relais::nouveau(relais::Config { donnees: donnees.to_path_buf(), url_publique: "https://platform.test".into(), max_octets: max });
+    let r = relais::nouveau(relais::Config { donnees: donnees.to_path_buf(), url_publique: "https://platform.test".into(), max_octets: max, jeton_stats: "jeton-stats".into() });
     let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let adresse = format!("http://{}", ecoute.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(ecoute, relais::routes(r)).await.unwrap() });
@@ -139,5 +139,39 @@ async fn tunnel_appairage_et_isolement() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     let (b, s) = (base.clone(), site.clone());
     assert_eq!(bloquant(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()).await, 502);
+    let _ = std::fs::remove_dir_all(&d);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ping_d_installation_et_statistiques() {
+    let d = dossier();
+    let base = relais_local(&d, 1024).await;
+    let envoyer = |corps: serde_json::Value| {
+        let b = base.clone();
+        bloquant(move || agent().post(format!("{b}/api/ping")).send_json(corps).unwrap().status().as_u16())
+    };
+    let ping = serde_json::json!({ "id": "0123456789abcdef0123456789abcdef", "type": "serveur", "evenement": "installation", "version": "0.30.0", "os": "Ubuntu 26.04 LTS", "machines": 2, "reglages": 4 });
+    assert_eq!(envoyer(ping.clone()).await, 204);
+    assert_eq!(envoyer(serde_json::json!({ "id": "x", "type": "serveur", "evenement": "installation", "version": "1", "os": "x" })).await, 400);
+    assert_eq!(envoyer(serde_json::json!({ "os": "x".repeat(5000) })).await, 413);
+
+    let stats = |jeton: Option<&'static str>| {
+        let b = base.clone();
+        bloquant(move || {
+            let mut r = agent().get(format!("{b}/api/installations"));
+            if let Some(j) = jeton {
+                r = r.header("Authorization", format!("Bearer {j}"));
+            }
+            let mut rep = r.call().unwrap();
+            (rep.status().as_u16(), rep.body_mut().read_json::<serde_json::Value>().ok())
+        })
+    };
+    assert_eq!(stats(None).await.0, 401);
+    assert_eq!(stats(Some("mauvais")).await.0, 401);
+    let (statut, corps) = stats(Some("jeton-stats")).await;
+    assert_eq!(statut, 200);
+    let corps = corps.unwrap();
+    assert_eq!((corps["total"].as_u64(), corps["actives"].as_u64(), corps["machines"].as_u64()), (Some(1), Some(1), Some(2)));
+    assert_eq!(corps["par_type"]["serveur"], 1);
     let _ = std::fs::remove_dir_all(&d);
 }
