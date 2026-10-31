@@ -291,6 +291,8 @@ pub fn publier(donnees: &Path, gh: &Github, mut r: Rapport, maintenant: u64) {
     let url = match signature(&r) {
         None => gh.ouvrir(&r).map(|(_, u)| u),
         Some(sig) => {
+            // Une issue appartient à un dépôt : changer de dépôt repart de zéro.
+            let sig = format!("{}|{sig}", gh.depot);
             let _g = SIGNATURES.lock().unwrap_or_else(|p| p.into_inner());
             let mut toutes = lire_signatures(donnees);
             match toutes.get_mut(&sig) {

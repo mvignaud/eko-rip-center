@@ -2777,10 +2777,8 @@ struct ReglageTelemetrie {
 /// Coche ou décoche l'envoi (administrateur).
 async fn regler_telemetrie(State(etat): State<Partage>, Json(r): Json<ReglageTelemetrie>) -> Response {
     let donnees = &etat.config.donnees;
-    let mut e = telemetrie::lire(donnees);
-    e.desactive = !r.actif;
-    match telemetrie::ecrire(donnees, &e) {
-        Ok(()) => Json(telemetrie::etat_public(donnees)).into_response(),
+    match telemetrie::modifier(donnees, |e| e.desactive = !r.actif) {
+        Ok(_) => Json(telemetrie::etat_public(donnees)).into_response(),
         Err(_) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", None),
     }
 }

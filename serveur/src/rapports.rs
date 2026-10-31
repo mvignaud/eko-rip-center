@@ -39,9 +39,7 @@ pub fn auto(donnees: &Path) -> Option<bool> {
 }
 
 pub fn regler_auto(donnees: &Path, accepte: bool) -> std::io::Result<()> {
-    let mut e = crate::telemetrie::lire(donnees);
-    e.rapports_auto = Some(accepte);
-    crate::telemetrie::ecrire(donnees, &e)
+    crate::telemetrie::modifier(donnees, |e| e.rapports_auto = Some(accepte)).map(|_| ())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -70,9 +68,35 @@ fn masquer_mot(mot: &str) -> String {
     }
 }
 
+/// Chemins entiers d'abord : un chemin non cité peut contenir des espaces (« /…/Devis Client
+/// Dupont.pdf refusé : … »). Depuis son début (`/`, `~/` ou `C:\` en tête de mot) jusqu'au
+/// prochain « : » entouré d'espaces ou à la fin de la ligne, tout est remplacé.
+fn masquer_chemins(ligne: &str) -> String {
+    let mut sortie = String::with_capacity(ligne.len());
+    let mut reste = ligne;
+    loop {
+        let debut = reste.char_indices().find(|&(i, c)| {
+            let tete = i == 0 || reste[..i].ends_with(|p: char| p.is_whitespace() || matches!(p, '(' | '[' | '=' | ','));
+            let suite = &reste[i..];
+            tete && (c == '/' && suite.len() > 1 || suite.starts_with("~/") || suite.len() > 2 && c.is_ascii_alphabetic() && (suite[1..].starts_with(":\\") || suite[1..].starts_with(":/")))
+        });
+        let Some((i, _)) = debut else {
+            sortie.push_str(reste);
+            return sortie;
+        };
+        sortie.push_str(&reste[..i]);
+        sortie.push_str("<chemin>");
+        match reste[i..].find(" : ") {
+            Some(f) => reste = &reste[i + f..],
+            None => return sortie,
+        }
+    }
+}
+
 /// Chemins, noms de fichiers et e-mails d'une ligne de journal remplacés ; les textes entre
 /// guillemets (souvent un nom de travail ou de client) aussi.
 pub fn masquer(ligne: &str) -> String {
+    let ligne = &masquer_chemins(ligne);
     let mut sortie = String::with_capacity(ligne.len());
     let mut guillemet: Option<char> = None;
     let mut mot = String::new();
@@ -299,6 +323,10 @@ mod tests {
         assert_eq!(masquer("contact jean@dupont.fr ok"), "contact <e-mail> ok");
         assert_eq!(masquer("rendu en 12.5 s, 300 dpi"), "rendu en 12.5 s, 300 dpi");
         assert_eq!(masquer("ouvert \"jamais fermé"), "ouvert \"<texte>");
+        // Chemin non cité avec des espaces (journal des dossiers surveillés).
+        assert_eq!(masquer("dossier surveillé : /var/lib/eko-rip/entrees/Vinyle/Devis Client Confidentiel.pdf refusé : fichier invalide"), "dossier surveillé : <chemin> : fichier invalide");
+        assert_eq!(masquer("copie de C:\\Users\\Martin\\Bâche Dupont.pdf"), "copie de <chemin>");
+        assert_eq!(masquer("erreur : code 3 : rien"), "erreur : code 3 : rien");
     }
 
     #[test]

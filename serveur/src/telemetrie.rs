@@ -35,22 +35,35 @@ pub fn fichier(donnees: &Path) -> PathBuf {
     donnees.join("telemetrie.json")
 }
 
-/// État en place, ou un nouvel identifiant (écrit tout de suite, pour rester le même).
-pub fn lire(donnees: &Path) -> Etat {
-    if let Ok(Some(e)) = crate::etat::lire::<Etat>(&fichier(donnees))
-        && e.id.len() == 32
-    {
-        return e;
-    }
-    let mut o = [0u8; 16];
-    getrandom::fill(&mut o).expect("générateur aléatoire");
-    let e = Etat { id: o.iter().map(|b| format!("{b:02x}")).collect(), ..Default::default() };
-    let _ = ecrire(donnees, &e);
-    e
+/// Lectures-modifications-écritures de `telemetrie.json` l'une après l'autre (case de
+/// Système, accord des rapports, fin d'un ping) : aucune ne défait une autre.
+static VERROU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lire_fichier(donnees: &Path) -> Option<Etat> {
+    crate::etat::lire::<Etat>(&fichier(donnees)).ok().flatten().filter(|e| e.id.len() == 32)
 }
 
-pub fn ecrire(donnees: &Path, e: &Etat) -> std::io::Result<()> {
-    crate::etat::ecrire(&fichier(donnees), e, false)
+fn nouvel_etat() -> Etat {
+    let mut o = [0u8; 16];
+    getrandom::fill(&mut o).expect("générateur aléatoire");
+    Etat { id: o.iter().map(|b| format!("{b:02x}")).collect(), ..Default::default() }
+}
+
+/// État en place, ou un nouvel identifiant (écrit tout de suite, pour rester le même).
+pub fn lire(donnees: &Path) -> Etat {
+    if let Some(e) = lire_fichier(donnees) {
+        return e;
+    }
+    modifier(donnees, |_| {}).unwrap_or_else(|_| nouvel_etat())
+}
+
+/// Relit l'état, le modifie et l'écrit, sous verrou.
+pub fn modifier(donnees: &Path, f: impl FnOnce(&mut Etat)) -> std::io::Result<Etat> {
+    let _g = VERROU.lock().unwrap_or_else(|p| p.into_inner());
+    let mut e = lire_fichier(donnees).unwrap_or_else(nouvel_etat);
+    f(&mut e);
+    crate::etat::ecrire(&fichier(donnees), &e, false)?;
+    Ok(e)
 }
 
 /// `EKO_TELEMETRIE=0|non|false|off` : aucun ping.
@@ -83,16 +96,18 @@ pub fn os() -> String {
 
 /// Un essai (bloquant). `compter` rend (machines, réglages).
 pub fn essayer(donnees: &Path, compter: impl Fn() -> (usize, usize)) {
-    let mut e = lire(donnees);
+    let e = lire(donnees);
     let maintenant = crate::maintenant();
     let Some(evenement) = evenement(&e, VERSION, maintenant, desactive_par_env()) else { return };
     let (machines, reglages) = compter();
     let corps = serde_json::json!({ "id": e.id, "type": "serveur", "evenement": evenement, "version": VERSION, "os": os(), "machines": machines, "reglages": reglages });
     let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(Duration::from_secs(10))).user_agent(format!("eko-rip-serveur/{VERSION}")).build().into();
     if agent.post(url()).send_json(corps).is_ok_and(|r| r.status().as_u16() == 204) {
-        e.version_signalee = Some(VERSION.into());
-        e.dernier_ping = Some(maintenant);
-        let _ = ecrire(donnees, &e);
+        // Seuls ces deux champs : un réglage changé pendant l'envoi est gardé.
+        let _ = modifier(donnees, |e| {
+            e.version_signalee = Some(VERSION.into());
+            e.dernier_ping = Some(maintenant);
+        });
     }
 }
 
