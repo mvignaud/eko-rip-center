@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Tout ce qui ne dépend pas de l'interface : API, modèles, libellés, logique d'état.
+       net8.0 simple (pas net8.0-windows) : compile et se teste aussi sous Linux et macOS. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EkoRip.Coeur</RootNamespace>
+    <AssemblyName>EkoRip.Coeur</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EkoRip.Coeur.Tests" />
+  </ItemGroup>
+
+</Project>

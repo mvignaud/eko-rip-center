@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>EkoRip.Coeur.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EkoRip.Coeur\EkoRip.Coeur.csproj" />
+  </ItemGroup>
+
+  <!-- Réponses réelles du serveur 0.28.0 (les mêmes que clients/linux/tests/reponses). -->
+  <ItemGroup>
+    <None Include="Reponses\*" CopyToOutputDirectory="PreserveNewest" LinkBase="Reponses" />
+  </ItemGroup>
+
+</Project>
