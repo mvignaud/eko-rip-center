@@ -5,6 +5,7 @@ use crate::api::{Client, Erreur, Resultat, VERSION};
 use crate::commande::Commande;
 use crate::config;
 use crate::connexion::{ICONE, PageIdentification, PageServeur};
+use crate::decouverte::{self, Serveur};
 use crate::envoi;
 use crate::inspecteur::Inspecteur;
 use crate::machines::Machines;
@@ -70,6 +71,8 @@ pub struct Fenetre {
     page: RefCell<String>,
     precedent: RefCell<String>,
     en_vol: Cell<bool>,
+    /// Recherche des serveurs du réseau en cours.
+    recherche_serveurs: Cell<bool>,
     hors_ligne: Cell<bool>,
     minuterie: RefCell<Option<glib::SourceId>>,
     suivi: RefCell<Suivi>,
@@ -211,6 +214,7 @@ impl Fenetre {
             page: RefCell::new("travaux".into()),
             precedent: RefCell::new("serveur".into()),
             en_vol: Cell::new(false),
+            recherche_serveurs: Cell::new(false),
             hors_ligne: Cell::new(false),
             minuterie: RefCell::new(None),
             suivi: RefCell::new(Suivi::default()),
@@ -271,6 +275,12 @@ impl Fenetre {
         let aller = se_connecter.clone();
         self.serveur.bouton.connect_clicked(move |_| aller());
         self.serveur.adresse.connect_entry_activated(move |_| se_connecter());
+        let f = Rc::downgrade(self);
+        self.serveur.rechercher.connect_clicked(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.rechercher_serveurs();
+            }
+        });
         let f = Rc::downgrade(self);
         self.serveur.annuler.connect_clicked(move |_| {
             if let Some(f) = f.upgrade() {
@@ -411,7 +421,7 @@ impl Fenetre {
 
     // --- Connexion ---
 
-    fn montrer_serveur(&self, message: Option<&str>) {
+    fn montrer_serveur(self: &Rc<Self>, message: Option<&str>) {
         let courant = self.pile.visible_child_name().map(|n| n.to_string()).unwrap_or_default();
         if courant != "serveur" {
             *self.precedent.borrow_mut() = courant;
@@ -422,6 +432,33 @@ impl Fenetre {
         if let Some(m) = message {
             self.toast(m);
         }
+        self.rechercher_serveurs();
+    }
+
+    /// Cherche les serveurs annoncés sur le réseau local (~3 s, hors du fil GTK) et les propose.
+    fn rechercher_serveurs(self: &Rc<Self>) {
+        if self.recherche_serveurs.replace(true) {
+            return;
+        }
+        self.afficher_trouves(&[], true);
+        glib::spawn_future_local({
+            let moi = self.clone();
+            async move {
+                let trouves = gio::spawn_blocking(decouverte::chercher).await.unwrap_or_default();
+                moi.recherche_serveurs.set(false);
+                moi.afficher_trouves(&trouves, false);
+            }
+        });
+    }
+
+    fn afficher_trouves(self: &Rc<Self>, serveurs: &[Serveur], en_cours: bool) {
+        let faible = Rc::downgrade(self);
+        self.serveur.maj_trouves(serveurs, en_cours, move |adresse| {
+            if let Some(f) = faible.upgrade() {
+                f.serveur.adresse.set_text(&adresse);
+                f.connecter_a(&adresse);
+            }
+        });
     }
 
     fn montrer_identification(&self, message: Option<&str>) {

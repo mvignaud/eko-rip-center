@@ -126,3 +126,11 @@ struct DecodageTests {
         #expect(ordre == ordre.sorted(), "le fichier vient en dernier")
     }
 }
+
+/// Adresse d'un serveur trouvé sur le réseau (découverte DNS-SD).
+struct DecouverteTests {
+    @Test func testAdresseServeurTrouve() {
+        #expect(ServeurTrouve.adresse(ip: "192.168.10.109", port: 8640) == "http://192.168.10.109:8640")
+        #expect(ServeurTrouve.adresse(ip: "192.168.10.109%en0", port: 9000) == "http://192.168.10.109:9000")
+    }
+}

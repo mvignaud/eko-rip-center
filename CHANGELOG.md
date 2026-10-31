@@ -15,6 +15,22 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
+  (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
+  (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie
+  de l'adresse reste possible (et seule proposée si rien n'est trouvé). Désactivable côté
+  serveur par `EKO_RIP_ANNONCE=0`. Voir `docs/fr/installation-client.md`.
+  *Automatic LAN discovery of the server (DNS-SD); manual address entry kept as a fallback.*
+
+### Modifié
+- **Cloud E-KO RIP : une adresse par site.** Chaque serveur rattaché est servi sur sa propre
+  origine, `https://<site>.platform.e-ko.rip` : elle se saisit telle quelle dans les clients
+  Mac, Linux, Windows et mobile, et l'interface d'administration fonctionne dans un navigateur.
+  Cookies du portail en `__Host-` ; certificats à la demande autorisés par
+  `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
+  pour l'API.
+
 ## [0.30.0] — 2026-10-31
 
 ### Ajouté

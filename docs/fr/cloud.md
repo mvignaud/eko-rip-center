@@ -11,7 +11,7 @@ comme à l'atelier ; l'identité de la plate-forme passera jusqu'au serveur au l
 
 ```
 Poste ou téléphone hors atelier
-   │ HTTPS  platform.e-ko.rip/s/<site>/api/…
+   │ HTTPS  <site>.platform.e-ko.rip/…
    ▼
 Caddy ──► eko-rip-cloud ──► tunnel du site
                 ▲
@@ -31,7 +31,7 @@ Caddy ──► eko-rip-cloud ──► tunnel du site
    En secours, sur le VPS : `sudo -u eko-rip-cloud EKO_CLOUD_DATA=/var/lib/eko-rip-cloud eko-rip-cloud valider KXRT-4821`.
 4. Quelques secondes plus tard, le serveur reçoit sa clé, l'enregistre dans `cloud.json`
    (droits 0600, jamais réaffichée) et ouvre le tunnel. L'écran affiche l'adresse à distance :
-   `https://platform.e-ko.rip/s/<site>`.
+   `https://<site>.platform.e-ko.rip` (aussi affichée dans **Mes sites** du portail).
 
 **Détacher de la plate-forme** coupe le tunnel aussitôt et oublie la clé ; il faudra un nouvel
 appairage pour rétablir l'accès. Après une coupure réseau, le serveur rouvre le tunnel tout
@@ -63,10 +63,13 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
 
 ## Utiliser l'accès à distance
 
-Dans un client (Mac, Linux, Windows, mobile), l'adresse du serveur devient
-`https://platform.e-ko.rip/s/<site>` ; la connexion se fait avec un compte du serveur RIP. Les
-clients se brancheront directement sur la plate-forme au lot 4 (connexion au compte du cloud,
-bascule automatique entre l'adresse locale et l'accès à distance).
+Chaque site a **sa propre adresse**, `https://<site>.platform.e-ko.rip`. On la saisit telle
+quelle comme adresse du serveur dans un client (Mac, Linux, Windows, mobile) ou on l'ouvre dans
+un navigateur : l'interface d'administration du serveur RIP y fonctionne comme à l'atelier. La
+connexion se fait avec un compte du serveur RIP.
+
+L'ancienne forme `https://platform.e-ko.rip/s/<site>` reste servie pour les appels d'API, mais
+une page y est isolée (`sandbox`, pas de script) : préférer l'adresse propre au site.
 
 ## Ce qui ne passe jamais par le cloud
 
@@ -86,10 +89,12 @@ Sans compte déclaré, toute requête venue par le cloud est refusée (`cloud_sa
 - Vers un atelier ne part que la session du serveur RIP (cookie `eko_rip_session`) : ni
   l'en-tête `Authorization`, ni les cookies du portail, ni les en-têtes `X-EKO-Cloud-*`
   (réservés à la plate-forme).
-- Le cookie de session d'un site est limité à son chemin `/s/<site>/` (`Secure` en HTTPS) :
-  un site ne reçoit jamais la session d'un autre.
-- Toute réponse d'un atelier porte `Content-Security-Policy: sandbox` : une page servie par un
-  serveur RIP n'a pas l'origine de la plate-forme et ne peut rien y lire.
+- Chaque site a sa propre origine (`<site>.platform.e-ko.rip`) : le navigateur sépare ses
+  cookies et ses pages de ceux des autres sites et du portail. Le `Domain` des cookies posés par
+  un serveur RIP est retiré ; les cookies du portail portent le préfixe `__Host-`, qu'un
+  sous-domaine ne peut ni poser ni écraser. Le portail n'existe pas sur l'adresse d'un site.
+- Sous l'ancienne forme `/s/<site>/`, le cookie d'un site est limité à ce chemin et toute
+  réponse porte `Content-Security-Policy: sandbox` (pas de script, origine opaque).
 - Requête de plus de 2 Go (`EKO_CLOUD_MAX_MO`) : refusée (`envoi_trop_gros`). Site hors ligne
   ou inconnu : même réponse (`site_hors_ligne`).
 
@@ -100,13 +105,29 @@ système dédié, données dans `/var/lib/eko-rip-cloud` (`sites.json`, `validat
 sur `127.0.0.1:8650` ; Caddy fait le HTTPS :
 
 ```caddy
-platform.e-ko.rip {
+{
+    # Certificat de chaque site à sa première visite, seulement s'il existe.
+    on_demand_tls {
+        ask http://127.0.0.1:8650/api/certificat
+    }
+}
+
+platform.e-ko.rip, *.platform.e-ko.rip {
+    tls {
+        on_demand
+    }
     # Le tunnel (Upgrade: eko-tunnel/1) passe tel quel ; les flux ne sont pas mis en tampon.
     reverse_proxy 127.0.0.1:8650 {
         flush_interval -1
     }
 }
 ```
+
+DNS : `platform.e-ko.rip` **et** `*.platform.e-ko.rip` pointent vers le VPS (A 54.36.102.38).
+`GET /api/certificat?domain=<nom>` répond 200 pour la plate-forme et les sites existants, 404
+sinon, ce qui empêche d'obtenir des certificats pour des noms inventés. Let's Encrypt limite à
+50 nouveaux certificats par semaine pour `e-ko.rip` : au-delà, passer à un certificat joker
+(`*.platform.e-ko.rip`, défi DNS chez OVH).
 
 Commandes : `eko-rip-cloud admin <e-mail>` (super-administrateur), `eko-rip-cloud sites` (liste), `eko-rip-cloud valider <code> [propriétaire]`,
 `eko-rip-cloud supprimer <site>` (son tunnel est coupé dans la minute). Réglages dans

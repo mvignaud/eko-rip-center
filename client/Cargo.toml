@@ -10,3 +10,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+# Découverte des serveurs du réseau local (DNS-SD).
+mdns-sd = "0.21.6"
+serde = { version = "1", features = ["derive"] }
