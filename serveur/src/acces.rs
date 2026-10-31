@@ -36,7 +36,7 @@ pub enum Role {
 /// Écritures réservées à l'administrateur.
 pub fn reserve_admin(methode: &axum::http::Method, chemin: &str) -> bool {
     // La sauvegarde porte les prix : même sa lecture est réservée.
-    chemin == "/api/sauvegarde" || *methode != axum::http::Method::GET && (["/api/machines", "/api/tarifs", "/api/profils", "/api/reglages", "/api/regles", "/api/balises", "/api/decoupe", "/api/tons-directs", "/api/tons-directs/import"].contains(&chemin) || chemin.starts_with("/api/reglages/") || chemin.starts_with("/api/consommation/") || chemin.starts_with("/api/pont") || chemin.starts_with("/api/machines/") && (chemin.ends_with("/supports") || chemin.ends_with("/paquet")))
+    chemin == "/api/sauvegarde" || *methode != axum::http::Method::GET && (["/api/machines", "/api/tarifs", "/api/profils", "/api/reglages", "/api/regles", "/api/gabarits", "/api/balises", "/api/decoupe", "/api/tons-directs", "/api/tons-directs/import"].contains(&chemin) || chemin.starts_with("/api/reglages/") || chemin.starts_with("/api/consommation/") || chemin.starts_with("/api/pont") || chemin.starts_with("/api/machines/") && (chemin.ends_with("/supports") || chemin.ends_with("/paquet")))
 }
 
 pub fn fichier(donnees: &Path) -> PathBuf {

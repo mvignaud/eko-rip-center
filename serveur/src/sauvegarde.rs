@@ -44,6 +44,9 @@ pub struct Sauvegarde {
     /// Motif de nom à balises du même dossier (roadmap 9.10) ; absent : gardé.
     #[serde(default)]
     pub balises: Option<crate::balises::Config>,
+    /// Gabarits de cellules de la planche manuelle (roadmap 5.10) ; absents : gardés.
+    #[serde(default)]
+    pub gabarits: Option<Vec<crate::cellules::Gabarit>>,
 }
 
 pub fn hex(octets: &[u8]) -> String {

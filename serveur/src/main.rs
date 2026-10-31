@@ -36,6 +36,7 @@ mod reglages;
 mod balises;
 mod regles;
 mod recalibration;
+mod cellules;
 mod rendus;
 mod releves;
 mod reperage;
@@ -464,6 +465,7 @@ fn routes(etat: Partage) -> Router {
         .route("/api/reglages/import", axum::routing::post(importer_reglages))
         .route("/api/reglages/{nom}", axum::routing::delete(supprimer_reglage))
         .route("/api/regles", get(lire_regles).post(enregistrer_regles))
+        .route("/api/gabarits", get(lire_gabarits).post(enregistrer_gabarits))
         .route("/api/balises", get(lire_balises).post(enregistrer_balises))
         .route("/api/travaux/{id}", axum::routing::delete(supprimer))
         .route("/api/travaux/{id}/relancer", axum::routing::post(relancer))
@@ -1573,6 +1575,14 @@ struct DemandePlanche {
     marge_haut_mm: f64,
     #[serde(default)]
     marge_bas_mm: f64,
+    /// Planche manuelle (roadmap 5.10) : copies posées à la main (verrou, grille,
+    /// magnétisme), ou gabarit de cellules ; données variables d'un CSV sur une seule page.
+    #[serde(default)]
+    manuel: Option<cellules::Manuel>,
+    #[serde(default)]
+    gabarit: Option<cellules::Gabarit>,
+    #[serde(default)]
+    donnees_variables: Option<cellules::DonneesVariables>,
     elements: Vec<ElementPlanche>,
 }
 
@@ -1588,6 +1598,31 @@ impl DemandePlanche {
         let m = self.motif?;
         let bon = self.elements.len() == 1 && (1..=100).contains(&m.colonnes) && (1..=500).contains(&m.rangees) && m.colonnes * m.rangees <= 2000;
         (!bon).then_some("motif : une seule page, 1 à 100 colonnes, 1 à 500 rangées, 2000 copies au plus")
+    }
+
+    /// Planche manuelle vérifiée (roadmap 5.10) ; rend les textes de chaque copie, une par
+    /// ligne du CSV (vide sans données variables).
+    fn manuelle(&self) -> Result<Vec<Vec<cellules::Texte>>, String> {
+        if [self.motif.is_some(), self.manuel.is_some(), self.gabarit.is_some()].iter().filter(|b| **b).count() > 1 {
+            return Err("motif, poses à la main et gabarit s'excluent".into());
+        }
+        if let Some(m) = &self.manuel {
+            m.verifier()?;
+        }
+        match &self.donnees_variables {
+            None => Ok(vec![]),
+            Some(_) if self.elements.len() != 1 || self.motif.is_some() => Err("données variables : une seule page, sans motif".into()),
+            Some(d) => cellules::textes(d),
+        }
+    }
+
+    /// (page, copies) de chaque élément : avec des données variables, une copie par ligne.
+    fn pages(&self, textes: &[Vec<cellules::Texte>]) -> Vec<(usize, usize)> {
+        self.elements.iter().map(|e| (e.page, if textes.is_empty() { e.copies } else { textes.len() })).collect()
+    }
+
+    fn agencement(&self) -> (Option<cellules::Manuel>, Option<cellules::Gabarit>) {
+        (self.manuel.clone(), self.gabarit.clone())
     }
 }
 
@@ -1785,6 +1820,11 @@ async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>
     if m.connexion == machines::Connexion::Dossier {
         return refus(StatusCode::CONFLICT, "renvoi_sans_connexion", Some(m.nom));
     }
+    // Pas de renvoi en chaîne : un autre RIP ne passe pas par nous, avec notre jeton, vers
+    // un troisième.
+    if matches!(m.connexion, machines::Connexion::RipEko { .. }) {
+        return refus(StatusCode::CONFLICT, "renvoi_en_chaine", Some(m.nom));
+    }
     let rep = etat.config.donnees.join("renvoi");
     let chemin = rep.join(format!("{}.bin", Uuid::new_v4()));
     let (mut nom, mut recu) = (String::from("renvoi"), false);
@@ -1882,6 +1922,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         pont: Some(erp::lire(&etat.config.donnees).sauve()),
         regles: Some(regles::lire(&etat.config.donnees)),
         balises: Some(balises::lire(&etat.config.donnees)),
+        gabarits: Some(cellules::lire(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -1953,6 +1994,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     if let Some(Err(code)) = s.balises.as_ref().map(balises::verifier) {
         return refus(StatusCode::BAD_REQUEST, code, None);
     }
+    if let Some(Err(code)) = s.gabarits.as_deref().map(cellules::verifier_gabarits) {
+        return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", Some(code.into()));
+    }
     let connus = reglages::lire(&etat.config.donnees);
     reglages::identifier(&mut liste, &connus);
     let _verrou = etat.reglages.lock().await;
@@ -1991,6 +2035,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         if let Some(b) = &s.balises {
             balises::ecrire(&etat.config.donnees, b)?;
+        }
+        if let Some(g) = &s.gabarits {
+            cellules::ecrire(&etat.config.donnees, g)?;
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -2302,6 +2349,10 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
     if let Some(e) = d.motif_invalide() {
         return mauvais(e.into());
     }
+    let textes = match d.manuelle() {
+        Ok(t) => t,
+        Err(e) => return mauvais(e),
+    };
     let donnees = &etat.config.donnees;
     let mut pdfs = vec![];
     let mut noms = vec![];
@@ -2316,11 +2367,11 @@ async fn apercu_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanch
         }
         noms.push(format!("{} p{}", t.nom, e.page));
     }
-    let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
-    let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
+    let pages = d.pages(&textes);
+    let ((laize, espace, rotation, forme, motif), (manuel, gabarit)) = ((d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif), d.agencement());
     let imp = match tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::imposer(&sources, laize, espace, rotation, forme, motif)
+        imbrication::imposer(&sources, laize, espace, rotation, forme, motif, imbrication::Manuelle { poses: manuel.as_ref(), gabarit: gabarit.as_ref() })
     })
     .await
     {
@@ -2374,6 +2425,10 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     if let Some(e) = d.motif_invalide() {
         return mauvais(e);
     }
+    let textes = match d.manuelle() {
+        Ok(t) => t,
+        Err(e) => return mauvais(&e),
+    };
     let donnees = &etat.config.donnees;
     let mut pdfs = vec![];
     for e in &d.elements {
@@ -2394,10 +2449,12 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     }
     let (laize, espace, rotation, forme, motif) = (d.laize_mm, d.espacement_mm, d.rotation, d.forme, d.motif);
     let finition = imbrication::Finition { marge_bas: d.marge_bas_mm * imbrication::PT_PAR_MM, marge_haut: d.marge_haut_mm * imbrication::PT_PAR_MM, contour: d.contour, ..Default::default() };
-    let pages: Vec<(usize, usize)> = d.elements.iter().map(|e| (e.page, e.copies)).collect();
+    let pages = d.pages(&textes);
+    let copies: usize = pages.iter().map(|p| p.1).sum();
+    let (manuel, gabarit) = d.agencement();
     let compose = tokio::task::spawn_blocking(move || {
         let sources: Vec<imbrication::Source> = pdfs.iter().zip(&pages).map(|(pdf, &(page, copies))| imbrication::Source { pdf, page, copies }).collect();
-        imbrication::composer(&sources, laize, espace, rotation, forme, motif, finition)
+        imbrication::composer(&sources, laize, espace, rotation, forme, motif, finition, imbrication::Manuelle { poses: manuel.as_ref(), gabarit: gabarit.as_ref() }, &textes)
     })
     .await;
     let planche = match compose {
@@ -2411,10 +2468,10 @@ async fn creer_planche(State(etat): State<Partage>, Json(d): Json<DemandePlanche
     if let Err(e) = tokio::fs::create_dir_all(&rep).await.and(tokio::fs::write(rep.join("source.tmp"), planche).await) {
         return abandon(&rep, StatusCode::INTERNAL_SERVER_ERROR, ("erreur_interne", Some(e.to_string()))).await;
     }
-    let copies: usize = d.elements.iter().map(|e| e.copies).sum();
-    let nom = match d.motif {
-        Some(m) => format!("Motif {} × {}{} — {laize:.0} mm", m.colonnes, m.rangees, if m.demi_saut { " demi-saut" } else { "" }),
-        None => format!("Planche {laize:.0} mm — {copies} élément(s)"),
+    let nom = match (&d.motif, &d.gabarit) {
+        (Some(m), _) => format!("Motif {} × {}{} — {laize:.0} mm", m.colonnes, m.rangees, if m.demi_saut { " demi-saut" } else { "" }),
+        (None, Some(g)) => format!("Gabarit {} — {copies} élément(s)", g.nom),
+        (None, None) => format!("Planche {laize:.0} mm — {copies} élément(s)"),
     };
     match creer_travail(&etat, id, nom, Format::Pdf, Demande { dpi: d.dpi, reperage: d.reperage, ..Default::default() }).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
@@ -2739,6 +2796,22 @@ async fn enregistrer_regles(State(etat): State<Partage>, Json(r): Json<Vec<regle
     }
     match regles::ecrire(&etat.config.donnees, &r) {
         Ok(()) => Json(r).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Gabarits de cellules de la planche manuelle (roadmap 5.10).
+async fn lire_gabarits(State(etat): State<Partage>) -> Json<Vec<cellules::Gabarit>> {
+    Json(cellules::lire(&etat.config.donnees))
+}
+
+async fn enregistrer_gabarits(State(etat): State<Partage>, Json(g): Json<Vec<cellules::Gabarit>>) -> Response {
+    let _verrou = etat.reglages.lock().await;
+    if let Err(code) = cellules::verifier_gabarits(&g) {
+        return refus(StatusCode::BAD_REQUEST, code, None);
+    }
+    match cellules::ecrire(&etat.config.donnees, &g) {
+        Ok(()) => Json(g).into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
     }
 }
@@ -4600,7 +4673,7 @@ fn pdf_planche(donnees: &std::path::Path, sources: &[SourcePlanche], plan: &nid:
     let sources: Vec<imbrication::Source> = sources.iter().zip(&pdfs).map(|((_, page, _), pdf)| imbrication::Source { pdf, page: *page, copies: 1 }).collect();
     // Copie k : candidat `plan.elements[k]`, source = son rang parmi les retenus.
     let elements: Vec<usize> = plan.elements.iter().map(|c| plan.retenus.iter().position(|r| r == c).unwrap_or(0)).collect();
-    imbrication::composer_places(&sources, &plan.places, &elements, plan.planche, imbrication::Finition { purges: plan.purges, ..finition })
+    imbrication::composer_places(&sources, &plan.places, &elements, plan.planche, imbrication::Finition { purges: plan.purges, ..finition }, &[])
 }
 
 fn sources_planche(g: &Groupe, plan: &nid::Plan) -> Vec<SourcePlanche> {
@@ -5479,6 +5552,8 @@ mod tests {
             assert!(!v.to_string().contains(&jeton));
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            let e = envoyer(vers(&id, &jeton), b"x".to_vec()).await.unwrap().unwrap_err();
+            assert!(e.contains("409") && e.contains("renvoi_en_chaine"), "pas de renvoi en chaîne : {e}");
             let mut ailleurs = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
             ailleurs[1]["connexion"]["hote"] = "192.0.2.7".into();
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(ailleurs)).await.status(), StatusCode::BAD_REQUEST, "autre hôte : jeton à ressaisir");
@@ -6612,6 +6687,29 @@ mod tests {
             let cote = |c: f64| c * mm - 10.0;
             assert!((v["utilisation"].as_f64().unwrap() - 3.0 * cote(200.0) * cote(100.0) / (320.0 * mm * 200.0 * mm)).abs() < 1e-4, "{v}");
             assert_eq!(lire_tous(&donnees).len(), 1, "rien de créé");
+            // Planche manuelle (roadmap 5.10) : poses à la main, gabarit, données variables.
+            let apercu = |corps: serde_json::Value| {
+                let e = e.clone();
+                async move {
+                    let r = appel(&e, "POST", "/api/planches/apercu", None, Some(corps)).await;
+                    (r.status(), serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap())
+                }
+            };
+            let el = serde_json::json!([{ "id": t.id, "page": 1, "copies": 2 }]);
+            let (s, v) = apercu(serde_json::json!({ "laize_mm": 320.0, "elements": el, "manuel": { "poses": [{ "copie": 1, "x_mm": 100.0, "y_mm": 0.0, "verrou": true }] } })).await;
+            assert_eq!((s, v["places"][0]["x"].as_f64().map(f64::round), v["places"][1]["y"].as_f64().map(f64::round)), (StatusCode::OK, Some(100.0), Some(105.0)), "{v}");
+            let gabarit = serde_json::json!({ "nom": "A4", "largeur_mm": 210.0, "hauteur_mm": 110.0, "colonnes": 1, "rangees": 3 });
+            let (s, v) = apercu(serde_json::json!({ "laize_mm": 320.0, "elements": el, "gabarit": gabarit })).await;
+            assert_eq!((s, v["places"][1]["y"].as_f64().map(f64::round), v["longueur_mm"].as_f64().map(f64::round)), (StatusCode::OK, Some(115.0), Some(220.0)), "{v}");
+            let dv = serde_json::json!({ "csv": "Nom\nA\nB\nC", "champs": [{ "colonne": "Nom", "x_mm": 10.0, "y_mm": 10.0 }] });
+            let (s, v) = apercu(serde_json::json!({ "laize_mm": 320.0, "elements": el, "gabarit": gabarit, "donnees_variables": dv })).await;
+            assert_eq!((s, v["places"].as_array().map(Vec::len)), (StatusCode::OK, Some(3)), "une copie par ligne du CSV : {v}");
+            let (s, v) = apercu(serde_json::json!({ "laize_mm": 320.0, "elements": el, "gabarit": gabarit, "manuel": {} })).await;
+            assert_eq!((s, v["code"].as_str()), (StatusCode::BAD_REQUEST, Some("planche_invalide")), "gabarit et poses s'excluent");
+            let gabarits = serde_json::json!([gabarit]);
+            assert_eq!(appel(&e, "POST", "/api/gabarits", None, Some(gabarits.clone())).await.status(), StatusCode::OK);
+            let lus = super::couches_decoupe::json(appel(&e, "GET", "/api/gabarits", None, None).await).await;
+            assert_eq!((lus[0]["nom"].as_str(), lus[0]["espace_mm"].as_f64()), (Some("A4"), Some(0.0)));
             std::fs::remove_dir_all(&donnees).unwrap();
         }
 

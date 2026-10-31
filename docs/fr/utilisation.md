@@ -766,6 +766,28 @@ l'espacement choisi. Avec **Demi-saut**, une colonne sur deux descend d'une demi
 (raccord papier peint). Le nombre de copies coché est ignoré ; la grille doit tenir dans
 la laize (100 colonnes, 500 rangées et 2000 copies au plus). La découpe suit chaque copie.
 
+### Planche manuelle (API, écran à venir dans les clients natifs)
+
+`POST /api/planches` et `/api/planches/apercu` acceptent trois champs de plus (un seul
+parmi `motif`, `manuel` et `gabarit`) :
+
+- `manuel` : `{ "poses": [{ "copie": 0, "x_mm": 0, "y_mm": 0, "angle": 0, "verrou": true }],
+  "grille_mm": 10, "magnetisme_mm": 5 }`. Les copies sont comptées dans l'ordre des
+  éléments, à partir de 0 ; x et y donnent le coin bas gauche sur la planche. Une copie
+  **verrouillée** est prise telle quelle. Les autres sont calées sur la **grille**, puis
+  **aimantées** (à moins de `magnetisme_mm`) au bord de la laize ou au bord d'une copie déjà
+  posée, à l'espacement près. Une copie qui sort de la laize ou en chevauche une autre est
+  refusée (`planche_invalide`, avec le numéro). Les copies sans pose vont en rangées au-dessus.
+- `gabarit` : `{ "nom", "largeur_mm", "hauteur_mm", "colonnes", "rangees", "espace_mm" }`.
+  Une copie par case, de gauche à droite puis de bas en haut, centrée et couchée si elle
+  ne tient que tournée. Les gabarits se gardent par nom avec `GET`/`POST /api/gabarits`
+  (administrateur) et passent dans la sauvegarde de la configuration.
+- `donnees_variables` : `{ "csv": "Nom;Numéro\n…", "champs": [{ "colonne": "Nom",
+  "x_mm": 10, "y_mm": 5, "taille_pt": 12 }] }`, sur une seule page. Il y a une copie par
+  ligne du CSV (2000 au plus ; séparateur `;` ou `,` pris dans l'en-tête ; guillemets
+  doubles). Chaque champ écrit la valeur de sa colonne en Helvetica noir, à x, y mm du coin
+  bas gauche de la page. Les données variables se combinent avec `gabarit` ou `manuel`.
+
 ## Imbrication dans la file
 
 Au lieu de sortir une à une, les impressions en attente d'une même imprimante peuvent

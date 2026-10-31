@@ -727,6 +727,28 @@ chosen spacing. With **Half drop**, every other column moves down half a height
 (wallpaper repeat). The ticked number of copies is ignored; the grid must fit the roll
 width (100 columns, 500 rows and 2000 copies at most). The cut follows every copy.
 
+### Manual sheet (API; the screen will come with the native clients)
+
+`POST /api/planches` and `/api/planches/apercu` take three more fields (only one of
+`motif`, `manuel` and `gabarit`):
+
+- `manuel`: `{ "poses": [{ "copie": 0, "x_mm": 0, "y_mm": 0, "angle": 0, "verrou": true }],
+  "grille_mm": 10, "magnetisme_mm": 5 }`. Copies are counted in element order, from 0;
+  x and y give the lower left corner on the sheet. A **locked** copy is taken as is. The
+  others snap to the **grid**, then **stick** (within `magnetisme_mm`) to the roll edge or
+  to the edge of a copy already placed, allowing for the spacing. A copy that leaves the
+  roll width or overlaps another is refused (`planche_invalide`, with its number). Copies
+  without a pose go in rows above.
+- `gabarit`: `{ "nom", "largeur_mm", "hauteur_mm", "colonnes", "rangees", "espace_mm" }`.
+  One copy per cell, left to right then bottom to top, centred and turned when it only
+  fits turned. Templates are kept by name with `GET`/`POST /api/gabarits` (administrator)
+  and are part of the configuration backup.
+- `donnees_variables`: `{ "csv": "Name;Number\n…", "champs": [{ "colonne": "Name",
+  "x_mm": 10, "y_mm": 5, "taille_pt": 12 }] }`, on a single page. There is one copy per CSV
+  line (2000 at most; `;` or `,` separator taken from the header; double quotes). Each
+  field writes its column's value in black Helvetica, x, y mm from the page's lower left
+  corner. Variable data combines with `gabarit` or `manuel`.
+
 ## Nesting in the queue
 
 Instead of leaving one by one, the prints waiting for the same printer can leave
