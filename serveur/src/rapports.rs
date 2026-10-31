@@ -261,8 +261,9 @@ pub fn envoyer_attente(donnees: &Path) {
     let Ok(lus) = std::fs::read_dir(dossier_attente(donnees)) else { return };
     let mut fichiers: Vec<PathBuf> = lus.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "json")).collect();
     fichiers.sort();
-    let accepte = auto(donnees) == Some(true);
     for f in fichiers {
+        // Relu à chaque fois : un retrait d'accord pendant l'envoi arrête la suite.
+        let accepte = auto(donnees) == Some(true);
         let corps = std::fs::read(&f).ok().and_then(|o| serde_json::from_slice::<serde_json::Value>(&o).ok());
         match corps {
             Some(c) if accepte => match poster(c, true) {

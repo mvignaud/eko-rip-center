@@ -241,6 +241,6 @@ async fn rapports_et_issues_github() {
     assert!(!corps.contains("a@b.fr") && !corps.contains("ligne secrète") && !corps.contains("@moi"));
     let gardé = eko_rip_cloud::rapports::lire(&d, &reference).unwrap();
     assert_eq!((gardé.email.as_str(), gardé.journal.as_str(), gardé.issue.as_deref()), ("a@b.fr", "ligne secrète", Some("https://github.test/o/d/issues/7")));
-    assert_eq!(eko_rip_cloud::rapports::lister(&d).len(), 3);
+    assert_eq!(eko_rip_cloud::rapports::nombre(&d), 3);
     let _ = std::fs::remove_dir_all(&d);
 }

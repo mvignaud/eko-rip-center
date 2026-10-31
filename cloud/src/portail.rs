@@ -672,10 +672,9 @@ fn carte_installations(st: &crate::installations::Statistiques) -> String {
 
 /// Rapports de bug reçus (90 jours) et accès GitHub pour les issues.
 fn carte_rapports(r: &Partage, s: &Session, depot: &str, jeton: bool) -> String {
-    let tous = crate::rapports::lister(&r.config.donnees);
+    let tous = crate::rapports::lister(&r.config.donnees, 100);
     let lignes: String = tous
         .iter()
-        .take(100)
         .map(|x| {
             let issue = x.issue.as_deref().map_or("—".to_string(), |u| format!(r#"<a href="{}" rel="noopener" target="_blank">issue</a>"#, echapper(u)));
             format!(
@@ -690,7 +689,7 @@ fn carte_rapports(r: &Partage, s: &Session, depot: &str, jeton: bool) -> String 
         })
         .collect();
     format!(
-        r#"<div class="carte"><h2>Rapports ({n})</h2>
+        r#"<div class="carte"><h2>Rapports ({n}, les 100 derniers affichés)</h2>
 <p class="meta">« Signaler un problème » et rapports automatiques des installations, gardés 90 jours. Le journal et l'e-mail restent ici ; l'issue GitHub n'a que le titre, la description, le poste, l'OS et la référence.</p>
 <div class="tableau"><table><thead><tr><th>Référence</th><th>Nature</th><th>Poste</th><th>Titre</th><th>GitHub</th></tr></thead><tbody>{lignes}</tbody></table></div>
 <h2>Issues GitHub</h2>
@@ -700,7 +699,7 @@ fn carte_rapports(r: &Partage, s: &Session, depot: &str, jeton: bool) -> String 
 <label>Jeton ({etat})<input type="password" name="github_jeton" autocomplete="new-password"></label>
 <label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer le jeton enregistré</span></label>
 <button type="submit">Enregistrer</button></form></div>"#,
-        n = tous.len(),
+        n = crate::rapports::nombre(&r.config.donnees),
         csrf = hidden_csrf(s),
         depot = echapper(depot),
         etat = if jeton { "enregistré (laisser vide pour le garder)" } else { "non renseigné" },

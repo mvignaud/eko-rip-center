@@ -161,26 +161,50 @@ pub fn lire(donnees: &Path, reference: &str) -> Option<Rapport> {
     serde_json::from_slice(&std::fs::read(chemin(donnees, reference)?).ok()?).ok()
 }
 
-/// Les rapports gardés, du plus récent au plus ancien.
-pub fn lister(donnees: &Path) -> Vec<Rapport> {
-    let mut v: Vec<Rapport> = std::fs::read_dir(dossier(donnees))
+/// Ce que montre la liste de l'administration : sans journal, description ni e-mail (lus
+/// seulement sur la page d'un rapport).
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct Resume {
+    pub reference: String,
+    pub recu_le: u64,
+    #[serde(rename = "type")]
+    pub type_poste: String,
+    pub version: String,
+    pub nature: String,
+    pub code: String,
+    pub titre: String,
+    #[serde(default)]
+    pub issue: Option<String>,
+}
+
+/// Fichiers des rapports et leur date d'écriture, du plus récent au plus ancien (rien n'est lu).
+fn fichiers(donnees: &Path) -> Vec<(PathBuf, std::time::SystemTime)> {
+    let mut v: Vec<_> = std::fs::read_dir(dossier(donnees))
         .into_iter()
         .flatten()
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
-        .filter_map(|e| serde_json::from_slice(&std::fs::read(e.path()).ok()?).ok())
+        .filter_map(|e| Some((e.path(), e.metadata().ok()?.modified().ok()?)))
         .collect();
-    v.sort_by_key(|r| std::cmp::Reverse(r.recu_le));
+    v.sort_by_key(|(_, t)| std::cmp::Reverse(*t));
     v
 }
 
-/// Efface les rapports de plus de 90 jours.
+pub fn nombre(donnees: &Path) -> usize {
+    fichiers(donnees).len()
+}
+
+/// Les `max` rapports les plus récents, un fichier lu à la fois.
+pub fn lister(donnees: &Path, max: usize) -> Vec<Resume> {
+    fichiers(donnees).into_iter().take(max).filter_map(|(p, _)| serde_json::from_slice(&std::fs::read(p).ok()?).ok()).collect()
+}
+
+/// Efface les rapports de plus de 90 jours, d'après la date du fichier (sans les lire).
 pub fn purger(donnees: &Path, maintenant: u64) {
-    for r in lister(donnees) {
-        if maintenant.saturating_sub(r.recu_le) > CONSERVATION_S
-            && let Some(c) = chemin(donnees, &r.reference)
-        {
-            let _ = std::fs::remove_file(c);
+    let limite = std::time::UNIX_EPOCH + Duration::from_secs(maintenant.saturating_sub(CONSERVATION_S));
+    for (p, t) in fichiers(donnees) {
+        if t < limite {
+            let _ = std::fs::remove_file(p);
         }
     }
 }
@@ -385,10 +409,17 @@ mod tests {
         let b = valider(&demande(), 20).unwrap();
         enregistrer(&d, &a).unwrap();
         enregistrer(&d, &b).unwrap();
-        assert_eq!(lister(&d).iter().map(|r| r.recu_le).collect::<Vec<_>>(), vec![20, 10]);
+        // Dates des fichiers : a il y a 100 jours, b il y a 1 jour.
+        let maintenant = crate::maintenant();
+        for (r, jours) in [(&a, 100), (&b, 1)] {
+            let f = std::fs::File::options().write(true).open(chemin(&d, &r.reference).unwrap()).unwrap();
+            f.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(maintenant - jours * 86_400)).unwrap();
+        }
+        assert_eq!(lister(&d, 10).iter().map(|r| r.recu_le).collect::<Vec<_>>(), vec![20, 10]);
+        assert_eq!(lister(&d, 1).len(), 1);
         assert_eq!(lire(&d, &a.reference).unwrap(), a);
-        purger(&d, 15 + CONSERVATION_S);
-        assert_eq!(lister(&d).len(), 1);
+        purger(&d, maintenant);
+        assert_eq!((nombre(&d), lister(&d, 10)[0].reference.clone()), (1, b.reference.clone()));
         let _ = std::fs::remove_dir_all(&d);
     }
 }
