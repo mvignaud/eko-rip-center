@@ -708,6 +708,7 @@ const textes = {
     note_fond_reperes: "Les repères noirs sont imprimés dessus en surimpression : le fond reste aussi sous eux.",
     coupe_auto: "Couper dès l'arrivée", note_coupe_auto: "Décoché : chaque découpe arrive suspendue dans la file de la machine et part quand l'opérateur la reprend (« Reprendre »).", trier_traces: "Trier les tracés (intérieurs d'abord, plus proche voisin ; sinon ordre de création)", decoupe_enregistree: "Réglages de découpe enregistrés.",
     alertes: {
+      espace_disque_bas: (d) => `Disque presque plein (${d}) : faire de la place avant le seuil critique, où les envois automatiques passent en erreur.`,
       image_sans_resolution: (d) => `L'image ne donne pas sa résolution : posée à ${d}. Vérifier la taille, ou la régler dans Réglages (échelle).`,
       image_canaux_ignores: (d) => `${d} canal(aux) de sélection du TIFF (masques Photoshop) ignoré(s) : ils ne s'impriment pas.`,
       epreuve_echouee: (d) => `Épreuve TIFF non faite : ${d}`,
@@ -1017,6 +1018,7 @@ const textes = {
     note_fond_reperes: "The black marks are printed over it with overprint: the background stays under them too.",
     coupe_auto: "Cut on arrival", note_coupe_auto: "Unticked: each cut arrives on hold in the machine's queue and goes when the operator resumes it (\"Resume\").", trier_traces: "Sort the paths (inner ones first, nearest neighbour; else creation order)", decoupe_enregistree: "Cutting settings saved.",
     alertes: {
+      espace_disque_bas: (d) => `Disk almost full (${d}): free some space before the critical threshold, where automatic submissions go into error.`,
       image_sans_resolution: (d) => `The image does not give its resolution: placed at ${d}. Check the size, or set it in Settings (scale).`,
       image_canaux_ignores: (d) => `${d} selection channel(s) of the TIFF (Photoshop masks) ignored: they are not printed.`,
       epreuve_echouee: (d) => `TIFF proof not made: ${d}`,

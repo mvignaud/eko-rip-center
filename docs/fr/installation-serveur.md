@@ -29,7 +29,10 @@ essais, c'est un plancher, pas une cible.
 - un rendu pèse **≈ 1 Go par m² à 600 dpi** (le quart à 300 dpi, quatre fois plus à
   1 200 dpi) : une bâche de 1,6 × 10 m à 600 dpi, c'est ≈ 16 Go ;
 - le serveur garde `EKO_RIP_SEUIL_LIBRE_MO` libres (5 Go par défaut) : en dessous, il
-  purge les plus vieux travaux inactifs et refuse un travail qui ne tiendrait pas ;
+  purge les plus vieux travaux inactifs et refuse un travail qui ne tiendrait pas (un
+  dépôt en dossier surveillé devient un travail en erreur, à relancer) ; sous
+  `EKO_RIP_SEUIL_ALERTE_MO` (20 Go par défaut), chaque nouveau travail porte l'alerte
+  « disque presque plein » ;
 - compter au moins **500 Go**, plus si les travaux sont gardés longtemps
   (`EKO_RIP_CONSERVATION_JOURS`) ; la vue Production montre le tampon de la file et la
   part du disque occupée.
@@ -160,7 +163,9 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_DELAI_S` | `1800` | durée maximale d'un rendu, en secondes |
 | `EKO_RIP_RENDUS` | un par cœur, 4 au plus | rendus menés en même temps (1 à 16) ; chacun prend un cœur et de la mémoire, baisser sur un petit poste |
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | travaux effacés après ce nombre de jours (0 : jamais) |
-| `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | espace libre à garder (Mo) : en dessous, les plus vieux travaux inactifs sont purgés et un travail qui ne tiendrait pas est refusé (`espace_insuffisant`) ; 0 : aucun seuil |
+| `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | espace libre à garder (Mo) : en dessous, les plus vieux travaux inactifs sont purgés et un travail qui ne tiendrait pas est refusé (`espace_insuffisant`) ; un dépôt en dossier surveillé devient un travail en erreur avec ce motif ; 0 : aucun seuil |
+| `EKO_RIP_SEUIL_ALERTE_MO` | `20480` | seuil bas (Mo) : en dessous, alerte `espace_disque_bas` sur chaque nouveau travail et `disque_niveau: bas` dans `/api/systeme` ; 0 : aucun |
+| `EKO_RIP_PURGER_ERP_FAITS` | `0` | `1` : un travail venu de l'ERP est effacé dès qu'il est fait (une sortie terminée, aucune à passer ni en échec), sans attendre la conservation |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | port du plotter de découpe |
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | réglages du port du plotter |
 | `EKO_RIP_EPSON_SNMP` | (vide) | adresse IP de l'Epson : largeur du média chargé lue par SNMP |

@@ -103,7 +103,7 @@ pub fn etat(f: &Fiche, releves: &[Releve], maintenant: u64) -> Etat {
     let Some(le) = f.etalonne_le else {
         return Etat { statut: Statut::Jamais, etalonne_le: None, rappel_le: None, plafond_le: None, declencheurs: vec![] };
     };
-    let mut declencheurs: Vec<Evenement> = f.evenements.iter().filter(|e| e.le > le).cloned().chain(poches_changees(releves, le)).collect();
+    let mut declencheurs: Vec<Evenement> = f.evenements.iter().filter(|e| e.le >= le).cloned().chain(poches_changees(releves, le)).collect();
     declencheurs.sort_by_key(|e| e.le);
     let (rappel, plafond) = (le + RAPPEL_JOURS * JOUR, le + PLAFOND_JOURS * JOUR);
     let statut = if maintenant >= plafond {
@@ -174,6 +174,8 @@ mod tests {
         assert_eq!(etat(&f, &[], 3000).statut, Statut::Rappel);
         etalonner(&mut f, 4000, String::new());
         assert_eq!(etat(&f, &[], 5000).statut, Statut::AJour);
+        f.evenements.push(Evenement { le: 4000, declencheur: Declencheur::Maintenance { note: String::new() } });
+        assert_eq!(etat(&f, &[], 5000).statut, Statut::Rappel, "saisi dans la seconde de l'étalonnage, après lui");
         let lu: Evenement = serde_json::from_value(serde_json::json!({ "le": 1, "motif": "maintenance", "note": "têtes nettoyées" })).unwrap();
         assert_eq!(lu.declencheur, Declencheur::Maintenance { note: "têtes nettoyées".into() });
     }

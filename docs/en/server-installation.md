@@ -28,7 +28,9 @@ separate from the system disk:
 - a render weighs **≈ 1 GB per m² at 600 dpi** (a quarter at 300 dpi, four times more at
   1,200 dpi): a 1.6 × 10 m banner at 600 dpi is ≈ 16 GB;
 - the server keeps `EKO_RIP_SEUIL_LIBRE_MO` free (5 GB by default): below it, it purges the
-  oldest inactive jobs and refuses a job that would not fit;
+  oldest inactive jobs and refuses a job that would not fit (a file dropped in a hot folder
+  becomes a job in error, to relaunch); below `EKO_RIP_SEUIL_ALERTE_MO` (20 GB by default),
+  each new job carries a "disk almost full" alert;
 - allow at least **500 GB**, more if jobs are kept long (`EKO_RIP_CONSERVATION_JOURS`);
   the Production view shows the queue's spool and how full the disk is.
 
@@ -153,7 +155,9 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_DELAI_S` | `1800` | maximum rendering time, in seconds |
 | `EKO_RIP_RENDUS` | one per core, 4 at most | renders run at the same time (1 to 16); each takes a core and memory, lower it on a small computer |
 | `EKO_RIP_CONSERVATION_JOURS` | `30` | jobs deleted after this many days (0: never) |
-| `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | free space to keep (MB): below it, the oldest inactive jobs are purged and a job that would not fit is refused (`espace_insuffisant`); 0: no threshold |
+| `EKO_RIP_SEUIL_LIBRE_MO` | `5120` | free space to keep (MB): below it, the oldest inactive jobs are purged and a job that would not fit is refused (`espace_insuffisant`); a file dropped in a hot folder becomes a job in error with that reason; 0: no threshold |
+| `EKO_RIP_SEUIL_ALERTE_MO` | `20480` | low threshold (MB): below it, an `espace_disque_bas` alert on each new job and `disque_niveau: bas` in `/api/systeme`; 0: none |
+| `EKO_RIP_PURGER_ERP_FAITS` | `0` | `1`: a job sent by the ERP is deleted as soon as it is done (one output finished, none left to run or failed), without waiting for the retention period |
 | `EKO_RIP_PLOTTER` | `/dev/kona` | cutter port |
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | cutter port settings |
 | `EKO_RIP_EPSON_SNMP` | (empty) | Epson IP address: loaded media width read over SNMP |

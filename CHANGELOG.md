@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Deux seuils d'espace disque** (feuille de route 0.8) : sous le seuil bas
+  (`EKO_RIP_SEUIL_ALERTE_MO`, 20 Go par défaut), chaque nouveau travail porte l'alerte
+  « disque presque plein » ; sous le seuil critique (`EKO_RIP_SEUIL_LIBRE_MO`), un fichier
+  déposé en dossier surveillé n'est plus mis de côté dans `refuses/` : il devient un travail
+  en erreur `espace_insuffisant`, avec son motif, à relancer une fois la place faite.
+  `/api/systeme` donne `seuil_alerte` et `disque_niveau` (`ok`, `bas`, `critique`). Option
+  `EKO_RIP_PURGER_ERP_FAITS=1` : un travail venu de l'ERP est effacé dès qu'il est fait.
+  *Low and critical disk thresholds; hot-folder jobs refused for space show as jobs in error;
+  optional purge of ERP jobs once done.*
 - **Rappels de recalibration** (feuille de route 8.5), par imprimante : rappel 14 jours
   après le dernier étalonnage, étalonnage périmé à 3 mois, et rappel dès qu'une poche
   d'encre est changée (hausse d'au moins 10 points dans les relevés SNMP), qu'un nouveau
