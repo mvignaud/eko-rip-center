@@ -3,3 +3,6 @@
 /serveur/eko-rip-data
 /client/gen
 essais-atelier/
+
+# Copies du journal déposées à la publication du site
+/site/changelog.*.json
