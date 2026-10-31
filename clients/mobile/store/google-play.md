@@ -76,8 +76,8 @@ GOOD TO KNOW
 ## Classification
 
 - Type : application. Gratuite. Catégorie : **Outils** (alternative : Productivité). Étiquettes : professionnel / outils.
-- Coordonnées : e-mail mathieu.vignaud2@gmail.com, site https://e-ko.fr.
-- URL de la politique de confidentialité : https://e-ko.fr/confidentialite-rip (à confirmer ; texte dans `store/confidentialite.md`).
+- Coordonnées : e-mail contact@e-ko.rip, site https://e-ko.rip/app/.
+- URL de la politique de confidentialité : https://e-ko.rip/app/confidentialite/ (texte dans `store/confidentialite.md`).
 
 ## Accès à l'application (Contenu de l'application > Accès à l'application)
 
@@ -106,7 +106,7 @@ L'application ne contient pas de publicités : NON.
   | Tout autre type (position, contacts, photos, fichiers, finances, santé, messages, activité, historique web, plantages/diagnostics) | Non | Non | — | — |
 - Adresse du serveur, identifiants : stockés sur l'appareil (stockage sécurisé), jamais envoyés au développeur.
 - **Données chiffrées en transit ?** Non systématiquement : l'utilisateur peut se connecter en HTTP à un serveur de réseau local (le trafic reste sur son réseau) ; HTTPS pris en charge. Répondre « Non » à « toutes les données sont chiffrées en transit » ou préciser selon la configuration du serveur.
-- **Possibilité de demander la suppression des données ?** Oui : se déconnecter ou couper les notifications retire le jeton du serveur et efface les données locales ; désinstaller l'application supprime le reste. Contact : mathieu.vignaud2@gmail.com.
+- **Possibilité de demander la suppression des données ?** Oui : se déconnecter ou couper les notifications retire le jeton du serveur et efface les données locales ; désinstaller l'application supprime le reste. Contact : contact@e-ko.rip.
 - Aucune vente de données, aucune publicité, aucun suivi, aucun SDK d'analyse.
 - Permissions Android : notifications (POST_NOTIFICATIONS), Internet, vibration. Aucune permission sensible.
 

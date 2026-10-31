@@ -2,7 +2,7 @@
 
 Dernière mise à jour : 31 octobre 2026
 
-**Éditeur** : 2M Numérique — contact : mathieu.vignaud2@gmail.com
+**Éditeur** : SAS GOLDEN PRINT — contact : contact@e-ko.rip
 
 E-KO RIP est une application de suivi pour le serveur d'impression (RIP) E-KO de votre entreprise.
 Elle ne collecte aucune donnée pour le compte de l'éditeur : il n'y a ni compte E-KO, ni publicité, ni outil de mesure d'audience, ni pistage.
@@ -33,7 +33,7 @@ Les données stockées sur le téléphone sont supprimées lorsque vous vous dé
 
 ## Vos droits
 
-Pour toute question ou demande relative à vos données (accès, rectification, effacement), contactez votre administrateur (responsable du serveur RIP) ou l'éditeur à mathieu.vignaud2@gmail.com. Vous pouvez aussi saisir la CNIL (www.cnil.fr).
+Pour toute question ou demande relative à vos données (accès, rectification, effacement), contactez votre administrateur (responsable du serveur RIP) ou l'éditeur à contact@e-ko.rip. Vous pouvez aussi saisir la CNIL (www.cnil.fr).
 
 ## Public
 

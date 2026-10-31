@@ -1,7 +1,7 @@
 {
   "configVersion": 0,
   "apple": {
-    "copyright": "2026 2M Numérique",
+    "copyright": "2026 SAS GOLDEN PRINT",
     "categories": ["UTILITIES", "PRODUCTIVITY"],
     "advisory": {
       "alcoholTobaccoOrDrugUseOrReferences": "NONE",
@@ -28,9 +28,9 @@
         "keywords": ["RIP", "impression", "imprimante", "grand format", "file d'attente", "encre", "atelier", "découpe", "alertes", "production"],
         "promoText": "Suivez la file d'impression, les niveaux d'encre et les alertes de vos machines, où que vous soyez dans l'atelier.",
         "releaseNotes": "Première version de E-KO RIP : file d'attente, machines (encres, rouleau, alertes), notifications push des erreurs machine et mode démo.",
-        "marketingUrl": "https://e-ko.fr",
-        "supportUrl": "https://e-ko.fr",
-        "privacyPolicyUrl": "https://e-ko.fr/confidentialite-rip"
+        "marketingUrl": "https://e-ko.rip/app/",
+        "supportUrl": "https://e-ko.rip/app/",
+        "privacyPolicyUrl": "https://e-ko.rip/app/confidentialite/"
       },
       "en-US": {
         "title": "E-KO RIP",
@@ -39,15 +39,15 @@
         "keywords": ["RIP", "print", "printer", "large format", "queue", "ink", "workshop", "cutting", "alerts", "production"],
         "promoText": "Follow your print queue, ink levels and machine alerts wherever you are in the shop.",
         "releaseNotes": "First release of E-KO RIP: print queue, machines (inks, roll, alerts), push notifications for machine errors and a demo mode.",
-        "marketingUrl": "https://e-ko.fr",
-        "supportUrl": "https://e-ko.fr",
-        "privacyPolicyUrl": "https://e-ko.fr/confidentialite-rip"
+        "marketingUrl": "https://e-ko.rip/app/",
+        "supportUrl": "https://e-ko.rip/app/",
+        "privacyPolicyUrl": "https://e-ko.rip/app/confidentialite/"
       }
     },
     "review": {
       "firstName": "Mathieu",
       "lastName": "Vignaud",
-      "email": "mathieu.vignaud2@gmail.com",
+      "email": "contact@e-ko.rip",
       "phone": "+33 0 00 00 00 00",
       "demoRequired": false,
       "notes": "E-KO RIP is a companion app for an in-house RIP (print server) running on a company's local network. It cannot be reached from outside the shop, so reviewers cannot connect to a real server.\n\nTo review the app, tap \"Essayer le mode démo\" at the bottom of the login screen. No account or password is needed. Demo mode shows fictitious data (3 machines, print queue, ink levels, alerts) and the actions (pause, resume, stop, reprint) work on that data. Push notifications are disabled in demo mode. To leave it, go to the Réglages tab and tap \"Quitter le mode démo\".\n\nThe app UI is in French."
