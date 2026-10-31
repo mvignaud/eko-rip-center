@@ -1687,9 +1687,14 @@ $("editeur-regles").addEventListener("submit", async (e) => {
   if (r) { regles = r; document.activeElement.blur(); dire(T().regles_enregistrees); afficherRegles(); }
 });
 /** Formulaire → réglages d'un travail (même forme que le serveur). */
+/** Réglages sans champ dans le formulaire (empilement 2.10, lissage 9.15) : repris tels
+ *  qu'appliqués, pour qu'une modification faite ici ne les efface pas. */
+let horsFormulaire = {};
+
 function demandeDuFormulaire() {
   const f = form, profil = (n) => f[n].value || null;
   return {
+    ...horsFormulaire,
     mode: f.mode.value, tous_les_traces: f.traces.value === "tous", reperage: f.reperage.value, dpi: +f.dpi.value,
     couleur: { entree_cmjn: profil("profil_cmjn"), entree_rvb: profil("profil_rvb"), sortie: profil("profil_sortie"), intention: +f.intention.value, forcer: f.forcer_profils.checked, intention_tons: f.intention_tons.value === "" ? null : +f.intention_tons.value },
     mosaique: f.mosaique.checked ? mosaiqueDuFormulaire(f) : null,
@@ -1831,6 +1836,7 @@ function lireEdition(racine) {
 }
 function appliquerDemande(d) {
   const f = form;
+  horsFormulaire = { empilement: d.empilement || [], reechantillonnage: d.reechantillonnage || "proche_voisin" };
   // Une résolution enregistrée absente de la liste (72, 2880…) y est ajoutée.
   if (![...f.dpi.options].some((o) => o.value === String(d.dpi))) f.dpi.append(new Option(String(d.dpi), String(d.dpi)));
   f.mode.value = d.mode; f.traces.value = d.tous_les_traces ? "tous" : "tons"; f.reperage.value = d.reperage; f.dpi.value = String(d.dpi);
