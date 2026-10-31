@@ -19,7 +19,8 @@ RACINE=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-rsync -a --exclude README.md "$RACINE/site/" "$TMP/"
+# Une copie du journal traînant dans site/ ne doit jamais remplacer celle en ligne (revue Graphify).
+rsync -a --exclude README.md --exclude 'changelog.*.json' "$RACINE/site/" "$TMP/"
 
 for langue in fr en; do
   if curl -fsS --max-time 20 "$ERP/changelog-rip.json?lang=$langue" -o "$TMP/changelog.$langue.json.tmp" \

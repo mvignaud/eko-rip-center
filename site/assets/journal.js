@@ -44,8 +44,15 @@
     return d.toLocaleDateString(langue === 'en' ? 'en-GB' : 'fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
+  // Au-delà de 8 s sans réponse, on passe à la copie de secours (revue Graphify).
   function lire(url) {
-    return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) {
+    var options = { headers: { Accept: 'application/json' } };
+    if (window.AbortController) {
+      var arret = new AbortController();
+      setTimeout(function () { arret.abort(); }, 8000);
+      options.signal = arret.signal;
+    }
+    return fetch(url, options).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     }).then(function (j) {
@@ -63,8 +70,8 @@
 
   function versionHtml(r, complet) {
     var entrees = (r.entries || []).map(function (e) {
-      var cat = echapper(e.category || 'features');
-      return '<div class="entree"><span class="cat ' + cat + '">' + echapper(T.categories[e.category] || e.category) + '</span>' +
+      var brute = e.category || 'features';
+      return '<div class="entree"><span class="cat ' + echapper(brute) + '">' + echapper(T.categories[brute] || brute) + '</span>' +
         '<h3>' + enrichir(e.title) + '</h3>' +
         (complet && e.description ? '<p>' + enrichir(e.description) + '</p>' : '') + '</div>';
     }).join('');
