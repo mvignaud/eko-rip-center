@@ -67,6 +67,9 @@ parité ; d'ici là, 0.Y.Z.
   le cadrage hérité (CropBox) avant la MediaBox de la page, comme le veut la norme.
   *A damaged PDF whose page is its own parent no longer stalls hot folders; inherited CropBox
   wins over the page MediaBox.*
+- Trois lectures d'octets écrites autrement pour que `cargo clippy` repasse sans erreur avec
+  Rust 1.99 (règle `chunks_exact_to_as_chunks`), sans changement de comportement.
+  *Clippy clean again on Rust 1.99.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*
