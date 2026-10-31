@@ -26,12 +26,19 @@ cd clients\windows
 
 dotnet test EkoRip.Coeur.Tests                        # logique, sans interface (marche aussi sous Linux)
 dotnet build EkoRip.App -p:Platform=x64               # débogage
-dotnet publish EkoRip.App -c Release -r win-x64       # dossier autonome
+dotnet publish EkoRip.App -c Release -p:Platform=x64  # dossier autonome
 
 # Lancement
 .\EkoRip.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\EkoRipCenter.exe
-.\EkoRip.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\EkoRipCenter.exe
+.\EkoRip.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\EkoRipCenter.exe
+
+# Version livrable : tests, publish autonome à la version du Cargo.toml, puis
+# dist\E-KO-RIP-Center-windows-x64-<version>.zip (environ 60 Mo, dossier « E-KO RIP Center »)
+.\construire.ps1                         # -Architecture arm64|x86, -Sortie <dossier>
 ```
+
+Le zip se décompresse n'importe où et `EkoRipCenter.exe` se lance tel quel : runtime .NET et
+Windows App SDK sont dedans, rien à installer.
 
 (`win-arm64` et `win-x86` marchent de la même façon.) Dans Visual Studio : ouvrir `EkoRip.sln`,
 plateforme **x64**, projet de démarrage `EkoRip.App`, F5.
