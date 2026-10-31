@@ -91,6 +91,18 @@ pub fn ecrire(donnees: &Path, regles: &[Regle]) -> std::io::Result<()> {
     crate::etat::ecrire(&fichier(donnees), regles, false)
 }
 
+/// Place libre pour un fichier refusé : `nom`, sinon `base-2.ext`, `base-3.ext`… pour qu'un
+/// refus n'écrase ni le fichier ni la raison (`.refus.txt`) d'un refus précédent.
+pub fn place_refus(refuses: &Path, nom: &str) -> PathBuf {
+    let p = Path::new(nom);
+    let base = p.file_stem().and_then(|s| s.to_str()).unwrap_or(nom);
+    let ext = p.extension().and_then(|e| e.to_str()).map(|e| format!(".{e}")).unwrap_or_default();
+    (1..)
+        .map(|i| refuses.join(if i == 1 { nom.to_string() } else { format!("{base}-{i}{ext}") }))
+        .find(|c| !c.exists() && !c.with_extension("refus.txt").exists())
+        .expect("suite infinie")
+}
+
 /// Au-delà, le format n'est pas lu (le PDF entier passerait en mémoire) : seules les règles
 /// sans format peuvent prendre le fichier.
 const FORMAT_MAX_OCTETS: u64 = 512 << 20;
@@ -110,12 +122,17 @@ pub fn dimensions_pdf(chemin: &Path) -> Option<[f64; 2]> {
     let doc = lopdf::Document::load(chemin).ok()?;
     let (_, id) = doc.get_pages().into_iter().next()?;
     let mut noeud = doc.get_dictionary(id).ok()?;
-    let boite = loop {
+    // Au plus 32 niveaux : un `Parent` qui boucle (PDF abîmé ou piégé) ne bloque pas la
+    // surveillance des dossiers, il rend seulement le format inconnu.
+    let mut boite = None;
+    for _ in 0..32 {
         if let Some(b) = [b"CropBox".as_slice(), b"MediaBox"].iter().find_map(|k| noeud.get(k).ok()) {
-            break doc.dereference(b).ok()?.1.as_array().ok()?.clone();
+            boite = Some(doc.dereference(b).ok()?.1.as_array().ok()?.clone());
+            break;
         }
         noeud = doc.get_dictionary(noeud.get(b"Parent").ok()?.as_reference().ok()?).ok()?;
-    };
+    }
+    let boite = boite?;
     let v: Vec<f64> = boite.iter().filter_map(|o| doc.dereference(o).ok()?.1.as_float().ok().map(f64::from)).collect();
     let [x0, y0, x1, y1] = v[..] else { return None };
     let mm = |pt: f64| pt.abs() * 25.4 / 72.0;
@@ -158,6 +175,19 @@ mod tests {
     }
 
     #[test]
+    fn refus_sans_ecrasement() {
+        let d = std::env::temp_dir().join(format!("eko-refus-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        assert_eq!(place_refus(&d, "Affiche.pdf"), d.join("Affiche.pdf"));
+        std::fs::write(d.join("Affiche.pdf"), b"1").unwrap();
+        assert_eq!(place_refus(&d, "Affiche.pdf"), d.join("Affiche-2.pdf"));
+        std::fs::write(d.join("Affiche-2.refus.txt"), b"raison").unwrap();
+        assert_eq!(place_refus(&d, "Affiche.pdf"), d.join("Affiche-3.pdf"), "raison seule déjà là");
+        assert_eq!(place_refus(&d, "sans_extension"), d.join("sans_extension"));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
     fn format_de_la_premiere_page() {
         use lopdf::{Document, Object, dictionary};
         let d = std::env::temp_dir().join(format!("eko-regles-{}", uuid::Uuid::new_v4()));
@@ -174,6 +204,15 @@ mod tests {
         let [p, g] = format_pdf(&chemin).unwrap();
         assert!((p - 297.0).abs() < 0.1 && (g - 420.0).abs() < 0.1, "{p} {g}");
         std::fs::write(d.join("faux.pdf"), b"%PDF-1.7 rien").unwrap();
+        // Page qui est son propre `Parent`, sans boîte : format inconnu, sans boucler.
+        let mut doc = Document::with_version("1.7");
+        let (pages, page) = (doc.new_object_id(), doc.new_object_id());
+        doc.objects.insert(page, Object::Dictionary(dictionary! { "Type" => "Page", "Parent" => page }));
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+        let catalogue = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", catalogue);
+        doc.save(d.join("cycle.pdf")).unwrap();
+        assert_eq!(format_pdf(&d.join("cycle.pdf")), None);
         assert_eq!(format_pdf(&d.join("faux.pdf")), None);
         std::fs::remove_dir_all(&d).unwrap();
     }

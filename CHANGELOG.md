@@ -26,6 +26,19 @@ parité ; d'ici là, 0.Y.Z.
   à l'envoi d'un fichier.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
+### Corrigé
+- **Dossiers surveillés** (9.1) : un PDF dont une page se donne elle-même pour parent
+  (fichier abîmé ou piégé) bloquait la lecture du format, et avec elle tous les dossiers
+  surveillés jusqu'au redémarrage. La remontée est bornée à 32 niveaux : le format est
+  alors inconnu et le fichier suit les règles sans format.
+- **Fichiers refusés** : un refus n'écrase plus un fichier refusé du même nom ni sa raison ;
+  il est rangé sous `nom-2.pdf`, `nom-3.pdf`…
+- Code accordé aux contrôles de Rust 1.99 (`as_chunks`), pour que `outils/verifier.sh`
+  repasse.
+
+*Fixed: a PDF with a looping page tree no longer stalls the watched folders; refused files
+are no longer overwritten.*
+
 ## [0.29.0] — 2026-10-30
 
 ### Ajouté

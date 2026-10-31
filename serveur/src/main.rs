@@ -2902,8 +2902,8 @@ async fn surveiller(etat: Partage) {
                 eprintln!("dossier surveillé : {} refusé : {raison}", chemin.display());
                 let refuses = chemin.with_file_name("refuses");
                 let _ = std::fs::create_dir_all(&refuses);
-                if let Some(nom) = chemin.file_name() {
-                    let cible = refuses.join(nom);
+                if let Some(nom) = chemin.file_name().and_then(|n| n.to_str()) {
+                    let cible = regles::place_refus(&refuses, nom);
                     let _ = std::fs::rename(&chemin, &cible);
                     let _ = std::fs::write(cible.with_extension("refus.txt"), format!("{raison}\n"));
                 }
