@@ -214,10 +214,20 @@ pub struct Texte {
 
 pub const LIGNES_MAX: usize = 2000;
 
-/// En-tête et lignes du CSV ; le séparateur est celui de l'en-tête (`;` s'il y en a un).
+/// En-tête et lignes du CSV ; le séparateur est celui de l'en-tête (`;` s'il y en a un
+/// hors guillemets). Un guillemet jamais refermé est refusé : il fusionnerait des lignes.
 pub fn lire_csv(csv: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
     let csv = csv.trim_start_matches('\u{feff}');
-    let sep = if csv.lines().next().unwrap_or_default().contains(';') { ';' } else { ',' };
+    let (mut dedans, mut point_virgule) = (false, false);
+    for c in csv.chars() {
+        match c {
+            '"' => dedans = !dedans,
+            '\n' if !dedans => break,
+            ';' if !dedans => point_virgule = true,
+            _ => {}
+        }
+    }
+    let sep = if point_virgule { ';' } else { ',' };
     let (mut lignes, mut ligne, mut champ, mut guillemets) = (vec![], vec![], String::new(), false);
     let mut car = csv.chars().peekable();
     while let Some(c) = car.next() {
@@ -235,6 +245,9 @@ pub fn lire_csv(csv: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
             }
             c => champ.push(c),
         }
+    }
+    if guillemets {
+        return Err("CSV : guillemet jamais refermé".into());
     }
     if !champ.is_empty() || !ligne.is_empty() {
         ligne.push(champ);
@@ -359,6 +372,8 @@ mod tests {
         assert_eq!(lignes, [vec!["Dupont; fils", "Nîmes", "1"], vec!["Martin", "Le \"Puy\"", "2"]]);
         assert_eq!(lire_csv("a,b\n1,2").unwrap().1, [vec!["1", "2"]], "virgule sans point-virgule dans l'en-tête");
         assert!(lire_csv("a;b\n").is_err(), "aucune ligne");
+        assert_eq!(lire_csv("Nom,\"Note;détail\"\nAlice,ok").unwrap().0, ["Nom", "Note;détail"], "point-virgule entre guillemets : pas le séparateur");
+        assert_eq!(lire_csv("Nom\n\"Alice\nBob\nCarol").unwrap_err(), "CSV : guillemet jamais refermé");
         let d = DonneesVariables { csv: "Nom;N°\nÉlise;7\nŒdipe;8".into(), champs: vec![Champ { colonne: "Nom".into(), x_mm: 10.0, y_mm: 20.0, taille_pt: 14.0 }] };
         let t = textes(&d).unwrap();
         assert_eq!((t.len(), t[1][0].contenu.as_str(), (t[0][0].y / MM).round()), (2, "Œdipe", 20.0));
