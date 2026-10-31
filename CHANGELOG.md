@@ -16,6 +16,14 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Pont ERP : travaux liés, opérateur et réimpression** (feuille de route 7.8). L'ERP peut
+  envoyer les parties d'un même **groupe** avec leur rang : elles passent dans la file d'un
+  bloc et dans l'ordre, même si leurs rendus finissent dans le désordre. Deux actions
+  s'ajoutent : **affecter l'opérateur** d'un dossier, et **faire réimprimer** un dossier (ou
+  une seule page) sans refaire le rendu. L'inventaire des supports et le journal des
+  machines passent déjà par les événements existants ; la documentation du pont le précise.
+  *ERP bridge: linked jobs kept together and in order, operator assignment and reprint
+  actions.*
 - **Planche manuelle** (feuille de route 5.10), côté serveur. Une planche peut maintenant
   recevoir des **copies posées à la main** (coin en mm, angle, **verrou**), calées sur une
   **grille** et **aimantées** aux bords voisins, avec un refus en cas de chevauchement ou de
@@ -54,6 +62,23 @@ parité ; d'ici là, 0.Y.Z.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
 ### Corrigé
+- Un PDF abîmé dont une page est son propre « parent » ne bloque plus les dossiers
+  surveillés : la recherche du format s'arrête au bout de 32 niveaux. Le format prend aussi
+  le cadrage hérité (CropBox) avant la MediaBox de la page, comme le veut la norme.
+  *A damaged PDF whose page is its own parent no longer stalls hot folders; inherited CropBox
+  wins over the page MediaBox.*
+- Trois lectures d'octets écrites autrement pour que `cargo clippy` repasse sans erreur avec
+  Rust 1.99 (règle `chunks_exact_to_as_chunks`), sans changement de comportement.
+  *Clippy clean again on Rust 1.99.*
+- Dossiers surveillés : un fichier refusé est rangé sous `nom-2`, `nom-3`… au lieu d'écraser,
+  dans `refuses/`, un refus précédent du même nom et sa raison.
+  *A rejected file no longer overwrites an earlier rejection of the same name.*
+- Balise `{support}` : à nom égal, c'est le support de l'imprimante retenue qui est pris (même
+  si `{machine}` vient après dans le motif), et plus le premier de ce nom dans le catalogue.
+  *`{support}` picks the media of the chosen printer when two share a name.*
+- Pont ERP : une action reçue pendant le rendu d'un travail (opérateur, échéance, suspension,
+  annulation) n'est plus effacée par la fin du rendu.
+  *ERP actions received while a job renders are no longer lost when the render ends.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*

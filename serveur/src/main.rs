@@ -1396,11 +1396,20 @@ async fn abandon(rep: &std::path::Path, statut: StatusCode, (code, detail): Refu
     refus(statut, code, detail)
 }
 
+/// Fiche et retenue de l'ERP telles qu'enregistrées : une action de l'ERP (opérateur,
+/// échéance, suspension…) reçue pendant le rendu n'est pas effacée par la copie du rendu.
+fn reprendre_fiche(donnees: &std::path::Path, t: &mut Travail) {
+    if let Some(enregistre) = lire_travail(donnees, t.id) {
+        (t.fiche, t.retenue_erp) = (enregistre.fiche, enregistre.retenue_erp);
+    }
+}
+
 async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     let jeton = etat.rendu.attendre(place).await;
     let mut a_sortir = false;
     let donnees = &etat.config.donnees;
     t.statut = Statut::EnCours;
+    reprendre_fiche(donnees, &mut t);
     let _ = ecrire(donnees, &t);
 
     let rep = dossier(donnees, t.id);
@@ -1538,11 +1547,14 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
             }
         }
     }
+    reprendre_fiche(donnees, &mut t);
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
     // Mise en file automatique à son tour : après les arrivées automatiques d'avant.
-    jeton.terminer(a_sortir.then(|| t.clone()), |t| mettre_en_file_auto(&etat, &t, None));
+    jeton.terminer(a_sortir.then(|| t.clone()), |t| {
+        mettre_en_file_auto(&etat, &t, None);
+    });
     // Planche d'imbrication qui n'a pas pu se rendre : ses sorties reviennent.
     if t.imbrication.is_some() && matches!(t.statut, Statut::Echec) {
         reprendre_les_imbriquees(&etat);
@@ -3115,8 +3127,9 @@ async fn surveiller(etat: Partage) {
                 eprintln!("dossier surveillé : {} refusé : {raison}", chemin.display());
                 let refuses = chemin.with_file_name("refuses");
                 let _ = std::fs::create_dir_all(&refuses);
-                if let Some(nom) = chemin.file_name() {
-                    let cible = refuses.join(nom);
+                // Nom non UTF-8 : rangé quand même, sous son nom lisible.
+                if let Some(nom) = chemin.file_name().map(|n| n.to_string_lossy()) {
+                    let cible = regles::place_refus(&refuses, &nom);
                     let _ = std::fs::rename(&chemin, &cible);
                     let _ = std::fs::write(cible.with_extension("refus.txt"), format!("{raison}\n"));
                 }
@@ -3190,17 +3203,8 @@ async fn preparer_auto(etat: &Partage, chemin: &std::path::Path, liste: &[reglag
                     None => false,
                 }
             }
-            Balise::Support => match supports::lire(donnees, "epson").supports.into_iter().find(|s| balises::cle(&s.nom) == balises::cle(v)) {
-                Some(s) => {
-                    // Le mode du réglage reste s'il est de ce support ; sinon la résolution du réglage.
-                    if !s.modes.iter().any(|m| m.id.is_some() && m.id == d.mode_uuid) {
-                        d.mode_uuid = None;
-                    }
-                    d.support_uuid = s.id;
-                    true
-                }
-                None => false,
-            },
+            // Après la boucle : le support dépend de l'imprimante, que `{machine}` peut poser plus loin.
+            Balise::Support => true,
             Balise::Copies => balises::entier(v, 100_000).map(|n| fiche.quantite = n).is_some(),
             Balise::Repetition => balises::entier(v, reglages::REPETITION_MAX).map(|n| d.repetition = n).is_some(),
             Balise::Laize => match (balises::nombre(v, "mm").filter(|l| (50.0..=5000.0).contains(l)), d.mosaique.as_mut()) {
@@ -3219,6 +3223,22 @@ async fn preparer_auto(etat: &Partage, chemin: &std::path::Path, liste: &[reglag
         };
         if !bon {
             alertes.push(invalide(*b, v));
+        }
+    }
+    // Support : celui de ce nom sur l'imprimante retenue d'abord, sinon le premier de ce nom.
+    if let Some(v) = valeur(Balise::Support) {
+        let catalogue = supports::lire(donnees, "epson").supports;
+        let du_nom = |s: &&supports::Support| balises::cle(&s.nom) == balises::cle(&v);
+        let sur_l_imprimante = |s: &&supports::Support| d.imprimante.as_ref().is_some_and(|i| &s.machine == i);
+        match catalogue.iter().filter(du_nom).find(sur_l_imprimante).or_else(|| catalogue.iter().find(du_nom)) {
+            Some(s) => {
+                // Le mode du réglage reste s'il est de ce support ; sinon la résolution du réglage.
+                if !s.modes.iter().any(|m| m.id.is_some() && m.id == d.mode_uuid) {
+                    d.mode_uuid = None;
+                }
+                d.support_uuid = s.id;
+            }
+            None => alertes.push(invalide(Balise::Support, &v)),
         }
     }
     // Largeur et hauteur voulues : l'échelle en découle, proportions gardées (la plus petite
@@ -3392,21 +3412,45 @@ fn appliquer_actions_erp(etat: &Etat) {
         };
         let (mut touchees, mut non_modifiables) = (0, 0);
         for t in &mut travaux {
-            let avant = (t.retenue_erp, t.fiche.echeance);
+            let avant = (t.retenue_erp, t.fiche.echeance, t.fiche.operateur.clone());
             if let Some(r) = retenue {
                 t.retenue_erp = r;
             }
-            if a.action == pont::GenreAction::Echeance {
-                t.fiche.echeance = a.echeance;
-                touchees += 1;
+            match a.action {
+                pont::GenreAction::Echeance => {
+                    t.fiche.echeance = a.echeance;
+                    touchees += 1;
+                }
+                pont::GenreAction::Operateur => {
+                    t.fiche.operateur = a.operateur.clone().unwrap_or_default();
+                    touchees += 1;
+                }
+                _ => {}
             }
-            if (t.retenue_erp, t.fiche.echeance) != avant
+            if (t.retenue_erp, t.fiche.echeance, t.fiche.operateur.clone()) != avant
                 && let Err(e) = ecrire(donnees, t)
             {
                 eprintln!("action de l'ERP {} : travail {} non écrit : {e}", a.id, t.id);
             }
         }
-        if a.action != pont::GenreAction::Echeance {
+        // Réimpression : un travail rendu, sans sortie encore en file, repart comme à son
+        // arrivée ; un travail en cours de rendu, rendu mais pas encore sorti (il attend son
+        // tour derrière un rendu plus ancien), déjà en file ou posé sur une planche pas encore
+        // imprimée n'est pas doublé.
+        if a.action == pont::GenreAction::Reimprimer {
+            for t in &travaux {
+                let en_file = etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == t.id && (s.active() || s.etat == file::Etat::Imbriquee));
+                if !matches!(t.statut, Statut::Termine) || en_file || etat.rendu.retenu(|x| x.id == t.id) {
+                    non_modifiables += 1;
+                    continue;
+                }
+                touchees += mettre_en_file_auto(etat, t, a.page);
+            }
+            let code = (touchees == 0).then_some(pont::ACTION_RIEN_A_REIMPRIMER);
+            pont::noter_action(donnees, &a, code, touchees, non_modifiables);
+            continue;
+        }
+        if !matches!(a.action, pont::GenreAction::Echeance | pont::GenreAction::Operateur) {
             let mut f = etat.file.lock().unwrap();
             let a_imprimer = |f: &file::File, s: &file::Sortie| f.sorties.iter().any(|x| x.travail == s.travail && x.page == s.page && x.operation() == machines::Operation::Impression && x.etat != file::Etat::Terminee);
             let concernees: Vec<Uuid> = f.sorties.iter().filter(|s| ids.contains(&s.travail) && !s.archivee && !matches!(s.etat, file::Etat::Annulee | file::Etat::Echec)).map(|s| s.id).collect();
@@ -3480,7 +3524,7 @@ async fn prendre_envois_recus(etat: &Partage) {
             continue;
         }
         let fiche = Fiche { commande: r.ref_erp.clone(), quantite: r.copies, echeance: r.echeance, ..Default::default() };
-        let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone() };
+        let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone(), partie: r.partie.clone() };
         let origine = if r.estimation { Origine::Estimation(lien) } else { Origine::Erp(lien) };
         match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, origine, vec![]).await {
             Ok(_) => pont::oublier_recu(&donnees, r.id),
@@ -3528,11 +3572,17 @@ fn png(octets: Vec<u8>) -> Response {
 /// impression part toujours suspendue : le support doit d'abord passer de l'Epson au Kona.
 /// `seule` : cette page seulement (page recochée, roadmap 5.12). Les pages exclues n'y vont
 /// pas ; une planche d'imbrication va sur sa machine.
-fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
+/// Rend le nombre de sorties ajoutées.
+fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) -> usize {
     let mut a = t.demande.auto;
     if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) || t.estimation || t.demande.epreuve_seule {
-        return;
+        return 0;
     }
+    // Travaux liés (roadmap 7.8) : rang de chaque partie du groupe, lu avant de prendre la file.
+    let rangs: Option<(u32, std::collections::HashMap<Uuid, u32>)> = t.erp.as_ref().and_then(|l| l.partie.as_ref()).map(|p| {
+        let du_groupe = lire_tous(&etat.config.donnees).into_iter().filter_map(|x| x.erp.and_then(|l| l.partie).filter(|q| q.groupe == p.groupe).map(|q| (x.id, q.rang)));
+        (p.rang, du_groupe.chain([(t.id, p.rang)]).collect())
+    });
     a.suspendre |= t.retenue_erp == Some(RetenueErp::Suspendu);
     // Première machine du catalogue qui imprime ; pour découper, elle-même si elle découpe
     // aussi (imprimante-découpeuse), sinon la première découpeuse.
@@ -3548,6 +3598,7 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
         (i.map(|m| m.id.clone()), d.cloned())
     };
     let mut f = etat.file.lock().unwrap();
+    let avant = f.sorties.len();
     for (i, p) in t.pages.iter().enumerate().filter(|(i, _)| seule.is_none_or(|n| n == i + 1) && !t.pages_exclues.contains(&(i + 1))) {
         let imprime = a.imprimer && t.demande.mode == Mode::Imprimer && p.plaques.iter().any(|x| !p.plaques_decoupe.contains(x));
         let mut ajouter = |machine: &str, operation, suspendue: bool| {
@@ -3573,9 +3624,30 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
             }
         }
     }
-    if let Err(e) = f.ecrire(&etat.config.donnees) {
+    let ajoutees = f.sorties.len() - avant;
+    if let Some((rang, rangs)) = rangs {
+        let nouvelles = f.sorties.split_off(avant);
+        let place = place_dans_le_groupe(&f.sorties, rang, &rangs);
+        f.sorties.splice(place..place, nouvelles);
+    }
+    if ajoutees > 0
+        && let Err(e) = f.ecrire(&etat.config.donnees)
+    {
         eprintln!("travail {} : file non enregistrée : {e}", t.id);
     }
+    ajoutees
+}
+
+/// Où poser les sorties d'une partie de rang `rang` : juste après la dernière sortie en file
+/// d'une partie de rang inférieur ou égal du même groupe, sinon juste avant la première d'une
+/// partie de rang supérieur, sinon en fin de file.
+fn place_dans_le_groupe(sorties: &[file::Sortie], rang: u32, rangs: &std::collections::HashMap<Uuid, u32>) -> usize {
+    let en_file = |s: &file::Sortie| !s.archivee && matches!(s.etat, file::Etat::EnAttente | file::Etat::Suspendue);
+    let rang_de = |s: &file::Sortie| rangs.get(&s.travail).copied().filter(|_| en_file(s));
+    if let Some(i) = sorties.iter().rposition(|s| rang_de(s).is_some_and(|r| r <= rang)) {
+        return i + 1;
+    }
+    sorties.iter().position(|s| rang_de(s).is_some_and(|r| r > rang)).unwrap_or(sorties.len())
 }
 
 /// Filtre couleur (roadmap 3.E2, 3.E3) sur les plaques CMJN de chaque page, production et
@@ -5845,6 +5917,17 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             let sorties = e.file.lock().unwrap().sorties.clone();
             assert_eq!(sorties.iter().map(|s| s.machine.as_str()).collect::<Vec<_>>(), ["epson"; 3]);
+            // Deux supports du même nom : celui de l'imprimante dite gagne, même si `{machine}`
+            // vient après `{support}` ; un support inconnu le dit.
+            let support = |machine: &str| supports::Support { id: Some(Uuid::new_v4()), machine: machine.into(), laize_mm: None, numero_machine: None, nom: "Bâche".into(), encres: vec![], modes: vec![] };
+            let (ailleurs, ici) = (support("autre"), support("epson"));
+            supports::ecrire(d, &supports::Catalogue { version: supports::VERSION, supports: vec![ailleurs, ici.clone()] }).unwrap();
+            balises::ecrire(d, &balises::Config { motif: "{nom}__{support}__{machine}".into() }).unwrap();
+            let (_, demande, _, alertes) = essai("Affiche__bache__epson.pdf").await.unwrap();
+            assert_eq!((demande.support_uuid, demande.imprimante.as_deref()), (ici.id, Some("epson")));
+            assert!(alertes.is_empty(), "{alertes:?}");
+            let (_, _, _, alertes) = essai("Affiche__papier__epson.pdf").await.unwrap();
+            assert_eq!(alertes.iter().map(|a| a.detail.as_str()).collect::<Vec<_>>(), ["support : « papier »"]);
             // Avec une découpe : une par impression répétée, chacune avec ses repères.
             e.file.lock().unwrap().sorties.clear();
             let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Plan", "statut": "termine", "erreur": null, "cree_le": 0,
@@ -9252,7 +9335,7 @@ mod tests {
             let preset = Uuid::new_v4();
             reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, ..Default::default() } }]).unwrap();
             let pdf = pdf_pages(&[PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 }]);
-            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None, estimation: false };
+            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None, estimation: false, partie: None };
             let (bon, sans_reglage, illisible) = (recu(3), pont::Recu { prereglage_uuid: Uuid::new_v4(), ..recu(1) }, recu(1));
             deposer(&e, &bon, &pdf);
             deposer(&e, &sans_reglage, &pdf);
@@ -9260,7 +9343,7 @@ mod tests {
             prendre_envois_recus(&e).await;
 
             let t = lire_travail(&d, bon.id).expect("travail créé sous l'uuid de l'envoi");
-            assert_eq!(t.erp, Some(pont::Lien { envoi: bon.id, ref_erp: "PROD-2026-00123".into() }));
+            assert_eq!(t.erp, Some(pont::Lien { envoi: bon.id, ref_erp: "PROD-2026-00123".into(), partie: None }));
             assert_eq!((t.fiche.commande.as_str(), t.fiche.quantite, t.fiche.echeance, t.nom.as_str(), t.demande.dpi), ("PROD-2026-00123", 3, Some(1793600000), "bache.pdf", 36));
             assert!(pont::recus(&d).is_empty(), "tout est pris ou refusé");
             assert!(lire_travail(&d, sans_reglage.id).is_none() && lire_travail(&d, illisible.id).is_none());
@@ -9303,14 +9386,17 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
-                erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into() }),
+                erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into(), partie: None }),
                 retenue_erp: None,
                 estimation: false,
             }
         }
 
         fn agir(e: &Partage, action: pont::GenreAction, ref_erp: &str, echeance: Option<u64>) -> Value {
-            let a = pont::ActionErp { id: Uuid::new_v4(), ref_erp: ref_erp.into(), action, echeance };
+            agir_avec(e, pont::ActionErp { id: Uuid::new_v4(), ref_erp: ref_erp.into(), action, echeance, operateur: None, page: None })
+        }
+
+        fn agir_avec(e: &Partage, a: pont::ActionErp) -> Value {
             let rep = e.config.donnees.join("pont").join("actions");
             std::fs::create_dir_all(&rep).unwrap();
             std::fs::write(rep.join(format!("{}.json", a.id)), serde_json::to_vec(&a).unwrap()).unwrap();
@@ -9388,6 +9474,69 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             assert_eq!(etats(&e).len(), 2, "annulé : rien de plus en file");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 7.8 : opérateur affecté et réimpression depuis l'ERP.
+        #[test]
+        fn l_erp_affecte_l_operateur_et_fait_reimprimer() {
+            use pont::GenreAction::*;
+            let e = etat("reimprimer-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let mut t = travail_erp(Some("PROD-2026-00123"), true);
+            t.pages.push(t.pages[0].clone());
+            let mut en_rendu = travail_erp(Some("PROD-2026-00123"), true);
+            en_rendu.statut = Statut::EnCours;
+            for x in [&t, &en_rendu] {
+                std::fs::create_dir_all(dossier(&d, x.id)).unwrap();
+                ecrire(&d, x).unwrap();
+            }
+            let action = |action, operateur: Option<&str>, page| pont::ActionErp { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), action, echeance: None, operateur: operateur.map(Into::into), page };
+            let resultat = |v: Value| (v["code"].clone(), v["touchees"].clone(), v["non_modifiables"].clone());
+
+            assert_eq!(resultat(agir_avec(&e, action(Operateur, Some("Léa"), None))), (Value::Null, json!(2), json!(0)));
+            assert_eq!(lire_travail(&d, t.id).unwrap().fiche.operateur, "Léa");
+            // Le rendu qui tournait garde l'opérateur reçu entre-temps.
+            let mut copie_du_rendu = t.clone();
+            reprendre_fiche(&d, &mut copie_du_rendu);
+            assert_eq!(copie_du_rendu.fiche.operateur, "Léa");
+            // Les deux pages repartent ; le travail en cours de rendu n'est pas doublé.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (Value::Null, json!(2), json!(1)));
+            assert_eq!(etats(&e).iter().filter(|(_, x)| *x == file::Etat::EnAttente).count(), 2);
+            // Déjà en file : rien de plus.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (json!("rien_a_reimprimer"), json!(0), json!(2)));
+            for s in e.file.lock().unwrap().sorties.iter_mut() {
+                s.etat = file::Etat::Terminee;
+            }
+            // Une page seulement.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, Some(2)))), (Value::Null, json!(1), json!(1)));
+            assert_eq!(e.file.lock().unwrap().sorties.last().map(|s| (s.page, s.etat)), Some((2, file::Etat::EnAttente)));
+            // Posé sur une planche pas encore imprimée : pas doublé.
+            e.file.lock().unwrap().sorties.last_mut().unwrap().etat = file::Etat::Imbriquee;
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (json!("rien_a_reimprimer"), json!(0), json!(2)));
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        /// Roadmap 7.8 : les parties d'un groupe passent ensemble et dans l'ordre, quel que
+        /// soit l'ordre dans lequel leur rendu finit.
+        #[test]
+        fn les_parties_d_un_groupe_restent_ensemble_et_dans_l_ordre() {
+            let e = etat("groupe-erp");
+            let d = e.config.donnees.clone();
+            let partie = |rang| {
+                let mut t = travail_erp(Some("PROD-2026-00123"), true);
+                t.erp.as_mut().unwrap().partie = Some(pont::Partie { groupe: "vitrine".into(), rang });
+                std::fs::create_dir_all(dossier(&d, t.id)).unwrap();
+                ecrire(&d, &t).unwrap();
+                t
+            };
+            let (p1, p2, p3, seul) = (partie(1), partie(2), partie(3), travail_erp(None, true));
+            for t in [&p3, &seul, &p1, &p2] {
+                assert_eq!(mettre_en_file_auto(&e, t, None), 1);
+            }
+            let ordre: Vec<Uuid> = e.file.lock().unwrap().sorties.iter().map(|s| s.travail).collect();
+            assert_eq!(ordre, [p1.id, p2.id, p3.id, seul.id]);
+            std::fs::remove_dir_all(&d).unwrap();
         }
 
         fn estimer(e: &Partage, ref_erp: &str) -> Option<Value> {
@@ -9473,7 +9622,7 @@ mod tests {
             reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, page_par_travail: true, auto, ..Default::default() } }]).unwrap();
             let page = || PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 };
             let pdf = pdf_pages(&[page(), page()]);
-            let devis = pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "devis.pdf".into(), prereglage_uuid: preset, copies: 3, echeance: None, sha256: None, estimation: true };
+            let devis = pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "devis.pdf".into(), prereglage_uuid: preset, copies: 3, echeance: None, sha256: None, estimation: true, partie: None };
             let sans_reglage = pont::Recu { id: Uuid::new_v4(), prereglage_uuid: Uuid::new_v4(), ..devis.clone() };
             deposer(&e, &devis, &pdf);
             deposer(&e, &sans_reglage, &pdf);
