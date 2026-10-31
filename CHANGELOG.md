@@ -16,6 +16,14 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Pont ERP : travaux liés, opérateur et réimpression** (feuille de route 7.8). L'ERP peut
+  envoyer les parties d'un même **groupe** avec leur rang : elles passent dans la file d'un
+  bloc et dans l'ordre, même si leurs rendus finissent dans le désordre. Deux actions
+  s'ajoutent : **affecter l'opérateur** d'un dossier, et **faire réimprimer** un dossier (ou
+  une seule page) sans refaire le rendu. L'inventaire des supports et le journal des
+  machines passent déjà par les événements existants ; la documentation du pont le précise.
+  *ERP bridge: linked jobs kept together and in order, operator assignment and reprint
+  actions.*
 - **Planche manuelle** (feuille de route 5.10), côté serveur. Une planche peut maintenant
   recevoir des **copies posées à la main** (coin en mm, angle, **verrou**), calées sur une
   **grille** et **aimantées** aux bords voisins, avec un refus en cas de chevauchement ou de
@@ -54,6 +62,11 @@ parité ; d'ici là, 0.Y.Z.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
 ### Corrigé
+- Un PDF abîmé dont une page est son propre « parent » ne bloque plus les dossiers
+  surveillés : la recherche du format s'arrête au bout de 32 niveaux. Le format prend aussi
+  le cadrage hérité (CropBox) avant la MediaBox de la page, comme le veut la norme.
+  *A damaged PDF whose page is its own parent no longer stalls hot folders; inherited CropBox
+  wins over the page MediaBox.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*

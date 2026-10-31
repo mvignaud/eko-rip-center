@@ -109,13 +109,20 @@ pub fn dimensions_pdf(chemin: &Path) -> Option<[f64; 2]> {
     }
     let doc = lopdf::Document::load(chemin).ok()?;
     let (_, id) = doc.get_pages().into_iter().next()?;
-    let mut noeud = doc.get_dictionary(id).ok()?;
-    let boite = loop {
-        if let Some(b) = [b"CropBox".as_slice(), b"MediaBox"].iter().find_map(|k| noeud.get(k).ok()) {
-            break doc.dereference(b).ok()?.1.as_array().ok()?.clone();
+    // CropBox héritée d'abord, même si la page porte sa MediaBox ; 32 niveaux au plus (un PDF
+    // abîmé dont un nœud est son propre parent ne bloque pas les dossiers surveillés).
+    let mut noeud = Some(doc.get_dictionary(id).ok()?);
+    let (mut cadrage, mut media) = (None, None);
+    for _ in 0..32 {
+        let Some(n) = noeud else { break };
+        cadrage = cadrage.or_else(|| n.get(b"CropBox").ok());
+        media = media.or_else(|| n.get(b"MediaBox").ok());
+        if cadrage.is_some() {
+            break;
         }
-        noeud = doc.get_dictionary(noeud.get(b"Parent").ok()?.as_reference().ok()?).ok()?;
-    };
+        noeud = n.get(b"Parent").ok().and_then(|p| p.as_reference().ok()).and_then(|r| doc.get_dictionary(r).ok());
+    }
+    let boite = doc.dereference(cadrage.or(media)?).ok()?.1.as_array().ok()?.clone();
     let v: Vec<f64> = boite.iter().filter_map(|o| doc.dereference(o).ok()?.1.as_float().ok().map(f64::from)).collect();
     let [x0, y0, x1, y1] = v[..] else { return None };
     let mm = |pt: f64| pt.abs() * 25.4 / 72.0;
@@ -173,6 +180,26 @@ mod tests {
         doc.save(&chemin).unwrap();
         let [p, g] = format_pdf(&chemin).unwrap();
         assert!((p - 297.0).abs() < 0.1 && (g - 420.0).abs() < 0.1, "{p} {g}");
+        // Page qui est son propre parent, sans boîte : réponse « inconnu », sans boucler.
+        let mut doc = Document::with_version("1.7");
+        let (pages, page) = (doc.new_object_id(), doc.new_object_id());
+        doc.objects.insert(page, Object::Dictionary(dictionary! { "Type" => "Page", "Parent" => page }));
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1 }));
+        let catalogue = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", catalogue);
+        doc.save(d.join("boucle.pdf")).unwrap();
+        assert_eq!(Document::load(d.join("boucle.pdf")).unwrap().get_pages().len(), 1, "le PDF se lit");
+        assert_eq!(format_pdf(&d.join("boucle.pdf")), None);
+        // MediaBox sur la page, CropBox héritée du nœud Pages : la CropBox (A4).
+        let mut doc = Document::with_version("1.7");
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![0.into(), 0.into(), Object::Real(1190.55), Object::Real(841.89)] });
+        doc.objects.insert(pages, Object::Dictionary(dictionary! { "Type" => "Pages", "Kids" => vec![page.into()], "Count" => 1, "CropBox" => vec![0.into(), 0.into(), Object::Real(595.28), Object::Real(841.89)] }));
+        let catalogue = doc.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages });
+        doc.trailer.set("Root", catalogue);
+        doc.save(d.join("a4.pdf")).unwrap();
+        let [p, g] = format_pdf(&d.join("a4.pdf")).unwrap();
+        assert!((p - 210.0).abs() < 0.1 && (g - 297.0).abs() < 0.1, "{p} {g}");
         std::fs::write(d.join("faux.pdf"), b"%PDF-1.7 rien").unwrap();
         assert_eq!(format_pdf(&d.join("faux.pdf")), None);
         std::fs::remove_dir_all(&d).unwrap();

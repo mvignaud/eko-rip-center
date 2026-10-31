@@ -1542,7 +1542,9 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
     // Mise en file automatique à son tour : après les arrivées automatiques d'avant.
-    jeton.terminer(a_sortir.then(|| t.clone()), |t| mettre_en_file_auto(&etat, &t, None));
+    jeton.terminer(a_sortir.then(|| t.clone()), |t| {
+        mettre_en_file_auto(&etat, &t, None);
+    });
     // Planche d'imbrication qui n'a pas pu se rendre : ses sorties reviennent.
     if t.imbrication.is_some() && matches!(t.statut, Statut::Echec) {
         reprendre_les_imbriquees(&etat);
@@ -3392,21 +3394,42 @@ fn appliquer_actions_erp(etat: &Etat) {
         };
         let (mut touchees, mut non_modifiables) = (0, 0);
         for t in &mut travaux {
-            let avant = (t.retenue_erp, t.fiche.echeance);
+            let avant = (t.retenue_erp, t.fiche.echeance, t.fiche.operateur.clone());
             if let Some(r) = retenue {
                 t.retenue_erp = r;
             }
-            if a.action == pont::GenreAction::Echeance {
-                t.fiche.echeance = a.echeance;
-                touchees += 1;
+            match a.action {
+                pont::GenreAction::Echeance => {
+                    t.fiche.echeance = a.echeance;
+                    touchees += 1;
+                }
+                pont::GenreAction::Operateur => {
+                    t.fiche.operateur = a.operateur.clone().unwrap_or_default();
+                    touchees += 1;
+                }
+                _ => {}
             }
-            if (t.retenue_erp, t.fiche.echeance) != avant
+            if (t.retenue_erp, t.fiche.echeance, t.fiche.operateur.clone()) != avant
                 && let Err(e) = ecrire(donnees, t)
             {
                 eprintln!("action de l'ERP {} : travail {} non écrit : {e}", a.id, t.id);
             }
         }
-        if a.action != pont::GenreAction::Echeance {
+        // Réimpression : un travail rendu, sans sortie encore en file, repart comme à son
+        // arrivée ; un travail en cours de rendu ou déjà en file n'est pas doublé.
+        if a.action == pont::GenreAction::Reimprimer {
+            for t in &travaux {
+                if !matches!(t.statut, Statut::Termine) || occupe(etat, t) {
+                    non_modifiables += 1;
+                    continue;
+                }
+                touchees += mettre_en_file_auto(etat, t, a.page);
+            }
+            let code = (touchees == 0).then_some(pont::ACTION_RIEN_A_REIMPRIMER);
+            pont::noter_action(donnees, &a, code, touchees, non_modifiables);
+            continue;
+        }
+        if !matches!(a.action, pont::GenreAction::Echeance | pont::GenreAction::Operateur) {
             let mut f = etat.file.lock().unwrap();
             let a_imprimer = |f: &file::File, s: &file::Sortie| f.sorties.iter().any(|x| x.travail == s.travail && x.page == s.page && x.operation() == machines::Operation::Impression && x.etat != file::Etat::Terminee);
             let concernees: Vec<Uuid> = f.sorties.iter().filter(|s| ids.contains(&s.travail) && !s.archivee && !matches!(s.etat, file::Etat::Annulee | file::Etat::Echec)).map(|s| s.id).collect();
@@ -3480,7 +3503,7 @@ async fn prendre_envois_recus(etat: &Partage) {
             continue;
         }
         let fiche = Fiche { commande: r.ref_erp.clone(), quantite: r.copies, echeance: r.echeance, ..Default::default() };
-        let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone() };
+        let lien = pont::Lien { envoi: r.id, ref_erp: r.ref_erp.clone(), partie: r.partie.clone() };
         let origine = if r.estimation { Origine::Estimation(lien) } else { Origine::Erp(lien) };
         match creer_travail_avec(etat, r.id, r.nom.clone(), format, reglage.demande, fiche, origine, vec![]).await {
             Ok(_) => pont::oublier_recu(&donnees, r.id),
@@ -3528,11 +3551,17 @@ fn png(octets: Vec<u8>) -> Response {
 /// impression part toujours suspendue : le support doit d'abord passer de l'Epson au Kona.
 /// `seule` : cette page seulement (page recochée, roadmap 5.12). Les pages exclues n'y vont
 /// pas ; une planche d'imbrication va sur sa machine.
-fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
+/// Rend le nombre de sorties ajoutées.
+fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) -> usize {
     let mut a = t.demande.auto;
     if (!a.imprimer && !a.decouper) || t.retenue_erp == Some(RetenueErp::Annule) || t.estimation || t.demande.epreuve_seule {
-        return;
+        return 0;
     }
+    // Travaux liés (roadmap 7.8) : rang de chaque partie du groupe, lu avant de prendre la file.
+    let rangs: Option<(u32, std::collections::HashMap<Uuid, u32>)> = t.erp.as_ref().and_then(|l| l.partie.as_ref()).map(|p| {
+        let du_groupe = lire_tous(&etat.config.donnees).into_iter().filter_map(|x| x.erp.and_then(|l| l.partie).filter(|q| q.groupe == p.groupe).map(|q| (x.id, q.rang)));
+        (p.rang, du_groupe.chain([(t.id, p.rang)]).collect())
+    });
     a.suspendre |= t.retenue_erp == Some(RetenueErp::Suspendu);
     // Première machine du catalogue qui imprime ; pour découper, elle-même si elle découpe
     // aussi (imprimante-découpeuse), sinon la première découpeuse.
@@ -3548,6 +3577,7 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
         (i.map(|m| m.id.clone()), d.cloned())
     };
     let mut f = etat.file.lock().unwrap();
+    let avant = f.sorties.len();
     for (i, p) in t.pages.iter().enumerate().filter(|(i, _)| seule.is_none_or(|n| n == i + 1) && !t.pages_exclues.contains(&(i + 1))) {
         let imprime = a.imprimer && t.demande.mode == Mode::Imprimer && p.plaques.iter().any(|x| !p.plaques_decoupe.contains(x));
         let mut ajouter = |machine: &str, operation, suspendue: bool| {
@@ -3573,9 +3603,30 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
             }
         }
     }
-    if let Err(e) = f.ecrire(&etat.config.donnees) {
+    let ajoutees = f.sorties.len() - avant;
+    if let Some((rang, rangs)) = rangs {
+        let nouvelles = f.sorties.split_off(avant);
+        let place = place_dans_le_groupe(&f.sorties, rang, &rangs);
+        f.sorties.splice(place..place, nouvelles);
+    }
+    if ajoutees > 0
+        && let Err(e) = f.ecrire(&etat.config.donnees)
+    {
         eprintln!("travail {} : file non enregistrée : {e}", t.id);
     }
+    ajoutees
+}
+
+/// Où poser les sorties d'une partie de rang `rang` : juste après la dernière sortie en file
+/// d'une partie de rang inférieur ou égal du même groupe, sinon juste avant la première d'une
+/// partie de rang supérieur, sinon en fin de file.
+fn place_dans_le_groupe(sorties: &[file::Sortie], rang: u32, rangs: &std::collections::HashMap<Uuid, u32>) -> usize {
+    let en_file = |s: &file::Sortie| !s.archivee && matches!(s.etat, file::Etat::EnAttente | file::Etat::Suspendue);
+    let rang_de = |s: &file::Sortie| rangs.get(&s.travail).copied().filter(|_| en_file(s));
+    if let Some(i) = sorties.iter().rposition(|s| rang_de(s).is_some_and(|r| r <= rang)) {
+        return i + 1;
+    }
+    sorties.iter().position(|s| rang_de(s).is_some_and(|r| r > rang)).unwrap_or(sorties.len())
 }
 
 /// Filtre couleur (roadmap 3.E2, 3.E3) sur les plaques CMJN de chaque page, production et
@@ -9252,7 +9303,7 @@ mod tests {
             let preset = Uuid::new_v4();
             reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, ..Default::default() } }]).unwrap();
             let pdf = pdf_pages(&[PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 }]);
-            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None, estimation: false };
+            let recu = |copies| pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies, echeance: Some(1793600000), sha256: None, estimation: false, partie: None };
             let (bon, sans_reglage, illisible) = (recu(3), pont::Recu { prereglage_uuid: Uuid::new_v4(), ..recu(1) }, recu(1));
             deposer(&e, &bon, &pdf);
             deposer(&e, &sans_reglage, &pdf);
@@ -9260,7 +9311,7 @@ mod tests {
             prendre_envois_recus(&e).await;
 
             let t = lire_travail(&d, bon.id).expect("travail créé sous l'uuid de l'envoi");
-            assert_eq!(t.erp, Some(pont::Lien { envoi: bon.id, ref_erp: "PROD-2026-00123".into() }));
+            assert_eq!(t.erp, Some(pont::Lien { envoi: bon.id, ref_erp: "PROD-2026-00123".into(), partie: None }));
             assert_eq!((t.fiche.commande.as_str(), t.fiche.quantite, t.fiche.echeance, t.nom.as_str(), t.demande.dpi), ("PROD-2026-00123", 3, Some(1793600000), "bache.pdf", 36));
             assert!(pont::recus(&d).is_empty(), "tout est pris ou refusé");
             assert!(lire_travail(&d, sans_reglage.id).is_none() && lire_travail(&d, illisible.id).is_none());
@@ -9303,14 +9354,17 @@ mod tests {
                 fiche: Default::default(),
                 pages_exclues: vec![],
                 imbrication: None,
-                erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into() }),
+                erp: ref_erp.map(|r| pont::Lien { envoi: id, ref_erp: r.into(), partie: None }),
                 retenue_erp: None,
                 estimation: false,
             }
         }
 
         fn agir(e: &Partage, action: pont::GenreAction, ref_erp: &str, echeance: Option<u64>) -> Value {
-            let a = pont::ActionErp { id: Uuid::new_v4(), ref_erp: ref_erp.into(), action, echeance };
+            agir_avec(e, pont::ActionErp { id: Uuid::new_v4(), ref_erp: ref_erp.into(), action, echeance, operateur: None, page: None })
+        }
+
+        fn agir_avec(e: &Partage, a: pont::ActionErp) -> Value {
             let rep = e.config.donnees.join("pont").join("actions");
             std::fs::create_dir_all(&rep).unwrap();
             std::fs::write(rep.join(format!("{}.json", a.id)), serde_json::to_vec(&a).unwrap()).unwrap();
@@ -9388,6 +9442,62 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             assert_eq!(etats(&e).len(), 2, "annulé : rien de plus en file");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 7.8 : opérateur affecté et réimpression depuis l'ERP.
+        #[test]
+        fn l_erp_affecte_l_operateur_et_fait_reimprimer() {
+            use pont::GenreAction::*;
+            let e = etat("reimprimer-erp");
+            let d = e.config.donnees.clone();
+            erp::ecrire(&d, &erp::Config { url: Some("http://127.0.0.1:9/rip".into()), secret_hmac: Some("secret-factice".into()), actif: true, instance: Some(Uuid::new_v4()), ..Default::default() }).unwrap();
+            let mut t = travail_erp(Some("PROD-2026-00123"), true);
+            t.pages.push(t.pages[0].clone());
+            let mut en_rendu = travail_erp(Some("PROD-2026-00123"), true);
+            en_rendu.statut = Statut::EnCours;
+            for x in [&t, &en_rendu] {
+                std::fs::create_dir_all(dossier(&d, x.id)).unwrap();
+                ecrire(&d, x).unwrap();
+            }
+            let action = |action, operateur: Option<&str>, page| pont::ActionErp { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), action, echeance: None, operateur: operateur.map(Into::into), page };
+            let resultat = |v: Value| (v["code"].clone(), v["touchees"].clone(), v["non_modifiables"].clone());
+
+            assert_eq!(resultat(agir_avec(&e, action(Operateur, Some("Léa"), None))), (Value::Null, json!(2), json!(0)));
+            assert_eq!(lire_travail(&d, t.id).unwrap().fiche.operateur, "Léa");
+            // Les deux pages repartent ; le travail en cours de rendu n'est pas doublé.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (Value::Null, json!(2), json!(1)));
+            assert_eq!(etats(&e).iter().filter(|(_, x)| *x == file::Etat::EnAttente).count(), 2);
+            // Déjà en file : rien de plus.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (json!("rien_a_reimprimer"), json!(0), json!(2)));
+            for s in e.file.lock().unwrap().sorties.iter_mut() {
+                s.etat = file::Etat::Terminee;
+            }
+            // Une page seulement.
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, Some(2)))), (Value::Null, json!(1), json!(1)));
+            assert_eq!(e.file.lock().unwrap().sorties.last().map(|s| (s.page, s.etat)), Some((2, file::Etat::EnAttente)));
+            std::fs::remove_dir_all(&d).unwrap();
+        }
+
+        /// Roadmap 7.8 : les parties d'un groupe passent ensemble et dans l'ordre, quel que
+        /// soit l'ordre dans lequel leur rendu finit.
+        #[test]
+        fn les_parties_d_un_groupe_restent_ensemble_et_dans_l_ordre() {
+            let e = etat("groupe-erp");
+            let d = e.config.donnees.clone();
+            let partie = |rang| {
+                let mut t = travail_erp(Some("PROD-2026-00123"), true);
+                t.erp.as_mut().unwrap().partie = Some(pont::Partie { groupe: "vitrine".into(), rang });
+                std::fs::create_dir_all(dossier(&d, t.id)).unwrap();
+                ecrire(&d, &t).unwrap();
+                t
+            };
+            let (p1, p2, p3, seul) = (partie(1), partie(2), partie(3), travail_erp(None, true));
+            for t in [&p3, &seul, &p1, &p2] {
+                assert_eq!(mettre_en_file_auto(&e, t, None), 1);
+            }
+            let ordre: Vec<Uuid> = e.file.lock().unwrap().sorties.iter().map(|s| s.travail).collect();
+            assert_eq!(ordre, [p1.id, p2.id, p3.id, seul.id]);
+            std::fs::remove_dir_all(&d).unwrap();
         }
 
         fn estimer(e: &Partage, ref_erp: &str) -> Option<Value> {
@@ -9473,7 +9583,7 @@ mod tests {
             reglages::ecrire(&d, &[reglages::Reglage { uuid: Some(preset), nom: "Bache".into(), demande: Demande { dpi: 36, rotation_auto: false, page_par_travail: true, auto, ..Default::default() } }]).unwrap();
             let page = || PageEssai { media: [0.0, 0.0, 283.46, 141.73], crop: None, rotate: 0 };
             let pdf = pdf_pages(&[page(), page()]);
-            let devis = pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "devis.pdf".into(), prereglage_uuid: preset, copies: 3, echeance: None, sha256: None, estimation: true };
+            let devis = pont::Recu { id: Uuid::new_v4(), ref_erp: "PROD-2026-00123".into(), nom: "devis.pdf".into(), prereglage_uuid: preset, copies: 3, echeance: None, sha256: None, estimation: true, partie: None };
             let sans_reglage = pont::Recu { id: Uuid::new_v4(), prereglage_uuid: Uuid::new_v4(), ..devis.clone() };
             deposer(&e, &devis, &pdf);
             deposer(&e, &sans_reglage, &pdf);
