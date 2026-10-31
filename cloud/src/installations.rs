@@ -130,6 +130,11 @@ impl Registre {
         Some(serde_json::to_vec(&self.installations).expect("sérialisation des installations"))
     }
 
+    /// Écriture ratée : le registre reste à écrire (nouvel essai au prochain passage).
+    pub fn remettre_a_ecrire(&mut self) {
+        self.sale = true;
+    }
+
     pub fn statistiques(&self, maintenant: u64) -> Statistiques {
         let mut s = Statistiques { total: self.installations.len(), ..Default::default() };
         let semaine = |t: u64| maintenant.saturating_sub(t) / (7 * 86_400);

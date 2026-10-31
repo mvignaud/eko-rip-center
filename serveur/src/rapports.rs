@@ -96,7 +96,19 @@ fn masquer_chemins(ligne: &str) -> String {
 /// Chemins, noms de fichiers et e-mails d'une ligne de journal remplacés ; les textes entre
 /// guillemets (souvent un nom de travail ou de client) aussi.
 pub fn masquer(ligne: &str) -> String {
-    let ligne = &masquer_chemins(ligne);
+    // Le journal sépare ses champs par « : ». Un champ où paraît un nom de fichier est remplacé
+    // en entier : un nom non cité peut contenir des espaces (« Devis Client Dupont.pdf »).
+    masquer_chemins(ligne)
+        .split(" : ")
+        .map(|champ| {
+            let m = masquer_mots(champ);
+            if m.contains("<fichier>") { "<fichier>".to_string() } else { m }
+        })
+        .collect::<Vec<_>>()
+        .join(" : ")
+}
+
+fn masquer_mots(ligne: &str) -> String {
     let mut sortie = String::with_capacity(ligne.len());
     let mut guillemet: Option<char> = None;
     let mut mot = String::new();
@@ -318,7 +330,8 @@ mod tests {
     #[test]
     fn masque_ce_qui_peut_nommer_un_client() {
         assert_eq!(masquer("travail 3f2 : gs a échoué sur /var/lib/eko-rip/travaux/x/Dupont_bache.pdf"), "travail 3f2 : gs a échoué sur <chemin>");
-        assert_eq!(masquer("fichier Dupont_bache.PDF, illisible"), "fichier <fichier>, illisible");
+        assert_eq!(masquer("fichier Dupont_bache.PDF, illisible"), "<fichier>");
+        assert_eq!(masquer("dossier automatique : Devis Client Confidentiel.pdf : nom_non_conforme motif"), "dossier automatique : <fichier> : nom_non_conforme motif");
         assert_eq!(masquer("envoi de \"Bâche Dupont 3x2\" refusé"), "envoi de \"<texte>\" refusé");
         assert_eq!(masquer("réglage «Vinyle Martin» absent"), "réglage «<texte>» absent");
         assert_eq!(masquer("contact jean@dupont.fr ok"), "contact <e-mail> ok");

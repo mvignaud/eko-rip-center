@@ -187,8 +187,9 @@ pub async fn enregistrer_installations(relais: &Partage) {
     let contenu = relais.installations.lock().unwrap().a_ecrire();
     if let Some(c) = contenu {
         let donnees = relais.config.donnees.clone();
-        if let Ok(Err(e)) = tokio::task::spawn_blocking(move || installations::ecrire(&donnees, &c)).await {
-            eprintln!("installations.json : {e}");
+        if !matches!(tokio::task::spawn_blocking(move || installations::ecrire(&donnees, &c)).await, Ok(Ok(()))) {
+            eprintln!("installations.json non écrit : nouvel essai dans une minute");
+            relais.installations.lock().unwrap().remettre_a_ecrire();
         }
     }
 }
