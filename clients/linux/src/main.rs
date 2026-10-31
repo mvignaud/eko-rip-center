@@ -4,6 +4,7 @@ mod api;
 mod commande;
 mod config;
 mod connexion;
+mod decouverte;
 mod envoi;
 #[cfg(test)]
 mod essai_serveur;

@@ -16,6 +16,8 @@
 # Adresse IP de l'Epson (SNMP) : largeur du média chargé, reprise comme laize.
 #EKO_RIP_EPSON_SNMP=192.168.1.50
 #EKO_RIP_EPSON_COMMUNAUTE=public
+# 0 : ne pas s'annoncer sur le réseau local (DNS-SD _eko-rip._tcp, pour la découverte par les clients).
+#EKO_RIP_ANNONCE=1
 # 1 : interface complète aussi dans un navigateur (développement seulement).
 #EKO_RIP_ACCES_NAVIGATEUR=0
 # Cloud E-KO RIP : plate-forme d'accès à distance (sans VPN ni port ouvert). Le serveur s'y

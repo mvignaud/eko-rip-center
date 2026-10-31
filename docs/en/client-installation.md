@@ -15,8 +15,17 @@ Download from the releases page:
 
 ## First launch
 
-Enter the server address, for example `192.168.1.20:8640`. The client remembers it.
+The connection screen looks for E-KO RIP servers on the local network by itself and lists them
+under **Servers found on the network** (name, address and version): one click connects.
+**Search again** repeats the search (about 3 seconds). If no server shows up, enter its address
+under **Enter an address**, for example `192.168.1.20:8640`. The client remembers the server
+you chose.
 To change it: **Server → Change server** menu (`Cmd/Ctrl + Shift + S`).
+
+Discovery uses DNS-SD (mDNS, `_eko-rip._tcp`, UDP port 5353): it does not cross routers or VPNs
+(use the address then). On Mac, macOS asks to allow local network access on first launch. The
+server announces itself under the machine name (`EKO_RIP_CLOUD_NOM` if set); `EKO_RIP_ANNONCE=0`
+turns the announcement off.
 
 ## First-launch warning
 

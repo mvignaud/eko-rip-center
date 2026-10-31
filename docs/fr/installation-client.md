@@ -30,8 +30,17 @@ sudo apt update && sudo apt upgrade
 
 ## Premier lancement
 
-Saisir l'adresse du serveur, par exemple `192.168.1.20:8640`. Le client la retient.
+L'écran de connexion cherche seul les serveurs E-KO RIP du réseau local et les propose dans
+**Serveurs trouvés sur le réseau** (nom, adresse et version) : un clic suffit. **Rechercher à
+nouveau** relance la recherche (environ 3 secondes). Si aucun serveur n'apparaît, saisir son
+adresse sous **Saisir une adresse**, par exemple `192.168.1.20:8640`. Le client retient le
+serveur choisi.
 Pour en changer : menu **Serveur → Changer de serveur** (`Cmd/Ctrl + Maj + S`).
+
+La découverte utilise DNS-SD (mDNS, `_eko-rip._tcp`, port UDP 5353) : elle ne traverse pas les
+routeurs ni les VPN (utiliser alors l'adresse). Sur Mac, macOS demande d'autoriser l'accès au
+réseau local au premier lancement. Le serveur s'annonce sous le nom de la machine
+(`EKO_RIP_CLOUD_NOM` s'il est réglé) ; `EKO_RIP_ANNONCE=0` désactive l'annonce.
 
 ## Avertissement au premier lancement
 

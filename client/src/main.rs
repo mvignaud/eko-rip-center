@@ -3,6 +3,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod decouverte;
+
 use tauri::Manager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem as P, Submenu};
 
@@ -15,6 +17,7 @@ const PAGE_CHOIX: &str = if cfg!(windows) {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![decouverte::chercher_serveurs])
         // Menu en français : celui de Tauri par défaut (Menu::default) est en anglais, sur
         // macOS comme sur Windows. Éléments standard du système, avec leurs raccourcis.
         .menu(|app| {

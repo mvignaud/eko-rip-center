@@ -10,6 +10,7 @@ struct ConnexionVue: View {
     @State private var nom = ""
     @State private var motDePasse = ""
     @AppStorage("dernierUtilisateur") private var dernierUtilisateur = ""
+    @State private var decouverte = Decouverte()
     @FocusState private var champ: Champ?
 
     private enum Champ { case adresse, nom, motDePasse }
@@ -35,14 +36,47 @@ struct ConnexionVue: View {
                     SecureField("Mot de passe", text: $motDePasse)
                         .focused($champ, equals: .motDePasse)
                 } else {
-                    TextField("Adresse", text: $saisie, prompt: Text("hôte:8640"))
-                        .focused($champ, equals: .adresse)
-                        .autocorrectionDisabled()
+                    Section("Serveurs trouvés sur le réseau") {
+                        if decouverte.recherche {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Recherche en cours…").foregroundStyle(.secondary)
+                            }
+                        }
+                        ForEach(decouverte.serveurs) { serveur in
+                            Button {
+                                saisie = serveur.adresse
+                                Task { await etat.connecter(serveur.adresse) }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(serveur.nom)
+                                    Text(serveur.adresse.replacingOccurrences(of: "http://", with: "") + (serveur.version.isEmpty ? "" : " · \(serveur.version)"))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(etat.occupe)
+                        }
+                        if !decouverte.recherche && decouverte.serveurs.isEmpty {
+                            Text("Aucun serveur trouvé sur le réseau : saisissez son adresse.")
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("Rechercher à nouveau") { decouverte.chercher() }
+                            .disabled(decouverte.recherche)
+                    }
+                    Section("Saisir une adresse") {
+                        TextField("Adresse", text: $saisie, prompt: Text("hôte:8640"))
+                            .focused($champ, equals: .adresse)
+                            .autocorrectionDisabled()
+                    }
                 }
             }
             .formStyle(.grouped)
-            .scrollDisabled(true)
-            .frame(width: 400, height: demandeIdentifiant ? 130 : 80)
+            .scrollDisabled(demandeIdentifiant)
+            .frame(width: 400, height: demandeIdentifiant ? 130 : 320)
 
             if let erreur = etat.erreurConnexion {
                 Text(erreur)
@@ -78,13 +112,16 @@ struct ConnexionVue: View {
             saisie = etat.adresse.isEmpty ? adresseRetenue : etat.adresse
             nom = dernierUtilisateur
             champ = demandeIdentifiant ? (nom.isEmpty ? .nom : .motDePasse) : .adresse
+            if !demandeIdentifiant { decouverte.chercher() }
         }
+        .onDisappear { decouverte.arreter() }
         .onChange(of: etat.phase) { _, nouvelle in
             if nouvelle == .connexion {
                 nom = dernierUtilisateur
                 champ = nom.isEmpty ? .nom : .motDePasse
             } else if nouvelle == .adresse {
                 champ = .adresse
+                decouverte.chercher()
             }
         }
     }
