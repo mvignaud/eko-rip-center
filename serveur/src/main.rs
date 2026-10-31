@@ -1800,11 +1800,14 @@ async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
 async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
     let connues = etat.machines.read().unwrap().clone();
-    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé.
+    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé, mais
+    // seulement vers le même hôte et le même port (sinon le masque reste et la machine est
+    // refusée : un nouvel hôte demande un nouveau jeton).
     for m in &mut liste {
-        if let machines::Connexion::RipEko { jeton, .. } = &mut m.connexion
+        if let machines::Connexion::RipEko { hote, port, jeton, .. } = &mut m.connexion
             && jeton == machines::JETON_MASQUE
-            && let Some(machines::Connexion::RipEko { jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && let Some(machines::Connexion::RipEko { hote: h, port: p, jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && (h, p) == (&*hote, &*port)
         {
             *jeton = garde.clone();
         }
@@ -2977,17 +2980,8 @@ async fn preparer_auto(etat: &Partage, chemin: &std::path::Path, liste: &[reglag
                     None => false,
                 }
             }
-            Balise::Support => match supports::lire(donnees, "epson").supports.into_iter().find(|s| balises::cle(&s.nom) == balises::cle(v)) {
-                Some(s) => {
-                    // Le mode du réglage reste s'il est de ce support ; sinon la résolution du réglage.
-                    if !s.modes.iter().any(|m| m.id.is_some() && m.id == d.mode_uuid) {
-                        d.mode_uuid = None;
-                    }
-                    d.support_uuid = s.id;
-                    true
-                }
-                None => false,
-            },
+            // Après la boucle : le support dépend de l'imprimante, que `{machine}` peut poser plus loin.
+            Balise::Support => true,
             Balise::Copies => balises::entier(v, 100_000).map(|n| fiche.quantite = n).is_some(),
             Balise::Repetition => balises::entier(v, reglages::REPETITION_MAX).map(|n| d.repetition = n).is_some(),
             Balise::Laize => match (balises::nombre(v, "mm").filter(|l| (50.0..=5000.0).contains(l)), d.mosaique.as_mut()) {
@@ -3006,6 +3000,22 @@ async fn preparer_auto(etat: &Partage, chemin: &std::path::Path, liste: &[reglag
         };
         if !bon {
             alertes.push(invalide(*b, v));
+        }
+    }
+    // Support : celui de ce nom sur l'imprimante retenue d'abord, sinon le premier de ce nom.
+    if let Some(v) = valeur(Balise::Support) {
+        let catalogue = supports::lire(donnees, "epson").supports;
+        let du_nom = |s: &&supports::Support| balises::cle(&s.nom) == balises::cle(&v);
+        let sur_l_imprimante = |s: &&supports::Support| d.imprimante.as_ref().is_some_and(|i| &s.machine == i);
+        match catalogue.iter().filter(du_nom).find(sur_l_imprimante).or_else(|| catalogue.iter().find(du_nom)) {
+            Some(s) => {
+                // Le mode du réglage reste s'il est de ce support ; sinon la résolution du réglage.
+                if !s.modes.iter().any(|m| m.id.is_some() && m.id == d.mode_uuid) {
+                    d.mode_uuid = None;
+                }
+                d.support_uuid = s.id;
+            }
+            None => alertes.push(invalide(Balise::Support, &v)),
         }
     }
     // Largeur et hauteur voulues : l'échelle en découle, proportions gardées (la plus petite
@@ -5335,6 +5345,11 @@ mod tests {
             assert!(!v.to_string().contains(&jeton));
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            // Autre hôte avec le masque : le jeton n'y part pas, il faut le ressaisir.
+            let mut v = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
+            v[1]["connexion"]["hote"] = "10.0.0.9".into();
+            assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::BAD_REQUEST, "nouvel hôte : jeton à ressaisir");
+            assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "catalogue inchangé");
             std::fs::remove_dir_all(&b.config.donnees).unwrap();
         }
 
@@ -5622,6 +5637,17 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             let sorties = e.file.lock().unwrap().sorties.clone();
             assert_eq!(sorties.iter().map(|s| s.machine.as_str()).collect::<Vec<_>>(), ["epson"; 3]);
+            // Deux supports du même nom : celui de l'imprimante dite gagne, même si `{machine}`
+            // vient après `{support}` ; un support inconnu le dit.
+            let support = |machine: &str| supports::Support { id: Some(Uuid::new_v4()), machine: machine.into(), laize_mm: None, numero_machine: None, nom: "Bâche".into(), encres: vec![], modes: vec![] };
+            let (ailleurs, ici) = (support("autre"), support("epson"));
+            supports::ecrire(d, &supports::Catalogue { version: supports::VERSION, supports: vec![ailleurs, ici.clone()] }).unwrap();
+            balises::ecrire(d, &balises::Config { motif: "{nom}__{support}__{machine}".into() }).unwrap();
+            let (_, demande, _, alertes) = essai("Affiche__bache__epson.pdf").await.unwrap();
+            assert_eq!((demande.support_uuid, demande.imprimante.as_deref()), (ici.id, Some("epson")));
+            assert!(alertes.is_empty(), "{alertes:?}");
+            let (_, _, _, alertes) = essai("Affiche__papier__epson.pdf").await.unwrap();
+            assert_eq!(alertes.iter().map(|a| a.detail.as_str()).collect::<Vec<_>>(), ["support : « papier »"]);
             std::fs::remove_dir_all(d).unwrap();
         }
 
