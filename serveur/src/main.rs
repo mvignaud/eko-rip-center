@@ -5814,7 +5814,7 @@ mod tests {
             }
             assert!(ouvert, "{}", cloud::etat_public(&e.config.donnees));
             let etat = cloud::etat_public(&e.config.donnees);
-            assert_eq!(etat["adresse"], format!("{base}/s/{}", site.id));
+            assert_eq!(etat["adresse"], eko_rip_cloud::relais::adresse_du_site(&base, &site.id));
             assert!(etat.get("cle").is_none() && !etat.to_string().contains("cle\""), "la clé ne sort jamais");
 
             let racine = format!("{base}/s/{}", site.id);

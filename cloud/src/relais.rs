@@ -141,12 +141,62 @@ pub fn routes(relais: Partage) -> Router {
         .route("/api/appairage/{demande}", get(suivre_appairage))
         .route("/api/ping", post(recevoir_ping).layer(axum::extract::DefaultBodyLimit::max(4096)))
         .route("/api/installations", get(statistiques_installations))
+        .route("/api/certificat", get(autoriser_certificat))
         .route("/api/rapports", post(recevoir_rapport).layer(axum::extract::DefaultBodyLimit::max(crate::rapports::MAX_CORPS)))
         .route("/s/{site}", any(relayer))
         .route("/s/{site}/", any(relayer))
         .route("/s/{site}/{*reste}", any(relayer))
         .layer(axum::middleware::map_response(entetes_du_portail))
+        .layer(axum::middleware::from_fn_with_state(relais.clone(), aiguiller))
         .with_state(relais)
+}
+
+/// Domaine des sites : `<site>.platform.e-ko.rip` pour `https://platform.e-ko.rip`.
+pub fn domaine_des_sites(url_publique: &str) -> &str {
+    let hote = url_publique.split("://").nth(1).unwrap_or(url_publique);
+    hote.split('/').next().unwrap_or(hote)
+}
+
+/// Adresse publique d'un site : sa propre origine, `https://<site>.platform.e-ko.rip`.
+pub fn adresse_du_site(url_publique: &str, site: &str) -> String {
+    let schema = url_publique.split("://").next().unwrap_or("https");
+    format!("{schema}://{site}.{}", domaine_des_sites(url_publique))
+}
+
+/// Site visé par l'en-tête `Host` (`<site>.<domaine>[:port]`), s'il y en a un.
+fn site_de_l_hote(entetes: &HeaderMap, url_publique: &str) -> Option<String> {
+    let hote = entetes.get(header::HOST)?.to_str().ok()?.to_ascii_lowercase();
+    let domaine = domaine_des_sites(url_publique).to_ascii_lowercase();
+    // Le port éventuel fait partie du domaine (essais en local) ; sinon on l'ignore.
+    let hote = if domaine.contains(':') { hote.as_str() } else { hote.split(':').next().unwrap_or("") };
+    let site = hote.strip_suffix(&domaine)?.strip_suffix('.')?;
+    (!site.is_empty() && site.len() <= 32 && site.bytes().all(|o| o.is_ascii_lowercase() || o.is_ascii_digit())).then(|| site.to_string())
+}
+
+/// Question de Caddy avant d'obtenir un certificat à la demande (`on_demand_tls { ask … }`) :
+/// oui pour la plate-forme et pour chaque site existant, non pour tout autre nom.
+async fn autoriser_certificat(State(relais): State<Partage>, axum::extract::Query(q): axum::extract::Query<HashMap<String, String>>) -> StatusCode {
+    let nom = q.get("domain").map(|d| d.to_ascii_lowercase()).unwrap_or_default();
+    let domaine = domaine_des_sites(&relais.config.url_publique).to_ascii_lowercase();
+    if nom == domaine {
+        return StatusCode::OK;
+    }
+    let Some(site) = nom.strip_suffix(&domaine).and_then(|s| s.strip_suffix('.')) else { return StatusCode::NOT_FOUND };
+    let donnees = relais.config.donnees.clone();
+    let site = site.to_string();
+    let existe = tokio::task::spawn_blocking(move || sites::lire(&donnees).map(|l| l.iter().any(|s| s.id == site)).unwrap_or(false)).await.unwrap_or(false);
+    if existe { StatusCode::OK } else { StatusCode::NOT_FOUND }
+}
+
+/// Une requête adressée à `<site>.<domaine>` part tout entière vers ce site, avant le portail.
+async fn aiguiller(State(relais): State<Partage>, requete: Request, suite: axum::middleware::Next) -> Response {
+    match site_de_l_hote(requete.headers(), &relais.config.url_publique) {
+        Some(site) => {
+            let sous = requete.uri().path().trim_start_matches('/').to_string();
+            transmettre(&relais, site, &sous, requete, Mode::Origine).await
+        }
+        None => suite.run(requete).await,
+    }
 }
 
 /// En-têtes de sécurité des pages du portail ; une réponse d'atelier garde les siens
@@ -343,7 +393,7 @@ async fn suivre_appairage(State(relais): State<Partage>, Chemin(demande): Chemin
                         let _ = crate::base::donner_droit(&relais.base(), &site.id, c, "proprietaire");
                     }
                     eprintln!("site appairé : {} ({})", site.id, site.nom);
-                    let adresse = format!("{}/s/{}", relais.config.url_publique, site.id);
+                    let adresse = adresse_du_site(&relais.config.url_publique, &site.id);
                     Json(serde_json::json!({ "etat": "valide", "site": site.id, "cle": cle, "adresse": adresse })).into_response()
                 }
                 _ => refus(StatusCode::SERVICE_UNAVAILABLE, "indisponible"),
@@ -373,27 +423,51 @@ fn cookie_rip(entetes: &HeaderMap) -> Option<HeaderValue> {
 
 /// `Set-Cookie` d'un site : chemin forcé à `/s/<site>/`, `Secure` en HTTPS, `Domain` retiré.
 pub fn cookie_du_site(valeur: &str, site: &str, https: bool) -> String {
+    cookie_relaye(valeur, Some(site), https)
+}
+
+/// `Set-Cookie` d'un serveur RIP : sans `Domain` (le cookie reste sur l'hôte qui répond),
+/// limité à `/s/<site>/` en mode chemin, `Secure` en HTTPS.
+fn cookie_relaye(valeur: &str, chemin_du_site: Option<&str>, https: bool) -> String {
     let mut parties: Vec<String> = vec![];
     for (i, p) in valeur.split(';').enumerate() {
         let t = p.trim();
         let attr = t.split('=').next().unwrap_or("").trim().to_ascii_lowercase();
-        if i > 0 && matches!(attr.as_str(), "path" | "domain" | "secure") {
+        let a_retirer = match chemin_du_site {
+            Some(_) => matches!(attr.as_str(), "path" | "domain" | "secure"),
+            None => matches!(attr.as_str(), "domain" | "secure"),
+        };
+        if i > 0 && a_retirer {
             continue;
         }
         parties.push(t.to_string());
     }
-    parties.push(format!("Path=/s/{site}/"));
+    if let Some(site) = chemin_du_site {
+        parties.push(format!("Path=/s/{site}/"));
+    }
     if https {
         parties.push("Secure".into());
     }
     parties.join("; ")
 }
 
+/// Comment un site est servi : sous `/s/<site>/` de la plate-forme (clients d'API), ou sur
+/// sa propre origine `<site>.<domaine>` (navigateur, client Windows : l'interface y tourne).
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Chemin,
+    Origine,
+}
+
 async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
     let chemin = requete.uri().path().to_string();
     let reste = chemin.strip_prefix("/s/").unwrap_or("");
     let (site, sous) = reste.split_once('/').unwrap_or((reste, ""));
-    let site = site.to_string();
+    let (site, sous) = (site.to_string(), sous.to_string());
+    transmettre(&relais, site, &sous, requete, Mode::Chemin).await
+}
+
+async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Request, mode: Mode) -> Response {
     let envoi = relais.tunnels.lock().unwrap().get(&site).map(|t| t.envoi.clone());
     // Site inconnu ou hors ligne : même réponse (on ne dit pas quels sites existent).
     let Some(mut envoi) = envoi else { return refus(StatusCode::BAD_GATEWAY, "site_hors_ligne") };
@@ -432,13 +506,19 @@ async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
     };
     let (mut p, corps) = reponse.into_parts();
     let https = relais.config.url_publique.starts_with("https://");
-    let cookies: Vec<HeaderValue> = p.headers.get_all(header::SET_COOKIE).iter().filter_map(|v| v.to_str().ok()).filter_map(|v| HeaderValue::from_str(&cookie_du_site(v, &site, https)).ok()).collect();
+    let cookies: Vec<HeaderValue> = p.headers.get_all(header::SET_COOKIE).iter().filter_map(|v| v.to_str().ok()).filter_map(|v| HeaderValue::from_str(&cookie_relaye(v, (mode == Mode::Chemin).then_some(site.as_str()), https)).ok()).collect();
     p.headers.remove(header::SET_COOKIE);
     for c in cookies {
         p.headers.append(header::SET_COOKIE, c);
     }
+    // Sous `/s/<site>/`, la page partage l'origine du portail : `sandbox` l'en isole (pas de
+    // script). Sur sa propre origine, l'interface du serveur RIP tourne normalement.
+    if mode == Mode::Chemin {
+        p.headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("sandbox; frame-ancestors 'none'"));
+    } else if !p.headers.contains_key(header::CONTENT_SECURITY_POLICY) {
+        p.headers.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("frame-ancestors 'none'"));
+    }
     for (nom, valeur) in [
-        (header::CONTENT_SECURITY_POLICY, "sandbox; frame-ancestors 'none'"),
         (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
         (header::X_FRAME_OPTIONS, "DENY"),
         (header::REFERRER_POLICY, "no-referrer"),
@@ -455,6 +535,24 @@ async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn site_vise_par_l_hote() {
+        let h = |v: &'static str| {
+            let mut h = HeaderMap::new();
+            h.insert(header::HOST, HeaderValue::from_static(v));
+            h
+        };
+        let url = "https://platform.e-ko.rip";
+        assert_eq!(site_de_l_hote(&h("k3x9ab.platform.e-ko.rip"), url).as_deref(), Some("k3x9ab"));
+        assert_eq!(site_de_l_hote(&h("K3X9AB.Platform.E-KO.rip:443"), url).as_deref(), Some("k3x9ab"));
+        assert_eq!(site_de_l_hote(&h("platform.e-ko.rip"), url), None);
+        assert_eq!(site_de_l_hote(&h("a.b.platform.e-ko.rip"), url), None);
+        assert_eq!(site_de_l_hote(&h("k3x9abplatform.e-ko.rip"), url), None);
+        assert_eq!(site_de_l_hote(&h("k3x9ab.platform.e-ko.rip.evil.test"), url), None);
+        assert_eq!(adresse_du_site(url, "k3x9ab"), "https://k3x9ab.platform.e-ko.rip");
+        assert_eq!(site_de_l_hote(&h("s1.127.0.0.1:8650"), "http://127.0.0.1:8650").as_deref(), Some("s1"));
+    }
 
     #[test]
     fn cookie_limite_au_site() {

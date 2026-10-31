@@ -15,6 +15,14 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Modifié
+- **Cloud E-KO RIP : une adresse par site.** Chaque serveur rattaché est servi sur sa propre
+  origine, `https://<site>.platform.e-ko.rip` : elle se saisit telle quelle dans les clients
+  Mac, Linux, Windows et mobile, et l'interface d'administration fonctionne dans un navigateur.
+  Cookies du portail en `__Host-` ; certificats à la demande autorisés par
+  `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
+  pour l'API.
+
 ## [0.30.0] — 2026-10-31
 
 ### Ajouté

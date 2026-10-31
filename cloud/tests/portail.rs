@@ -141,7 +141,7 @@ async fn inscription_rattachement_administration() {
     let q = p.clone();
     let c4 = chef.clone();
     let sites = b(move || get(&q, "/sites", Some(&c4))).await;
-    assert!(sites.corps.contains("RIP atelier") && sites.corps.contains("En ligne") && sites.corps.contains(&format!("/s/{site}")), "{}", sites.corps);
+    assert!(sites.corps.contains("RIP atelier") && sites.corps.contains("En ligne") && sites.corps.contains(&relais::adresse_du_site(URL, &site)), "{}", sites.corps);
     assert!(sites.corps.contains("Propriétaire"));
 
     // Un autre compte ne peut ni voir ni retirer ce site, ni ouvrir l'administration.
