@@ -164,6 +164,10 @@ pub struct Demande {
     /// Rééchantillonnage des images matricielles agrandies ou réduites au rendu (roadmap 9.15).
     #[serde(default, skip_serializing_if = "Reechantillonnage::est_defaut")]
     pub reechantillonnage: Reechantillonnage,
+    /// Couches posées sur l'Epson, de la première à la dernière (roadmap 2.10) ; vide :
+    /// `couches` décide (blanc ou argent dessous ou dessus).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub empilement: Vec<epson::Couche>,
 }
 
 /// Comment Ghostscript passe une image de sa résolution à celle du rendu (roadmap 9.15).
@@ -218,7 +222,7 @@ pub fn dpi_defaut() -> u32 {
 
 impl Default for Demande {
     fn default() -> Self {
-        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1, epreuve: None, epreuve_seule: false, reechantillonnage: Reechantillonnage::ProcheVoisin }
+        Demande { mode: Mode::Imprimer, tous_les_traces: false, reperage: reperage::Reperage::Aucun, couleur: couleur::Couleur::default(), dpi: dpi_defaut(), mosaique: None, blanc: blanc::Blanc::default(), couches: epson::Couches::default(), edition: edition::Edition::default(), auto: Auto::default(), support: None, support_uuid: None, mode_uuid: None, decoupeuse: None, parametre_decoupe: None, rotation_auto: true, etendre_coupe: None, fond_reperes: None, page_par_travail: false, abandon_polices: false, imprimante: None, repetition: 1, epreuve: None, epreuve_seule: false, reechantillonnage: Reechantillonnage::ProcheVoisin, empilement: vec![] }
     }
 }
 
@@ -247,6 +251,9 @@ impl Demande {
         self.fond_reperes.as_ref().map_or(Ok(()), reperage::FondReperes::verifier)?;
         if self.support.as_ref().is_some_and(|n| n.chars().count() > 60) {
             return Err("tarifs_invalides");
+        }
+        if self.empilement.len() > epson::COUCHES_MAX {
+            return Err("empilement_invalide");
         }
         if self.imprimante.as_ref().is_some_and(|n| n.is_empty() || n.len() > 30) || !(1..=REPETITION_MAX).contains(&self.repetition) {
             return Err("demande_invalide");
@@ -346,6 +353,18 @@ pub fn stables(avant: &mut std::collections::HashMap<PathBuf, u64>, maintenant: 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Roadmap 2.10 : l'empilement se lit en JSON, s'omet vide, et compte 5 couches au plus.
+    #[test]
+    fn empilement_lu_et_borne() {
+        use epson::Couche::*;
+        let d: Demande = serde_json::from_value(serde_json::json!({ "empilement": ["blanc", "couleur", "blanc"] })).unwrap();
+        assert_eq!(d.empilement, [Blanc, Couleur, Blanc]);
+        assert!(d.verifier(&[]).is_ok());
+        assert!(serde_json::to_value(Demande::default()).unwrap().get("empilement").is_none(), "vide : omis");
+        let trop = Demande { empilement: vec![Couleur; epson::COUCHES_MAX + 1], ..Default::default() };
+        assert_eq!(trop.verifier(&[]), Err("empilement_invalide"));
+    }
 
     #[test]
     fn noms() {

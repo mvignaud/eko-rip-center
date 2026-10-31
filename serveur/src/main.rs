@@ -869,6 +869,8 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 epreuve = valeur == "oui";
                 Ok(())
             }
+            "reechantillonnage" => serde_json::from_value(serde_json::Value::String(valeur)).map(|r| d.reechantillonnage = r).map_err(|_| erreur("demande_invalide")),
+            "empilement" => valeur.split(',').map(str::trim).filter(|v| !v.is_empty()).map(|v| serde_json::from_value(serde_json::Value::String(v.into()))).collect::<Result<_, _>>().map(|e| d.empilement = e).map_err(|_| erreur("empilement_invalide")),
             "epreuve_seule" => {
                 d.epreuve_seule = valeur == "oui";
                 Ok(())
@@ -4181,8 +4183,8 @@ fn controler_impression(m: &machines::Machine, t: &Travail, p: &Page) -> Result<
     if m.modele != machines::Modele::EpsonScS80600 {
         return Ok(());
     }
-    let controle = if m.connexion.flux_direct() { epson::verifier_pour_le_pilote } else { |p: &[String], c| epson::preparer(p, c).map(|_| ()) };
-    controle(&p.plaques, t.demande.couches)
+    let controle = if m.connexion.flux_direct() { epson::verifier_pour_le_pilote } else { |p: &[String], c, pile: &[epson::Couche]| epson::preparer(p, c, pile).map(|_| ()) };
+    controle(&p.plaques, t.demande.couches, &t.demande.empilement)
 }
 
 /// Met une page en file : découpe pour le Kona, plaques pour l'Epson.
@@ -4319,7 +4321,7 @@ fn cle_imbrication(t: &Travail, p: &Page, n: usize, sorties: &[file::Sortie]) ->
     // sur la planche, deux travaux qui en choisissent deux différents ne s'imbriquent pas.
     let mut reglages: Vec<(String, &str)> = t.couches_decoupe.iter().filter(|c| c.active).filter_map(|c| c.reglage.as_deref().map(|r| (decoupe::cle(&c.nom), r))).collect();
     reglages.sort();
-    let cle = serde_json::json!([d.support_uuid, d.mode_uuid, decoupeuse, d.edition.miroir, d.dpi, d.reperage, d.couleur, d.blanc, d.couches, d.fond_reperes, d.tous_les_traces, d.etendre_coupe, reglages]).to_string();
+    let cle = serde_json::json!([d.support_uuid, d.mode_uuid, decoupeuse, d.edition.miroir, d.dpi, d.reperage, d.couleur, d.blanc, d.couches, d.empilement, d.fond_reperes, d.tous_les_traces, d.etendre_coupe, reglages]).to_string();
     (cle, decoupeuse)
 }
 
@@ -4411,6 +4413,7 @@ fn demande_planche(g: &Groupe) -> Demande {
         dpi: d.dpi,
         blanc: d.blanc,
         couches: d.couches,
+        empilement: d.empilement.clone(),
         support: d.support.clone(),
         support_uuid: d.support_uuid,
         mode_uuid: d.mode_uuid,
@@ -4906,7 +4909,7 @@ const RELEVE_IMPRESSION: Duration = Duration::from_secs(5);
 async fn imprimer_sur_l_epson(etat: &Etat, s: &file::Sortie, m: &machines::Machine, c: machines::Connexion) -> Result<epson::Points, (&'static str, String)> {
     let echec = |e: String| ("sortie_echouee", e);
     let (t, p) = lire_page(&etat.config.donnees, s.travail, s.page).ok_or(echec("travail ou page disparu".into()))?;
-    epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches).map_err(|e| ("envoi_impossible", e))?;
+    epson::verifier_pour_le_pilote(&p.plaques, t.demande.couches, &t.demande.empilement).map_err(|e| ("envoi_impossible", e))?;
     let rep = dossier(&etat.config.donnees, s.travail);
     let plaques = epson::PLAQUES_CMJN.map(|n| render::chemin_plaque(&rep, s.page, n));
     // Séparation portée par le mode du travail (roadmap 8.11), sinon celle par défaut.
@@ -5014,7 +5017,7 @@ async fn sortir_les_plaques(etat: &Etat, s: &file::Sortie, modele: machines::Mod
     let cible = file::dossier_sortie(donnees, s);
     tokio::fs::create_dir_all(&cible).await.map_err(|e| e.to_string())?;
     let fichiers: Vec<(String, String)> = if modele == machines::Modele::EpsonScS80600 {
-        let envoi = epson::preparer(&p.plaques, t.demande.couches)?;
+        let envoi = epson::preparer(&p.plaques, t.demande.couches, &t.demande.empilement)?;
         tokio::fs::write(cible.join("envoi.json"), serde_json::to_vec_pretty(&envoi).unwrap_or_default()).await.map_err(|e| e.to_string())?;
         envoi.canaux.into_iter().map(|(c, nom)| (nom, format!("{c:?}"))).collect()
     } else {
@@ -6188,7 +6191,7 @@ mod tests {
             let sortie = file::dossier_sortie(&donnees, &s);
             assert_eq!(std::fs::read_to_string(sortie.join("C.tif")).unwrap(), "Cyan", "une plaque par canal Epson");
             let envoi: serde_json::Value = serde_json::from_slice(&std::fs::read(sortie.join("envoi.json")).unwrap()).unwrap();
-            assert_eq!(envoi, serde_json::json!({ "canaux": [["C", "Cyan"]], "couches": "dessous" }));
+            assert_eq!(envoi, serde_json::json!({ "canaux": [["C", "Cyan"]], "couches": "dessous", "passages": [["C"]] }));
             assert_eq!(std::fs::read_dir(&sortie).unwrap().count(), 2, "un ton de découpe ne part jamais à l'imprimante");
             assert_eq!(file::File::lire(&donnees).sorties, [s], "file écrite sur le disque");
 

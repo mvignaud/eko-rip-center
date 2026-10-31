@@ -15,6 +15,17 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Empilement de couches** (feuille de route 2.10) : réglage `empilement` de la demande,
+  jusqu'à 5 couches posées dans l'ordre déclaré (`couleur`, `blanc`, `argent`), par exemple
+  blanc-couleur-blanc pour une vitrophanie vue des deux côtés ou couleur-couleur pour un
+  rétroéclairé jour/nuit. L'envoi Epson (`envoi.json` en mode Dossier) liste les passages
+  dans cet ordre ; une couche sans sa plaque, ou une plaque qu'aucune couche ne pose, est
+  refusée. Sans empilement, le réglage dessous / dessus reste en vigueur. Le pilote direct
+  n'imprime encore qu'un passage. Champs `empilement` et `reechantillonnage` aussi lus
+  à l'envoi d'un fichier.
+  *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
+
 ## [0.29.0] — 2026-10-30
 
 ### Ajouté
