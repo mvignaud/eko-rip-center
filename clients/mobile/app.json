@@ -31,11 +31,31 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-notifications", { "color": "#0A84FF" }],
-      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]
+      [
+        "expo-notifications",
+        {
+          "color": "#0A84FF"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ],
     "extra": {
-      "eas": { "projectId": "A_RENSEIGNER_PAR_EAS_INIT" }
-    }
+      "eas": {
+        "projectId": "15ed012a-28ab-4b28-a037-ec31bb3edd29"
+      },
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      }
+    },
+    "owner": "e-ko-dev"
   }
 }
