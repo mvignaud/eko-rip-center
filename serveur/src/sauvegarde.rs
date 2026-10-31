@@ -47,6 +47,9 @@ pub struct Sauvegarde {
     /// Gabarits de cellules de la planche manuelle (roadmap 5.10) ; absents : gardés.
     #[serde(default)]
     pub gabarits: Option<Vec<crate::cellules::Gabarit>>,
+    /// Étalonnages G7 et leurs itérations (roadmap 8.10) ; absents : gardés.
+    #[serde(default)]
+    pub g7: Option<Vec<crate::g7::Etalonnage>>,
 }
 
 pub fn hex(octets: &[u8]) -> String {
