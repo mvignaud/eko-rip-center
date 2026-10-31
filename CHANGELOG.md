@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Deux seuils d'espace disque** (feuille de route 0.8) : sous le seuil bas
+  (`EKO_RIP_SEUIL_ALERTE_MO`, 20 Go par défaut), chaque nouveau travail porte l'alerte
+  « disque presque plein » ; sous le seuil critique (`EKO_RIP_SEUIL_LIBRE_MO`), un fichier
+  déposé en dossier surveillé n'est plus mis de côté dans `refuses/` : il devient un travail
+  en erreur `espace_insuffisant`, avec son motif, à relancer une fois la place faite.
+  `/api/systeme` donne `seuil_alerte` et `disque_niveau` (`ok`, `bas`, `critique`). Option
+  `EKO_RIP_PURGER_ERP_FAITS=1` : un travail venu de l'ERP est effacé dès qu'il est fait.
+  *Low and critical disk thresholds; hot-folder jobs refused for space show as jobs in error;
+  optional purge of ERP jobs once done.*
 - **Rappels de recalibration** (feuille de route 8.5), par imprimante : rappel 14 jours
   après le dernier étalonnage, étalonnage périmé à 3 mois, et rappel dès qu'une poche
   d'encre est changée (hausse d'au moins 10 points dans les relevés SNMP), qu'un nouveau
@@ -34,6 +43,13 @@ parité ; d'ici là, 0.Y.Z.
   n'imprime encore qu'un passage. Champs `empilement` et `reechantillonnage` aussi lus
   à l'envoi d'un fichier.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
+
+### Corrigé
+- Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
+  de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
+  reused when the host or port changes.*
+- La balise `{repetition}` met aussi en file une découpe par impression répétée, plus une
+  seule. *Repeated prints each get their cut.*
 
 ## [0.29.0] — 2026-10-30
 

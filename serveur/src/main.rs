@@ -312,8 +312,14 @@ struct Config {
     conservation_jours: u64,
     /// Espace libre à garder sur le disque des données, en octets (0 : aucun seuil) : en
     /// dessous, les plus vieux travaux inactifs sont purgés et un nouveau travail qui ne
-    /// tiendrait pas est refusé (roadmap 0.6).
+    /// tiendrait pas est refusé (roadmap 0.6). Seuil critique de la roadmap 0.8.
     seuil_libre: u64,
+    /// Seuil bas, en octets (0 : aucun) : en dessous, chaque nouveau travail porte l'alerte
+    /// `espace_disque_bas` et `/api/systeme` dit `disque_niveau: bas` (roadmap 0.8).
+    seuil_alerte: u64,
+    /// Travaux de l'ERP effacés dès qu'ils sont faits, sans attendre la conservation
+    /// (`EKO_RIP_PURGER_ERP_FAITS=1`, roadmap 0.8) : l'ERP garde le fichier et le dossier.
+    purger_erp_faits: bool,
     /// Port du plotter (le Kona : `/dev/kona`, créé par la règle udev du paquet).
     plotter: PathBuf,
     plotter_stty: String,
@@ -364,6 +370,8 @@ async fn main() {
         rendus: std::env::var("EKO_RIP_RENDUS").ok().filter(|v| !v.is_empty()).map_or_else(rendus::par_defaut, |v| v.parse::<usize>().ok().filter(|n| (1..=rendus::MAX).contains(n)).expect("EKO_RIP_RENDUS : 1 à 16")),
         conservation_jours: env_ou("EKO_RIP_CONSERVATION_JOURS", "30").parse().expect("EKO_RIP_CONSERVATION_JOURS"),
         seuil_libre: env_ou("EKO_RIP_SEUIL_LIBRE_MO", "5120").parse::<u64>().expect("EKO_RIP_SEUIL_LIBRE_MO") * 1024 * 1024,
+        seuil_alerte: env_ou("EKO_RIP_SEUIL_ALERTE_MO", "20480").parse::<u64>().expect("EKO_RIP_SEUIL_ALERTE_MO") * 1024 * 1024,
+        purger_erp_faits: env_ou("EKO_RIP_PURGER_ERP_FAITS", "0") == "1",
         plotter: env_ou("EKO_RIP_PLOTTER", "/dev/kona").into(),
         plotter_stty: env_ou("EKO_RIP_PLOTTER_STTY", plotter::STTY_DEFAUT),
         epson_snmp: std::env::var("EKO_RIP_EPSON_SNMP").ok().filter(|v| !v.is_empty()),
@@ -1010,6 +1018,7 @@ enum Origine {
 async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Format, d: Demande, fiche: Fiche, origine: Origine, depart: Vec<controle::Alerte>) -> Result<Travail, (StatusCode, Refus)> {
     let estimation = matches!(origine, Origine::Estimation(_));
     let automatique = matches!(origine, Origine::Dossier | Origine::Erp(_) | Origine::Estimation(_));
+    let dossier_surveille = matches!(origine, Origine::Dossier);
     let (imbrication, couches_decoupe, erp) = match origine {
         Origine::Aucune | Origine::Dossier => (None, vec![], None),
         Origine::Planche(i, c) => (Some(i), c, None),
@@ -1052,15 +1061,25 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
             tokio::fs::write(&chemin, normalise).await.map_err(|e| interne(e.to_string()))?;
         }
     }
-    // Refus anticipé si le rendu ne tiendrait pas au-dessus du seuil d'espace libre.
-    if format == Format::Pdf && d.mode == Mode::Imprimer && etat.config.seuil_libre > 0 {
+    // Espace libre (roadmap 0.6, 0.8) : refus anticipé si le rendu ne tiendrait pas au-dessus
+    // du seuil critique, alerte sous le seuil bas. Un dépôt en dossier surveillé n'est pas
+    // refusé : il devient un travail en erreur avec son motif, à relancer une fois la place faite.
+    let (seuil_bas, seuil_critique) = (etat.config.seuil_alerte, etat.config.seuil_libre);
+    let (mut manque_place, mut disque_bas) = (None, None);
+    if format == Format::Pdf && d.mode == Mode::Imprimer && (seuil_bas, seuil_critique) != (0, 0) {
         let pdf = tokio::fs::read(rep.join(format.fichier())).await.map_err(|e| interne(e.to_string()))?;
         let surface = (1..).map_while(|n| imbrication::taille_page(&pdf, n).ok()).map(|t| t.largeur * t.hauteur / (imbrication::PT_PAR_MM * imbrication::PT_PAR_MM) / 1e6).sum::<f64>();
         let besoin = place_estimee(surface, d.dpi);
-        if let Some((_, libre)) = espace_disque(&etat.config.donnees).await
-            && libre < etat.config.seuil_libre.saturating_add(besoin)
-        {
-            return Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", Some(format!("≈ {} Mo nécessaires, {} Mo libres, seuil {} Mo", besoin >> 20, libre >> 20, etat.config.seuil_libre >> 20)))));
+        if let Some((_, libre)) = espace_disque(&etat.config.donnees).await {
+            if seuil_critique > 0 && libre < seuil_critique.saturating_add(besoin) {
+                let detail = format!("≈ {} Mo nécessaires, {} Mo libres, seuil {} Mo", besoin >> 20, libre >> 20, seuil_critique >> 20);
+                if !dossier_surveille {
+                    return Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", Some(detail))));
+                }
+                manque_place = Some(detail);
+            } else if seuil_bas > 0 && libre < seuil_bas.saturating_add(besoin) {
+                disque_bas = Some(alerte("espace_disque_bas", format!("{} Mo libres, seuil {} Mo", libre >> 20, seuil_bas >> 20)));
+            }
         }
     }
     let mut alertes = if format == Format::Pdf && d.mode == Mode::Imprimer {
@@ -1096,6 +1115,7 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     }
     let mosaique = d.mosaique.clone().filter(|_| d.mode == Mode::Imprimer && format == Format::Pdf);
     alertes.extend(depart.iter().cloned());
+    alertes.extend(disque_bas);
     if let Some(r) = &remarques_image {
         if r.sans_resolution {
             alertes.push(controle::Alerte { code: "image_sans_resolution".into(), page: None, detail: format!("{} ppi · {:.0} × {:.0} mm", images::PPI_PAR_DEFAUT, r.largeur_mm, r.hauteur_mm) });
@@ -1121,9 +1141,9 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
         nom,
         format,
         demande: Demande { mosaique, ..d },
-        statut: Statut::EnAttente,
-        code_erreur: None,
-        erreur: None,
+        statut: if manque_place.is_some() { Statut::Echec } else { Statut::EnAttente },
+        code_erreur: manque_place.is_some().then(|| "espace_insuffisant".to_string()),
+        erreur: manque_place,
         pages: vec![],
         alertes,
         cree_le: maintenant(),
@@ -1138,7 +1158,11 @@ async fn creer_travail_avec(etat: &Partage, id: Uuid, nom: String, format: Forma
     };
     ecrire(&etat.config.donnees, &travail).map_err(|e| interne(e.to_string()))?;
     // Inscrit avant de lancer la tâche : l'ordre d'arrivée ne dépend pas de l'ordonnanceur.
-    tokio::spawn(traiter(etat.clone(), travail.clone(), etat.rendu.inscrire(automatique)));
+    if matches!(travail.statut, Statut::EnAttente) {
+        tokio::spawn(traiter(etat.clone(), travail.clone(), etat.rendu.inscrire(automatique)));
+    } else {
+        eprintln!("dossier surveillé : {} en erreur, espace insuffisant : {}", travail.nom, travail.erreur.as_deref().unwrap_or_default());
+    }
     for (nom_page, pdf) in autres_pages {
         let id = Uuid::new_v4();
         let rep_page = dossier(&etat.config.donnees, id);
@@ -1805,11 +1829,14 @@ async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
 async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
     let connues = etat.machines.read().unwrap().clone();
-    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé.
+    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé,
+    // vers le même RIP seulement ; un autre hôte ou port demande de ressaisir le jeton (le
+    // masque, refusé par `verifier`, ne part jamais vers un nouvel hôte).
     for m in &mut liste {
-        if let machines::Connexion::RipEko { jeton, .. } = &mut m.connexion
+        if let machines::Connexion::RipEko { hote, port, jeton, .. } = &mut m.connexion
             && jeton == machines::JETON_MASQUE
-            && let Some(machines::Connexion::RipEko { jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && let Some(machines::Connexion::RipEko { hote: h, port: p, jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && (h, p) == (hote, port)
         {
             *jeton = garde.clone();
         }
@@ -2863,6 +2890,17 @@ async fn purger(etat: Partage) {
                 eprintln!("travail {id} purgé (plus de {} jours)", etat.config.conservation_jours);
             }
         }
+        // Travaux de l'ERP faits, si l'option est active (roadmap 0.8).
+        if etat.config.purger_erp_faits {
+            let sorties = etat.file.lock().unwrap().sorties.clone();
+            for id in erp_faits(&lire_tous(donnees), &sorties) {
+                // Relu juste avant d'effacer : relancé ou remis en file entre-temps, il reste.
+                let encore = lire_travail(donnees, id).is_some_and(|t| !erp_faits(std::slice::from_ref(&t), &etat.file.lock().unwrap().sorties).is_empty());
+                if encore && effacer_travail(&etat, id).await {
+                    eprintln!("travail {id} de l'ERP purgé (fait)");
+                }
+            }
+        }
         // Sous le seuil d'espace libre : le plus vieux inactif d'abord, jusqu'à repasser au-dessus.
         if etat.config.seuil_libre > 0 {
             for id in plus_vieux_inactifs(&lire_tous(donnees)) {
@@ -2912,9 +2950,34 @@ fn place_estimee(surface_m2: f64, dpi: u32) -> u64 {
     (surface_m2 * 1e9 * (f64::from(dpi) / 600.0).powi(2)) as u64
 }
 
-/// Travaux inactifs, du plus vieux au plus récent : ordre de purge sous le seuil.
+/// Travaux de l'ERP faits (roadmap 0.8) : rendus, au moins une sortie terminée, aucune à
+/// passer, ni posée sur une planche pas encore imprimée, ni en échec (à relancer par
+/// l'opérateur). Les estimations ont leur propre purge.
+fn erp_faits(travaux: &[Travail], sorties: &[file::Sortie]) -> Vec<Uuid> {
+    let fait = |t: &Travail| {
+        let siennes = || sorties.iter().filter(|s| s.travail == t.id);
+        siennes().any(|s| s.etat == file::Etat::Terminee) && !siennes().any(|s| s.active() || s.etat == file::Etat::Imbriquee || (s.etat == file::Etat::Echec && !s.archivee))
+    };
+    travaux.iter().filter(|t| t.erp.is_some() && !t.estimation && matches!(t.statut, Statut::Termine) && fait(t)).map(|t| t.id).collect()
+}
+
+/// Niveau du disque des données (roadmap 0.8) : `bas` sous le seuil d'alerte, `critique`
+/// sous le seuil de refus et de purge (0 : seuil absent).
+fn niveau_disque(libre: u64, seuil_alerte: u64, seuil_critique: u64) -> &'static str {
+    if seuil_critique > 0 && libre < seuil_critique {
+        "critique"
+    } else if seuil_alerte > 0 && libre < seuil_alerte {
+        "bas"
+    } else {
+        "ok"
+    }
+}
+
+/// Travaux inactifs, du plus vieux au plus récent : ordre de purge sous le seuil. Un dépôt
+/// mis en erreur faute de place (roadmap 0.8) n'en est pas : son dossier garde le seul
+/// exemplaire du fichier, à relancer ; seule la conservation en jours l'efface.
 fn plus_vieux_inactifs(travaux: &[Travail]) -> Vec<Uuid> {
-    let mut v: Vec<&Travail> = travaux.iter().filter(|t| !actif(&t.statut)).collect();
+    let mut v: Vec<&Travail> = travaux.iter().filter(|t| !actif(&t.statut) && t.code_erreur.as_deref() != Some("espace_insuffisant")).collect();
     v.sort_by_key(|t| t.cree_le);
     v.into_iter().map(|t| t.id).collect()
 }
@@ -2934,6 +2997,8 @@ async fn systeme(State(etat): State<Partage>) -> Json<serde_json::Value> {
         "disque_libre": libre,
         "conservation_jours": etat.config.conservation_jours,
         "seuil_libre": etat.config.seuil_libre,
+        "seuil_alerte": etat.config.seuil_alerte,
+        "disque_niveau": libre.map(|l| niveau_disque(l, etat.config.seuil_alerte, etat.config.seuil_libre)),
         "alertes": etat::alertes(),
     }))
 }
@@ -3424,8 +3489,10 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
                 ajouter(m, machines::Operation::Impression, a.suspendre);
             }
         }
+        // Chaque impression répétée a sa découpe (ses repères), comme la première.
+        let fois = if imprime && imprimante.is_some() { t.demande.repetition.max(1) } else { 1 };
         if let (true, Some(m)) = (a.decouper && a_couper(t, p), &decoupeuse) {
-            for mut s in sorties_de_coupe(t, i + 1, p, &m.id, m) {
+            for mut s in (0..fois).flat_map(|_| sorties_de_coupe(t, i + 1, p, &m.id, m)) {
                 if a.suspendre || imprime {
                     s.etat = file::Etat::Suspendue;
                 }
@@ -5316,6 +5383,8 @@ mod tests {
                 rendus: 1,
                 conservation_jours: 0,
                 seuil_libre: 0,
+                seuil_alerte: 0,
+                purger_erp_faits: false,
                 plotter: "/dev/null".into(),
                 plotter_stty: String::new(),
                 epson_snmp: None,
@@ -5410,6 +5479,10 @@ mod tests {
             assert!(!v.to_string().contains(&jeton));
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            let mut ailleurs = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
+            ailleurs[1]["connexion"]["hote"] = "192.0.2.7".into();
+            assert_eq!(appel(&b, "POST", "/api/machines", None, Some(ailleurs)).await.status(), StatusCode::BAD_REQUEST, "autre hôte : jeton à ressaisir");
+            assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "rien d'enregistré");
             std::fs::remove_dir_all(&b.config.donnees).unwrap();
         }
 
@@ -5697,6 +5770,14 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             let sorties = e.file.lock().unwrap().sorties.clone();
             assert_eq!(sorties.iter().map(|s| s.machine.as_str()).collect::<Vec<_>>(), ["epson"; 3]);
+            // Avec une découpe : une par impression répétée, chacune avec ses repères.
+            e.file.lock().unwrap().sorties.clear();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Plan", "statut": "termine", "erreur": null, "cree_le": 0,
+                "auto": { "imprimer": true, "decouper": true }, "repetition": 3, "imprimante": "epson", "decoupeuse": "kona",
+                "pages": [{ "plaques": ["Cyan"], "traces_decoupe": 1, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            mettre_en_file_auto(&e, &t, None);
+            let ops = e.file.lock().unwrap().sorties.iter().map(|s| s.operation()).collect::<Vec<_>>();
+            assert_eq!((ops.iter().filter(|o| **o == machines::Operation::Impression).count(), ops.iter().filter(|o| **o == machines::Operation::Decoupe).count()), (3, 3));
             std::fs::remove_dir_all(d).unwrap();
         }
 
@@ -5797,14 +5878,17 @@ mod tests {
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
-        /// Seuil d'espace libre (roadmap 0.6) : refus anticipé, ordre de purge.
+        /// Seuil d'espace libre (roadmap 0.6) : refus anticipé, ordre de purge ; deux seuils
+        /// (0.8) : alerte sous le bas, dossier surveillé en erreur sous le critique.
         #[tokio::test]
         async fn seuil_d_espace_libre() {
+            assert_eq!([niveau_disque(5, 10, 3), niveau_disque(2, 10, 3), niveau_disque(20, 10, 3), niveau_disque(0, 0, 0)], ["bas", "critique", "ok", "ok"]);
             assert_eq!(place_estimee(1.0, 600), 1_000_000_000);
             assert_eq!(place_estimee(1.0, 300), 250_000_000, "au carré de la résolution");
             let t = |cree_le: u64, statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": Uuid::new_v4(), "nom": "x", "statut": statut, "erreur": null, "cree_le": cree_le, "pages": [] })).unwrap();
-            let v = [t(30, "termine"), t(10, "en_cours"), t(20, "echec"), t(40, "termine")];
-            assert_eq!(plus_vieux_inactifs(&v), [v[2].id, v[0].id, v[3].id], "du plus vieux au plus récent, jamais un actif");
+            let mut v = [t(30, "termine"), t(10, "en_cours"), t(20, "echec"), t(40, "termine"), t(5, "echec")];
+            v[4].code_erreur = Some("espace_insuffisant".into());
+            assert_eq!(plus_vieux_inactifs(&v), [v[2].id, v[0].id, v[3].id], "du plus vieux au plus récent, jamais un actif ni un dépôt en attente de place");
             // Seuil impossible à tenir : l'envoi est refusé avant tout rendu.
             let e = etat("seuil");
             let mut config = e.config.clone();
@@ -5826,10 +5910,50 @@ mod tests {
                 doc.save_to(&mut o).unwrap();
                 o
             };
-            std::fs::write(rep.join("source.tmp"), pdf).unwrap();
+            std::fs::write(rep.join("source.tmp"), &pdf).unwrap();
             let r = creer_travail(&e2, id, "x.pdf".into(), Format::Pdf, Demande::default()).await;
             assert!(matches!(r, Err((StatusCode::INSUFFICIENT_STORAGE, ("espace_insuffisant", _)))), "{:?}", r.err().map(|e| e.1));
-            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+            let deposer = || {
+                let id = Uuid::new_v4();
+                std::fs::create_dir_all(dossier(&e2.config.donnees, id)).unwrap();
+                std::fs::write(dossier(&e2.config.donnees, id).join("source.tmp"), &pdf).unwrap();
+                id
+            };
+            // Dépôt en dossier surveillé : pas de refus, un travail en erreur, sans rendu.
+            let id = deposer();
+            let t = creer_travail_avec(&e2, id, "auto.pdf".into(), Format::Pdf, Demande::default(), Fiche::default(), Origine::Dossier, vec![]).await.unwrap_or_else(|(s, r)| panic!("refusé : {s} {r:?}"));
+            assert!(matches!(t.statut, Statut::Echec) && t.code_erreur.as_deref() == Some("espace_insuffisant") && t.erreur.as_deref().is_some_and(|e| e.contains("Mo libres")));
+            assert!(matches!(lire_travail(&e2.config.donnees, id).map(|t| t.statut), Some(Statut::Echec)), "gardé, à relancer");
+            // Sous le seul seuil bas : accepté, avec l'alerte.
+            let mut config = e2.config.clone();
+            (config.seuil_libre, config.seuil_alerte) = (0, u64::MAX / 2);
+            let e3: Partage = Arc::new(Etat { config, rendu: rendus::Rendus::new(1), file: Default::default(), reglages: Default::default(), sessions: Default::default(), machines: std::sync::RwLock::new(e.machines.read().unwrap().clone()) });
+            let id = deposer();
+            let t = creer_travail(&e3, id, "bas.pdf".into(), Format::Pdf, Demande { mode: Mode::Imprimer, dpi: 36, ..Default::default() }).await.unwrap_or_else(|(s, r)| panic!("refusé : {s} {r:?}"));
+            assert!(matches!(t.statut, Statut::EnAttente) && t.alertes.iter().any(|a| a.code == "espace_disque_bas"), "{:?}", t.alertes.iter().map(|a| &a.code).collect::<Vec<_>>());
+            std::fs::remove_dir_all(&e.config.donnees).ok();
+        }
+
+        /// Option de purge des travaux de l'ERP faits (roadmap 0.8).
+        #[test]
+        fn travaux_erp_faits() {
+            let t = |erp: bool, statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": Uuid::new_v4(), "nom": "x", "statut": statut, "erreur": null, "cree_le": 0, "pages": [], "erp": erp.then(|| serde_json::json!({ "envoi": Uuid::new_v4(), "ref_erp": "PROD-2026-00123" })) })).unwrap();
+            let v = [t(true, "termine"), t(true, "termine"), t(true, "termine"), t(false, "termine"), t(true, "termine"), t(true, "echec"), t(true, "termine")];
+            let s = |i: usize, op, etat| file::Sortie { etat, ..file::Sortie::nouvelle("epson", op, v[i].id, "x", 1, 0) };
+            use machines::Operation::{Decoupe, Impression};
+            let sorties = [
+                s(0, Impression, file::Etat::Terminee),
+                s(0, Decoupe, file::Etat::Terminee),
+                s(1, Impression, file::Etat::Terminee),
+                s(1, Decoupe, file::Etat::Suspendue),
+                s(2, Impression, file::Etat::Terminee),
+                s(2, Impression, file::Etat::Echec),
+                s(3, Impression, file::Etat::Terminee),
+                s(5, Impression, file::Etat::Terminee),
+                s(6, Impression, file::Etat::Terminee),
+                s(6, Impression, file::Etat::Imbriquee),
+            ];
+            assert_eq!(erp_faits(&v, &sorties), [v[0].id], "découpe à passer, page en échec, hors ERP, jamais imprimé, rendu en échec, page sur une planche : gardés");
         }
 
         /// Page d'un travail en cours de rendu : 409 pas_pret ; travail inconnu : 404 (roadmap 0.5).

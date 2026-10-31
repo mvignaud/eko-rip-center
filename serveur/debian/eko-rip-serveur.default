@@ -6,6 +6,10 @@
 # Travaux effacés après ce nombre de jours (0 : jamais).
 #EKO_RIP_CONSERVATION_JOURS=30
 #EKO_RIP_SEUIL_LIBRE_MO=5120
+# Seuil bas (Mo) : en dessous, chaque nouveau travail porte une alerte « disque presque plein ».
+#EKO_RIP_SEUIL_ALERTE_MO=20480
+# 1 : travaux venus de l'ERP effacés dès qu'ils sont imprimés (et découpés).
+#EKO_RIP_PURGER_ERP_FAITS=0
 # Plotter de découpe (le Mutoh Kona apparaît en /dev/kona) et réglages du port :
 #EKO_RIP_PLOTTER=/dev/kona
 #EKO_RIP_PLOTTER_STTY=9600 cs8 -cstopb -parenb crtscts raw -echo
