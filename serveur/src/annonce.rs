@@ -3,15 +3,20 @@
 //! dans le journal et le serveur démarre quand même. Désactivable par `EKO_RIP_ANNONCE=0`.
 
 use mdns_sd::{ServiceDaemon, ServiceInfo};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 /// Type de service recherché par les clients.
 pub const TYPE_SERVICE: &str = "_eko-rip._tcp.local.";
 
-/// Port à annoncer pour l'adresse d'écoute, ou rien si elle est illisible ou limitée à la boucle locale.
-fn port_a_annoncer(ecoute: &str) -> Option<u16> {
+/// Ce qu'il faut annoncer pour l'adresse d'écoute : le port, et l'adresse précise si le serveur
+/// n'écoute que sur une interface (sinon toutes celles de la machine). Rien si l'adresse est
+/// illisible ou limitée à la boucle locale.
+fn a_annoncer(ecoute: &str) -> Option<(Option<IpAddr>, u16)> {
     let a: SocketAddr = ecoute.parse().ok()?;
-    (!a.ip().is_loopback()).then_some(a.port())
+    if a.ip().is_loopback() {
+        return None;
+    }
+    Some(((!a.ip().is_unspecified()).then_some(a.ip()), a.port()))
 }
 
 /// Nom du serveur : `EKO_RIP_CLOUD_NOM` s'il est réglé, sinon le nom de la machine.
@@ -40,12 +45,12 @@ pub fn demarrer(ecoute: &str) {
     if std::env::var("EKO_RIP_ANNONCE").is_ok_and(|v| v.trim() == "0") {
         return;
     }
-    let Some(port) = port_a_annoncer(ecoute) else {
+    let Some((ip, port)) = a_annoncer(ecoute) else {
         return;
     };
     let lancement = std::thread::Builder::new().name("annonce".into()).spawn(move || {
         let nom = nom_serveur();
-        match enregistrer(&nom, port) {
+        match enregistrer(&nom, ip, port) {
             Ok(_demon) => loop {
                 // Le démon (et son fil) vit tant que ce fil le garde.
                 std::thread::park();
@@ -58,11 +63,15 @@ pub fn demarrer(ecoute: &str) {
     }
 }
 
-fn enregistrer(nom: &str, port: u16) -> Result<ServiceDaemon, mdns_sd::Error> {
+fn enregistrer(nom: &str, ip: Option<IpAddr>, port: u16) -> Result<ServiceDaemon, mdns_sd::Error> {
     let demon = ServiceDaemon::new()?;
     let proprietes = [("version", env!("CARGO_PKG_VERSION")), ("nom", nom)];
-    // Adresse vide + `enable_addr_auto` : les adresses des interfaces sont suivies automatiquement.
-    let service = ServiceInfo::new(TYPE_SERVICE, nom, &hote_mdns(nom), "", port, &proprietes[..])?.enable_addr_auto();
+    let service = match ip {
+        // Écoute sur une seule interface : seule cette adresse est annoncée.
+        Some(ip) => ServiceInfo::new(TYPE_SERVICE, nom, &hote_mdns(nom), ip, port, &proprietes[..])?,
+        // Écoute sur toutes les interfaces : leurs adresses sont suivies automatiquement.
+        None => ServiceInfo::new(TYPE_SERVICE, nom, &hote_mdns(nom), "", port, &proprietes[..])?.enable_addr_auto(),
+    };
     demon.register(service)?;
     println!("Annonce du serveur sur le réseau local : {nom} (_eko-rip._tcp, port {port})");
     Ok(demon)
@@ -74,12 +83,12 @@ mod tests {
 
     #[test]
     fn port_annonce() {
-        assert_eq!(port_a_annoncer("0.0.0.0:8640"), Some(8640));
-        assert_eq!(port_a_annoncer("192.168.10.109:9000"), Some(9000));
-        assert_eq!(port_a_annoncer("[::]:8640"), Some(8640));
-        assert_eq!(port_a_annoncer("127.0.0.1:8640"), None);
-        assert_eq!(port_a_annoncer("[::1]:8640"), None);
-        assert_eq!(port_a_annoncer("localhost:8640"), None);
+        assert_eq!(a_annoncer("0.0.0.0:8640"), Some((None, 8640)));
+        assert_eq!(a_annoncer("192.168.10.109:9000"), Some((Some("192.168.10.109".parse().unwrap()), 9000)), "seule l'interface d'écoute est annoncée");
+        assert_eq!(a_annoncer("[::]:8640"), Some((None, 8640)));
+        assert_eq!(a_annoncer("127.0.0.1:8640"), None);
+        assert_eq!(a_annoncer("[::1]:8640"), None);
+        assert_eq!(a_annoncer("localhost:8640"), None);
     }
 
     #[test]
