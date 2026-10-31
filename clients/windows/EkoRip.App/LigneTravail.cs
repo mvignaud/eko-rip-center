@@ -44,6 +44,9 @@ public sealed class LigneTravail : INotifyPropertyChanged
 
     public Visibility VisibilitePastille => Travail.Statut == StatutTravail.EnCours ? Visibility.Collapsed : Visibility.Visible;
 
+    /// <summary>Nom lu par le Narrateur pour la ligne (sinon « EkoRip.Client.LigneTravail »).</summary>
+    public override string ToString() => $"{Nom}, {Statut}";
+
     public void Mettre(Travail travail)
     {
         Travail = travail;

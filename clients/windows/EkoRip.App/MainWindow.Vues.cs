@@ -33,7 +33,7 @@ public sealed partial class MainWindow
     private UIElement LigneInfo(string titre, string valeur)
     {
         var g = new Grid { ColumnSpacing = 12 };
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         g.Children.Add(Texte(titre, "TexteSecondaire"));
         var v = new TextBlock { Text = valeur, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true };
