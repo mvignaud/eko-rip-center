@@ -116,7 +116,7 @@ platform.e-ko.rip, *.platform.e-ko.rip {
     tls {
         on_demand
     }
-    # Le tunnel (Upgrade: eko-tunnel/1) passe tel quel ; les flux ne sont pas mis en tampon.
+    # Le tunnel (WebSocket) passe tel quel ; les flux ne sont pas mis en tampon.
     reverse_proxy 127.0.0.1:8650 {
         flush_interval -1
     }
@@ -133,12 +133,49 @@ Commandes : `eko-rip-cloud admin <e-mail>` (super-administrateur), `eko-rip-clou
 `eko-rip-cloud supprimer <site>` (son tunnel est coupé dans la minute). Réglages dans
 `/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO`.
 
+## Installer la plate-forme (hébergement mutualisé o2switch)
+
+o2switch (cPanel, LiteSpeed) ne lance que des applications Node.js. Le lanceur
+`cloud/o2switch/app.js` (sans dépendance npm) démarre le relais sur un port local, relance
+le relais s'il s'arrête et lui passe les requêtes comme le WebSocket du tunnel.
+
+1. **Binaire.** Le serveur mutualisé a une glibc ancienne : construire en statique (musl).
+   ```bash
+   rustup target add x86_64-unknown-linux-musl   # une fois (+ apt install musl-tools)
+   cargo build --release --locked --target x86_64-unknown-linux-musl -p eko-rip-cloud --bin eko-rip-cloud
+   ```
+2. **Envoi.** Créer `~/eko-rip-cloud/` sur le compte et y copier `app.js` et le binaire
+   (`target/x86_64-unknown-linux-musl/release/eko-rip-cloud`, droits 755). Le SSH n'est
+   ouvert qu'aux adresses déclarées dans cPanel (« Autorisation SSH »).
+3. **Domaines.** cPanel → Domaines : ajouter `platform.e-ko.rip` avec pour racine
+   `~/eko-rip-cloud/public`. DNS chez OVH : `platform` en A vers l'adresse du serveur
+   o2switch. Puis cPanel → « Lets Encrypt SSL » pour `platform.e-ko.rip`.
+4. **Application.** cPanel → « Setup Node.js App » → Create : Node 22, mode Production,
+   racine `eko-rip-cloud`, URL `platform.e-ko.rip`, fichier de démarrage `app.js`. Variables :
+   `EKO_CLOUD_URL=https://platform.e-ko.rip`, `EKO_CLOUD_DATA=/home/<compte>/eko-cloud-data`
+   (hors de la racine web), et si besoin `EKO_CLOUD_PORT_INTERNE` (8650 par défaut, à changer
+   s'il est pris sur le serveur), `EKO_CLOUD_JETON_STATS`. Start.
+5. **Premier compte.** En SSH, dans `~/eko-rip-cloud` :
+   `EKO_CLOUD_DATA=~/eko-cloud-data ./eko-rip-cloud admin <e-mail>`.
+6. **Vérifier.** `curl https://platform.e-ko.rip/sante` répond `ok`, puis rattacher un serveur
+   RIP (le tunnel doit rester « connecté » plusieurs minutes).
+
+Une adresse par site (`<site>.platform.e-ko.rip`) demande un sous-domaine joker et son
+certificat joker, que Let's Encrypt ne délivre qu'avec un défi DNS. Tant que ce certificat
+n'est pas en place, les clients joignent les sites à `https://platform.e-ko.rip/s/<site>/`
+(l'interface web dans un navigateur, elle, demande l'adresse propre au site).
+
+Mise à jour : remplacer le binaire, puis « Restart » dans « Setup Node.js App ».
+
 ## Protocole du tunnel
 
-Le serveur RIP envoie `GET /tunnel` (HTTP/1.1) avec `Authorization: Bearer <site>.<clé>` et
-`Upgrade: eko-tunnel/1`. La plate-forme répond `101 Switching Protocols` ; dans la connexion
-ainsi obtenue, elle parle HTTP/2 **en client** et le serveur RIP sert sa propre API. Plusieurs
-requêtes à la fois, fichiers en flux, ping toutes les 25 s.
+Le serveur RIP envoie `GET /tunnel` (HTTP/1.1) avec `Authorization: Bearer <site>.<clé>`,
+`Upgrade: websocket` et `Sec-WebSocket-Protocol: eko-tunnel/1` (WebSocket ordinaire, RFC
+6455). La plate-forme répond `101 Switching Protocols` ; dans les messages binaires du
+WebSocket, elle parle HTTP/2 **en client** et le serveur RIP sert sa propre API. Plusieurs
+requêtes à la fois, fichiers en flux, ping toutes les 25 s. Le WebSocket ne sert qu'à passer
+les frontaux qui refusent tout autre `Upgrade` (LiteSpeed, Passenger). La plate-forme accepte
+encore l'ancienne forme, `Upgrade: eko-tunnel/1` seul, des serveurs RIP 0.30.
 
 Appairage : `POST /api/appairage` `{ "nom": "…" }` → `201 { demande, code, lien, expire_dans }` ;
 `GET /api/appairage/<demande>` → `{ "etat": "en_attente" }`, puis une seule fois

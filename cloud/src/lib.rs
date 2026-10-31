@@ -2,10 +2,12 @@
 //! lui-même une connexion sortante vers la plate-forme ; la plate-forme fait passer par
 //! elle les requêtes des postes et de l'app mobile qui sont hors de l'atelier.
 //!
-//! Le tunnel : une requête HTTP/1.1 `GET /tunnel` avec `Upgrade: eko-tunnel/1`, puis, dans
-//! la connexion retournée, de l'HTTP/2 où les rôles sont inversés : la plate-forme est le
-//! client, le serveur RIP sert sa propre API. Plusieurs requêtes à la fois, fichiers en
-//! flux, aucun format maison.
+//! Le tunnel : une requête HTTP/1.1 `GET /tunnel` avec `Upgrade: websocket` (sous-protocole
+//! `eko-tunnel/1`), puis, dans les messages binaires du WebSocket, de l'HTTP/2 où les rôles
+//! sont inversés : la plate-forme est le client, le serveur RIP sert sa propre API.
+//! Plusieurs requêtes à la fois, fichiers en flux, aucun format maison. Le WebSocket ne sert
+//! qu'à traverser les frontaux (LiteSpeed, Passenger…) qui refusent tout autre `Upgrade`.
+//! La plate-forme accepte encore `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
 
 pub mod appairage;
 pub mod base;
@@ -15,8 +17,9 @@ pub mod portail;
 pub mod rapports;
 pub mod relais;
 pub mod sites;
+pub mod ws;
 
-/// Valeur de l'en-tête `Upgrade` du tunnel.
+/// Sous-protocole WebSocket du tunnel (et ancienne valeur de l'en-tête `Upgrade`).
 pub const PROTOCOLE: &str = "eko-tunnel/1";
 /// Chemin du tunnel sur la plate-forme.
 pub const CHEMIN_TUNNEL: &str = "/tunnel";

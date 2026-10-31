@@ -18,7 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use axum::{Json, Router};
 use hyper::client::conn::http2::SendRequest;
-use hyper_util::rt::{TokioExecutor, TokioTimer};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -300,11 +300,35 @@ fn identifiants(entetes: &HeaderMap) -> Option<(String, String)> {
     Some((site.to_string(), cle.to_string()))
 }
 
-async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> Response {
-    let protocole_ok = requete.headers().get(header::UPGRADE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.eq_ignore_ascii_case(PROTOCOLE));
-    if !protocole_ok {
-        return refus(StatusCode::BAD_REQUEST, "protocole_inconnu");
+/// Forme de la poignée de main du tunnel.
+enum Poignee {
+    /// `Upgrade: websocket` : la clé `Sec-WebSocket-Accept` à rendre.
+    WebSocket(String),
+    /// `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
+    Directe,
+}
+
+fn poignee(entetes: &HeaderMap) -> Option<Poignee> {
+    let upgrade = entetes.get(header::UPGRADE)?.to_str().ok()?;
+    if upgrade.eq_ignore_ascii_case(PROTOCOLE) {
+        return Some(Poignee::Directe);
     }
+    if !upgrade.eq_ignore_ascii_case("websocket") {
+        return None;
+    }
+    let version_ok = entetes.get(header::SEC_WEBSOCKET_VERSION).is_some_and(|v| v.as_bytes() == b"13");
+    let protocole_ok = entetes
+        .get_all(header::SEC_WEBSOCKET_PROTOCOL)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .any(|p| p.trim().eq_ignore_ascii_case(PROTOCOLE));
+    let cle = entetes.get(header::SEC_WEBSOCKET_KEY)?;
+    (version_ok && protocole_ok).then(|| Poignee::WebSocket(crate::ws::acceptation(cle.as_bytes())))
+}
+
+async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> Response {
+    let Some(forme) = poignee(requete.headers()) else { return refus(StatusCode::BAD_REQUEST, "protocole_inconnu") };
     let Some((id, cle)) = identifiants(requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "cle_absente") };
     let donnees = relais.config.donnees.clone();
     let site = match tokio::task::spawn_blocking({
@@ -322,36 +346,58 @@ async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> R
     }
     let Some(montee) = requete.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else { return refus(StatusCode::BAD_REQUEST, "protocole_inconnu") };
     let r = relais.clone();
+    let websocket = matches!(forme, Poignee::WebSocket(_));
     tokio::spawn(async move {
         let Ok(flux) = montee.await else { return };
-        let mut b = hyper::client::conn::http2::Builder::new(TokioExecutor::new());
-        b.timer(TokioTimer::new()).keep_alive_interval(Duration::from_secs(25)).keep_alive_timeout(Duration::from_secs(20)).keep_alive_while_idle(true).adaptive_window(true);
-        let Ok((envoi, connexion)) = b.handshake::<_, Body>(flux).await else { return };
-        let generation = r.generation.fetch_add(1, Ordering::Relaxed);
-        let (fin_tx, fin_rx) = tokio::sync::oneshot::channel::<()>();
-        let tache = tokio::spawn(async move {
-            let _ = connexion.await;
-            let _ = fin_tx.send(());
-        });
-        // Une nouvelle connexion du même site remplace l'ancienne (reconnexion après une
-        // coupure que l'ancienne n'a pas encore vue).
-        if let Some(ancien) = r.tunnels.lock().unwrap().insert(id.clone(), Tunnel { envoi, generation, tache: tache.abort_handle() }) {
-            ancien.tache.abort();
-        }
-        eprintln!("tunnel ouvert : site {id}");
-        let _ = tokio::task::spawn_blocking({
-            let (donnees, id) = (donnees.clone(), id.clone());
-            move || sites::noter_connexion(&donnees, &id)
-        })
-        .await;
-        let _ = fin_rx.await;
-        let mut t = r.tunnels.lock().unwrap();
-        if t.get(&id).is_some_and(|x| x.generation == generation) {
-            t.remove(&id);
-            eprintln!("tunnel fermé : site {id}");
+        if websocket {
+            let flux = crate::ws::FluxWs::nouveau(TokioIo::new(flux), tokio_tungstenite::tungstenite::protocol::Role::Server).await;
+            brancher(r, id, donnees, TokioIo::new(flux)).await;
+        } else {
+            brancher(r, id, donnees, flux).await;
         }
     });
-    Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "upgrade").header(header::UPGRADE, PROTOCOLE).body(Body::empty()).expect("réponse 101")
+    let reponse = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "upgrade");
+    match forme {
+        Poignee::Directe => reponse.header(header::UPGRADE, PROTOCOLE),
+        Poignee::WebSocket(acceptation) => {
+            reponse.header(header::UPGRADE, "websocket").header(header::SEC_WEBSOCKET_ACCEPT, acceptation).header(header::SEC_WEBSOCKET_PROTOCOL, PROTOCOLE)
+        }
+    }
+    .body(Body::empty())
+    .expect("réponse 101")
+}
+
+/// Ouvre l'HTTP/2 dans le tunnel et le garde dans la table jusqu'à sa fermeture.
+async fn brancher<T>(r: Partage, id: String, donnees: PathBuf, flux: T)
+where
+    T: hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static,
+{
+    let mut b = hyper::client::conn::http2::Builder::new(TokioExecutor::new());
+    b.timer(TokioTimer::new()).keep_alive_interval(Duration::from_secs(25)).keep_alive_timeout(Duration::from_secs(20)).keep_alive_while_idle(true).adaptive_window(true);
+    let Ok((envoi, connexion)) = b.handshake::<_, Body>(flux).await else { return };
+    let generation = r.generation.fetch_add(1, Ordering::Relaxed);
+    let (fin_tx, fin_rx) = tokio::sync::oneshot::channel::<()>();
+    let tache = tokio::spawn(async move {
+        let _ = connexion.await;
+        let _ = fin_tx.send(());
+    });
+    // Une nouvelle connexion du même site remplace l'ancienne (reconnexion après une
+    // coupure que l'ancienne n'a pas encore vue).
+    if let Some(ancien) = r.tunnels.lock().unwrap().insert(id.clone(), Tunnel { envoi, generation, tache: tache.abort_handle() }) {
+        ancien.tache.abort();
+    }
+    eprintln!("tunnel ouvert : site {id}");
+    let _ = tokio::task::spawn_blocking({
+        let (donnees, id) = (donnees.clone(), id.clone());
+        move || sites::noter_connexion(&donnees, &id)
+    })
+    .await;
+    let _ = fin_rx.await;
+    let mut t = r.tunnels.lock().unwrap();
+    if t.get(&id).is_some_and(|x| x.generation == generation) {
+        t.remove(&id);
+        eprintln!("tunnel fermé : site {id}");
+    }
 }
 
 #[derive(serde::Deserialize)]

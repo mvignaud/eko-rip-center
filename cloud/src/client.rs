@@ -1,5 +1,6 @@
 //! Côté serveur RIP : ouvrir le tunnel vers la plate-forme et y servir son API.
 
+use crate::ws::{self, FluxWs};
 use crate::{CHEMIN_TUNNEL, PROTOCOLE};
 use axum::Router;
 use axum::http::{Request, StatusCode, Uri, header};
@@ -79,11 +80,15 @@ where
     tokio::spawn(async move {
         let _ = connexion.with_upgrades().await;
     });
+    let cle_ws = ws::cle_websocket();
     let requete = Request::get(CHEMIN_TUNNEL)
         .header(header::HOST, hote)
         .header(header::AUTHORIZATION, autorisation)
         .header(header::CONNECTION, "upgrade")
-        .header(header::UPGRADE, PROTOCOLE)
+        .header(header::UPGRADE, "websocket")
+        .header(header::SEC_WEBSOCKET_VERSION, "13")
+        .header(header::SEC_WEBSOCKET_KEY, &cle_ws)
+        .header(header::SEC_WEBSOCKET_PROTOCOL, PROTOCOLE)
         .header(header::USER_AGENT, agent)
         .body(Empty::<Bytes>::new())
         .map_err(reseau)?;
@@ -94,7 +99,12 @@ where
         let code = serde_json::from_slice::<serde_json::Value>(&corps).ok().and_then(|v| v["code"].as_str().map(str::to_string)).unwrap_or_else(|| format!("http_{statut}"));
         return Err(Erreur::Refus { statut, code });
     }
+    let attendu = ws::acceptation(cle_ws.as_bytes());
+    if reponse.headers().get(header::SEC_WEBSOCKET_ACCEPT).and_then(|v| v.to_str().ok()) != Some(attendu.as_str()) {
+        return Err(reseau("poignée de main WebSocket invalide"));
+    }
     let flux = hyper::upgrade::on(reponse).await.map_err(reseau)?;
+    let flux = TokioIo::new(FluxWs::nouveau(TokioIo::new(flux), tokio_tungstenite::tungstenite::protocol::Role::Client).await);
     connecte();
     hyper::server::conn::http2::Builder::new(TokioExecutor::new())
         .timer(TokioTimer::new())

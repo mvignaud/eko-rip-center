@@ -87,6 +87,26 @@ async fn tunnel_appairage_et_isolement() {
     let r = client::servir(&base, "inconnu", &cle, "essai", rip(), || {}).await;
     assert_eq!(r, Err(client::Erreur::Refus { statut: 401, code: "cle_invalide".into() }));
 
+    // Poignées de main brutes : l'ancien `Upgrade: eko-tunnel/1` (RIP 0.30) est encore
+    // accepté ; un WebSocket sans le sous-protocole du tunnel ne l'est pas.
+    let brut = |entetes: String| {
+        let b = base.clone();
+        async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut tcp = tokio::net::TcpStream::connect(b.trim_start_matches("http://")).await.unwrap();
+            tcp.write_all(format!("GET /tunnel HTTP/1.1\r\nHost: platform.test\r\nConnection: upgrade\r\n{entetes}\r\n").as_bytes()).await.unwrap();
+            let mut tampon = vec![0u8; 512];
+            let n = tcp.read(&mut tampon).await.unwrap();
+            String::from_utf8_lossy(&tampon[..n]).to_string()
+        }
+    };
+    let ancien = brut(format!("Authorization: Bearer {site}.{cle}\r\nUpgrade: eko-tunnel/1\r\n")).await;
+    assert!(ancien.starts_with("HTTP/1.1 101"), "{ancien}");
+    assert!(ancien.to_ascii_lowercase().contains("upgrade: eko-tunnel/1"), "{ancien}");
+    let sans_protocole = brut(format!("Authorization: Bearer {site}.{cle}\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n")).await;
+    assert!(sans_protocole.starts_with("HTTP/1.1 400"), "{sans_protocole}");
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
     // Bonne clé : le tunnel tient.
     let (tx, rx) = tokio::sync::oneshot::channel();
     let (b, s, c) = (base.clone(), site.clone(), cle.clone());

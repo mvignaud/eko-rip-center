@@ -24,6 +24,14 @@ parité ; d'ici là, 0.Y.Z.
   *Automatic LAN discovery of the server (DNS-SD); manual address entry kept as a fallback.*
 
 ### Modifié
+- **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket
+  ordinaire (sous-protocole `eko-tunnel/1`) qui porte la même connexion HTTP/2 qu'avant ; il
+  traverse ainsi les frontaux des hébergements mutualisés (LiteSpeed, Passenger). La
+  plate-forme accepte encore l'ancien tunnel des serveurs 0.30. Nouveau lanceur Node.js
+  (`cloud/o2switch/app.js`) pour héberger la plate-forme sur o2switch. Voir
+  `docs/fr/cloud.md`.
+  *Cloud tunnel now runs over a standard WebSocket (works behind shared hosting front ends);
+  old tunnels still accepted; Node.js launcher for o2switch.*
 - **Cloud E-KO RIP : une adresse par site.** Chaque serveur rattaché est servi sur sa propre
   origine, `https://<site>.platform.e-ko.rip` : elle se saisit telle quelle dans les clients
   Mac, Linux, Windows et mobile, et l'interface d'administration fonctionne dans un navigateur.

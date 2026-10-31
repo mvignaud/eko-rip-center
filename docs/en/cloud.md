@@ -21,5 +21,11 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   workshop (no `Authorization`, no portal cookies); each site has its own origin, cookie
   `Domain` attributes are stripped and portal cookies use the `__Host-` prefix. The legacy
   `/s/<site>/` form still works for API calls, with path-scoped cookies and a `sandbox` CSP.
+- **Tunnel**: a plain WebSocket (`Sec-WebSocket-Protocol: eko-tunnel/1`) carrying HTTP/2, so it
+  goes through shared-hosting front ends (LiteSpeed, Passenger); the bare `Upgrade: eko-tunnel/1`
+  of RIP 0.30 servers is still accepted.
+- **Shared hosting (o2switch)**: `cloud/o2switch/app.js` is a dependency-free Node.js launcher
+  for cPanel's "Setup Node.js App"; it starts the static (musl) relay binary and forwards HTTP
+  and WebSocket traffic to it.
 
-Full details (installation, Caddy, protocol) in the French page: [docs/fr/cloud.md](../fr/cloud.md).
+Full details (installation on a VPS or on o2switch, Caddy, protocol) in the French page: [docs/fr/cloud.md](../fr/cloud.md).
