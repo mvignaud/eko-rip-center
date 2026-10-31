@@ -138,7 +138,12 @@ public static class Regles
     /// <summary>Nom proposé pour l'épreuve TIFF : <c>nom-p1-epreuve.tif</c>.</summary>
     public static string NomEpreuve(string nomTravail, int page)
     {
-        var sansExtension = Path.GetFileNameWithoutExtension(nomTravail.Replace('\\', '/'));
+        // Découpage à la main : sous Windows, Path.GetFileNameWithoutExtension prend « a: » pour
+        // un lecteur et renverrait « b » pour « a:b.pdf ».
+        var nom = nomTravail.Replace('\\', '/');
+        nom = nom[(nom.LastIndexOf('/') + 1)..];
+        var point = nom.LastIndexOf('.');
+        var sansExtension = point > 0 ? nom[..point] : nom;
         var base_ = new string(sansExtension.Select(c => c is '/' or ':' or '\\' or '*' or '?' or '"' or '<' or '>' or '|' ? '_' : c).ToArray());
         if (base_.Length == 0) base_ = "epreuve";
         return $"{base_}-p{page}-epreuve.tif";
