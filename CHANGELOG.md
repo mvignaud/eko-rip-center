@@ -44,6 +44,13 @@ parité ; d'ici là, 0.Y.Z.
   à l'envoi d'un fichier.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
+### Corrigé
+- Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
+  de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
+  reused when the host or port changes.*
+- La balise `{repetition}` met aussi en file une découpe par impression répétée, plus une
+  seule. *Repeated prints each get their cut.*
+
 ## [0.29.0] — 2026-10-30
 
 ### Ajouté

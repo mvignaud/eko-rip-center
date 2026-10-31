@@ -1829,11 +1829,14 @@ async fn recevoir_renvoi(State(etat): State<Partage>, Chemin(id): Chemin<String>
 /// Remplace le catalogue ; une machine retirée garde ses sorties finies dans l'historique.
 async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json<Vec<machines::Machine>>) -> Response {
     let connues = etat.machines.read().unwrap().clone();
-    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé.
+    // Jeton de renvoi masqué à l'écran : celui déjà enregistré pour la machine est gardé,
+    // vers le même RIP seulement ; un autre hôte ou port demande de ressaisir le jeton (le
+    // masque, refusé par `verifier`, ne part jamais vers un nouvel hôte).
     for m in &mut liste {
-        if let machines::Connexion::RipEko { jeton, .. } = &mut m.connexion
+        if let machines::Connexion::RipEko { hote, port, jeton, .. } = &mut m.connexion
             && jeton == machines::JETON_MASQUE
-            && let Some(machines::Connexion::RipEko { jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && let Some(machines::Connexion::RipEko { hote: h, port: p, jeton: garde, .. }) = connues.iter().find(|c| c.id == m.id).map(|c| &c.connexion)
+            && (h, p) == (hote, port)
         {
             *jeton = garde.clone();
         }
@@ -2946,11 +2949,12 @@ fn place_estimee(surface_m2: f64, dpi: u32) -> u64 {
 }
 
 /// Travaux de l'ERP faits (roadmap 0.8) : rendus, au moins une sortie terminée, aucune à
-/// passer ni en échec (à relancer par l'opérateur). Les estimations ont leur propre purge.
+/// passer, ni posée sur une planche pas encore imprimée, ni en échec (à relancer par
+/// l'opérateur). Les estimations ont leur propre purge.
 fn erp_faits(travaux: &[Travail], sorties: &[file::Sortie]) -> Vec<Uuid> {
     let fait = |t: &Travail| {
         let siennes = || sorties.iter().filter(|s| s.travail == t.id);
-        siennes().any(|s| s.etat == file::Etat::Terminee) && !siennes().any(|s| s.active() || (s.etat == file::Etat::Echec && !s.archivee))
+        siennes().any(|s| s.etat == file::Etat::Terminee) && !siennes().any(|s| s.active() || s.etat == file::Etat::Imbriquee || (s.etat == file::Etat::Echec && !s.archivee))
     };
     travaux.iter().filter(|t| t.erp.is_some() && !t.estimation && matches!(t.statut, Statut::Termine) && fait(t)).map(|t| t.id).collect()
 }
@@ -2967,9 +2971,11 @@ fn niveau_disque(libre: u64, seuil_alerte: u64, seuil_critique: u64) -> &'static
     }
 }
 
-/// Travaux inactifs, du plus vieux au plus récent : ordre de purge sous le seuil.
+/// Travaux inactifs, du plus vieux au plus récent : ordre de purge sous le seuil. Un dépôt
+/// mis en erreur faute de place (roadmap 0.8) n'en est pas : son dossier garde le seul
+/// exemplaire du fichier, à relancer ; seule la conservation en jours l'efface.
 fn plus_vieux_inactifs(travaux: &[Travail]) -> Vec<Uuid> {
-    let mut v: Vec<&Travail> = travaux.iter().filter(|t| !actif(&t.statut)).collect();
+    let mut v: Vec<&Travail> = travaux.iter().filter(|t| !actif(&t.statut) && t.code_erreur.as_deref() != Some("espace_insuffisant")).collect();
     v.sort_by_key(|t| t.cree_le);
     v.into_iter().map(|t| t.id).collect()
 }
@@ -3481,8 +3487,10 @@ fn mettre_en_file_auto(etat: &Etat, t: &Travail, seule: Option<usize>) {
                 ajouter(m, machines::Operation::Impression, a.suspendre);
             }
         }
+        // Chaque impression répétée a sa découpe (ses repères), comme la première.
+        let fois = if imprime && imprimante.is_some() { t.demande.repetition.max(1) } else { 1 };
         if let (true, Some(m)) = (a.decouper && a_couper(t, p), &decoupeuse) {
-            for mut s in sorties_de_coupe(t, i + 1, p, &m.id, m) {
+            for mut s in (0..fois).flat_map(|_| sorties_de_coupe(t, i + 1, p, &m.id, m)) {
                 if a.suspendre || imprime {
                     s.etat = file::Etat::Suspendue;
                 }
@@ -5469,6 +5477,10 @@ mod tests {
             assert!(!v.to_string().contains(&jeton));
             assert_eq!(appel(&b, "POST", "/api/machines", None, Some(v)).await.status(), StatusCode::OK);
             assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "jeton gardé");
+            let mut ailleurs = corps(appel(&b, "GET", "/api/machines", None, None).await).await;
+            ailleurs[1]["connexion"]["hote"] = "192.0.2.7".into();
+            assert_eq!(appel(&b, "POST", "/api/machines", None, Some(ailleurs)).await.status(), StatusCode::BAD_REQUEST, "autre hôte : jeton à ressaisir");
+            assert_eq!(b.machines.read().unwrap()[1].connexion, vers(&id, &jeton), "rien d'enregistré");
             std::fs::remove_dir_all(&b.config.donnees).unwrap();
         }
 
@@ -5756,6 +5768,14 @@ mod tests {
             mettre_en_file_auto(&e, &t, None);
             let sorties = e.file.lock().unwrap().sorties.clone();
             assert_eq!(sorties.iter().map(|s| s.machine.as_str()).collect::<Vec<_>>(), ["epson"; 3]);
+            // Avec une découpe : une par impression répétée, chacune avec ses repères.
+            e.file.lock().unwrap().sorties.clear();
+            let t = serde_json::from_value::<Travail>(serde_json::json!({ "id": id, "nom": "Plan", "statut": "termine", "erreur": null, "cree_le": 0,
+                "auto": { "imprimer": true, "decouper": true }, "repetition": 3, "imprimante": "epson", "decoupeuse": "kona",
+                "pages": [{ "plaques": ["Cyan"], "traces_decoupe": 1, "largeur_mm": 100.0, "hauteur_mm": 100.0 }] })).unwrap();
+            mettre_en_file_auto(&e, &t, None);
+            let ops = e.file.lock().unwrap().sorties.iter().map(|s| s.operation()).collect::<Vec<_>>();
+            assert_eq!((ops.iter().filter(|o| **o == machines::Operation::Impression).count(), ops.iter().filter(|o| **o == machines::Operation::Decoupe).count()), (3, 3));
             std::fs::remove_dir_all(d).unwrap();
         }
 
@@ -5864,8 +5884,9 @@ mod tests {
             assert_eq!(place_estimee(1.0, 600), 1_000_000_000);
             assert_eq!(place_estimee(1.0, 300), 250_000_000, "au carré de la résolution");
             let t = |cree_le: u64, statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": Uuid::new_v4(), "nom": "x", "statut": statut, "erreur": null, "cree_le": cree_le, "pages": [] })).unwrap();
-            let v = [t(30, "termine"), t(10, "en_cours"), t(20, "echec"), t(40, "termine")];
-            assert_eq!(plus_vieux_inactifs(&v), [v[2].id, v[0].id, v[3].id], "du plus vieux au plus récent, jamais un actif");
+            let mut v = [t(30, "termine"), t(10, "en_cours"), t(20, "echec"), t(40, "termine"), t(5, "echec")];
+            v[4].code_erreur = Some("espace_insuffisant".into());
+            assert_eq!(plus_vieux_inactifs(&v), [v[2].id, v[0].id, v[3].id], "du plus vieux au plus récent, jamais un actif ni un dépôt en attente de place");
             // Seuil impossible à tenir : l'envoi est refusé avant tout rendu.
             let e = etat("seuil");
             let mut config = e.config.clone();
@@ -5915,7 +5936,7 @@ mod tests {
         #[test]
         fn travaux_erp_faits() {
             let t = |erp: bool, statut: &str| serde_json::from_value::<Travail>(serde_json::json!({ "id": Uuid::new_v4(), "nom": "x", "statut": statut, "erreur": null, "cree_le": 0, "pages": [], "erp": erp.then(|| serde_json::json!({ "envoi": Uuid::new_v4(), "ref_erp": "PROD-2026-00123" })) })).unwrap();
-            let v = [t(true, "termine"), t(true, "termine"), t(true, "termine"), t(false, "termine"), t(true, "termine"), t(true, "echec")];
+            let v = [t(true, "termine"), t(true, "termine"), t(true, "termine"), t(false, "termine"), t(true, "termine"), t(true, "echec"), t(true, "termine")];
             let s = |i: usize, op, etat| file::Sortie { etat, ..file::Sortie::nouvelle("epson", op, v[i].id, "x", 1, 0) };
             use machines::Operation::{Decoupe, Impression};
             let sorties = [
@@ -5927,8 +5948,10 @@ mod tests {
                 s(2, Impression, file::Etat::Echec),
                 s(3, Impression, file::Etat::Terminee),
                 s(5, Impression, file::Etat::Terminee),
+                s(6, Impression, file::Etat::Terminee),
+                s(6, Impression, file::Etat::Imbriquee),
             ];
-            assert_eq!(erp_faits(&v, &sorties), [v[0].id], "découpe à passer, page en échec, hors ERP, jamais imprimé, rendu en échec : gardés");
+            assert_eq!(erp_faits(&v, &sorties), [v[0].id], "découpe à passer, page en échec, hors ERP, jamais imprimé, rendu en échec, page sur une planche : gardés");
         }
 
         /// Page d'un travail en cours de rendu : 409 pas_pret ; travail inconnu : 404 (roadmap 0.5).
