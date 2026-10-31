@@ -54,7 +54,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
 - **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
-  les mentions marquées « À COMPLÉTER » sont à remplir : SIREN, siège, capital, contacts…).
+  RCS Auch 939 018 024, contact contact@eko.rip, pas de téléphone).
 - Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
   session ; 5 échecs de mot de passe bloquent le compte 5 minutes ; limites par adresse
   (inscriptions, connexions) ; cookie de session `HttpOnly`, `SameSite=Lax`, jamais transmis
