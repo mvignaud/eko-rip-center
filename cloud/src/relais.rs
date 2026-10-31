@@ -103,13 +103,15 @@ impl Relais {
         self.appairages.lock().unwrap().code_en_attente(code)
     }
 
-    /// Retire un site : sites.json, droits, et tunnel coupé aussitôt.
-    pub fn retirer_site(&self, site: &str) {
-        let _ = sites::supprimer(&self.config.donnees, site);
+    /// Retire un site : sites.json, droits, et tunnel coupé aussitôt. Si sites.json ne peut
+    /// pas être écrit, rien n'est retiré (la clé du site resterait valable) : erreur.
+    pub fn retirer_site(&self, site: &str) -> Result<(), String> {
+        sites::supprimer(&self.config.donnees, site)?;
         let _ = crate::base::oublier_site(&self.base(), site);
         if let Some(t) = self.tunnels.lock().unwrap().remove(site) {
             t.tache.abort();
         }
+        Ok(())
     }
 }
 

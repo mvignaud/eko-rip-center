@@ -33,7 +33,7 @@ pub struct Appairages {
 /// `kxrt 4821`, `KXRT-4821` → `KXRT4821` ; None si ce n'est pas un code.
 pub fn normaliser(code: &str) -> Option<String> {
     let c: String = code.chars().filter(|c| !matches!(c, '-' | ' ')).collect::<String>().to_ascii_uppercase();
-    (c.len() == 8 && c[..4].chars().all(|x| LETTRES.contains(x)) && c[4..].chars().all(|x| x.is_ascii_digit())).then_some(c)
+    (c.len() == 8 && c.is_ascii() && c[..4].chars().all(|x| LETTRES.contains(x)) && c[4..].chars().all(|x| x.is_ascii_digit())).then_some(c)
 }
 
 /// Forme affichée : `KXRT-4821`.
@@ -148,6 +148,7 @@ mod tests {
         assert!(normaliser("KXRO-4821").is_none());
         assert!(normaliser("KXRT-482").is_none());
         assert!(normaliser("../../etc").is_none());
+        assert!(normaliser("ABDé123").is_none(), "pas de panique sur un caractère multi-octets");
     }
 
     #[test]

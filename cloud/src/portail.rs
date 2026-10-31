@@ -489,7 +489,10 @@ pub async fn retirer(State(r): State<Partage>, h: HeaderMap, Chemin(site): Chemi
     if !proprietaire && !s.compte.super_admin {
         return (StatusCode::FORBIDDEN, page("Refusé", Some(&s), r#"<div class="carte"><p class="erreur">Seul le propriétaire peut retirer ce site.</p></div>"#)).into_response();
     }
-    r.retirer_site(&site);
+    if let Err(e) = r.retirer_site(&site) {
+        eprintln!("retrait du site {site} : {e}");
+        return erreur_page(&r, Some(&s), "Service momentanément indisponible.");
+    }
     Redirect::to(if s.compte.super_admin && !proprietaire { "/admin" } else { "/sites?ok=retire" }).into_response()
 }
 
@@ -539,7 +542,10 @@ pub async fn supprimer_compte(State(r): State<Partage>, h: HeaderMap, Form(f): C
     }
     let possedes: Vec<String> = base::sites_du_compte(&r.base(), s.compte.id).unwrap_or_default().into_iter().filter(|(_, role)| role == "proprietaire").map(|(id, _)| id).collect();
     for site in possedes {
-        r.retirer_site(&site);
+        if let Err(e) = r.retirer_site(&site) {
+            eprintln!("retrait du site {site} : {e}");
+            return erreur_page(&r, Some(&s), "Service momentanément indisponible.");
+        }
     }
     let _ = base::supprimer_compte(&r.base(), s.compte.id);
     let mut rep = page("Compte supprimé", None, r#"<div class="carte"><h1>Compte supprimé</h1><p>Votre compte et vos sites ont été effacés.</p></div>"#).into_response();
