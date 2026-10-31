@@ -757,6 +757,8 @@ struct DemandeIterationG7 {
     nom: String,
     engraissement: Option<f64>,
     aplats: Option<g7::Aplats>,
+    /// Numéro de l'itération dont les courbes ont servi à imprimer la mire.
+    avec: Option<u32>,
     mesures: Vec<g7::Mesure>,
 }
 
@@ -764,7 +766,7 @@ struct DemandeIterationG7 {
 async fn ajouter_iteration_g7(State(etat): State<Partage>, Json(d): Json<DemandeIterationG7>) -> Response {
     let _verrou = etat.reglages.lock().await;
     let mut liste = g7::lire(&etat.config.donnees);
-    let e = match g7::ajouter(&mut liste, d.nom.trim(), d.engraissement, d.aplats, d.mesures, maintenant()) {
+    let e = match g7::ajouter(&mut liste, d.nom.trim(), d.engraissement, d.aplats, d.avec, d.mesures, maintenant()) {
         Ok(e) => e,
         Err(code) => return refus(StatusCode::BAD_REQUEST, code, None),
     };

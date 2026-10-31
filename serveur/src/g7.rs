@@ -89,7 +89,13 @@ pub struct Iteration {
     pub le: u64,
     pub mesures: Vec<Mesure>,
     pub ecarts: Ecarts,
+    /// Courbes à envoyer pour la prochaine mire : la correction mesurée, composée avec les
+    /// courbes d'impression.
     pub courbes: Courbes,
+    /// Courbes avec lesquelles cette mire a été imprimée (copiées de l'itération dite) ;
+    /// absentes : imprimée sans courbe.
+    #[serde(default)]
+    pub imprimee_avec: Option<Courbes>,
 }
 
 /// Un étalonnage nommé (par exemple une imprimante et un support), avec ses itérations.
@@ -270,35 +276,54 @@ pub fn nom_valide(nom: &str) -> bool {
     !nom.trim().is_empty() && nom.chars().count() <= 80 && !nom.chars().any(char::is_control)
 }
 
-/// Ajoute une itération à l'étalonnage `nom` (créé au besoin) ; les plus anciennes partent
-/// au-delà de [`ITERATIONS_MAX`], jamais la meilleure.
-pub fn ajouter(liste: &mut Vec<Etalonnage>, nom: &str, engraissement: Option<f64>, aplats: Option<Aplats>, mesures: Vec<Mesure>, le: u64) -> Result<Etalonnage, &'static str> {
+/// La correction `c` (valeurs voulues → valeurs de la mire) appliquée à travers les courbes
+/// d'impression `p` (valeurs de la mire → valeurs envoyées).
+fn composer(c: &Courbes, p: &Courbes) -> Courbes {
+    let a_travers = |c: &[(f64, f64)], p: &[(f64, f64)]| c.iter().map(|&(t, v)| (t, ((interpoler(p, v) * 10.0).round() / 10.0).clamp(0.0, 100.0))).collect();
+    Courbes { c: a_travers(&c.c, &p.c), m: a_travers(&c.m, &p.m), y: a_travers(&c.y, &p.y), k: a_travers(&c.k, &p.k) }
+}
+
+/// Écarts et courbes d'une itération, avec la cible et les aplats de l'étalonnage.
+fn evaluer(mesures: &[Mesure], imprimee_avec: Option<&Courbes>, engraissement: f64, aplats: Option<&Aplats>) -> Result<(Ecarts, Courbes), &'static str> {
+    let (ecarts, correction) = calculer(mesures, engraissement, aplats)?;
+    Ok((ecarts, imprimee_avec.map_or(correction.clone(), |p| composer(&correction, p))))
+}
+
+/// Ajoute une itération à l'étalonnage `nom` (créé au besoin). `avec` : numéro de
+/// l'itération dont les courbes ont servi à imprimer la mire. Une cible changée
+/// (`engraissement`, `aplats`) recalcule toute l'histoire, pour que la meilleure se juge sur
+/// la même cible. Les plus anciennes partent au-delà de [`ITERATIONS_MAX`], jamais la
+/// meilleure.
+pub fn ajouter(liste: &mut Vec<Etalonnage>, nom: &str, engraissement: Option<f64>, aplats: Option<Aplats>, avec: Option<u32>, mesures: Vec<Mesure>, le: u64) -> Result<Etalonnage, &'static str> {
     if !nom_valide(nom) {
         return Err("etalonnage_invalide");
     }
-    let i = match liste.iter().position(|e| e.nom == nom) {
-        Some(i) => i,
-        None => {
-            liste.push(Etalonnage { nom: nom.into(), engraissement: ENGRAISSEMENT_DEFAUT, aplats: None, iterations: vec![] });
-            liste.len() - 1
-        }
+    let mut e = liste.iter().find(|e| e.nom == nom).cloned().unwrap_or(Etalonnage { nom: nom.into(), engraissement: ENGRAISSEMENT_DEFAUT, aplats: None, iterations: vec![] });
+    let imprimee_avec = match avec {
+        Some(n) => Some(e.iterations.iter().find(|x| x.numero == n).ok_or("iteration_inconnue")?.courbes.clone()),
+        None => None,
     };
-    let e = &mut liste[i];
-    if let Some(g) = engraissement {
-        e.engraissement = g;
+    let cible_changee = engraissement.is_some_and(|g| g != e.engraissement) || aplats.is_some_and(|a| Some(a) != e.aplats);
+    e.engraissement = engraissement.unwrap_or(e.engraissement);
+    e.aplats = aplats.or(e.aplats);
+    let (ecarts, courbes) = evaluer(&mesures, imprimee_avec.as_ref(), e.engraissement, e.aplats.as_ref())?;
+    if cible_changee {
+        for x in &mut e.iterations {
+            (x.ecarts, x.courbes) = evaluer(&x.mesures, x.imprimee_avec.as_ref(), e.engraissement, e.aplats.as_ref())?;
+        }
     }
-    if aplats.is_some() {
-        e.aplats = aplats;
-    }
-    let (ecarts, courbes) = calculer(&mesures, e.engraissement, e.aplats.as_ref())?;
     let numero = e.iterations.last().map_or(1, |x| x.numero + 1);
-    e.iterations.push(Iteration { numero, le, mesures, ecarts, courbes });
+    e.iterations.push(Iteration { numero, le, mesures, ecarts, courbes, imprimee_avec });
     while e.iterations.len() > ITERATIONS_MAX {
         let garder = e.meilleure().map(|m| m.numero);
         let Some(j) = e.iterations.iter().position(|x| Some(x.numero) != garder) else { break };
         e.iterations.remove(j);
     }
-    Ok(e.clone())
+    match liste.iter_mut().find(|x| x.nom == nom) {
+        Some(place) => *place = e.clone(),
+        None => liste.push(e.clone()),
+    }
+    Ok(e)
 }
 
 #[cfg(test)]
@@ -378,22 +403,44 @@ mod tests {
     fn iterations_convergent_et_la_meilleure_reste() {
         let mut liste = vec![];
         let (g, derive) = (0.32, 5.0);
-        let e1 = ajouter(&mut liste, "Epson / bâche", None, None, imprimer(None, g, derive), 1).unwrap();
+        let nom = "Epson / bâche";
+        let e1 = ajouter(&mut liste, nom, None, None, None, imprimer(None, g, derive), 1).unwrap();
         let premiere = e1.iterations[0].ecarts;
-        let e2 = ajouter(&mut liste, "Epson / bâche", None, None, imprimer(Some(&e1.iterations[0].courbes), g, derive), 2).unwrap();
+        // Mire suivante imprimée avec les courbes de la 1 : la correction se compose avec elles.
+        let e2 = ajouter(&mut liste, nom, None, None, Some(1), imprimer(Some(&e1.iterations[0].courbes), g, derive), 2).unwrap();
         let deuxieme = e2.iterations[1].ecarts;
         assert!(deuxieme.l < premiere.l / 3.0 && deuxieme.gris < premiere.gris, "{premiere:?} → {deuxieme:?}");
         assert_eq!(e2.meilleure().map(|i| i.numero), Some(2));
+        // Les courbes de la 2 restent bonnes une fois imprimées (elles ne repartent pas de zéro).
+        let e3 = ajouter(&mut liste, nom, None, None, Some(2), imprimer(Some(&e2.iterations[1].courbes), g, derive), 3).unwrap();
+        let troisieme = e3.iterations[2].ecarts;
+        assert!(troisieme.l < SEUIL_L && troisieme.gris <= deuxieme.gris + 0.1, "{deuxieme:?} → {troisieme:?}");
         // Une itération ratée (imprimée sans courbe) ne fait pas oublier la meilleure.
-        let e3 = ajouter(&mut liste, "Epson / bâche", None, None, imprimer(None, g, derive), 3).unwrap();
-        assert_eq!((e3.iterations.len(), e3.meilleure().map(|i| i.numero)), (3, Some(2)));
+        let e4 = ajouter(&mut liste, nom, None, None, None, imprimer(None, g, derive), 4).unwrap();
+        assert_ne!(e4.meilleure().map(|i| i.numero), Some(4));
         assert_eq!(liste.len(), 1);
+        assert_eq!(ajouter(&mut liste, nom, None, None, Some(99), imprimer(None, g, derive), 5).unwrap_err(), "iteration_inconnue");
         // Au-delà du maximum, les plus anciennes partent, jamais la meilleure.
-        for n in 4..(ITERATIONS_MAX as u64 + 6) {
-            ajouter(&mut liste, "Epson / bâche", None, None, imprimer(None, g, derive), n).unwrap();
+        let meilleure = liste[0].meilleure().map(|i| i.numero);
+        for n in 5..(ITERATIONS_MAX as u64 + 6) {
+            ajouter(&mut liste, nom, None, None, None, imprimer(None, g, derive), n).unwrap();
         }
         assert_eq!(liste[0].iterations.len(), ITERATIONS_MAX);
-        assert_eq!(liste[0].meilleure().map(|i| i.numero), Some(2));
-        assert_eq!(ajouter(&mut liste, " ", None, None, vec![], 0).unwrap_err(), "etalonnage_invalide");
+        assert_eq!(liste[0].meilleure().map(|i| i.numero), meilleure);
+        assert_eq!(ajouter(&mut liste, " ", None, None, None, vec![], 0).unwrap_err(), "etalonnage_invalide");
+    }
+
+    #[test]
+    fn cible_changee_recalcule_l_histoire() {
+        let mut liste = vec![];
+        let mesures = imprimer(None, ENGRAISSEMENT_DEFAUT, 0.0);
+        let e1 = ajouter(&mut liste, "x", None, None, None, mesures.clone(), 1).unwrap();
+        assert!(e1.iterations[0].ecarts.conforme);
+        let e2 = ajouter(&mut liste, "x", Some(0.1), None, None, mesures, 2).unwrap();
+        assert_eq!(e2.iterations[0].ecarts, e2.iterations[1].ecarts, "mêmes mesures, même cible : mêmes écarts");
+        assert!(!e2.iterations[0].ecarts.conforme);
+        // Une mesure refusée ne change ni la cible ni l'histoire.
+        assert!(ajouter(&mut liste, "x", Some(0.3), None, None, vec![], 3).is_err());
+        assert_eq!(liste[0].engraissement, 0.1);
     }
 }

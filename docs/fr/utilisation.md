@@ -1022,8 +1022,11 @@ plages entre les deux. La réponse donne :
 - les courbes de correction C, M, Y et K, de 5 en 5 % ;
 - toutes les itérations de cet étalonnage, et le numéro de la meilleure.
 
-On imprime la mire suivante avec les courbes de la meilleure itération. Une itération
-moins bonne ne l'efface pas, et les 50 dernières sont gardées. La cible du gris garde la
+On imprime la mire suivante avec les courbes de la meilleure itération, et on l'indique
+par `"avec": <son numéro>` à l'envoi des mesures. La nouvelle correction se compose alors
+avec ces courbes. Une itération moins bonne n'efface pas la meilleure, et les 50 dernières
+sont gardées. Changer `engraissement` ou `aplats` recalcule toutes les itérations sur la
+nouvelle cible. La cible du gris garde la
 teinte du papier, qui s'efface à mesure que le gris fonce. Méthode et valeurs à nous : ce
 n'est pas une certification G7. Les courbes s'appliqueront au rendu avec la linéarisation
 par mode (8.2). Réservé à l'administrateur, et compris dans la sauvegarde.

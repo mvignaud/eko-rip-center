@@ -967,8 +967,11 @@ at least three patches in between. The answer gives:
 - the C, M, Y and K correction curves, every 5 %;
 - every iteration of this calibration, and the number of the best one.
 
-Print the next chart with the curves of the best iteration. A worse iteration does not
-erase it, and the last 50 are kept. The grey target keeps the paper's tint, which fades
+Print the next chart with the curves of the best iteration, and say so with
+`"avec": <its number>` when sending the measurements. The new correction is then composed
+with those curves. A worse iteration does not erase the best one, and the last 50 are
+kept. Changing `engraissement` or `aplats` recomputes every iteration against the new
+target. The grey target keeps the paper's tint, which fades
 as the grey darkens. Our own method and values: this is not a G7 certification. The
 curves will apply to rendering with per-mode linearisation (8.2). Admin only, and
 included in the backup.
