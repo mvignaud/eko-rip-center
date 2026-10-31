@@ -310,7 +310,15 @@ pub fn grille(t: Taille, m: Motif, laize: f64, espace: f64) -> Result<(Vec<Place
     Ok((places, Taille { largeur, hauteur: m.rangees as f64 * pas_y - espace + saut }))
 }
 
-pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>) -> Result<Imposition, String> {
+/// Planche manuelle (roadmap 5.10) : poses à la main, ou gabarit de cellules ; sans l'un
+/// ni l'autre, l'imbrication automatique.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Manuelle<'a> {
+    pub poses: Option<&'a crate::cellules::Manuel>,
+    pub gabarit: Option<&'a crate::cellules::Gabarit>,
+}
+
+pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>, manuelle: Manuelle) -> Result<Imposition, String> {
     let tailles_sources = sources.iter().enumerate().map(|(n, s)| taille_page(s.pdf, s.page).map_err(|e| format!("source {} : {e}", n + 1))).collect::<Result<Vec<_>, _>>()?;
     let elements: Vec<usize> = match motif {
         Some(_) if sources.len() != 1 => return Err("un motif répète une seule page".into()),
@@ -333,6 +341,10 @@ pub fn imposer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool
         .collect();
     let (places, planche) = if let Some(m) = motif {
         grille(tailles_sources[0], m, laize, espace)?
+    } else if let Some(g) = manuelle.gabarit {
+        crate::cellules::placer_en_cellules(&tailles, g, laize)?
+    } else if let Some(m) = manuelle.poses {
+        crate::cellules::placer_manuel(&tailles, m, laize, espace, rotation)?
     } else if forme {
         let silhouettes: Vec<crate::forme::Silhouette> = elements.iter().map(|&n| crate::forme::Silhouette { taille: tailles_sources[n], polygones: contours[n].clone() }).collect();
         crate::forme::placer(&silhouettes, laize, espace, rotation)?
@@ -355,15 +367,18 @@ pub struct Finition {
 }
 
 /// Compose la planche : rend le PDF et les places (dans l'ordre des copies déroulées).
-pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>, finition: Finition) -> Result<(Vec<u8>, Vec<Place>), String> {
-    let Imposition { places, planche, elements, .. } = imposer(sources, laize_mm, espace_mm, rotation, forme, motif)?;
-    let pdf = composer_places(sources, &places, &elements, planche, finition)?;
+/// `textes` : données variables de chaque copie (roadmap 5.10), vide sans elles.
+#[allow(clippy::too_many_arguments)]
+pub fn composer(sources: &[Source], laize_mm: f64, espace_mm: f64, rotation: bool, forme: bool, motif: Option<Motif>, finition: Finition, manuelle: Manuelle, textes: &[Vec<crate::cellules::Texte>]) -> Result<(Vec<u8>, Vec<Place>), String> {
+    let Imposition { places, planche, elements, .. } = imposer(sources, laize_mm, espace_mm, rotation, forme, motif, manuelle)?;
+    let pdf = composer_places(sources, &places, &elements, planche, finition, textes)?;
     Ok((pdf, places))
 }
 
 /// PDF d'une planche déjà placée : `places` (indice → copie), `elements` (copie → source),
-/// `planche` la boîte des éléments ; l'habillage s'ajoute autour.
-pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize], planche: Taille, finition: Finition) -> Result<Vec<u8>, String> {
+/// `planche` la boîte des éléments ; l'habillage s'ajoute autour. `textes[copie]` : textes
+/// posés sur la copie, en Helvetica, dans le repère de sa page.
+pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize], planche: Taille, finition: Finition, textes: &[Vec<crate::cellules::Texte>]) -> Result<Vec<u8>, String> {
     let mut cible = Document::with_version("1.6");
     // Formulaires créés, un par source, et leur taille.
     let mut formulaires: Vec<(ObjectId, Taille, [f64; 2])> = vec![];
@@ -380,9 +395,17 @@ pub fn composer_places(sources: &[Source], places: &[Place], elements: &[usize],
     for p in places {
         let n = elements[p.indice];
         let m = matrice_pose(formulaires[n].1, formulaires[n].2, p.angle, p.x, p.y + marge_bas);
-        contenu += &format!("q {} {} {} {} {:.4} {:.4} cm /F{n} Do Q\n", m[0], m[1], m[2], m[3], m[4], m[5]);
+        contenu += &format!("q {} {} {} {} {:.4} {:.4} cm /F{n} Do", m[0], m[1], m[2], m[3], m[4], m[5]);
+        let [llx, lly] = formulaires[n].2;
+        for t in textes.get(p.indice).into_iter().flatten().filter(|t| !t.contenu.is_empty()) {
+            contenu += &format!(" BT /Fv {:.2} Tf 0 g {:.4} {:.4} Td <{}> Tj ET", t.taille, llx + t.x, lly + t.y, crate::cellules::hex_winansi(&t.contenu));
+        }
+        contenu += " Q\n";
     }
     let mut ressources = dictionary! { "XObject" => xobjets };
+    if textes.iter().any(|t| !t.is_empty()) {
+        ressources.set("Font", dictionary! { "Fv" => dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "Encoding" => "WinAnsiEncoding" } });
+    }
     if contour {
         // Ton de découpe à teinte magenta, comme `CutContour` : jamais imprimé.
         let ton = Object::Array(vec![
@@ -505,7 +528,7 @@ pub(crate) mod tests {
     fn element_tourne_rendu_et_decoupe_en_place() {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &magenta, page: 1, copies: 1 }];
-        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true, false, None, Finition::default()).unwrap();
+        let (planche, places) = composer(&sources, 50.0 / PT_PAR_MM, 0.0, true, false, None, Finition::default(), Manuelle::default(), &[]).unwrap();
         assert!(places[0].tourne());
         let d = crate::decoupe::extraire(&planche, false).unwrap();
         assert!((d[0].largeur - 40.0).abs() < 1e-3 && (d[0].hauteur - 60.0).abs() < 1e-3, "{} × {}", d[0].largeur, d[0].hauteur);
@@ -558,7 +581,7 @@ pub(crate) mod tests {
     fn planche_sur_la_forme_tete_beche() {
         let tri = pdf_triangle(100.0 * MM);
         let sources = [Source { pdf: &tri, page: 1, copies: 2 }];
-        let (planche, places) = composer(&sources, 105.0, 0.0, true, true, None, Finition::default()).unwrap();
+        let (planche, places) = composer(&sources, 105.0, 0.0, true, true, None, Finition::default(), Manuelle::default(), &[]).unwrap();
         assert!(places.iter().any(|p| p.angle == 180), "{places:?}");
         let d = crate::decoupe::extraire(&planche, false).unwrap();
         assert!(d[0].hauteur / MM < 120.0, "longueur {} mm", d[0].hauteur / MM);
@@ -578,7 +601,7 @@ pub(crate) mod tests {
         let (a, b) = (&d[0].traces[0], &d[0].traces[1]);
         assert!(!dans(centre(a), &b.points) && !dans(centre(b), &a.points), "contours imbriqués l'un dans l'autre");
         // En rangées (sans la forme), deux carrés l'un au-dessus de l'autre.
-        let (rangs, _) = composer(&sources, 105.0, 0.0, true, false, None, Finition::default()).unwrap();
+        let (rangs, _) = composer(&sources, 105.0, 0.0, true, false, None, Finition::default(), Manuelle::default(), &[]).unwrap();
         assert!(crate::decoupe::extraire(&rangs, false).unwrap()[0].hauteur / MM > 190.0);
     }
 
@@ -645,7 +668,7 @@ pub(crate) mod tests {
         let magenta = pdf(60.0, 40.0, "0 1 0 0", (50.0, 30.0));
         let sources = [Source { pdf: &cyan, page: 1, copies: 1 }, Source { pdf: &magenta, page: 1, copies: 2 }];
         // Laize 80 mm ≈ 226,8 pt : cyan (100) + magenta (60) + espace tiennent en rangée 1 ; le 2e magenta passe en rangée 2.
-        let (planche, places) = composer(&sources, 80.0, 5.0, false, false, None, Finition::default()).unwrap();
+        let (planche, places) = composer(&sources, 80.0, 5.0, false, false, None, Finition::default(), Manuelle::default(), &[]).unwrap();
         assert_eq!(places.len(), 3);
 
         // Découpe : trois contours, chacun dans son élément placé.

@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Planche manuelle** (feuille de route 5.10), côté serveur. Une planche peut maintenant
+  recevoir des **copies posées à la main** (coin en mm, angle, **verrou**), calées sur une
+  **grille** et **aimantées** aux bords voisins, avec un refus en cas de chevauchement ou de
+  sortie de laize. Elle peut aussi suivre un **gabarit de cellules** (cases fixes, une copie
+  centrée par case, gabarits gardés par nom dans `/api/gabarits` et dans la sauvegarde), ou
+  des **données variables** : une copie par ligne d'un CSV, avec des textes posés sur la
+  page. L'écran viendra avec les clients natifs.
+  *Manual sheet: hand-placed copies with lock, grid and snapping; cell templates; variable
+  data from a CSV.*
 - **Deux seuils d'espace disque** (feuille de route 0.8) : sous le seuil bas
   (`EKO_RIP_SEUIL_ALERTE_MO`, 20 Go par défaut), chaque nouveau travail porte l'alerte
   « disque presque plein » ; sous le seuil critique (`EKO_RIP_SEUIL_LIBRE_MO`), un fichier

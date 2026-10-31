@@ -344,7 +344,7 @@ Dépend de : 1.4 (support chargé), 4.2 (couches, NestTrimBox). Réutilise `imbr
 | 5.7 | P2 | ✅ FAIT — Bande de purge (côté, largeur), justification G/C/D, décalage d'origine, espace entre copies, retournement d'un lé sur deux | tests géométriques |
 | 5.8 | P2 | Repères de massicot X/Y (simple/double, épaisseur, blanc image-repère) | quand une Fotoba arrive, sinon P3 |
 | 5.9 | P2 | 🏭 Essai : planche d'économie imprimée + découpée Kona | 🏭 planche de 5 travaux sortie et coupée sans intervention entre les deux |
-| 5.10 | P3 | Planche manuelle (glisser-déposer, verrou, grille, magnétisme), templates de cellules, données variables (CSV) | quand le besoin est confirmé |
+| 5.10 | P3 | ✅ FAIT le 31/10 côté serveur (`cellules.rs` : champs `manuel`, `gabarit`, `donnees_variables` de `/api/planches` et de l'aperçu, `/api/gabarits` ; l'écran va à 10.5) — Planche manuelle (glisser-déposer, verrou, grille, magnétisme), templates de cellules, données variables (CSV) | quand le besoin est confirmé |
 | 5.11 | P2 | ✅ FAIT — (Caldera C3) Compléter 5.2 : déclencheurs **inactivité** (aucun travail reçu depuis X min, distinct du minuteur depuis le 1er travail), **longueur maxi**, **rangée pleine sortie seule** ; chargement **libre** (format figé par la 1re planche) ou **strict** (une planche par format) | test : 3 travaux, inactivité 1 min → départ 1 min après le dernier ; longueur maxi 2 m franchie → départ ; strict + 2 laizes → 2 planches |
 | 5.12 | P1 | ✅ FAIT — (demande de Mathieu, 25/10) **Pages et fichiers à ne pas imprimer** : case par page dans la fiche du travail et dans l'imbrication (travail entier ou pages choisies d'un multipage) ; une page décochée n'entre ni dans la planche ni dans la file, et reste réactivable | test : PDF 3 pages, page 2 décochée → planche et file sans la page 2 ; recochée → elle revient |
 | 5.13 | P2 | ✅ FAIT — (garde-fou, 25/10) **« Refaire » d'une planche abandonnée** : une planche en échec dont les travaux sont déjà revenus en file ne doit pas pouvoir être relancée (double impression) — refus codé, ou relance qui reprend les travaux de la file | test : planche en échec → travaux revenus → Refaire refusé |
@@ -434,7 +434,7 @@ système, notifications) est livré dans la 0.29.0. Le serveur expose déjà tou
 | 10.2 | P2 | **Réglages récents dans les clients** : lissage des images agrandies (`reechantillonnage`, 9.15), empilement de couches (`empilement`, 2.10), badge de recalibration par machine (`/api/recalibrations`, 8.5) | un travail envoyé avec `lisse` et un empilement blanc-couleur-blanc depuis chaque client ; badge « Recalibration conseillée / périmée » visible sur la carte machine |
 | 10.3 | P3 | **Plusieurs serveurs RIP dans un client** (reprend 9.14) : file unifiée, envoi vers le serveur choisi | client relié à 2 serveurs de test → les deux files visibles, envoi vers chacun |
 | 10.4 | P2 | **Client Windows** (WinUI 3, même API), quand un PC Windows est disponible pour le construire et le signer | installateur signé, lot 1 complet sur Windows 11 |
-| 10.5 | P3 | **Planche d'imbrication, détourage et mise en coupe en natif** (éditeurs visuels de la phase 3 et 5) | ouverts et utilisables sans la fenêtre web |
+| 10.5 | P3 | **Planche d'imbrication, détourage et mise en coupe en natif** (éditeurs visuels de la phase 3 et 5) ; planche manuelle 5.10 (glisser-déposer, verrou, grille, gabarits, CSV) sur l'API de la 5.10 | ouverts et utilisables sans la fenêtre web |
 
 ## Décompte
 
