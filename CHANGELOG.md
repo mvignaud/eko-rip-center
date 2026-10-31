@@ -16,6 +16,14 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
+  fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
+  les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi
+  l'historique des itérations, où la meilleure reste même si une suivante est moins
+  bonne. Les courbes s'appliqueront au rendu avec la linéarisation par mode. L'écran
+  viendra avec les clients natifs.
+  *G7-style grey calibration: chart, correction curves, iteration history keeping the best
+  one.*
 - **Pont ERP : travaux liés, opérateur et réimpression** (feuille de route 7.8). L'ERP peut
   envoyer les parties d'un même **groupe** avec leur rang : elles passent dans la file d'un
   bloc et dans l'ordre, même si leurs rendus finissent dans le désordre. Deux actions

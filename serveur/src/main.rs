@@ -26,6 +26,7 @@ mod forme;
 mod images;
 mod imbrication;
 mod linearisation;
+mod g7;
 mod mosaique;
 mod nid;
 mod pont;
@@ -481,6 +482,9 @@ fn routes(etat: Partage) -> Router {
         .route("/api/separation/bascules", get(lister_bascules))
         .route("/api/linearisation/mire.cgats", get(mire_de_linearisation))
         .route("/api/linearisation/limite-proposee", axum::routing::post(proposer_limite))
+        .route("/api/g7", get(lire_g7))
+        .route("/api/g7/mire.cgats", get(mire_g7))
+        .route("/api/g7/iterations", axum::routing::post(ajouter_iteration_g7))
         .route("/api/travaux/{id}/bat.pdf", get(bat_pdf))
         .route("/api/travaux/{id}/pages/{page}/epreuve.tif", get(epreuve_tif))
         .route("/api/travaux/{id}/pages/{page}/apercu.png", get(apercu))
@@ -726,6 +730,47 @@ async fn proposer_limite(Json(d): Json<DemandeLimite>) -> Response {
     match linearisation::limite_proposee(&d.mesures, d.seuil.unwrap_or(linearisation::SEUIL_DEFAUT)) {
         Ok(p) => Json(p).into_response(),
         Err(code) => refus(StatusCode::BAD_REQUEST, code, None),
+    }
+}
+
+#[derive(Deserialize)]
+struct DemandeMireG7 {
+    n: Option<usize>,
+}
+
+/// Mire G7 (roadmap 8.10) : rampe CMY à parts égales et rampe noire, en CGATS.
+async fn mire_g7(axum::extract::Query(q): axum::extract::Query<DemandeMireG7>) -> Response {
+    match g7::mire_cgats(q.n.unwrap_or(21)) {
+        Ok(t) => ([(header::CONTENT_TYPE, "text/plain; charset=utf-8"), (header::CONTENT_DISPOSITION, "attachment; filename=\"mire-g7.txt\"")], t).into_response(),
+        Err(code) => refus(StatusCode::BAD_REQUEST, code, None),
+    }
+}
+
+/// Étalonnages G7, chacun avec ses itérations et le numéro de la meilleure.
+async fn lire_g7(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    let v: Vec<serde_json::Value> = g7::lire(&etat.config.donnees).iter().map(|e| serde_json::json!({ "etalonnage": e, "meilleure": e.meilleure().map(|i| i.numero) })).collect();
+    Json(serde_json::json!(v))
+}
+
+#[derive(Deserialize)]
+struct DemandeIterationG7 {
+    nom: String,
+    engraissement: Option<f64>,
+    aplats: Option<g7::Aplats>,
+    mesures: Vec<g7::Mesure>,
+}
+
+/// Nouvelle itération G7 mesurée : écarts, courbes de correction, et la meilleure gardée.
+async fn ajouter_iteration_g7(State(etat): State<Partage>, Json(d): Json<DemandeIterationG7>) -> Response {
+    let _verrou = etat.reglages.lock().await;
+    let mut liste = g7::lire(&etat.config.donnees);
+    let e = match g7::ajouter(&mut liste, d.nom.trim(), d.engraissement, d.aplats, d.mesures, maintenant()) {
+        Ok(e) => e,
+        Err(code) => return refus(StatusCode::BAD_REQUEST, code, None),
+    };
+    match g7::ecrire(&etat.config.donnees, &liste) {
+        Ok(()) => Json(serde_json::json!({ "etalonnage": e, "meilleure": e.meilleure().map(|i| i.numero) })).into_response(),
+        Err(err) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(err.to_string())),
     }
 }
 
@@ -1935,6 +1980,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         regles: Some(regles::lire(&etat.config.donnees)),
         balises: Some(balises::lire(&etat.config.donnees)),
         gabarits: Some(cellules::lire(&etat.config.donnees)),
+        g7: Some(g7::lire(&etat.config.donnees)),
     };
     let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
     ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
@@ -2009,6 +2055,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
     if let Some(Err(code)) = s.gabarits.as_deref().map(cellules::verifier_gabarits) {
         return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", Some(code.into()));
     }
+    if s.g7.as_ref().is_some_and(|l| l.iter().any(|e| !g7::nom_valide(&e.nom))) {
+        return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", Some("g7".into()));
+    }
     let connus = reglages::lire(&etat.config.donnees);
     reglages::identifier(&mut liste, &connus);
     let _verrou = etat.reglages.lock().await;
@@ -2050,6 +2099,9 @@ async fn restaurer_config(State(etat): State<Partage>, Json(s): Json<sauvegarde:
         }
         if let Some(g) = &s.gabarits {
             cellules::ecrire(&etat.config.donnees, g)?;
+        }
+        if let Some(g) = &s.g7 {
+            g7::ecrire(&etat.config.donnees, g)?;
         }
         reglages::ecrire(&etat.config.donnees, &liste)
     };
@@ -5966,6 +6018,28 @@ mod tests {
             assert_eq!((lu.supports[0].modes[0].bascule, lu.supports[0].modes[0].limite_totale), (Some(separation::Bascule::Douce), Some(260.0)));
             c.supports[0].modes[0].limite_totale = Some(500.0);
             assert_eq!(appel(&e, "POST", "/api/machines/epson/supports", None, Some(serde_json::json!(c.supports))).await.status(), StatusCode::BAD_REQUEST);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 8.10 : mire G7, itération mesurée enregistrée, meilleure donnée.
+        #[tokio::test]
+        async fn etalonnage_g7_par_l_api() {
+            let e = etat("g7");
+            let r = appel(&e, "GET", "/api/g7/mire.cgats?n=11", None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            let t = String::from_utf8(axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap().to_vec()).unwrap();
+            assert!(t.contains("NUMBER_OF_SETS 22"));
+            // Imprimante qui suit déjà la cible : écarts nuls, première itération = meilleure.
+            let mesures: Vec<serde_json::Value> = (0..=10).flat_map(|i| {
+                let l = 95.0 - 7.5 * i as f64;
+                ["cmy", "k"].map(|r| serde_json::json!({ "rampe": r, "pct": i * 10, "l": l, "a": 0.0, "b": 0.0 }))
+            }).collect();
+            let v = super::couches_decoupe::json(appel(&e, "POST", "/api/g7/iterations", None, Some(serde_json::json!({ "nom": "Epson / bâche", "mesures": mesures }))).await).await;
+            assert_eq!((v["meilleure"].as_u64(), v["etalonnage"]["iterations"][0]["courbes"]["k"].as_array().map(Vec::len)), (Some(1), Some(21)));
+            let liste = super::couches_decoupe::json(appel(&e, "GET", "/api/g7", None, None).await).await;
+            assert_eq!(liste[0]["etalonnage"]["nom"], "Epson / bâche");
+            let r = super::couches_decoupe::json(appel(&e, "POST", "/api/g7/iterations", None, Some(serde_json::json!({ "nom": "x", "mesures": [] }))).await).await;
+            assert_eq!(r["code"], "mesures_invalides");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

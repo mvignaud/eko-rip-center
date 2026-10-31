@@ -1010,6 +1010,24 @@ séchage, puis saisir la limite dans le mode.
 `encres=C,Lc,M`) donne une mire CGATS d'une plage par encre et par palier, resserrée dans
 les hautes lumières : 8 plages sous 20 % sur 21, contre 4 pour une rampe régulière.
 
+**Étalonnage du gris (type G7, API)** : `GET /api/g7/mire.cgats?n=21` donne la mire, une
+rampe CMY à parts égales et une rampe noire, de 0 à 100 %. Une fois la mire imprimée,
+envoyer ses mesures (L*a*b* par plage) à `POST /api/g7/iterations` :
+`{"nom": "Epson / bâche", "mesures": [{"rampe": "cmy", "pct": 50, "l": 58.1, "a": 1.2, "b": -0.4}, …]}`
+(avec, au choix, `engraissement`, 22 % par défaut à 50 %, et `aplats` : le a*b* des aplats
+C, M et Y). Chaque rampe demande son papier (0 %), son aplat (100 %) et au moins trois
+plages entre les deux. La réponse donne :
+- les écarts à la cible, ΔL* moyen et écart de gris moyen, avec `conforme` sous 1,5 et 1,5
+  (seuils indicatifs) ;
+- les courbes de correction C, M, Y et K, de 5 en 5 % ;
+- toutes les itérations de cet étalonnage, et le numéro de la meilleure.
+
+On imprime la mire suivante avec les courbes de la meilleure itération. Une itération
+moins bonne ne l'efface pas, et les 50 dernières sont gardées. La cible du gris garde la
+teinte du papier, qui s'efface à mesure que le gris fonce. Méthode et valeurs à nous : ce
+n'est pas une certification G7. Les courbes s'appliqueront au rendu avec la linéarisation
+par mode (8.2). Réservé à l'administrateur, et compris dans la sauvegarde.
+
 **À l'envoi**, **Support et mode d'impression** : le mode impose la résolution du rendu ;
 le support relie aux tarifs. **— résolution choisie à la main —** garde la résolution du
 panneau. Changer de mode sur un travail reçu refait le rendu.
