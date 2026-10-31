@@ -35,6 +35,7 @@ mod render;
 mod reglages;
 mod balises;
 mod regles;
+mod recalibration;
 mod rendus;
 mod releves;
 mod reperage;
@@ -441,6 +442,10 @@ fn routes(etat: Partage) -> Router {
         .route("/api/machines/{id}/media", get(media_machine))
         .route("/api/renvoi/{id}", axum::routing::post(recevoir_renvoi))
         .route("/api/machines/{id}/consommation", get(consommation_machine))
+        .route("/api/machines/{id}/recalibration", get(recalibration_machine))
+        .route("/api/machines/{id}/etalonnage", axum::routing::post(etalonner_machine))
+        .route("/api/machines/{id}/recalibration/evenement", axum::routing::post(declencher_recalibration))
+        .route("/api/recalibrations", get(recalibrations))
         .route("/api/machines/{id}/supports", get(lister_supports).post(enregistrer_supports))
         .route("/api/machines/{id}/charge", get(lire_charge).post(saisir_charge))
         .route("/api/machines/{id}/supports/paquet", axum::routing::post(importer_paquet))
@@ -2188,6 +2193,76 @@ async fn consommation_machine(State(etat): State<Partage>, Chemin(id): Chemin<St
     let jusqua = q.jusqua.unwrap_or_else(maintenant);
     let depuis = q.depuis.unwrap_or(jusqua.saturating_sub(7 * 86400));
     Json(releves::consommation(&releves::lire(&etat.config.donnees, &id), depuis, jusqua)).into_response()
+}
+
+/// Rappel de recalibration d'une imprimante (roadmap 8.5) : âge de l'étalonnage et
+/// déclencheurs depuis (poches changées d'après les relevés SNMP, lots, maintenance).
+async fn recalibration_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let fiche = recalibration::lire(&etat.config.donnees).remove(&id).unwrap_or_default();
+    Json(recalibration::etat(&fiche, &releves::lire(&etat.config.donnees, &id), maintenant())).into_response()
+}
+
+/// Rappels de toutes les machines, par identifiant.
+async fn recalibrations(State(etat): State<Partage>) -> Json<std::collections::BTreeMap<String, recalibration::Etat>> {
+    let donnees = &etat.config.donnees;
+    let mut fiches = recalibration::lire(donnees);
+    let ids: Vec<String> = etat.machines.read().unwrap().iter().map(|m| m.id.clone()).collect();
+    let quand = maintenant();
+    Json(ids.into_iter().map(|id| {
+        let e = recalibration::etat(&fiches.remove(&id).unwrap_or_default(), &releves::lire(donnees, &id), quand);
+        (id, e)
+    }).collect())
+}
+
+#[derive(Deserialize)]
+struct SaisieEtalonnage {
+    #[serde(default)]
+    note: String,
+}
+
+/// Étalonnage refait à l'instant : il remet les rappels à zéro.
+async fn etalonner_machine(State(etat): State<Partage>, Chemin(id): Chemin<String>, Json(s): Json<SaisieEtalonnage>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    if s.note.chars().count() > 200 {
+        return refus(StatusCode::BAD_REQUEST, "recalibration_invalide", None);
+    }
+    let _verrou = etat.reglages.lock().await;
+    let donnees = &etat.config.donnees;
+    let mut fiches = recalibration::lire(donnees);
+    recalibration::etalonner(fiches.entry(id.clone()).or_default(), maintenant(), s.note);
+    if let Err(e) = recalibration::ecrire(donnees, &fiches) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e));
+    }
+    Json(recalibration::etat(&fiches[&id], &releves::lire(donnees, &id), maintenant())).into_response()
+}
+
+/// Nouveau lot ou maintenance saisi : rappel de recalibration (une poche changée se voit
+/// seule, dans les relevés).
+async fn declencher_recalibration(State(etat): State<Partage>, Chemin(id): Chemin<String>, Json(d): Json<recalibration::Declencheur>) -> Response {
+    if machine(&etat, &id).is_none() {
+        return introuvable();
+    }
+    let note = match &d {
+        recalibration::Declencheur::NouveauLot { note } | recalibration::Declencheur::Maintenance { note } => note,
+        recalibration::Declencheur::Poche { .. } => return refus(StatusCode::BAD_REQUEST, "recalibration_invalide", None),
+    };
+    if note.chars().count() > 200 {
+        return refus(StatusCode::BAD_REQUEST, "recalibration_invalide", None);
+    }
+    let _verrou = etat.reglages.lock().await;
+    let donnees = &etat.config.donnees;
+    let mut fiches = recalibration::lire(donnees);
+    let fiche = fiches.entry(id.clone()).or_default();
+    fiche.evenements.push(recalibration::Evenement { le: maintenant(), declencheur: d });
+    if let Err(e) = recalibration::ecrire(donnees, &fiches) {
+        return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e));
+    }
+    Json(recalibration::etat(&fiches[&id], &releves::lire(donnees, &id), maintenant())).into_response()
 }
 
 /// Imposition sans rien créer : places des éléments (mm, origine en bas à gauche),
@@ -6085,6 +6160,41 @@ mod tests {
             assert_eq!(appel(&e, "POST", "/api/machines/kona/charge", None, Some(serde_json::json!({ "support_uuid": s }))).await.status(), StatusCode::BAD_REQUEST, "support d'une autre machine");
             let v = corps(appel(&e, "POST", "/api/machines/epson/charge", None, Some(serde_json::json!({ "support_uuid": null }))).await).await;
             assert_eq!(v["source"], "machine", "retour à la lecture par la machine");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Roadmap 8.5 par l'API : jamais étalonnée, étalonnage saisi (à jour), poche
+        /// changée dans les relevés SNMP (rappel), étalonnage refait, maintenance saisie.
+        #[tokio::test]
+        async fn rappels_de_recalibration() {
+            let e = etat("recalibration");
+            let corps = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), 1 << 20).await.unwrap()).unwrap() };
+            let lire = || appel(&e, "GET", "/api/machines/epson/recalibration", None, None);
+            assert_eq!(corps(lire().await).await["statut"], "jamais");
+            let v = corps(appel(&e, "POST", "/api/machines/epson/etalonnage", None, Some(serde_json::json!({ "note": "mire HEXIS" }))).await).await;
+            assert_eq!(v["statut"], "a_jour");
+            let t = v["etalonne_le"].as_u64().unwrap();
+            let releve = |le, cyan| releves::Releve { le, encres: vec![("Cyan".into(), cyan)], longueur_m: None };
+            releves::ajouter(&e.config.donnees, "epson", &releve(t + 1, 3)).unwrap();
+            releves::ajouter(&e.config.donnees, "epson", &releve(t + 2, 100)).unwrap();
+            let v = corps(lire().await).await;
+            assert_eq!((v["statut"].as_str(), v["declencheurs"][0]["motif"].as_str(), v["declencheurs"][0]["encre"].as_str()), (Some("rappel"), Some("poche"), Some("Cyan")));
+            assert_eq!(corps(appel(&e, "GET", "/api/recalibrations", None, None).await).await["epson"]["statut"], "rappel");
+            // Étalonnage refait plus tard (relevés datés d'avant lui) : à jour.
+            let mut fiches = recalibration::lire(&e.config.donnees);
+            fiches.get_mut("epson").unwrap().etalonne_le = Some(t + 3);
+            recalibration::ecrire(&e.config.donnees, &fiches).unwrap();
+            assert_eq!(corps(lire().await).await["statut"], "a_jour");
+            // Maintenance saisie après un étalonnage de la veille, sans relevé : rappel.
+            std::fs::remove_dir_all(e.config.donnees.join("releves")).unwrap();
+            fiches.get_mut("epson").unwrap().etalonne_le = Some(t - 86_400);
+            recalibration::ecrire(&e.config.donnees, &fiches).unwrap();
+            assert_eq!(corps(lire().await).await["statut"], "a_jour");
+            let r = appel(&e, "POST", "/api/machines/epson/recalibration/evenement", None, Some(serde_json::json!({ "motif": "maintenance", "note": "têtes nettoyées" }))).await;
+            assert_eq!(corps(r).await["statut"], "rappel");
+            let poche = serde_json::json!({ "motif": "poche", "encre": "Cyan" });
+            assert_eq!(appel(&e, "POST", "/api/machines/epson/recalibration/evenement", None, Some(poche)).await.status(), StatusCode::BAD_REQUEST, "une poche se lit, ne se saisit pas");
+            assert_eq!(appel(&e, "GET", "/api/machines/inconnue/recalibration", None, None).await.status(), StatusCode::NOT_FOUND);
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

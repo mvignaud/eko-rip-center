@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Rappels de recalibration** (feuille de route 8.5), par imprimante : rappel 14 jours
+  après le dernier étalonnage, étalonnage périmé à 3 mois, et rappel dès qu'une poche
+  d'encre est changée (hausse d'au moins 10 points dans les relevés SNMP), qu'un nouveau
+  lot ou une maintenance est saisi. Jamais bloquant. Routes
+  `/api/machines/{id}/recalibration`, `/api/machines/{id}/etalonnage`,
+  `/api/machines/{id}/recalibration/evenement` et `/api/recalibrations` ; gardé dans
+  `etalonnages.json`.
+  *Recalibration reminders: 14 days, 3-month limit, ink pouch change seen over SNMP,
+  new batch or maintenance.*
 - **Empilement de couches** (feuille de route 2.10) : réglage `empilement` de la demande,
   jusqu'à 5 couches posées dans l'ordre déclaré (`couleur`, `blanc`, `argent`), par exemple
   blanc-couleur-blanc pour une vitrophanie vue des deux côtés ou couleur-couleur pour un

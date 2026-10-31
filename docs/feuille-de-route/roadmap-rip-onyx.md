@@ -392,7 +392,7 @@ Dépend de : 2.2, 2.3 (séparation et tramage), 1.1 (le mode porte les étapes).
 | 8.2 | P1 | Linéarisation 1D par canal vers des densités cibles (N-factor, variance, lissage, gain de point), historique conservé (ONYX écrase) | 🏭 rampe mesurée linéaire à ± 2 % |
 | 8.3 | P1 | Limites d'encre combinées (simples, doubles, neutres + Or/Rd), encre totale, noir hors limite | 🏭 aplat 300 % sans bavure après séchage |
 | 8.4 | P1 | Profil ICC mesuré (moteur libre, CGATS en entrée/sortie), aucun profil ONYX | 🏭 ΔE2000 moyen ≤ 2 sur une mire de contrôle |
-| 8.5 | P1 | Recalibration : rappel 14 j, plafond 3 mois, déclencheurs (nouveau lot, maintenance, changement de poche détecté par SNMP) | test : hausse SNMP d'une encre → rappel |
+| 8.5 | P1 | ✅ FAIT le 31/10 côté serveur (recalibration.rs, par imprimante : rappel 14 j, périmé à 90 j, poche changée = hausse SNMP ≥ 10 points, nouveau lot / maintenance saisis ; routes `recalibration`, `etalonnage`, `/api/recalibrations` ; jamais bloquant ; affichage dans les clients natifs à faire ; par mode quand 8.1–8.4 existeront) — Recalibration : rappel 14 j, plafond 3 mois, déclencheurs (nouveau lot, maintenance, changement de poche détecté par SNMP) | test : hausse SNMP d'une encre → rappel |
 | 8.6 | P2 | ✅ FAIT le 25/10 sauf ΔE estimé (→ ArgyllCMS, 8.4) et priorité par mode / alerte PDF sans vrai ton direct (→ 8.7) — Table de tons directs (Lab, alias, casse **et** espaces exacts), remplacement par mode prioritaire, journal des noms non trouvés, ΔE estimé, alerte PDF sans vrai ton direct<br>+ Caldera C11 : **import d'une bibliothèque Lab de fournisseur** au format ouvert (CxF, CGATS ou CSV Lab) — ex. nuancier HEXIS ; jamais de bibliothèque Pantone sans licence ; profil d'entrée CMJN par défaut choisi et documenté (fini : import CSV de 50 teintes → 50 tons directs ; doublon de nom refusé ou renommé) | tests sur PDF de référence |
 | 8.7 | P2 | 🟡 Intention FAITE le 25/10 (serveur → réglage → travail ; test « seuls les travaux par défaut changent ») ; recette 9 encres 🏭 (mesures i1Pro) — Intention propre aux tons directs (globale → réglage → travail), recherche de recette 9 encres (≈ Smart Spot Search) | test : intention globale changée → seuls les travaux « par défaut » changent |
 | 8.8 | P2 | Nuanciers 1D/2D/3D, statut « en attente de mesure », « ajouter au mode » | 🏭 |
@@ -422,6 +422,20 @@ Dépend de : 2.2, 2.3 (séparation et tramage), 1.1 (le mode porte les étapes).
 | 9.14 | P3 | ⏸ REPORTÉ le 30/10 aux clients natifs (refonte SwiftUI / GTK 4) : inutile de l'ajouter au client Tauri qu'ils remplacent — (Caldera C15) **Client connecté à plusieurs serveurs RIP** (atelier multi-sites ou 2e serveur), file unifiée dans le client | test : client Tauri avec 2 serveurs de test → les deux files visibles, envoi vers chacun |
 | 9.15 | P3 | ✅ FAIT le 30/10 (réglage `reechantillonnage` : `proche_voisin` par défaut ou `lisse` = `-dDOINTERPOLATE` de Ghostscript, filtre cubique ; mire 100 ppi ×4 : 48,6 dB contre 30,2 dB) — (Caldera C16) **Rééchantillonnage bicubique** (ou meilleur) à l'agrandissement des images matricielles, choix par réglage | test : image 100 ppi ×4 → PSNR meilleur que plus proche voisin sur une mire |
 
+## Phase 10 — Clients natifs (ajoutée le 31/10, suite de la refonte du 30/10)
+
+Les clients Mac (SwiftUI) et Linux (GTK 4 / libadwaita) remplacent le client Tauri ; cahier
+dans `docs/clients-natifs.md`. Le lot 1 (connexion, travaux, inspecteur, envoi, machines,
+système, notifications) est livré dans la 0.29.0. Le serveur expose déjà tout ce qui suit.
+
+| ID | Pri | Item | Critère de « fini » |
+|---|---|---|---|
+| 10.1 | P1 | **Écrans d'administration natifs** (lot 2) : supports et modes, règles et balises, tarifs, tons directs, pont ERP, sauvegarde, éditeur de machines ; aujourd'hui ouverts dans une fenêtre web par « Administration… » | chaque écran du menu « Administration… » existe en natif sur Mac et Linux ; la fenêtre web n'est plus nécessaire |
+| 10.2 | P2 | **Réglages récents dans les clients** : lissage des images agrandies (`reechantillonnage`, 9.15), empilement de couches (`empilement`, 2.10), badge de recalibration par machine (`/api/recalibrations`, 8.5) | un travail envoyé avec `lisse` et un empilement blanc-couleur-blanc depuis chaque client ; badge « Recalibration conseillée / périmée » visible sur la carte machine |
+| 10.3 | P3 | **Plusieurs serveurs RIP dans un client** (reprend 9.14) : file unifiée, envoi vers le serveur choisi | client relié à 2 serveurs de test → les deux files visibles, envoi vers chacun |
+| 10.4 | P2 | **Client Windows** (WinUI 3, même API), quand un PC Windows est disponible pour le construire et le signer | installateur signé, lot 1 complet sur Windows 11 |
+| 10.5 | P3 | **Planche d'imbrication, détourage et mise en coupe en natif** (éditeurs visuels de la phase 3 et 5) | ouverts et utilisables sans la fenêtre web |
+
 ## Décompte
 
 | Phase | P1 | P2 | P3 | Total |
@@ -436,7 +450,8 @@ Dépend de : 2.2, 2.3 (séparation et tramage), 1.1 (le mode porte les étapes).
 | 7 Pont ERP | 5 | 3 | 1 | 9 |
 | 8 Couleur mesurée | 5 | 5 | 2 | 12 |
 | 9 Reste | 2 | 7 | 6 | 15 |
-| **Total** | **58** | **43** | **18** | **119** |
+| 10 Clients natifs | 1 | 2 | 2 | 5 |
+| **Total** | **59** | **45** | **20** | **124** |
 
 ## Les 5 premiers items
 
