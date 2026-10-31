@@ -28,7 +28,9 @@ hmac = "0.13.0"
 sha2 = "0.11.1"
 qrcodegen = "1.8.0"
 # Client HTTPS du pont ERP (lot R2) : synchrone, léger, rustls (ring + racines webpki), sans gzip.
-ureq = { version = "~3.4.2", default-features = false, features = ["rustls"] }
+ureq = { version = "~3.4.2", default-features = false, features = ["rustls", "json"] }
+# Cloud E-KO RIP : côté serveur du tunnel vers la plate-forme.
+eko-rip-cloud = { path = "../cloud" }
 
 [package.metadata.deb]
 name = "eko-rip-serveur"

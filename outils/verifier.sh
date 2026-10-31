@@ -17,9 +17,9 @@ echo "· clés de traduction en double"
 node outils/doublons-traductions.js serveur/static/index.html
 
 echo "· clippy"
-cargo clippy -p eko-rip-serveur --all-targets --locked -- -D warnings
+cargo clippy -p eko-rip-serveur -p eko-rip-cloud --all-targets --locked -- -D warnings
 
 echo "· tests"
-cargo test -p eko-rip-serveur --locked
+cargo test -p eko-rip-serveur -p eko-rip-cloud --locked
 
 echo "Tout est vert."

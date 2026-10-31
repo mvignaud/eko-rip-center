@@ -30,6 +30,7 @@ Paquet : `/var/lib/eko-rip` (ailleurs : `EKO_RIP_DATA`).
 | `tarifs.json` | prix d'encre et de support, HT ou TTC |
 | `reglages.json` | réglages enregistrés |
 | `erp.json` | pont ERP : empreinte du jeton de l'ERP, secret HMAC, URL de l'ERP, activation, instance (droits 0600) — voir [pont-erp.md](pont-erp.md) |
+| `cloud.json` | Cloud E-KO RIP : adresse de la plate-forme, site et clé reçus à l'appairage (droits 0600) — voir [cloud.md](cloud.md) |
 | `pont/` | pont ERP : journal des événements (`journal.jsonl`) et état des envois (`etat.json`) ; ce n'est pas de la configuration, il n'est pas sauvegardé |
 | `supports.json` | supports par machine et leurs modes d'impression (identifiants stables) ; repris de `tarifs.json` au premier démarrage |
 | `charges.json` | support chargé dans chaque machine, saisi par l'opérateur ou lu sur l'Epson |

@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP, lot 1 : accès à distance sans VPN ni port ouvert.** Nouvelle plate-forme
+  `eko-rip-cloud` (paquet à part, `platform.e-ko.rip`) : le serveur RIP lui ouvre un tunnel
+  sortant et elle y fait passer les requêtes des postes et de l'app mobile, à
+  `https://platform.e-ko.rip/s/<site>`. Rattachement depuis Système › Cloud E-KO RIP par un
+  code court à valider sur la plate-forme. Jamais sans compte ; ni pont ERP, ni renvoi, ni
+  réglages du pont ou du cloud par le tunnel ; cookies et pages des ateliers isolés les uns des
+  autres. Voir `docs/fr/cloud.md`.
+  *E-KO RIP Cloud step 1: remote access without VPN or open port, through an outgoing tunnel
+  from the RIP server to platform.e-ko.rip; pairing by short code.*
 - **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
   fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
   les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi

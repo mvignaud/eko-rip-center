@@ -1,0 +1,8 @@
+# Réglages de la plate-forme E-KO RIP Cloud. Redémarrer après modification :
+#   systemctl restart eko-rip-cloud
+# Écoute locale : Caddy (HTTPS) fait suivre platform.e-ko.rip vers cette adresse.
+#EKO_CLOUD_ADDR=127.0.0.1:8650
+# Adresse publique (liens d'appairage, adresses des sites).
+#EKO_CLOUD_URL=https://platform.e-ko.rip
+# Taille maximale d'une requête vers un site (Mo).
+#EKO_CLOUD_MAX_MO=2048
