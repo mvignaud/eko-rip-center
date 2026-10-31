@@ -70,6 +70,12 @@ parité ; d'ici là, 0.Y.Z.
 - Trois lectures d'octets écrites autrement pour que `cargo clippy` repasse sans erreur avec
   Rust 1.99 (règle `chunks_exact_to_as_chunks`), sans changement de comportement.
   *Clippy clean again on Rust 1.99.*
+- Dossiers surveillés : un fichier refusé est rangé sous `nom-2`, `nom-3`… au lieu d'écraser,
+  dans `refuses/`, un refus précédent du même nom et sa raison.
+  *A rejected file no longer overwrites an earlier rejection of the same name.*
+- Balise `{support}` : à nom égal, c'est le support de l'imprimante retenue qui est pris (même
+  si `{machine}` vient après dans le motif), et plus le premier de ce nom dans le catalogue.
+  *`{support}` picks the media of the chosen printer when two share a name.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*
