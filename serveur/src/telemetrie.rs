@@ -26,6 +26,9 @@ pub struct Etat {
     pub dernier_ping: Option<u64>,
     #[serde(default)]
     pub desactive: bool,
+    /// Rapports de bug automatiques acceptés (voir `rapports`) ; `None` : pas encore demandé.
+    #[serde(default)]
+    pub rapports_auto: Option<bool>,
 }
 
 pub fn fichier(donnees: &Path) -> PathBuf {

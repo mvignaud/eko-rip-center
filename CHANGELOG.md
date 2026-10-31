@@ -23,6 +23,12 @@ parité ; d'ici là, 0.Y.Z.
   `EKO_TELEMETRIE=0`. La plate-forme tient le registre et ses statistiques
   (`eko-rip-cloud installations`, `GET /api/installations`). Voir
   `docs/fr/statistiques-anonymes.md`.
+- **Rapports de bug.** « Signaler un problème » dans les clients Mac et Linux et dans Système ;
+  rapports automatiques (plantage, rendu ou sortie en échec, rendu anormalement long) sur
+  accord de l'administrateur, demandé à la première ouverture. Journal du serveur joint avec
+  chemins, noms de fichiers et e-mails masqués, gardé en privé 90 jours sur la plate-forme ;
+  issue GitHub ouverte automatiquement sans journal ni e-mail, une seule par erreur
+  automatique répétée. Voir `docs/fr/rapports-de-bug.md`.
 - **Cloud E-KO RIP, lot 1 : accès à distance sans VPN ni port ouvert.** Nouvelle plate-forme
   `eko-rip-cloud` (paquet à part, `platform.e-ko.rip`) : le serveur RIP lui ouvre un tunnel
   sortant et elle y fait passer les requêtes des postes et de l'app mobile, à

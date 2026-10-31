@@ -39,6 +39,7 @@ mod regles;
 mod recalibration;
 mod cellules;
 mod cloud;
+mod rapports;
 mod telemetrie;
 mod rendus;
 mod releves;
@@ -438,6 +439,9 @@ async fn main() {
     // que `garder` en ferme une partie (pont ERP, renvoi, réglages du cloud).
     let par_cloud = routes(etat.clone()).layer(DefaultBodyLimit::max(max)).layer(axum::Extension(cloud::ParCloud));
     tokio::spawn(cloud::boucle(etat.config.donnees.clone(), par_cloud));
+    // Rapports de bug automatiques (si l'administrateur l'a accepté) : plantage écrit avant l'arrêt.
+    rapports::installer_crochet(etat.config.donnees.clone());
+    tokio::spawn(rapports::boucle(etat.config.donnees.clone()));
     // Ping anonyme d'installation (à l'installation, à chaque mise à jour, puis chaque semaine).
     let e = etat.clone();
     tokio::spawn(telemetrie::boucle(etat.config.donnees.clone(), move || (e.machines.read().unwrap().len(), reglages::lire(&e.config.donnees).len())));
@@ -521,6 +525,8 @@ fn routes(etat: Partage) -> Router {
         .route("/api/cloud", get(lire_cloud).delete(detacher_cloud))
         .route("/api/cloud/appairage", axum::routing::post(appairer_cloud))
         .route("/api/telemetrie", get(lire_telemetrie).post(regler_telemetrie))
+        .route("/api/rapports", axum::routing::post(signaler_probleme))
+        .route("/api/rapports/reglage", get(lire_reglage_rapports).post(regler_rapports))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -1465,6 +1471,7 @@ fn reprendre_fiche(donnees: &std::path::Path, t: &mut Travail) {
 
 async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     let jeton = etat.rendu.attendre(place).await;
+    let debut_rendu = std::time::Instant::now();
     let mut a_sortir = false;
     let donnees = &etat.config.donnees;
     t.statut = Statut::EnCours;
@@ -1609,6 +1616,13 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     reprendre_fiche(donnees, &mut t);
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
+    }
+    // Rapport de bug automatique (s'il est accepté) : rendu en échec, ou anormalement long.
+    let duree = debut_rendu.elapsed();
+    if matches!(t.statut, Statut::Echec) && let Some(code @ ("rendu_echoue" | "decoupe_illisible")) = t.code_erreur.as_deref() {
+        rapports::signaler(donnees, "erreur", code, t.erreur.as_deref().unwrap_or(""));
+    } else if duree > Duration::from_secs(60 * env_ou("EKO_RIP_LENTEUR_MIN", "30").parse::<u64>().unwrap_or(30).max(1)) {
+        rapports::signaler(donnees, "lenteur", "rendu_lent", &format!("rendu en {} min : {} page(s), {} dpi", duree.as_secs() / 60, t.pages.len(), t.demande.dpi));
     }
     // Mise en file automatique à son tour : après les arrivées automatiques d'avant.
     jeton.terminer(a_sortir.then(|| t.clone()), |t| {
@@ -2715,6 +2729,39 @@ struct ReglagePont {
     actif: bool,
     #[serde(default)]
     secret: Option<String>,
+}
+
+/// « Signaler un problème » (Système, clients Mac et Linux) : transmis à la plate-forme, avec
+/// le journal masqué du serveur si demandé. Rend la référence du rapport.
+async fn signaler_probleme(State(etat): State<Partage>, Json(s): Json<rapports::Signalement>) -> Response {
+    let corps = match rapports::preparer(&etat.config.donnees, &s) {
+        Ok(c) => c,
+        Err(code) => return refus(StatusCode::BAD_REQUEST, code, None),
+    };
+    let joindre = s.joindre_journal;
+    match tokio::task::spawn_blocking(move || rapports::envoyer_signalement(corps, joindre)).await {
+        Ok(Ok(reference)) => (StatusCode::CREATED, Json(serde_json::json!({ "reference": reference }))).into_response(),
+        Ok(Err(code)) if code == rapports::RAPPORT_INVALIDE => refus(StatusCode::BAD_REQUEST, code, None),
+        Ok(Err(code)) if code == rapports::RAPPORTS_SATURE => refus(StatusCode::TOO_MANY_REQUESTS, code, None),
+        _ => refus(StatusCode::BAD_GATEWAY, rapports::PLATEFORME_INJOIGNABLE, None),
+    }
+}
+
+/// Rapports automatiques : `auto` vaut null tant que l'administrateur n'a pas répondu.
+async fn lire_reglage_rapports(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "auto": rapports::auto(&etat.config.donnees) }))
+}
+
+#[derive(Deserialize)]
+struct ReglageRapports {
+    auto: bool,
+}
+
+async fn regler_rapports(State(etat): State<Partage>, Json(r): Json<ReglageRapports>) -> Response {
+    match rapports::regler_auto(&etat.config.donnees, r.auto) {
+        Ok(()) => Json(serde_json::json!({ "auto": r.auto })).into_response(),
+        Err(_) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", None),
+    }
 }
 
 /// Statistiques anonymes d'installation (Système).
@@ -5251,7 +5298,12 @@ async fn executer(etat: Partage, s: file::Sortie) {
         x.consommation = reel;
         match resultat {
             Ok(_) => x.etat = file::Etat::Terminee,
-            Err((code, e)) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e)),
+            Err((code, e)) => {
+                if code == "sortie_echouee" {
+                    rapports::signaler(&etat.config.donnees, "erreur", code, &e);
+                }
+                (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e))
+            }
         }
     }
     // Planche imprimée : les impressions qu'elle remplaçait le sont aussi (elles ne

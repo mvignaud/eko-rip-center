@@ -22,3 +22,6 @@
 # à chaque mise à jour puis chaque semaine ; identifiant aléatoire, OS, version, nombre de
 # machines et de réglages). Aussi réglable dans Système.
 #EKO_TELEMETRIE=1
+# Rendu plus long que ce nombre de minutes : rapport de bug automatique « lenteur » (seulement si
+# les rapports automatiques ont été acceptés dans Système › Rapports de bug).
+#EKO_RIP_LENTEUR_MIN=30

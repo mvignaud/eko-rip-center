@@ -520,6 +520,7 @@
     <section class="panneau systeme"><h2 data-t="pont_erp"></h2><div class="corps" id="pont"></div></section>
     <section class="panneau systeme"><h2 data-t="cloud_titre"></h2><div class="corps" id="cloud"></div></section>
     <section class="panneau systeme"><h2 data-t="telemetrie_titre"></h2><div class="corps" id="telemetrie"></div></section>
+    <section class="panneau systeme"><h2 data-t="rapports_titre"></h2><div class="corps" id="rapports"></div></section>
     <section class="panneau admin"><h2 data-t="machines_titre"></h2><form class="corps" id="editeur-machines"></form></section>
     <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
     <section class="panneau"><h2 data-t="journal_titre"></h2><div class="corps" id="journal"></div></section>
@@ -699,6 +700,13 @@ const textes = {
     pont_actif: "Activer le pont", pont_enregistre: "Pont ERP enregistré.", pont_nouvelle_instance: "Tirer une nouvelle instance",
     pont_confirmer_instance: "Tirer une nouvelle instance ? Le journal des événements repart de 1 et l'ERP prendra ce RIP comme une installation neuve (l'autre installation, s'il y en a une, s'arrêtera).",
     pont_instance_tiree: "Nouvelle instance tirée.", pont_note: "Le RIP appelle l'ERP (aucun port ouvert à l'atelier) : catalogue, états des travaux et des sorties, consommation. Le secret n'est jamais réaffiché.",
+    rapports_titre: "Rapports de bug", rapports_auto: "Envoyer automatiquement les rapports d'erreur",
+    rapports_note: "En cas de plantage, de rendu ou de sortie en échec, ou de rendu anormalement long : la version, le système, le code de l'erreur et les dernières lignes du journal du serveur, avec chemins, noms de fichiers et e-mails masqués. Ils restent privés sur la plate-forme E-KO RIP ; une issue GitHub publique, sans journal, en garde la trace.",
+    rapports_question: "Envoyer automatiquement à E-KO RIP les rapports d'erreur de ce serveur (plantage, échecs, lenteurs) ? La version, le système, le code de l'erreur et le journal du serveur, avec noms de fichiers masqués. Modifiable ensuite dans Système › Rapports de bug.",
+    rapports_signaler: "Signaler un problème…", rapports_champ_titre: "Titre", rapports_champ_description: "Description", rapports_champ_email: "E-mail (facultatif, pour être recontacté)",
+    rapports_joindre: "Joindre le journal du serveur (noms de fichiers masqués)", rapports_envoyer: "Envoyer",
+    rapports_public: "Le titre et la description seront publiés sur GitHub (dépôt public) : n'y mettez pas d'information confidentielle. Le journal et l'e-mail restent privés.",
+    rapports_merci: (r) => `Merci, rapport envoyé (référence ${r}).`,
     telemetrie_titre: "Statistiques anonymes", telemetrie_case: "Envoyer des statistiques anonymes d'installation",
     telemetrie_note: "Un identifiant aléatoire, le type de poste, l'OS, la version et le nombre de machines et de réglages, à l'installation, à chaque mise à jour puis une fois par semaine, pour compter les installations E-KO RIP. Aucune donnée personnelle ni fichier.",
     telemetrie_env: "Désactivé sur ce serveur par EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
@@ -788,6 +796,9 @@ const textes = {
     erreurs: {
       cloud_sans_compte: "Le cloud demande au moins un compte sur ce serveur (eko-rip-serveur utilisateur ajouter <nom>) : sans compte, l'accès est libre.",
       cloud_injoignable: "Plate-forme injoignable : vérifier la connexion Internet du serveur.",
+      rapport_invalide: "Rapport incomplet : un titre (120 caractères au plus) et une description sont demandés.",
+      rapports_sature: "Trop de rapports envoyés aujourd'hui : réessayer demain.",
+      plateforme_injoignable: "Plate-forme E-KO RIP injoignable : vérifier la connexion Internet du serveur.",
       appairage_expire: "Code expiré sans avoir été validé : en demander un nouveau.",
       cloud_deja_rattache: "Ce serveur est déjà rattaché à la plate-forme.",
       ferme_par_cloud: "Impossible à distance : à faire depuis l'atelier.",
@@ -1024,6 +1035,13 @@ const textes = {
     pont_actif: "Enable the bridge", pont_enregistre: "ERP bridge saved.", pont_nouvelle_instance: "Draw a new instance",
     pont_confirmer_instance: "Draw a new instance? The event log restarts from 1 and the ERP will take this RIP as a new installation (the other installation, if any, will stop).",
     pont_instance_tiree: "New instance drawn.", pont_note: "The RIP calls the ERP (no port opened at the workshop): catalogue, job and output states, consumption. The secret is never shown again.",
+    rapports_titre: "Bug reports", rapports_auto: "Send error reports automatically",
+    rapports_note: "On a crash, a failed render or output, or an abnormally long render: the version, the system, the error code and the last lines of the server log, with paths, file names and e-mails masked. They stay private on the E-KO RIP platform; a public GitHub issue, without the log, keeps track of it.",
+    rapports_question: "Automatically send this server's error reports (crashes, failures, slowness) to E-KO RIP? The version, the system, the error code and the server log, with file names masked. Can be changed later in System › Bug reports.",
+    rapports_signaler: "Report a problem…", rapports_champ_titre: "Title", rapports_champ_description: "Description", rapports_champ_email: "E-mail (optional, to be contacted)",
+    rapports_joindre: "Attach the server log (file names masked)", rapports_envoyer: "Send",
+    rapports_public: "The title and description will be published on GitHub (public repository): do not include confidential information. The log and the e-mail stay private.",
+    rapports_merci: (r) => `Thank you, report sent (reference ${r}).`,
     telemetrie_titre: "Anonymous statistics", telemetrie_case: "Send anonymous installation statistics",
     telemetrie_note: "A random identifier, the kind of station, the OS, the version and the number of machines and presets, at install time, on each update and then once a week, to count E-KO RIP installations. No personal data, no files.",
     telemetrie_env: "Disabled on this server by EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
@@ -1113,6 +1131,9 @@ const textes = {
     erreurs: {
       cloud_sans_compte: "The cloud needs at least one account on this server (eko-rip-serveur utilisateur ajouter <name>): without accounts, access is open.",
       cloud_injoignable: "Platform unreachable: check the server's Internet connection.",
+      rapport_invalide: "Incomplete report: a title (120 characters at most) and a description are required.",
+      rapports_sature: "Too many reports sent today: try again tomorrow.",
+      plateforme_injoignable: "E-KO RIP platform unreachable: check the server's Internet connection.",
       appairage_expire: "Code expired before being validated: ask for a new one.",
       cloud_deja_rattache: "This server is already linked to the platform.",
       ferme_par_cloud: "Not possible remotely: do it from the workshop.",
@@ -1295,6 +1316,7 @@ function afficherSession() {
   $("deconnexion").hidden = !session.utilisateur;
   // L'opérateur ne voit pas les réglages du serveur (le serveur les lui refuse de toute façon).
   document.body.dataset.role = session.role || "operateur";
+  if (session.utilisateur || session.acces_libre) demanderAccordRapports();
   $("qui").textContent = session.utilisateur ? T().connecte(session.utilisateur) : "";
 }
 formConnexion.addEventListener("submit", async (e) => {
@@ -1635,6 +1657,48 @@ async function chargerSysteme() {
   chargerPont();
   chargerCloud();
   chargerTelemetrie();
+  chargerRapports();
+}
+
+/** Rapports de bug (Système) : accord pour les envois automatiques, et « Signaler un problème ». */
+async function chargerRapports() {
+  const r = await api("/api/rapports/reglage");
+  if (r) afficherRapports(r);
+}
+function afficherRapports(r) {
+  const d = T();
+  const caseAuto = el("input", { type: "checkbox", checked: r.auto === true, className: "admin" });
+  caseAuto.addEventListener("change", async () => {
+    const lu = await api("/api/rapports/reglage", json("POST", { auto: caseAuto.checked }));
+    if (!lu) caseAuto.checked = !caseAuto.checked;
+  });
+  const titre = el("input", { type: "text", maxLength: 120, required: true });
+  const description = el("textarea", { rows: 5, maxLength: 5000, required: true });
+  const email = el("input", { type: "email", maxLength: 120 });
+  const joindre = el("input", { type: "checkbox", checked: true });
+  const formulaire = el("form", { hidden: true },
+    el("label", {}, d.rapports_champ_titre, titre), el("label", {}, d.rapports_champ_description, description),
+    el("label", {}, d.rapports_champ_email, email), el("label", {}, joindre, " ", d.rapports_joindre),
+    el("p", { className: "meta" }, d.rapports_public), el("div", { className: "ligne" }, el("button", { type: "submit" }, d.rapports_envoyer)));
+  formulaire.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const lu = await api("/api/rapports", json("POST", { titre: titre.value, description: description.value, email: email.value, joindre_journal: joindre.checked }));
+    if (lu) { dire(T().rapports_merci(lu.reference)); formulaire.reset(); formulaire.hidden = true; }
+  });
+  $("rapports").replaceChildren(
+    el("label", { className: "admin" }, caseAuto, " ", d.rapports_auto), el("p", { className: "meta admin" }, d.rapports_note),
+    el("div", { className: "ligne" }, bouton(d.rapports_signaler, () => { formulaire.hidden = !formulaire.hidden; if (!formulaire.hidden) titre.focus(); })),
+    formulaire);
+}
+/** Première ouverture par un administrateur : on demande une fois l'accord pour les rapports automatiques. */
+let rapportsDemandes = false;
+async function demanderAccordRapports() {
+  if (rapportsDemandes || document.body.dataset.role !== "admin") return;
+  rapportsDemandes = true;
+  const r = await api("/api/rapports/reglage");
+  if (!r || r.auto !== null) return;
+  const oui = await demander(T().rapports_question);
+  await api("/api/rapports/reglage", json("POST", { auto: !!oui }));
 }
 
 /** Statistiques anonymes d'installation (Système) : une case, réservée à l'administrateur. */
