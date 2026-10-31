@@ -16,6 +16,16 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Application mobile de suivi** (iOS, Android ; `clients/mobile/`, Expo). File des sorties
+  par machine avec Lancer / Pause / Stop / Relancer / Passer en tête, état des machines
+  (encres, rouleau, alertes), historique des alertes, et **notifications push** : nouvelle
+  alerte de la machine (capot ouvert, support épuisé…), encre sous 5 % ou vide, machine qui
+  ne répond plus puis revient, sortie ou rendu en échec, et en option les fins d'impression.
+  Côté serveur : `GET /api/mobile/etat`, `GET /api/mobile/evenements`,
+  `POST /api/mobile/appareils` (et `/retirer`), `POST /api/mobile/essai` ; envoi par le service
+  push d'Expo (le serveur doit joindre `exp.host` en HTTPS). Voir
+  [docs/fr/application-mobile.md](docs/fr/application-mobile.md).
+  *Mobile monitoring app (iOS, Android) with push notifications of machine errors.*
 - **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
   fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
   les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi

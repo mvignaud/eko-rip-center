@@ -162,6 +162,8 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | cutter port settings |
 | `EKO_RIP_EPSON_SNMP` | (empty) | Epson IP address: loaded media width read over SNMP |
 | `EKO_RIP_EPSON_COMMUNAUTE` | `public` | Epson SNMP community |
+| `EKO_RIP_EXPO_JETON` | (empty) | Expo access token, when "enhanced push security" is on for the mobile app's Expo project |
+| `EKO_RIP_EXPO_URL` | `https://exp.host/--/api/v2/push/send` | Expo push service (change for tests only) |
 | `EKO_RIP_ACCES_NAVIGATEUR` | `0` | `1`: full interface in a browser too (development only) |
 
 ## Sharing the hot folders (Samba)
