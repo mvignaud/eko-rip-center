@@ -105,6 +105,12 @@ impl Appairages {
         }
     }
 
+    /// Code (normalisé) d'une demande encore en attente.
+    pub fn code_en_attente(&mut self, code: &str) -> bool {
+        self.purger();
+        self.demandes.values().any(|d| d.code == code)
+    }
+
     /// Retire les demandes expirées.
     pub fn purger(&mut self) {
         self.demandes.retain(|_, d| d.creee.elapsed() < DUREE);

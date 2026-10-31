@@ -25,6 +25,14 @@ parité ; d'ici là, 0.Y.Z.
   autres. Voir `docs/fr/cloud.md`.
   *E-KO RIP Cloud step 1: remote access without VPN or open port, through an outgoing tunnel
   from the RIP server to platform.e-ko.rip; pairing by short code.*
+- **Cloud E-KO RIP, lot 2 : le portail** de `platform.e-ko.rip`. Inscription libre ou connexion
+  Google / Facebook ; « Mes sites » (rattacher un serveur par son code, état en ligne, retirer) ;
+  « Mon compte » (liaisons, suppression) ; administration (clés Google et Facebook avec les URL de
+  retour à déclarer, sites, comptes suspendus) ; CGU, mentions légales et politique de
+  confidentialité (SAS GOLDEN PRINT). Formulaires protégés (origine, jeton par session),
+  blocage après 5 échecs, limites par adresse, en-têtes de sécurité.
+  *E-KO RIP Cloud step 2: the platform portal (sign-up, Google/Facebook sign-in, sites, account,
+  admin with OAuth keys and callback URLs, legal pages).*
 - **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
   fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
   les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi

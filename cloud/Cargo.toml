@@ -17,9 +17,12 @@ name = "eko-rip-cloud"
 path = "src/main.rs"
 
 [dependencies]
+argon2 = "0.6.0"
 axum = "0.8.9"
 bytes = "1"
 getrandom = "0.4.3"
+# Portail : comptes, sessions, droits, réglages (SQLite embarqué, rien à installer).
+rusqlite = { version = "0.37", features = ["bundled"] }
 http-body-util = "0.1.5"
 hyper = { version = "1.12.0", features = ["client", "server", "http1", "http2"] }
 hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
@@ -30,9 +33,9 @@ sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["full"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 webpki-roots = "1.0.11"
+# Connexion Google / Facebook : échange du code côté serveur.
+ureq = { version = "~3.4.2", default-features = false, features = ["rustls", "json"] }
 
-[dev-dependencies]
-ureq = { version = "~3.4.2", default-features = false, features = ["json"] }
 
 [package.metadata.deb]
 name = "eko-rip-cloud"

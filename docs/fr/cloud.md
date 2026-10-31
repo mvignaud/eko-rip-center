@@ -5,9 +5,9 @@ d'atelier depuis l'extérieur, **sans VPN et sans ouvrir de port** : c'est le se
 ouvre lui-même une connexion sortante (HTTPS, port 443) vers la plate-forme, et la plate-forme
 fait passer par elle les requêtes des postes et de l'app mobile.
 
-Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lot 1** (tunnel et appairage).
-Le portail (comptes de la plate-forme, Google / Facebook, sites, droits) arrive au lot 2 ; d'ici
-là on se connecte à distance avec **les comptes du serveur RIP**, comme à l'atelier.
+Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 et 2** (tunnel,
+appairage, portail). À distance, on se connecte encore avec **les comptes du serveur RIP**,
+comme à l'atelier ; l'identité de la plate-forme passera jusqu'au serveur au lot 3.
 
 ```
 Poste ou téléphone hors atelier
@@ -26,9 +26,9 @@ Caddy ──► eko-rip-cloud ──► tunnel du site
    Sans compte, l'accès est libre sur le réseau local : le cloud refuse alors de s'ouvrir.
 2. Dans **Système › Cloud E-KO RIP**, un administrateur clique **Connecter à la plate-forme**.
    Le serveur affiche un code court (`KXRT-4821`), valable 10 minutes.
-3. Le code est validé sur la plate-forme (lot 1 : sur le VPS,
-   `sudo -u eko-rip-cloud EKO_CLOUD_DATA=/var/lib/eko-rip-cloud eko-rip-cloud valider KXRT-4821 "Atelier Dupont"` ;
-   lot 2 : depuis le portail, une fois connecté à son compte).
+3. Sur le portail, une fois connecté : **Mes sites › Rattacher un serveur RIP**, saisir le code
+   (le lien affiché par le serveur y mène directement). Le compte devient propriétaire du site.
+   En secours, sur le VPS : `sudo -u eko-rip-cloud EKO_CLOUD_DATA=/var/lib/eko-rip-cloud eko-rip-cloud valider KXRT-4821`.
 4. Quelques secondes plus tard, le serveur reçoit sa clé, l'enregistre dans `cloud.json`
    (droits 0600, jamais réaffichée) et ouvre le tunnel. L'écran affiche l'adresse à distance :
    `https://platform.e-ko.rip/s/<site>`.
@@ -39,6 +39,27 @@ seul (attente de 1 s, 2 s… jusqu'à 60 s).
 
 Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-forme, essais),
 `EKO_RIP_CLOUD_NOM` (nom du site proposé, sinon le nom de la machine).
+
+## Le portail
+
+- **Inscription** libre (e-mail + mot de passe de 10 caractères au moins, CGU acceptées), ou
+  **Google** / **Facebook** une fois leurs clés saisies en administration. Un e-mail déjà inscrit
+  n'est lié à Google que si Google l'a vérifié ; jamais à Facebook sans connexion préalable
+  (liaison depuis « Mon compte »).
+- **Mes sites** : état en ligne / hors ligne, adresse à distance, rôle ; rattacher (10 sites par
+  compte), retirer (le propriétaire ; tunnel coupé aussitôt).
+- **Mon compte** : connexions liées, suppression du compte (et des sites possédés).
+- **Administration** (super-administrateur, donné par `eko-rip-cloud admin <e-mail>` sur le VPS) :
+  clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
+  eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
+  des comptes (suspendre : ses sessions sont fermées).
+- **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
+  les mentions marquées « À COMPLÉTER » sont à remplir : SIREN, siège, capital, contacts…).
+- Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
+  session ; 5 échecs de mot de passe bloquent le compte 5 minutes ; limites par adresse
+  (inscriptions, connexions) ; cookie de session `HttpOnly`, `SameSite=Lax`, jamais transmis
+  aux ateliers ; pages servies avec une politique de sécurité stricte (CSP, pas d'iframe).
+- Données : `/var/lib/eko-rip-cloud/portail.sqlite` (0600) à côté de `sites.json`.
 
 ## Utiliser l'accès à distance
 
@@ -87,7 +108,7 @@ platform.e-ko.rip {
 }
 ```
 
-Commandes : `eko-rip-cloud sites` (liste), `eko-rip-cloud valider <code> [propriétaire]`,
+Commandes : `eko-rip-cloud admin <e-mail>` (super-administrateur), `eko-rip-cloud sites` (liste), `eko-rip-cloud valider <code> [propriétaire]`,
 `eko-rip-cloud supprimer <site>` (son tunnel est coupé dans la minute). Réglages dans
 `/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO`.
 

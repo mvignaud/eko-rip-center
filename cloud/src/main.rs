@@ -5,6 +5,7 @@
 //!   eko-rip-cloud valider <CODE> [qui]    valide un code d'appairage affiché par un serveur RIP
 //!   eko-rip-cloud sites                   liste les sites
 //!   eko-rip-cloud supprimer <site>        retire un site (son tunnel est coupé dans la minute)
+//!   eko-rip-cloud admin <e-mail>          donne l'espace d'administration à un compte du portail
 
 use eko_rip_cloud::{appairage, relais, sites};
 use std::path::PathBuf;
@@ -59,6 +60,26 @@ async fn main() {
             }
             None => {
                 eprintln!("Usage : eko-rip-cloud supprimer <site>");
+                2
+            }
+        }),
+        Some("admin") => std::process::exit(match args.get(1) {
+            Some(email) => match eko_rip_cloud::base::ouvrir(&donnees).and_then(|c| eko_rip_cloud::base::nommer_super_admin(&c, email)) {
+                Ok(true) => {
+                    println!("{email} est super-administrateur de la plate-forme.");
+                    0
+                }
+                Ok(false) => {
+                    eprintln!("Aucun compte avec cet e-mail : le créer d'abord sur le portail (/inscription).");
+                    1
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    1
+                }
+            },
+            None => {
+                eprintln!("Usage : eko-rip-cloud admin <e-mail>");
                 2
             }
         }),
