@@ -736,6 +736,8 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
     let mut fond = (false, reperage::FondReperes { debord_mm: 3.0, aplat: false, cmjn: None }, false, None::<[f64; 4]>);
     let mut fiche = Fiche::default();
     let (mut epreuve, mut options_epreuve) = (false, epreuve::Options::default());
+    // Réglage enregistré, appliqué par le serveur (clients natifs) : il remplace la demande.
+    let mut reglage = None::<String>;
 
     loop {
         let champ = match form.next_field().await {
@@ -941,6 +943,10 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
                 d.abandon_polices = valeur == "oui";
                 Ok(())
             }
+            "reglage" => {
+                reglage = Some(valeur).filter(|v| !v.is_empty());
+                Ok(())
+            }
             "echeance" if valeur.is_empty() => Ok(()),
             "echeance" => valeur.parse().map(|v| fiche.echeance = Some(v)).map_err(|_| erreur("fiche_invalide")),
             _ => Ok(()),
@@ -959,6 +965,12 @@ async fn envoyer(State(etat): State<Partage>, mut form: Multipart) -> Response {
         return abandon(&rep, StatusCode::BAD_REQUEST, ("fond_reperes_invalide", None)).await;
     }
     d.fond_reperes = fond.0.then_some(reperage::FondReperes { cmjn: fond.3.filter(|_| fond.2), ..fond.1 });
+    if let Some(n) = reglage {
+        match reglages::lire(&etat.config.donnees).into_iter().find(|r| r.nom == n) {
+            Some(r) => d = r.demande,
+            None => return abandon(&rep, StatusCode::BAD_REQUEST, (pont::REFUS_REGLAGE_INCONNU, Some(n))).await,
+        }
+    }
     match creer_travail_avec(&etat, id, nom, format, d, fiche, Origine::Aucune, vec![]).await {
         Ok(t) => (StatusCode::ACCEPTED, Json(t)).into_response(),
         Err((statut, r)) => abandon(&rep, statut, r).await,
@@ -5251,6 +5263,28 @@ mod tests {
                 None => Body::empty(),
             };
             routes(e.clone()).oneshot(r.body(corps).unwrap()).await.unwrap()
+        }
+
+        /// Envoi avec `reglage` (clients natifs) : le réglage enregistré remplace la demande ;
+        /// un nom inconnu est refusé.
+        #[tokio::test]
+        async fn envoi_avec_un_reglage_enregistre() {
+            let e = etat("envoi-reglage");
+            let r = appel(&e, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Coupe", "demande": { "mode": "decouper" } }))).await;
+            assert!(r.status().is_success(), "{:?}", r.status());
+            let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" fill="none" stroke="#000"/></svg>"##;
+            let envoi = |reglage: &str| {
+                let corps = format!("--x\r\nContent-Disposition: form-data; name=\"reglage\"\r\n\r\n{reglage}\r\n--x\r\nContent-Disposition: form-data; name=\"fichier\"; filename=\"a.svg\"\r\nContent-Type: image/svg+xml\r\n\r\n{svg}\r\n--x--\r\n");
+                Request::builder().method("POST").uri("/api/travaux").header(header::USER_AGENT, "Mozilla/5.0 EKO-RIP-Client/0.9").header(header::CONTENT_TYPE, "multipart/form-data; boundary=x").body(Body::from(corps)).unwrap()
+            };
+            let r = routes(e.clone()).oneshot(envoi("Inconnu")).await.unwrap();
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!(v["code"], serde_json::json!("reglage_inconnu"));
+            let r = routes(e.clone()).oneshot(envoi("Coupe")).await.unwrap();
+            assert_eq!(r.status(), StatusCode::ACCEPTED);
+            let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!(v["mode"], serde_json::json!("decouper"));
         }
 
         /// Renvoi vers un autre RIP (roadmap 9.4) : le flux part par la connexion de la

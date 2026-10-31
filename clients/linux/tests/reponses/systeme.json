@@ -1,0 +1,1 @@
+{"alertes":[{"dossier":true,"fichier":"/tmp/claude-0/ripdata/sorties/epson","reprise":true}],"conservation_jours":30,"disque_libre":26435035136,"disque_total":270553174016,"rendus":{"en_attente":0,"en_cours":0,"simultanes":4},"seuil_libre":5368709120,"tampon":0,"version":"0.28.0"}
