@@ -76,6 +76,9 @@ parité ; d'ici là, 0.Y.Z.
 - Balise `{support}` : à nom égal, c'est le support de l'imprimante retenue qui est pris (même
   si `{machine}` vient après dans le motif), et plus le premier de ce nom dans le catalogue.
   *`{support}` picks the media of the chosen printer when two share a name.*
+- Pont ERP : une action reçue pendant le rendu d'un travail (opérateur, échéance, suspension,
+  annulation) n'est plus effacée par la fin du rendu.
+  *ERP actions received while a job renders are no longer lost when the render ends.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*

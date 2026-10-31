@@ -1396,11 +1396,20 @@ async fn abandon(rep: &std::path::Path, statut: StatusCode, (code, detail): Refu
     refus(statut, code, detail)
 }
 
+/// Fiche et retenue de l'ERP telles qu'enregistrées : une action de l'ERP (opérateur,
+/// échéance, suspension…) reçue pendant le rendu n'est pas effacée par la copie du rendu.
+fn reprendre_fiche(donnees: &std::path::Path, t: &mut Travail) {
+    if let Some(enregistre) = lire_travail(donnees, t.id) {
+        (t.fiche, t.retenue_erp) = (enregistre.fiche, enregistre.retenue_erp);
+    }
+}
+
 async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     let jeton = etat.rendu.attendre(place).await;
     let mut a_sortir = false;
     let donnees = &etat.config.donnees;
     t.statut = Statut::EnCours;
+    reprendre_fiche(donnees, &mut t);
     let _ = ecrire(donnees, &t);
 
     let rep = dossier(donnees, t.id);
@@ -1538,6 +1547,7 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
             }
         }
     }
+    reprendre_fiche(donnees, &mut t);
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
     }
@@ -9486,6 +9496,10 @@ mod tests {
 
             assert_eq!(resultat(agir_avec(&e, action(Operateur, Some("Léa"), None))), (Value::Null, json!(2), json!(0)));
             assert_eq!(lire_travail(&d, t.id).unwrap().fiche.operateur, "Léa");
+            // Le rendu qui tournait garde l'opérateur reçu entre-temps.
+            let mut copie_du_rendu = t.clone();
+            reprendre_fiche(&d, &mut copie_du_rendu);
+            assert_eq!(copie_du_rendu.fiche.operateur, "Léa");
             // Les deux pages repartent ; le travail en cours de rendu n'est pas doublé.
             assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (Value::Null, json!(2), json!(1)));
             assert_eq!(etats(&e).iter().filter(|(_, x)| *x == file::Etat::EnAttente).count(), 2);
