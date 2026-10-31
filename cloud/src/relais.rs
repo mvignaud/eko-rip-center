@@ -10,7 +10,7 @@
 
 use crate::appairage::{self, Appairages, Suivi};
 use crate::installations::{self, Registre};
-use crate::{CHEMIN_TUNNEL, COOKIE_RIP, PROTOCOLE, sites};
+use crate::{CHEMIN_TUNNEL, COOKIE_RIP, PROTOCOLE, portail, sites};
 use axum::body::Body;
 use axum::extract::{Path as Chemin, Request, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
@@ -42,30 +42,86 @@ struct Tunnel {
 }
 
 pub struct Relais {
-    config: Config,
+    pub(crate) config: Config,
     tunnels: Mutex<HashMap<String, Tunnel>>,
     appairages: Mutex<Appairages>,
     installations: Mutex<Registre>,
     generation: AtomicU64,
+    /// Base du portail (comptes, sessions, droits, réglages).
+    base: Mutex<rusqlite::Connection>,
+    /// Limites par adresse ou par compte : (essais, début de la fenêtre).
+    limites: Mutex<HashMap<String, (u32, std::time::Instant)>>,
 }
 
 pub type Partage = Arc<Relais>;
 
-/// Panique si `installations.json` est illisible (on ne repart pas de zéro en silence).
+/// Panique si `installations.json` ou la base sont illisibles (on ne repart pas de zéro en silence).
 pub fn nouveau(config: Config) -> Partage {
     let registre = installations::lire(&config.donnees).expect("installations.json");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0) })
+    let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default() })
 }
 
 impl Relais {
+    /// Statistiques anonymes des installations (page d'administration).
+    pub fn statistiques_installations(&self) -> installations::Statistiques {
+        self.installations.lock().unwrap().statistiques(crate::maintenant())
+    }
+
     pub fn connectes(&self) -> Vec<String> {
         self.tunnels.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub fn base(&self) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
+        self.base.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Vrai tant que `cle` a fait moins de `max` essais dans la fenêtre.
+    pub fn limiter(&self, cle: &str, max: u32, fenetre: Duration) -> bool {
+        let mut l = self.limites.lock().unwrap_or_else(|p| p.into_inner());
+        if l.len() > 50_000 {
+            l.retain(|_, (_, debut)| debut.elapsed() < Duration::from_secs(3600));
+        }
+        let e = l.entry(cle.to_string()).or_insert((0, std::time::Instant::now()));
+        if e.1.elapsed() >= fenetre {
+            *e = (0, std::time::Instant::now());
+        }
+        e.0 += 1;
+        e.0 <= max
+    }
+
+    pub fn code_en_attente(&self, code: &str) -> bool {
+        self.appairages.lock().unwrap().code_en_attente(code)
+    }
+
+    /// Retire un site : sites.json, droits, et tunnel coupé aussitôt.
+    pub fn retirer_site(&self, site: &str) {
+        let _ = sites::supprimer(&self.config.donnees, site);
+        let _ = crate::base::oublier_site(&self.base(), site);
+        if let Some(t) = self.tunnels.lock().unwrap().remove(site) {
+            t.tache.abort();
+        }
     }
 }
 
 pub fn routes(relais: Partage) -> Router {
     Router::new()
-        .route("/", get(accueil))
+        .route("/", get(portail::accueil))
+        .route("/inscription", get(portail::inscription).post(portail::inscrire))
+        .route("/connexion", get(portail::connexion).post(portail::connecter))
+        .route("/deconnexion", post(portail::deconnecter))
+        .route("/sites", get(portail::mes_sites))
+        .route("/sites/rattacher", post(portail::rattacher))
+        .route("/sites/{site}/retirer", post(portail::retirer))
+        .route("/appairer", get(portail::appairer))
+        .route("/compte", get(portail::mon_compte))
+        .route("/compte/supprimer", post(portail::supprimer_compte))
+        .route("/admin", get(portail::admin))
+        .route("/admin/oauth", post(portail::regler_oauth))
+        .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
+        .route("/auth/{fournisseur}", get(portail::partir_oauth))
+        .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
+        .route("/{page}", get(portail::legal))
         .route("/sante", get(|| async { "ok" }))
         .route(CHEMIN_TUNNEL, get(ouvrir_tunnel))
         .route("/api/appairage", post(demander_appairage))
@@ -75,7 +131,21 @@ pub fn routes(relais: Partage) -> Router {
         .route("/s/{site}", any(relayer))
         .route("/s/{site}/", any(relayer))
         .route("/s/{site}/{*reste}", any(relayer))
+        .layer(axum::middleware::map_response(entetes_du_portail))
         .with_state(relais)
+}
+
+/// En-têtes de sécurité des pages du portail ; une réponse d'atelier garde les siens
+/// (`sandbox`, posés par `relayer`).
+async fn entetes_du_portail(mut rep: Response) -> Response {
+    let h = rep.headers_mut();
+    if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
+        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+        h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+        h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+        h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
+    }
+    rep
 }
 
 /// Tâche de fond : demandes expirées, validations orphelines, et tunnels des sites retirés
@@ -132,10 +202,6 @@ async fn statistiques_installations(State(relais): State<Partage>, entetes: Head
 
 fn refus(statut: StatusCode, code: &'static str) -> Response {
     (statut, Json(serde_json::json!({ "code": code }))).into_response()
-}
-
-async fn accueil() -> impl IntoResponse {
-    ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], include_str!("../static/accueil.html").replace("{version}", env!("CARGO_PKG_VERSION")))
 }
 
 /// `Authorization: Bearer <site>.<clé>`.
@@ -230,8 +296,13 @@ async fn suivre_appairage(State(relais): State<Partage>, Chemin(demande): Chemin
         Suivi::EnAttente(code) => Json(serde_json::json!({ "etat": "en_attente", "code": appairage::afficher(&code) })).into_response(),
         Suivi::Validee { nom, proprietaire } => {
             let donnees = relais.config.donnees.clone();
+            let compte = proprietaire.as_deref().and_then(|p| p.strip_prefix("compte:")).and_then(|p| p.parse::<i64>().ok());
             match tokio::task::spawn_blocking(move || sites::creer(&donnees, &nom, proprietaire)).await {
                 Ok(Ok((site, cle))) => {
+                    // Validé depuis le portail : le compte devient propriétaire du site.
+                    if let Some(c) = compte {
+                        let _ = crate::base::donner_droit(&relais.base(), &site.id, c, "proprietaire");
+                    }
                     eprintln!("site appairé : {} ({})", site.id, site.nom);
                     let adresse = format!("{}/s/{}", relais.config.url_publique, site.id);
                     Json(serde_json::json!({ "etat": "valide", "site": site.id, "cle": cle, "adresse": adresse })).into_response()

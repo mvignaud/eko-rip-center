@@ -43,4 +43,4 @@ machines pilotées, nouvelles installations par semaine sur 8 semaines) :
 - sur le VPS : `sudo -u eko-rip-cloud EKO_CLOUD_DATA=/var/lib/eko-rip-cloud eko-rip-cloud installations` ;
 - en HTTP : `GET /api/installations` avec `Authorization: Bearer <EKO_CLOUD_JETON_STATS>`
   (route fermée tant que le jeton n'est pas réglé dans `/etc/default/eko-rip-cloud`). La page
-  du super-admin du portail (lot 2 du cloud) s'appuiera dessus.
+  *Administration* du portail (super-admin) affiche aussi ces statistiques, carte « Installations ».

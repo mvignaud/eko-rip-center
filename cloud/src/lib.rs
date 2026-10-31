@@ -8,8 +8,10 @@
 //! flux, aucun format maison.
 
 pub mod appairage;
+pub mod base;
 pub mod client;
 pub mod installations;
+pub mod portail;
 pub mod relais;
 pub mod sites;
 
