@@ -1,10 +1,9 @@
-import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { estEvenementMachine, Evenement, MESSAGE_RESEAU } from '../src/api';
-import { configurerNotifications } from '../src/notifications';
+import { configurerNotifications, useReponseNotification } from '../src/notifications';
 import { SessionProvider, useSession } from '../src/session';
 import { useTheme } from '../src/theme';
 import { Bouton } from '../src/ui';
@@ -26,7 +25,7 @@ function Racine() {
   const traitee = useRef<string | null>(null);
 
   // Toucher une notification ouvre l'onglet concerné (aussi au démarrage à froid)
-  const reponse = Notifications.useLastNotificationResponse();
+  const reponse = useReponseNotification();
   useEffect(() => {
     if (!reponse || statut !== 'connecte') return;
     const id = reponse.notification.request.identifier;

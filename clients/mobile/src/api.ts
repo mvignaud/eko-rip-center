@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { reinitialiserDemo, reponseDemo } from './demo';
 
 // ---------- Types ----------
 
@@ -127,9 +128,11 @@ export function normaliserUrl(brut: string): string {
 
 export const stockage = {
   async lire(cle: string): Promise<string | null> {
+    if (modeDemo) return null; // la démo ne lit ni n'écrit rien sur l'appareil
     try { return await SecureStore.getItemAsync(cle); } catch { return null; }
   },
   async ecrire(cle: string, valeur: string | null): Promise<void> {
+    if (modeDemo) return;
     try {
       if (valeur === null) await SecureStore.deleteItemAsync(cle);
       else await SecureStore.setItemAsync(cle, valeur);
@@ -138,7 +141,14 @@ export const stockage = {
 };
 
 let urlServeur = '';
+let modeDemo = false;
 let surSessionPerdue: (() => void) | null = null;
+
+/** Mode démo : les requêtes sont servies par des données fictives en mémoire (voir demo.ts). */
+export function definirDemo(actif: boolean) {
+  modeDemo = actif;
+  if (actif) reinitialiserDemo();
+}
 
 export function definirServeur(url: string) { urlServeur = normaliserUrl(url); }
 export function definirSurSessionPerdue(f: (() => void) | null) { surSessionPerdue = f; }
@@ -229,6 +239,7 @@ let auth: Auth = new AuthCookieLocal();
 export function definirAuth(a: Auth) { auth = a; }
 
 async function requete<T>(methode: string, chemin: string, corps?: unknown, retenter = true): Promise<T> {
+  if (modeDemo) return reponseDemo<T>(methode, chemin);
   const r = await brut(methode, chemin, corps);
   if (r.ok) {
     if (r.status === 204) return undefined as T;

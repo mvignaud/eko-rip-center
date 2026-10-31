@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api, Evenement, messageErreur, stockage } from './api';
 import { useAppActive } from './hooks';
@@ -62,6 +63,7 @@ export function AlertesProvider({ children }: { children: React.ReactNode }) {
 
   // Notification reçue au premier plan : on recharge tout de suite
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const abo = Notifications.addNotificationReceivedListener(() => { rafraichir(); });
     return () => abo.remove();
   }, [rafraichir]);

@@ -16,6 +16,7 @@ export const ETAT_NOTIF_INITIAL: EtatNotif = { code: 'inactif', message: '', jet
 
 /** Bannière + son même quand l'app est au premier plan, et canal Android « alertes ». */
 export function configurerNotifications() {
+  if (Platform.OS === 'web') return; // notifications natives uniquement
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -87,4 +88,10 @@ export async function desactiverNotifications(jeton: string | null): Promise<voi
   if (!j) return;
   try { await api.retirerAppareil(j); } catch { /* serveur absent : sans importance */ }
   await stockage.ecrire('jeton', null);
+}
+
+/** Dernière notification touchée ; toujours null sur le web (non pris en charge par expo-notifications). */
+export function useReponseNotification() {
+  // Platform.OS est constant : l'ordre des hooks ne change jamais
+  return Platform.OS === 'web' ? null : Notifications.useLastNotificationResponse();
 }

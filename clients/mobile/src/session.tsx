@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import {
-  api, definirServeur, definirSurSessionPerdue, ErreurApi, InfoSession, normaliserUrl, sonderServeur, stockage,
+  api, definirDemo, definirServeur, definirSurSessionPerdue, ErreurApi, InfoSession, normaliserUrl, sonderServeur, stockage,
 } from './api';
 import {
   activerNotifications, desactiverNotifications, ecrirePrefs, ETAT_NOTIF_INITIAL, EtatNotif, lirePrefs, PrefsNotif,
@@ -16,11 +17,15 @@ interface Session {
   accesLibre: boolean;
   notif: EtatNotif;
   prefs: PrefsNotif;
+  /** Mode démo : données fictives, aucun serveur ni notification. */
+  demo: boolean;
   /** Vérifie le serveur ; renvoie l'info de session (lève ErreurApi si injoignable). */
   sonder(url: string): Promise<InfoSession>;
   /** Se connecte (nom / mdp ignorés en accès libre). */
   connexion(url: string, nom?: string, mdp?: string): Promise<void>;
   deconnexion(): Promise<void>;
+  demarrerDemo(): void;
+  quitterDemo(): void;
   reessayer(): void;
   reglerNotifications(p: Partial<PrefsNotif>): Promise<void>;
 }
@@ -41,6 +46,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<PrefsNotif>({ actives: true, fins: false });
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
+  const [demo, setDemo] = useState(false);
   const jetonRef = useRef<string | null>(null);
 
   // Enregistre l'appareil pour les notifications push si l'utilisateur les veut
@@ -64,8 +70,26 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     synchroniserNotifs(p);
   }, [synchroniserNotifs]);
 
+  const demarrerDemo = useCallback(() => {
+    definirDemo(true);
+    setDemo(true);
+    setInfo({ acces_libre: true, utilisateur: null, role: 'admin' });
+    setNotif({ code: 'desactive', message: 'Notifications indisponibles en mode démo.', jeton: null });
+    setStatut('connecte');
+  }, []);
+
+  const quitterDemo = useCallback(() => {
+    definirDemo(false);
+    setDemo(false);
+    setInfo({ acces_libre: false, utilisateur: null, role: null });
+    setNotif(ETAT_NOTIF_INITIAL);
+    setStatut('deconnecte');
+  }, []);
+
   // Démarrage : reprise de la session avec l'URL et les identifiants mémorisés
   const demarrer = useCallback(async () => {
+    // Sur le web (captures d'écran), ?demo=1 ouvre directement le mode démo
+    if (Platform.OS === 'web' && globalThis.location?.search.includes('demo=1')) return demarrerDemo();
     setStatut('chargement');
     const urlMemo = await stockage.lire('url');
     if (!urlMemo) return setStatut('deconnecte');
@@ -85,7 +109,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (e instanceof ErreurApi && e.reseau) setStatut('erreur_reseau');
       else setStatut('deconnecte');
     }
-  }, [finConnexion]);
+  }, [finConnexion, demarrerDemo]);
 
   useEffect(() => { demarrer(); }, [demarrer]);
 
@@ -103,6 +127,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     accesLibre: info.acces_libre,
     notif,
     prefs,
+    demo,
     sonder: (u) => sonderServeur(u),
     async connexion(u, nom, mdp) {
       const base = normaliserUrl(u);
@@ -134,14 +159,17 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         .then(() => api.deconnexion())
         .catch(() => {});
     },
+    demarrerDemo,
+    quitterDemo,
     reessayer: demarrer,
     async reglerNotifications(patch) {
       const p = { ...prefsRef.current, ...patch };
       setPrefs(p);
+      if (demo) return;
       await ecrirePrefs(p);
       await synchroniserNotifs(p);
     },
-  }), [statut, url, info, notif, prefs, demarrer, finConnexion, synchroniserNotifs]);
+  }), [statut, url, info, notif, prefs, demo, demarrer, demarrerDemo, quitterDemo, finConnexion, synchroniserNotifs]);
 
   return <Ctx.Provider value={valeur}>{children}</Ctx.Provider>;
 }

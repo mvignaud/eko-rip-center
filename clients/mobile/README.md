@@ -77,6 +77,14 @@ eas submit -p ios        # App Store Connect (TestFlight)
 eas submit -p android    # Google Play (compte de service Play requis)
 ```
 
+## Fiches stores et captures
+
+- `store.config.json` : fiche App Store (`eas metadata:push`) ; `store/google-play.md` : fiche Play Console ; `store/confidentialite.md` : politique de confidentialité.
+- **Mode démo** : bouton « Essayer le mode démo » de l'écran de connexion (données fictives dans `src/demo.ts`, rien n'est enregistré ni envoyé).
+  Les relecteurs Apple / Google ne peuvent pas joindre le serveur de l'atelier.
+- Captures (`store/captures/`) : `npx expo export --platform web`, servir `dist/`, ouvrir `/?demo=1` (démo automatique, web uniquement)
+  et capturer avec Playwright (iPhone 6,9" : 440x956 @3 ; Android : 412x915 @2,625).
+
 ## Réseau
 
 - L'app parle en HTTP clair au serveur (`http://192.168.x.x:8640`) : ATS (iOS) et `usesCleartextTraffic` (Android)

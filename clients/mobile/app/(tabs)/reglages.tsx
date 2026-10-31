@@ -40,8 +40,8 @@ export default function Reglages() {
     <ScrollView contentContainerStyle={{ paddingVertical: 12 }}>
       <Text style={[styles.titre, { color: t.texteDiscret }]}>Serveur</Text>
       <Carte>
-        {ligne('Adresse', s.url)}
-        {ligne('Utilisateur', s.accesLibre ? 'Accès libre' : s.utilisateur ?? '—')}
+        {ligne('Adresse', s.demo ? 'Mode démo' : s.url)}
+        {ligne('Utilisateur', s.demo ? 'Données fictives' : s.accesLibre ? 'Accès libre' : s.utilisateur ?? '—')}
         {!s.accesLibre && ligne('Rôle', s.role === 'admin' ? 'Administrateur' : s.role === 'operateur' ? 'Opérateur' : '—')}
       </Carte>
 
@@ -78,7 +78,9 @@ export default function Reglages() {
       </Carte>
 
       <View style={{ marginHorizontal: 16, marginBottom: 12 }}>
-        <Bouton titre="Se déconnecter" onPress={quitter} couleur={t.erreur} />
+        {s.demo
+          ? <Bouton titre="Quitter le mode démo" onPress={s.quitterDemo} couleur={t.erreur} />
+          : <Bouton titre="Se déconnecter" onPress={quitter} couleur={t.erreur} />}
       </View>
 
       <Text style={[styles.version, { color: t.texteDiscret }]}>E-KO RIP version {VERSION_APP}</Text>

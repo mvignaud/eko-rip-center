@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErreurApi, messageErreur, stockage } from '../src/api';
@@ -9,7 +9,7 @@ import { useTheme } from '../src/theme';
 import { BlocErreur, Bouton } from '../src/ui';
 
 export default function Connexion() {
-  const { sonder, connexion, url: urlMemo } = useSession();
+  const { sonder, connexion, demarrerDemo, url: urlMemo } = useSession();
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [url, setUrl] = useState('');
@@ -111,6 +111,10 @@ export default function Connexion() {
             />
           )}
         </View>
+
+        <Pressable onPress={demarrerDemo} disabled={occupe} hitSlop={8} style={styles.demo}>
+          <Text style={{ color: t.accent, fontSize: 15 }}>Essayer le mode démo</Text>
+        </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -121,5 +125,6 @@ const styles = StyleSheet.create({
   titre: { fontSize: 34, fontWeight: '700' },
   sousTitre: { fontSize: 15, marginTop: 4, marginBottom: 32 },
   etiquette: { fontSize: 13, textTransform: 'uppercase', marginBottom: 6, marginTop: 12 },
+  demo: { alignSelf: 'center', marginTop: 28, padding: 6 },
   champ: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 17, marginBottom: 8 },
 });

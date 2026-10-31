@@ -1,0 +1,56 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 2M Numérique",
+    "categories": ["UTILITIES", "PRODUCTIVITY"],
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false,
+      "seventeenPlus": false
+    },
+    "info": {
+      "fr-FR": {
+        "title": "E-KO RIP",
+        "subtitle": "Suivi de vos impressions",
+        "description": "E-KO RIP est l'application compagnon du RIP E-KO, le serveur d'impression grand format de votre atelier. Elle vous permet de suivre la production à distance, depuis votre téléphone.\n\nFILE D'ATTENTE\n• Les sorties de chaque machine : en cours, en attente, suspendues, terminées ou en échec\n• Durée écoulée et durée estimée, message d'erreur en cas d'échec\n• Actions rapides : lancer ou reprendre, mettre en pause, passer en tête, arrêter, relancer une sortie\n\nMACHINES\n• État de chaque machine : en impression, en découpe, en attente, injoignable\n• Niveau de chaque encre, avec mise en évidence des niveaux bas\n• Longueur de support restante sur le rouleau\n• Alertes de la machine (capot ouvert, fin de rouleau…)\n\nALERTES ET NOTIFICATIONS\n• Notifications push en cas d'erreur machine, d'encre basse ou de sortie en échec\n• Fins d'impression en option\n• Historique des dernières alertes, avec pastille de nouveautés\n\nÀ SAVOIR\n• L'application se connecte au serveur RIP E-KO de votre entreprise : il faut être sur le réseau de l'atelier ou connecté au VPN.\n• Aucun compte E-KO n'est nécessaire pour découvrir l'application : touchez « Essayer le mode démo » sur l'écran de connexion.\n• Vos identifiants restent sur votre téléphone et ne sont envoyés qu'à votre propre serveur.\n• L'application ne permet ni l'envoi de fichiers ni le réglage de l'impression ou de la découpe : elle sert à surveiller et à piloter la file.",
+        "keywords": ["RIP", "impression", "imprimante", "grand format", "file d'attente", "encre", "atelier", "découpe", "alertes", "production"],
+        "promoText": "Suivez la file d'impression, les niveaux d'encre et les alertes de vos machines, où que vous soyez dans l'atelier.",
+        "releaseNotes": "Première version de E-KO RIP : file d'attente, machines (encres, rouleau, alertes), notifications push des erreurs machine et mode démo.",
+        "marketingUrl": "https://e-ko.fr",
+        "supportUrl": "https://e-ko.fr",
+        "privacyPolicyUrl": "https://e-ko.fr/confidentialite-rip"
+      },
+      "en-US": {
+        "title": "E-KO RIP",
+        "subtitle": "Print queue & machine alerts",
+        "description": "E-KO RIP is the companion app for the E-KO RIP, the large-format print server of your shop. It lets you follow production remotely from your phone.\n\nPRINT QUEUE\n• Outputs for each machine: running, waiting, paused, done or failed\n• Elapsed and estimated time, error message when a job fails\n• Quick actions: start or resume, pause, move to front, stop, reprint an output\n\nMACHINES\n• Status of each machine: printing, cutting, idle, unreachable\n• Level of every ink, with low levels highlighted\n• Media length left on the roll\n• Machine alerts (cover open, media near end…)\n\nALERTS AND NOTIFICATIONS\n• Push notifications for machine errors, low ink and failed outputs\n• Optional notifications when a print finishes\n• History of recent alerts with an unread badge\n\nGOOD TO KNOW\n• The app connects to your company's own E-KO RIP server: you must be on the shop network or connected to its VPN.\n• No E-KO account is needed to try the app: tap \"Essayer le mode démo\" (demo mode) on the login screen.\n• Your credentials stay on your phone and are only sent to your own server.\n• The app does not upload files or change print or cut settings: it is for monitoring and managing the queue.",
+        "keywords": ["RIP", "print", "printer", "large format", "queue", "ink", "workshop", "cutting", "alerts", "production"],
+        "promoText": "Follow your print queue, ink levels and machine alerts wherever you are in the shop.",
+        "releaseNotes": "First release of E-KO RIP: print queue, machines (inks, roll, alerts), push notifications for machine errors and a demo mode.",
+        "marketingUrl": "https://e-ko.fr",
+        "supportUrl": "https://e-ko.fr",
+        "privacyPolicyUrl": "https://e-ko.fr/confidentialite-rip"
+      }
+    },
+    "review": {
+      "firstName": "Mathieu",
+      "lastName": "Vignaud",
+      "email": "mathieu.vignaud2@gmail.com",
+      "phone": "+33 0 00 00 00 00",
+      "demoRequired": false,
+      "notes": "E-KO RIP is a companion app for an in-house RIP (print server) running on a company's local network. It cannot be reached from outside the shop, so reviewers cannot connect to a real server.\n\nTo review the app, tap \"Essayer le mode démo\" at the bottom of the login screen. No account or password is needed. Demo mode shows fictitious data (3 machines, print queue, ink levels, alerts) and the actions (pause, resume, stop, reprint) work on that data. Push notifications are disabled in demo mode. To leave it, go to the Réglages tab and tap \"Quitter le mode démo\".\n\nThe app UI is in French."
+    }
+  }
+}
