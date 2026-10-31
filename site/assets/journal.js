@@ -69,8 +69,10 @@
         (complet && e.description ? '<p>' + enrichir(e.description) + '</p>' : '') + '</div>';
     }).join('');
     var ancre = 'v' + String(r.version).replace(/[^0-9a-z.-]/gi, '');
+    // Le lien permanent garde la langue lue (revue Codex).
+    var page = '/changelog/' + (langue === 'fr' ? '' : '?lang=' + langue);
     return '<article class="version" id="' + ancre + '">' +
-      '<div class="version-tete"><h2><a href="/changelog/#' + ancre + '" style="color:inherit">' + echapper(r.version) + '</a></h2><time datetime="' + echapper(r.date) + '">' + date(r.date) + '</time></div>' +
+      '<div class="version-tete"><h2><a href="' + page + '#' + ancre + '" style="color:inherit">' + echapper(r.version) + '</a></h2><time datetime="' + echapper(r.date) + '">' + date(r.date) + '</time></div>' +
       (r.codename ? '<p class="devise">' + enrichir(r.codename) + '</p>' : '') +
       entrees + '</article>';
   }
