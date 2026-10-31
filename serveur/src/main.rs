@@ -3117,8 +3117,9 @@ async fn surveiller(etat: Partage) {
                 eprintln!("dossier surveillé : {} refusé : {raison}", chemin.display());
                 let refuses = chemin.with_file_name("refuses");
                 let _ = std::fs::create_dir_all(&refuses);
-                if let Some(nom) = chemin.file_name().and_then(|n| n.to_str()) {
-                    let cible = regles::place_refus(&refuses, nom);
+                // Nom non UTF-8 : rangé quand même, sous son nom lisible.
+                if let Some(nom) = chemin.file_name().map(|n| n.to_string_lossy()) {
+                    let cible = regles::place_refus(&refuses, &nom);
                     let _ = std::fs::rename(&chemin, &cible);
                     let _ = std::fs::write(cible.with_extension("refus.txt"), format!("{raison}\n"));
                 }
@@ -3423,10 +3424,13 @@ fn appliquer_actions_erp(etat: &Etat) {
             }
         }
         // Réimpression : un travail rendu, sans sortie encore en file, repart comme à son
-        // arrivée ; un travail en cours de rendu ou déjà en file n'est pas doublé.
+        // arrivée ; un travail en cours de rendu, rendu mais pas encore sorti (il attend son
+        // tour derrière un rendu plus ancien), déjà en file ou posé sur une planche pas encore
+        // imprimée n'est pas doublé.
         if a.action == pont::GenreAction::Reimprimer {
             for t in &travaux {
-                if !matches!(t.statut, Statut::Termine) || occupe(etat, t) {
+                let en_file = etat.file.lock().unwrap().sorties.iter().any(|s| s.travail == t.id && (s.active() || s.etat == file::Etat::Imbriquee));
+                if !matches!(t.statut, Statut::Termine) || en_file || etat.rendu.retenu(|x| x.id == t.id) {
                     non_modifiables += 1;
                     continue;
                 }
@@ -9493,6 +9497,9 @@ mod tests {
             // Une page seulement.
             assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, Some(2)))), (Value::Null, json!(1), json!(1)));
             assert_eq!(e.file.lock().unwrap().sorties.last().map(|s| (s.page, s.etat)), Some((2, file::Etat::EnAttente)));
+            // Posé sur une planche pas encore imprimée : pas doublé.
+            e.file.lock().unwrap().sorties.last_mut().unwrap().etat = file::Etat::Imbriquee;
+            assert_eq!(resultat(agir_avec(&e, action(Reimprimer, None, None))), (json!("rien_a_reimprimer"), json!(0), json!(2)));
             std::fs::remove_dir_all(&d).unwrap();
         }
 
