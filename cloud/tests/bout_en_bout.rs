@@ -175,3 +175,72 @@ async fn ping_d_installation_et_statistiques() {
     assert_eq!(corps["par_type"]["serveur"], 1);
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Rapports : gardés sur la plate-forme ; issue GitHub (faux GitHub local) sans journal ni
+/// e-mail ; même signature automatique = même issue.
+#[tokio::test(flavor = "multi_thread")]
+async fn rapports_et_issues_github() {
+    use std::sync::{Arc, Mutex};
+    let recus: Arc<Mutex<Vec<(String, serde_json::Value)>>> = Default::default();
+    let r2 = recus.clone();
+    let faux_github = Router::new().route(
+        "/repos/{proprio}/{depot}/{*reste}",
+        post(move |uri: axum::http::Uri, h: HeaderMap, axum::Json(v): axum::Json<serde_json::Value>| {
+            let r2 = r2.clone();
+            async move {
+                assert_eq!(h.get(header::AUTHORIZATION).unwrap(), "Bearer jeton-gh");
+                r2.lock().unwrap().push((uri.path().to_string(), v));
+                (axum::http::StatusCode::CREATED, axum::Json(serde_json::json!({ "number": 7, "html_url": "https://github.test/o/d/issues/7" })))
+            }
+        }),
+    );
+    let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api = format!("http://{}", ecoute.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(ecoute, faux_github).await.unwrap() });
+    // SAFETY : variable lue seulement par la plate-forme de ce test.
+    unsafe { std::env::set_var("EKO_CLOUD_GITHUB_API", &api) };
+
+    let d = dossier();
+    {
+        let b = eko_rip_cloud::base::ouvrir(&d).unwrap();
+        eko_rip_cloud::base::regler(&b, "github_jeton", "jeton-gh").unwrap();
+        eko_rip_cloud::base::regler(&b, "github_depot", "o/d").unwrap();
+    }
+    let base = relais_local(&d, 1024).await;
+    let envoyer = |corps: serde_json::Value| {
+        let b = base.clone();
+        bloquant(move || {
+            let mut r = agent().post(format!("{b}/api/rapports")).send_json(corps).unwrap();
+            (r.status().as_u16(), r.body_mut().read_json::<serde_json::Value>().unwrap_or_default())
+        })
+    };
+    let manuel = serde_json::json!({ "type": "client-linux", "version": "0.30.0", "os": "Ubuntu 26.04 LTS", "nature": "manuel", "titre": "Aperçu blanc", "description": "Ça ne marche pas @moi", "email": "a@b.fr", "journal": "ligne secrète" });
+    let (statut, rep) = envoyer(manuel).await;
+    assert_eq!(statut, 201);
+    let reference = rep["reference"].as_str().unwrap().to_string();
+    assert_eq!(envoyer(serde_json::json!({ "type": "x" })).await.0, 422);
+    assert_eq!(envoyer(serde_json::json!({ "type": "serveur", "version": "1", "os": "x", "nature": "manuel", "titre": "t", "description": "" })).await.0, 400);
+    let auto = serde_json::json!({ "id": "0123456789abcdef0123456789abcdef", "type": "serveur", "version": "0.30.0", "os": "Ubuntu", "nature": "erreur", "code": "rendu_echoue", "titre": "Rendu échoué", "journal": "x" });
+    assert_eq!(envoyer(auto.clone()).await.0, 201);
+    assert_eq!(envoyer(auto).await.0, 201);
+
+    // L'issue part en arrière-plan.
+    for _ in 0..50 {
+        if recus.lock().unwrap().len() >= 2 && eko_rip_cloud::rapports::lire(&d, &reference).and_then(|r| r.issue).is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let recus = recus.lock().unwrap().clone();
+    // Deux issues (manuel, puis la signature automatique) ; la 2e occurrence auto, dans la
+    // journée, n'ajoute pas de commentaire.
+    assert_eq!(recus.iter().filter(|(p, _)| p == "/repos/o/d/issues").count(), 2, "{recus:?}");
+    assert!(!recus.iter().any(|(p, _)| p.ends_with("/comments")));
+    let corps = recus[0].1["body"].as_str().unwrap();
+    assert!(!corps.contains("a@b.fr") && !corps.contains("ligne secrète") && !corps.contains("@moi"));
+    let gardé = eko_rip_cloud::rapports::lire(&d, &reference).unwrap();
+    assert_eq!((gardé.email.as_str(), gardé.journal.as_str(), gardé.issue.as_deref()), ("a@b.fr", "ligne secrète", Some("https://github.test/o/d/issues/7")));
+    assert_eq!(eko_rip_cloud::rapports::lister(&d).len(), 3);
+    let _ = std::fs::remove_dir_all(&d);
+}

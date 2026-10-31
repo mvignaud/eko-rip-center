@@ -12,6 +12,7 @@ mod inspecteur;
 mod libelles;
 mod machines;
 mod modele;
+mod rapport;
 mod systeme;
 mod telemetrie;
 mod travaux;

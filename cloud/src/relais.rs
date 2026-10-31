@@ -68,6 +68,15 @@ impl Relais {
         self.installations.lock().unwrap().statistiques(crate::maintenant())
     }
 
+    /// Accès GitHub réglé dans Administration (jeton et dépôt), sinon aucun.
+    pub fn github(&self) -> Option<crate::rapports::Github> {
+        let b = self.base();
+        let v = |cle: &str| crate::base::reglage(&b, cle).ok().flatten().filter(|v| !v.is_empty());
+        let (jeton, depot) = (v("github_jeton")?, v("github_depot")?);
+        let api = std::env::var("EKO_CLOUD_GITHUB_API").ok().filter(|v| !v.is_empty()).unwrap_or_else(|| "https://api.github.com".into());
+        Some(crate::rapports::Github { jeton, depot, api })
+    }
+
     pub fn connectes(&self) -> Vec<String> {
         self.tunnels.lock().unwrap().keys().cloned().collect()
     }
@@ -118,6 +127,8 @@ pub fn routes(relais: Partage) -> Router {
         .route("/compte/supprimer", post(portail::supprimer_compte))
         .route("/admin", get(portail::admin))
         .route("/admin/oauth", post(portail::regler_oauth))
+        .route("/admin/github", post(portail::regler_github))
+        .route("/admin/rapports/{reference}", get(portail::voir_rapport))
         .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
         .route("/auth/{fournisseur}", get(portail::partir_oauth))
         .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
@@ -128,6 +139,7 @@ pub fn routes(relais: Partage) -> Router {
         .route("/api/appairage/{demande}", get(suivre_appairage))
         .route("/api/ping", post(recevoir_ping).layer(axum::extract::DefaultBodyLimit::max(4096)))
         .route("/api/installations", get(statistiques_installations))
+        .route("/api/rapports", post(recevoir_rapport).layer(axum::extract::DefaultBodyLimit::max(crate::rapports::MAX_CORPS)))
         .route("/s/{site}", any(relayer))
         .route("/s/{site}/", any(relayer))
         .route("/s/{site}/{*reste}", any(relayer))
@@ -156,6 +168,8 @@ pub async fn entretenir(relais: Partage) {
         relais.appairages.lock().unwrap().purger();
         appairage::purger_validations(&relais.config.donnees);
         enregistrer_installations(&relais).await;
+        let d = relais.config.donnees.clone();
+        let _ = tokio::task::spawn_blocking(move || crate::rapports::purger(&d, crate::maintenant())).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {
             relais.tunnels.lock().unwrap().retain(|id, t| {
                 let garde = sites.iter().any(|s| &s.id == id);
@@ -185,6 +199,28 @@ async fn recevoir_ping(State(relais): State<Partage>, Json(p): Json<installation
         Err(installations::Refus::Invalide) => refus(StatusCode::BAD_REQUEST, "ping_invalide"),
         Err(installations::Refus::Sature) => refus(StatusCode::SERVICE_UNAVAILABLE, "ping_sature"),
     }
+}
+
+/// Rapport de bug d'une installation : gardé ici, puis issue GitHub en arrière-plan (sans
+/// journal ni e-mail). Au plus 20 rapports par installation et 500 en tout par jour.
+async fn recevoir_rapport(State(relais): State<Partage>, Json(d): Json<crate::rapports::Demande>) -> Response {
+    let Some(rapport) = crate::rapports::valider(&d, crate::maintenant()) else { return refus(StatusCode::BAD_REQUEST, "rapport_invalide") };
+    let jour = Duration::from_secs(86_400);
+    if !relais.limiter("rapports", 500, jour) || !d.id.is_empty() && !relais.limiter(&format!("rapport:{}", d.id), 20, jour) {
+        return refus(StatusCode::TOO_MANY_REQUESTS, "rapports_sature");
+    }
+    let donnees = relais.config.donnees.clone();
+    let reference = rapport.reference.clone();
+    let r = rapport.clone();
+    if !matches!(tokio::task::spawn_blocking(move || crate::rapports::enregistrer(&donnees, &r)).await, Ok(Ok(()))) {
+        return refus(StatusCode::SERVICE_UNAVAILABLE, "indisponible");
+    }
+    eprintln!("rapport reçu : {reference} ({} {})", rapport.nature, rapport.type_poste);
+    if let Some(gh) = relais.github() {
+        let donnees = relais.config.donnees.clone();
+        tokio::task::spawn_blocking(move || crate::rapports::publier(&donnees, &gh, rapport, crate::maintenant()));
+    }
+    (StatusCode::CREATED, Json(serde_json::json!({ "reference": reference }))).into_response()
 }
 
 /// `Authorization: Bearer <EKO_CLOUD_JETON_STATS>` ; route absente (404) sans jeton configuré.

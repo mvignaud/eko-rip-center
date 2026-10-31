@@ -490,6 +490,7 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
     let message = match q.get("ok").map(String::as_str) {
         Some("oauth") => r#"<p class="ok">Clés enregistrées.</p>"#,
         Some("compte") => r#"<p class="ok">Compte mis à jour.</p>"#,
+        Some("github") => r#"<p class="ok">Accès GitHub enregistré.</p>"#,
         _ => "",
     };
     let connectes = r.connectes();
@@ -535,6 +536,7 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
     let corps = format!(
         r#"<h1>Administration</h1>{message}
 {installations}
+{rapports}
 <div class="carte"><h2>Connexion Google</h2>
 <p class="meta">Google Cloud Console › API et services › Identifiants › ID client OAuth (application Web).</p>
 <p>Origine JavaScript autorisée : <code>{url}</code><br>URI de redirection autorisé : <code>{url}/auth/google/retour</code></p>
@@ -560,6 +562,7 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         domaine = echapper(r.config.url_publique.split("://").nth(1).unwrap_or("")),
         ns = tous.len(),
         installations = carte_installations(&r.statistiques_installations()),
+        rapports = carte_rapports(&r, &s, &valeur("github_depot"), !valeur("github_jeton").is_empty()),
     );
     page("Administration", Some(&s), &corps).into_response()
 }
@@ -586,6 +589,103 @@ fn carte_installations(st: &crate::installations::Statistiques) -> String {
         os = tableau("Système", &st.par_os),
         versions = tableau("Version", &st.par_version),
     )
+}
+
+/// Rapports de bug reçus (90 jours) et accès GitHub pour les issues.
+fn carte_rapports(r: &Partage, s: &Session, depot: &str, jeton: bool) -> String {
+    let tous = crate::rapports::lister(&r.config.donnees);
+    let lignes: String = tous
+        .iter()
+        .take(100)
+        .map(|x| {
+            let issue = x.issue.as_deref().map_or("—".to_string(), |u| format!(r#"<a href="{}" rel="noopener" target="_blank">issue</a>"#, echapper(u)));
+            format!(
+                r#"<tr><td><a href="/admin/rapports/{re}"><code>{re}</code></a><br><span class="meta">{date}</span></td><td>{nature}{code}</td><td>{poste}</td><td>{titre}</td><td>{issue}</td></tr>"#,
+                re = echapper(&x.reference),
+                date = date(Some(x.recu_le)),
+                nature = echapper(&x.nature),
+                code = if x.code.is_empty() { String::new() } else { format!("<br><code>{}</code>", echapper(&x.code)) },
+                poste = echapper(&format!("{} {}", x.type_poste, x.version)),
+                titre = echapper(&x.titre),
+            )
+        })
+        .collect();
+    format!(
+        r#"<div class="carte"><h2>Rapports ({n})</h2>
+<p class="meta">« Signaler un problème » et rapports automatiques des installations, gardés 90 jours. Le journal et l'e-mail restent ici ; l'issue GitHub n'a que le titre, la description, le poste, l'OS et la référence.</p>
+<div class="tableau"><table><thead><tr><th>Référence</th><th>Nature</th><th>Poste</th><th>Titre</th><th>GitHub</th></tr></thead><tbody>{lignes}</tbody></table></div>
+<h2>Issues GitHub</h2>
+<p class="meta">Jeton à grain fin (Settings › Developer settings › Fine-grained tokens) limité au dépôt, droit « Issues : lecture et écriture ». Sans jeton, les rapports sont seulement gardés ici.</p>
+<form method="post" action="/admin/github">{csrf}
+<label>Dépôt (propriétaire/nom)<input type="text" name="github_depot" value="{depot}" placeholder="mvignaud/eko-rip-center" autocomplete="off"></label>
+<label>Jeton ({etat})<input type="password" name="github_jeton" autocomplete="new-password"></label>
+<label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer le jeton enregistré</span></label>
+<button type="submit">Enregistrer</button></form></div>"#,
+        n = tous.len(),
+        csrf = hidden_csrf(s),
+        depot = echapper(depot),
+        etat = if jeton { "enregistré (laisser vide pour le garder)" } else { "non renseigné" },
+    )
+}
+
+pub async fn regler_github(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger_admin(&r, &h) {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let depot = champ(&f, "github_depot");
+    let parties: Vec<&str> = depot.split('/').collect();
+    let nom_ok = |p: &str| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    if !depot.is_empty() && !(parties.len() == 2 && parties.iter().all(|p| nom_ok(p))) {
+        return erreur_page(&r, Some(&s), "Dépôt invalide (forme attendue : propriétaire/nom).");
+    }
+    let b = r.base();
+    let mut ok = base::regler(&b, "github_depot", &depot).is_ok();
+    let jeton = champ(&f, "github_jeton");
+    if champ(&f, "effacer") == "1" {
+        ok &= base::regler(&b, "github_jeton", "").is_ok();
+    } else if !jeton.is_empty() {
+        ok &= base::regler(&b, "github_jeton", &jeton).is_ok();
+    }
+    drop(b);
+    if !ok {
+        return erreur_page(&r, Some(&s), "Enregistrement impossible.");
+    }
+    Redirect::to("/admin?ok=github").into_response()
+}
+
+/// Un rapport en entier, journal compris (super-admin).
+pub async fn voir_rapport(State(r): State<Partage>, h: HeaderMap, Chemin(reference): Chemin<String>) -> Response {
+    let s = match exiger_admin(&r, &h) {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    let Some(x) = crate::rapports::lire(&r.config.donnees, &reference) else { return erreur_page(&r, Some(&s), "Rapport introuvable (effacé après 90 jours ?).") };
+    let ligne = |k: &str, v: &str| if v.is_empty() { String::new() } else { format!("<dt>{k}</dt><dd>{}</dd>", echapper(v)) };
+    let corps = format!(
+        r#"<h1>Rapport {re}</h1><div class="carte"><dl>{a}{b}{c}{d}{e}{f}{g}{h}</dl>{issue}</div>
+<div class="carte"><h2>Description</h2><pre>{desc}</pre></div>
+<div class="carte"><h2>Journal</h2><pre>{journal}</pre></div><p><a href="/admin">Retour</a></p>"#,
+        re = echapper(&x.reference),
+        a = ligne("Reçu le", &date(Some(x.recu_le))),
+        b = ligne("Nature", &x.nature),
+        c = ligne("Code", &x.code),
+        d = ligne("Poste", &format!("{} {}", x.type_poste, x.version)),
+        e = ligne("Serveur", &x.serveur),
+        f = ligne("Système", &x.os),
+        g = ligne("Titre", &x.titre),
+        h = ligne("E-mail", &x.email),
+        issue = x.issue.as_deref().map_or(String::new(), |u| format!(r#"<p><a href="{}" rel="noopener" target="_blank">Issue GitHub</a></p>"#, echapper(u))),
+        desc = echapper(&x.description),
+        journal = if x.journal.is_empty() { "(aucun journal joint)".into() } else { echapper(&x.journal) },
+    );
+    page("Rapport", Some(&s), &corps).into_response()
 }
 
 pub async fn regler_oauth(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {

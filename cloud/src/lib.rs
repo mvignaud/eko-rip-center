@@ -12,6 +12,7 @@ pub mod base;
 pub mod client;
 pub mod installations;
 pub mod portail;
+pub mod rapports;
 pub mod relais;
 pub mod sites;
 

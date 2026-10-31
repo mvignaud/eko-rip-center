@@ -65,7 +65,7 @@ fn nouvel_id() -> Option<String> {
 }
 
 /// `PRETTY_NAME` de /etc/os-release (repli « Linux »), 64 caractères au plus.
-fn os() -> String {
+pub(crate) fn os() -> String {
     let nom = std::fs::read_to_string("/etc/os-release")
         .ok()
         .and_then(|s| s.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim().trim_matches(|c| c == '"' || c == '\'').trim().to_string())))
