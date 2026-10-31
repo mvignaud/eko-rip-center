@@ -36,7 +36,7 @@ eko-rip-cloud = { path = "../cloud" }
 name = "eko-rip-serveur"
 maintainer = "2M Numérique <mathieu.vignaud2@gmail.com>"
 copyright = "2026, 2M Numérique"
-extended-description = "Serveur du RIP E-KO RIP Center : reçoit les PDF des postes par le navigateur, les rend en plaques d'encre et pilote les machines branchées."
+extended-description = "Serveur du RIP E-KO RIP Center : reçoit les PDF des postes par le navigateur, les rend en plaques d'encre et pilote les machines branchées. Se rattache au Cloud E-KO RIP (https://platform.e-ko.rip) pour l'accès à distance sans VPN."
 depends = "$auto, ghostscript, adduser"
 section = "graphics"
 priority = "optional"
