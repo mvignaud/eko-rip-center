@@ -140,6 +140,13 @@ impl Client {
         r
     }
 
+    /// Signale un problème au serveur (`POST /api/rapports`) ; rend la référence du rapport.
+    pub fn rapporter(&self, corps: serde_json::Value) -> Resultat<String> {
+        let rep = self.verifier(self.requete("POST", "/api/rapports").send_json(corps))?;
+        let v: serde_json::Value = rep.into_json().map_err(|e| Erreur::locale("reponse_illisible", e.to_string()))?;
+        Ok(v["reference"].as_str().unwrap_or_default().to_string())
+    }
+
     // --- Lectures ---
 
     pub fn travaux(&self) -> Resultat<Vec<Travail>> {

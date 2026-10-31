@@ -18,3 +18,14 @@
 #EKO_RIP_EPSON_COMMUNAUTE=public
 # 1 : interface complète aussi dans un navigateur (développement seulement).
 #EKO_RIP_ACCES_NAVIGATEUR=0
+# Cloud E-KO RIP : plate-forme d'accès à distance (sans VPN ni port ouvert). Le serveur s'y
+# rattache depuis Système › Cloud E-KO RIP › Connecter à la plate-forme (code à saisir sur
+# https://platform.e-ko.rip). Les statistiques anonymes et les rapports de bug y partent aussi.
+EKO_RIP_CLOUD_URL=https://platform.e-ko.rip
+# 0 : aucun ping anonyme d'installation vers la plate-forme E-KO RIP (sinon : à l'installation,
+# à chaque mise à jour puis chaque semaine ; identifiant aléatoire, OS, version, nombre de
+# machines et de réglages). Aussi réglable dans Système.
+#EKO_TELEMETRIE=1
+# Rendu plus long que ce nombre de minutes : rapport de bug automatique « lenteur » (seulement si
+# les rapports automatiques ont été acceptés dans Système › Rapports de bug).
+#EKO_RIP_LENTEUR_MIN=30

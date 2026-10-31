@@ -15,7 +15,39 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.30.0] — 2026-10-31
+
 ### Ajouté
+- **Statistiques anonymes d'installation.** Le serveur et les clients Mac et Linux envoient à
+  `platform.e-ko.rip/api/ping`, à l'installation, à chaque mise à jour puis chaque semaine, un
+  identifiant aléatoire, le type de poste, l'OS, la version (et pour le serveur le nombre de
+  machines et de réglages), même sans rattachement au cloud. Désactivable dans Système ou par
+  `EKO_TELEMETRIE=0`. La plate-forme tient le registre et ses statistiques
+  (`eko-rip-cloud installations`, `GET /api/installations`). Voir
+  `docs/fr/statistiques-anonymes.md`.
+- **Rapports de bug.** « Signaler un problème » dans les clients Mac et Linux et dans Système ;
+  rapports automatiques (plantage, rendu ou sortie en échec, rendu anormalement long) sur
+  accord de l'administrateur, demandé à la première ouverture. Journal du serveur joint avec
+  chemins, noms de fichiers et e-mails masqués, gardé en privé 90 jours sur la plate-forme ;
+  issue GitHub ouverte automatiquement sans journal ni e-mail, une seule par erreur
+  automatique répétée. Voir `docs/fr/rapports-de-bug.md`.
+- **Cloud E-KO RIP, lot 1 : accès à distance sans VPN ni port ouvert.** Nouvelle plate-forme
+  `eko-rip-cloud` (paquet à part, `platform.e-ko.rip`) : le serveur RIP lui ouvre un tunnel
+  sortant et elle y fait passer les requêtes des postes et de l'app mobile, à
+  `https://platform.e-ko.rip/s/<site>`. Rattachement depuis Système › Cloud E-KO RIP par un
+  code court à valider sur la plate-forme. Jamais sans compte ; ni pont ERP, ni renvoi, ni
+  réglages du pont ou du cloud par le tunnel ; cookies et pages des ateliers isolés les uns des
+  autres. Voir `docs/fr/cloud.md`.
+  *E-KO RIP Cloud step 1: remote access without VPN or open port, through an outgoing tunnel
+  from the RIP server to platform.e-ko.rip; pairing by short code.*
+- **Cloud E-KO RIP, lot 2 : le portail** de `platform.e-ko.rip`. Inscription libre ou connexion
+  Google / Facebook ; « Mes sites » (rattacher un serveur par son code, état en ligne, retirer) ;
+  « Mon compte » (liaisons, suppression) ; administration (clés Google et Facebook avec les URL de
+  retour à déclarer, sites, comptes suspendus) ; CGU, mentions légales et politique de
+  confidentialité (SAS GOLDEN PRINT). Formulaires protégés (origine, jeton par session),
+  blocage après 5 échecs, limites par adresse, en-têtes de sécurité.
+  *E-KO RIP Cloud step 2: the platform portal (sign-up, Google/Facebook sign-in, sites, account,
+  admin with OAuth keys and callback URLs, legal pages).*
 - **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
   fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
   les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi
@@ -95,6 +127,11 @@ parité ; d'ici là, 0.Y.Z.
 - Renvoi : un flux reçu d'un autre RIP ne peut plus viser une machine qui renvoie
   elle-même vers un troisième (`renvoi_en_chaine`), notre jeton ne sert plus de relais.
   *No chained forwarding through this RIP.*
+
+*Added: E-KO RIP Cloud (remote access without VPN through platform.e-ko.rip, pairing by
+code, portal), anonymous installation statistics (opt-out), bug reports ("Report a problem"
+in the Mac and Linux clients, opt-in automatic reports with masked server log, GitHub issue
+without log or e-mail), G7 grey calibration and other roadmap items.*
 
 ## [0.29.0] — 2026-10-30
 

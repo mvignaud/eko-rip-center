@@ -28,6 +28,15 @@ impl Systeme {
         }
         let client_groupe = adw::PreferencesGroup::builder().title("Ce poste").build();
         client_groupe.add(&client);
+        let stats = gtk::CheckButton::builder().active(crate::telemetrie::active()).valign(gtk::Align::Center).build();
+        stats.connect_toggled(|c| crate::telemetrie::regler_active(c.is_active()));
+        let ligne_stats = adw::ActionRow::builder()
+            .title("Envoyer des statistiques anonymes d'installation")
+            .subtitle("Un identifiant aléatoire, le type de poste, l'OS et la version, pour compter les installations. Aucune donnée personnelle ni fichier.")
+            .activatable_widget(&stats)
+            .build();
+        ligne_stats.add_prefix(&stats);
+        client_groupe.add(&ligne_stats);
 
         let alertes = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
         let groupe_alertes = adw::PreferencesGroup::builder().title("Fichiers et dossiers").description("Fichiers d'état illisibles ou dossiers recréés depuis le démarrage du serveur.").visible(false).build();

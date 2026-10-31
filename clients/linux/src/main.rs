@@ -12,7 +12,9 @@ mod inspecteur;
 mod libelles;
 mod machines;
 mod modele;
+mod rapport;
 mod systeme;
+mod telemetrie;
 mod travaux;
 
 use adw::prelude::*;
@@ -34,6 +36,7 @@ fn main() -> glib::ExitCode {
     let fenetre: Rc<RefCell<Option<Rc<Fenetre>>>> = Rc::new(RefCell::new(None));
 
     app.connect_startup(|app| {
+        telemetrie::demarrer();
         let css = gtk::CssProvider::new();
         css.load_from_data(STYLE);
         if let Some(ecran) = gtk::gdk::Display::default() {
