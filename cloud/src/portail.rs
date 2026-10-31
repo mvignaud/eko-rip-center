@@ -92,50 +92,129 @@ fn suite_sure(s: Option<&String>) -> String {
     s.filter(|s| s.starts_with('/') && !s.starts_with("//") && !s.contains('\\')).cloned().unwrap_or_else(|| "/sites".into())
 }
 
+/// Feuille de style du portail : celle des clients natifs (macOS, GTK) — barre latérale
+/// translucide, barre d'outils unifiée, listes groupées arrondies, accent bleu système.
 const STYLE: &str = r#"
-:root { color-scheme: light dark; --fond: #f5f5f7; --carte: #ffffff; --texte: #1d1d1f; --doux: #6e6e73; --bord: #d2d2d7; --accent: #0071e3; --erreur: #d70015; --ok: #248a3d; }
-@media (prefers-color-scheme: dark) { :root { --fond: #1c1c1e; --carte: #2c2c2e; --texte: #f5f5f7; --doux: #a1a1a6; --bord: #3a3a3c; --accent: #2997ff; --erreur: #ff453a; --ok: #30d158; } }
+:root { color-scheme: light dark; --fenetre: #ececec; --fond: #f5f5f7; --groupe: #ffffff; --barre: rgba(232,232,237,.82); --laterale: rgba(226,226,231,.78); --texte: #1d1d1f; --doux: #86868b; --trait: rgba(0,0,0,.1); --champ: #ffffff; --champ-bord: rgba(0,0,0,.16); --accent: #007aff; --accent-doux: rgba(0,122,255,.14); --selection: rgba(0,0,0,.08); --erreur: #ff3b30; --ok: #34c759; --ombre: 0 1px 2px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.06); }
+@media (prefers-color-scheme: dark) { :root { --fenetre: #1e1e1e; --fond: #1e1e1e; --groupe: #2a2a2c; --barre: rgba(42,42,44,.82); --laterale: rgba(38,38,40,.8); --texte: #f5f5f7; --doux: #98989d; --trait: rgba(255,255,255,.1); --champ: rgba(255,255,255,.06); --champ-bord: rgba(255,255,255,.14); --accent: #0a84ff; --accent-doux: rgba(10,132,255,.22); --selection: rgba(255,255,255,.1); --erreur: #ff453a; --ok: #30d158; --ombre: 0 0 0 .5px rgba(255,255,255,.08); } }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--fond); color: var(--texte); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 1rem; border-bottom: 1px solid var(--bord); background: var(--carte); }
-header a { color: inherit; text-decoration: none; }
-header nav { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
-header nav form { margin: 0; }
-.marque { font-weight: 600; white-space: nowrap; }
-main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-.carte { background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 1.2rem; margin: 0 0 1.2rem; }
-h1 { font-size: 1.7rem; margin: 0 0 1rem; } h2 { font-size: 1.2rem; margin: 1.4rem 0 .6rem; }
-.carte h2:first-child { margin-top: 0; }
-label { display: block; margin: .7rem 0; font-weight: 500; }
-input[type=text], input[type=email], input[type=password] { display: block; width: 100%; margin-top: .3rem; padding: .6rem .7rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--fond); color: var(--texte); font: inherit; }
+html { background: var(--fond); }
+body { margin: 0; min-height: 100vh; background: var(--fond); color: var(--texte); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+.rosace { width: 28px; height: 28px; flex: none; }
+/* Fenêtre : barre latérale + contenu (connecté). */
+.app { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 100vh; }
+.laterale { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: .2rem; padding: .9rem .6rem; background: var(--laterale); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-right: .5px solid var(--trait); }
+.marque { display: flex; align-items: center; gap: .55rem; padding: .2rem .5rem .9rem; color: var(--texte); font-weight: 600; font-size: 14px; white-space: nowrap; }
+.marque:hover { text-decoration: none; }
+.rubrique { padding: .7rem .6rem .25rem; color: var(--doux); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.entree { display: flex; align-items: center; gap: .55rem; padding: .32rem .6rem; border-radius: 6px; color: var(--texte); font-size: 14px; }
+.entree:hover { text-decoration: none; background: var(--selection); }
+.entree svg { width: 17px; height: 17px; flex: none; color: var(--accent); }
+.entree.active { background: var(--accent); color: #fff; } .entree.active svg { color: #fff; }
+.laterale .bas { margin-top: auto; display: grid; gap: .5rem; padding: .4rem .2rem 0; }
+.laterale .bas form { margin: 0; }
+.laterale .bas button { width: 100%; }
+.liens { display: flex; flex-wrap: wrap; gap: .2rem .7rem; padding: 0 .4rem; color: var(--doux); font-size: 11px; }
+.liens a { color: inherit; }
+.contenu { min-width: 0; }
+.outils { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center; height: 52px; padding: 0 1rem; background: var(--barre); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid var(--trait); font-size: 14px; font-weight: 600; }
+.app main { max-width: 46rem; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+.app main > h1:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+/* Feuille centrée (accueil, connexion, inscription). */
+.feuille { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 3rem 1rem 1.5rem; background: var(--fenetre); }
+.feuille .tete { display: flex; flex-direction: column; align-items: center; gap: .6rem; margin-bottom: 1.4rem; color: var(--texte); font-size: 17px; font-weight: 600; }
+.feuille .tete:hover { text-decoration: none; }
+.feuille .tete .rosace { width: 72px; height: 72px; }
+.feuille main { width: 100%; max-width: 27rem; }
+.feuille main.large { max-width: 46rem; }
+.feuille .liens { justify-content: center; margin-top: auto; padding-top: 2rem; }
+/* Listes groupées (Form .grouped). */
+.carte { background: var(--groupe); border-radius: 10px; box-shadow: var(--ombre); padding: 1rem 1.1rem; margin: 0 0 1.1rem; }
+.carte > :first-child { margin-top: 0; } .carte > :last-child { margin-bottom: 0; }
+h1 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 .8rem; }
+h2 { font-size: 13px; font-weight: 600; margin: 1.3rem 0 .5rem; }
+.carte h2 { font-size: 15px; }
+p { margin: .5rem 0; }
+ul { padding-left: 1.2rem; }
+label { display: block; margin: .75rem 0; font-size: 13px; font-weight: 500; }
+input[type=text], input[type=email], input[type=password] { display: block; width: 100%; margin-top: .3rem; min-height: 30px; padding: .3rem .6rem; border: .5px solid var(--champ-bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit; font-size: 14px; box-shadow: inset 0 .5px 1px rgba(0,0,0,.06); }
+input:focus-visible { outline: 3.5px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; border-color: var(--accent); }
+input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: .15rem 0 0; flex: none; }
 label.case { font-weight: normal; display: flex; gap: .5rem; align-items: flex-start; }
-button, .bouton { display: inline-block; padding: .55rem 1rem; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: inherit; font-weight: 500; cursor: pointer; text-decoration: none; }
-button.discret, .bouton.discret { background: transparent; color: var(--accent); border: 1px solid var(--bord); }
+button, .bouton { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 30px; padding: .3rem .9rem; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; box-shadow: 0 .5px 1px rgba(0,0,0,.15); }
+button:hover, .bouton:hover { text-decoration: none; filter: brightness(1.06); }
+button:focus-visible, .bouton:focus-visible { outline: 3.5px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; }
+form > button[type=submit] { margin-top: .4rem; }
+button.discret, .bouton.discret { background: var(--champ); color: var(--texte); box-shadow: 0 0 0 .5px var(--champ-bord), 0 .5px 1px rgba(0,0,0,.08); }
 button.danger { background: var(--erreur); }
-.meta { color: var(--doux); font-size: .9rem; }
+.meta { color: var(--doux); font-size: 13px; }
 .erreur { color: var(--erreur); } .ok { color: var(--ok); }
-table { width: 100%; border-collapse: collapse; } th, td { text-align: left; padding: .5rem .4rem; border-bottom: 1px solid var(--bord); vertical-align: top; }
-.tableau { overflow-x: auto; }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; word-break: break-all; }
+p.erreur, p.ok { padding: .55rem .8rem; border-radius: 8px; font-size: 13px; background: color-mix(in srgb, currentColor 12%, transparent); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: .35rem .5rem; color: var(--doux); font-size: 11px; font-weight: 600; border-bottom: .5px solid var(--trait); }
+td { text-align: left; padding: .55rem .5rem; border-bottom: .5px solid var(--trait); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td form { margin: 0; }
+td.ok, td.meta { white-space: nowrap; color: var(--texte); }
+td.ok::before, td.meta::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: .4rem; border-radius: 50%; background: var(--doux); vertical-align: 1px; }
+td.ok::before { background: var(--ok); }
+.tableau { overflow-x: auto; margin: 0 -.5rem; }
+code { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; color: var(--doux); }
 .ligne { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
-.fournisseurs { display: grid; gap: .6rem; margin: 1rem 0; }
-footer { max-width: 52rem; margin: 0 auto; padding: 1rem; color: var(--doux); font-size: .85rem; display: flex; gap: 1rem; flex-wrap: wrap; }
-footer a { color: inherit; }
+.ligne input { margin-top: 0; }
+.fournisseurs { display: grid; gap: .5rem; margin: 1rem 0 .6rem; }
+.fournisseurs .bouton { min-height: 34px; font-size: 14px; }
+/* Pages légales : texte courant. */
+.texte h1 { font-size: 22px; } .texte h2 { font-size: 15px; margin-top: 1.5rem; } .texte p, .texte li { font-size: 14px; }
+@media (max-width: 760px) {
+  .app { display: block; }
+  .laterale { position: sticky; top: 0; z-index: 3; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .3rem; padding: .5rem .7rem; border-right: 0; border-bottom: .5px solid var(--trait); }
+  .marque { padding: .2rem .3rem; flex: 1 0 100%; }
+  .rubrique, .liens, .outils { display: none; }
+  .entree { padding: .3rem .55rem; font-size: 13px; }
+  .entree svg { width: 15px; height: 15px; }
+  .laterale .bas { margin: 0 0 0 auto; padding: 0; }
+  .laterale .bas button { width: auto; }
+  .app main { padding: 1rem .8rem 2rem; }
+  .app main > h1:first-child { position: static; width: auto; height: auto; clip: auto; }
+  .app::after { content: ""; }
+  .pied-mobile { display: flex !important; }
+  .feuille { padding-top: 2rem; }
+}
+.pied-mobile { display: none; justify-content: center; padding: 0 1rem 1.5rem; }
 "#;
 
+/// L'icône de l'application (rosace CMJN des clients natifs).
+const ROSACE: &str = r##"<svg class="rosace" viewBox="0 0 1024 1024" aria-hidden="true"><path d="M512 100c205 0 260 0 312 52s52 107 52 312v96c0 205 0 260-52 312s-107 52-312 52-260 0-312-52-52-107-52-312v-96c0-205 0-260 52-312s107-52 312-52z" fill="#fff" stroke="#000" stroke-opacity=".12" stroke-width="12"/><g style="isolation:isolate"><circle cx="420" cy="420" r="165" fill="#00aeef" style="mix-blend-mode:multiply"/><circle cx="604" cy="420" r="165" fill="#ec008c" style="mix-blend-mode:multiply"/><circle cx="420" cy="604" r="165" fill="#ffe600" style="mix-blend-mode:multiply"/><circle cx="604" cy="604" r="165" fill="#231f20" fill-opacity=".85" style="mix-blend-mode:multiply"/></g></svg>"##;
+
+const ICONE_SITES: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="14" height="6" rx="1.6"/><rect x="3" y="11" width="14" height="6" rx="1.6"/><circle cx="6.5" cy="6" r=".6" fill="currentColor"/><circle cx="6.5" cy="14" r=".6" fill="currentColor"/></svg>"#;
+const ICONE_COMPTE: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 15.3c1.1-1.8 2.8-2.7 4.8-2.7s3.7.9 4.8 2.7"/></svg>"#;
+const ICONE_ADMIN: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5 16 5v4.6c0 3.6-2.5 6.6-6 7.9-3.5-1.3-6-4.3-6-7.9V5z"/><path d="m7.3 10 1.9 1.9 3.6-3.8"/></svg>"#;
+
+const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a>"#;
+
 fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
-    let nav = match s {
-        Some(s) => format!(
-            r#"<a href="/sites">Mes sites</a><a href="/compte">Mon compte</a>{}<form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Déconnexion</button></form>"#,
-            if s.compte.super_admin { r#"<a href="/admin">Administration</a>"# } else { "" },
-            echapper(&s.csrf)
+    let tete = format!(r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head>"##, echapper(titre));
+    let legal = corps.contains(r#"class="carte texte""#);
+    let html = match s {
+        Some(s) => {
+            let entree = |lien: &str, nom: &str, icone: &str| format!(r#"<a class="entree{}" href="{lien}"{}>{icone}<span>{nom}</span></a>"#, if titre == nom { " active" } else { "" }, if titre == nom { r#" aria-current="page""# } else { "" });
+            let admin = if s.compte.super_admin { format!(r#"<div class="rubrique">Plate-forme</div>{}"#, entree("/admin", "Administration", ICONE_ADMIN)) } else { String::new() };
+            format!(
+                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
+                entree("/sites", "Mes sites", ICONE_SITES),
+                entree("/compte", "Mon compte", ICONE_COMPTE),
+                echapper(&s.csrf),
+                echapper(titre)
+            )
+        }
+        None => format!(
+            r#"{tete}<body><div class="feuille"><a class="tete" href="/">{ROSACE}<span>E-KO RIP Cloud</span></a><main{}>{corps}</main><div class="liens">{LIENS_LEGAUX}</div></div></body></html>"#,
+            if legal { r#" class="large""# } else { "" }
         ),
-        None => r#"<a href="/connexion">Connexion</a><a class="bouton" href="/inscription">Créer un compte</a>"#.into(),
     };
-    Html(format!(
-        r#"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head><body><header><a class="marque" href="/">E-KO RIP Cloud</a><nav>{nav}</nav></header><main>{corps}</main><footer><span>SAS GOLDEN PRINT</span><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a></footer></body></html>"#,
-        echapper(titre)
-    ))
+    Html(html)
 }
 
 fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
@@ -615,7 +694,7 @@ pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<S
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     let s = session(&r, &h);
-    page(titre, s.as_ref(), &format!(r#"<div class="carte">{contenu}</div>"#)).into_response()
+    page(titre, s.as_ref(), &format!(r#"<div class="carte texte">{contenu}</div>"#)).into_response()
 }
 
 // ————— Google et Facebook —————
