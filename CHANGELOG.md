@@ -26,6 +26,16 @@ parité ; d'ici là, 0.Y.Z.
   à l'envoi d'un fichier.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
+### Corrigé
+- **Machine « Renvoi »** (9.4) : le jeton enregistré n'est repris, à l'enregistrement du
+  catalogue, que si l'hôte et le port sont inchangés ; vers un autre hôte, il faut saisir
+  le jeton de ce serveur-là.
+- **Balise `{support}`** (9.10) : à nom égal, le support de l'imprimante retenue (balise
+  `{machine}` comprise, où qu'elle soit dans le motif) gagne sur celui d'une autre machine.
+
+*Fixed: the forwarding token is kept only for the same host and port; the `{support}` tag
+picks the support of the chosen printer.*
+
 ## [0.29.0] — 2026-10-30
 
 ### Ajouté
