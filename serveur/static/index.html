@@ -1665,9 +1665,12 @@ async function chargerRapports() {
   const r = await api("/api/rapports/reglage");
   if (r) afficherRapports(r);
 }
+let caseRapportsAuto = null;
 function afficherRapports(r) {
+  // Rafraîchissement de Système (chaque minute) : seule la case suit, le brouillon en cours reste.
+  if (caseRapportsAuto?.isConnected) { caseRapportsAuto.checked = r.auto === true; return; }
   const d = T();
-  const caseAuto = el("input", { type: "checkbox", checked: r.auto === true, className: "admin" });
+  const caseAuto = caseRapportsAuto = el("input", { type: "checkbox", checked: r.auto === true, className: "admin" });
   caseAuto.addEventListener("change", async () => {
     const lu = await api("/api/rapports/reglage", json("POST", { auto: caseAuto.checked }));
     if (!lu) caseAuto.checked = !caseAuto.checked;
