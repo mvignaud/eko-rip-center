@@ -160,10 +160,11 @@ le relais s'il s'arrête et lui passe les requêtes comme le WebSocket du tunnel
 6. **Vérifier.** `curl https://platform.e-ko.rip/sante` répond `ok`, puis rattacher un serveur
    RIP (le tunnel doit rester « connecté » plusieurs minutes).
 
-Une adresse par site (`<site>.platform.e-ko.rip`) demande un sous-domaine joker et son
-certificat joker, que Let's Encrypt ne délivre qu'avec un défi DNS. Tant que ce certificat
-n'est pas en place, les clients joignent les sites à `https://platform.e-ko.rip/s/<site>/`
-(l'interface web dans un navigateur, elle, demande l'adresse propre au site).
+Une adresse par site (`<site>.platform.e-ko.rip`) : ajouter aussi le sous-domaine joker
+`*.platform.e-ko.rip` (même racine, rattaché à la même application), DNS `*.platform` en A vers
+le serveur o2switch, et un certificat qui couvre le joker. Sans lui, les clients joignent les
+sites à `https://platform.e-ko.rip/s/<site>/` (l'interface web dans un navigateur, elle,
+demande l'adresse propre au site).
 
 Mise à jour : remplacer le binaire, puis « Restart » dans « Setup Node.js App ».
 
