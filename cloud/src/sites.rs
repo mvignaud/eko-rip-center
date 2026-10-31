@@ -26,6 +26,14 @@ impl Site {
     }
 }
 
+/// Lectures-modifications-écritures de `sites.json` l'une après l'autre (appairages et
+/// connexions simultanés) : aucune ne défait une autre, et un seul `sites.json.tmp` à la fois.
+static VERROU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn verrou() -> std::sync::MutexGuard<'static, ()> {
+    VERROU.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 pub fn fichier(donnees: &Path) -> PathBuf {
     donnees.join("sites.json")
 }
@@ -64,6 +72,7 @@ pub fn nouvel_id() -> String {
 
 /// Crée un site et rend sa clé, en clair une seule fois.
 pub fn creer(donnees: &Path, nom: &str, proprietaire: Option<String>) -> Result<(Site, String), String> {
+    let _v = verrou();
     let mut sites = lire(donnees)?;
     let mut id = nouvel_id();
     while sites.iter().any(|s| s.id == id) {
@@ -78,6 +87,7 @@ pub fn creer(donnees: &Path, nom: &str, proprietaire: Option<String>) -> Result<
 
 /// Retire un site ; rend faux s'il n'existait pas.
 pub fn supprimer(donnees: &Path, id: &str) -> Result<bool, String> {
+    let _v = verrou();
     let mut sites = lire(donnees)?;
     let avant = sites.len();
     sites.retain(|s| s.id != id);
@@ -89,6 +99,7 @@ pub fn supprimer(donnees: &Path, id: &str) -> Result<bool, String> {
 }
 
 pub fn noter_connexion(donnees: &Path, id: &str) {
+    let _v = verrou();
     if let Ok(mut sites) = lire(donnees)
         && let Some(s) = sites.iter_mut().find(|s| s.id == id)
     {

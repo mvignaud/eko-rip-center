@@ -911,8 +911,8 @@ pub enum Issue {
 /// - identité déjà liée : connexion (sauf compte suspendu) ;
 /// - déjà connecté : liaison au compte ouvert ;
 /// - e-mail inconnu : nouveau compte ;
-/// - e-mail d'un compte existant : liaison seulement si le fournisseur l'a vérifié (Google),
-///   sinon refus (on ne prend pas la main sur un compte avec un e-mail non prouvé).
+/// - e-mail d'un compte existant : si le fournisseur l'a vérifié (Google), son titulaire
+///   reprend le compte et tout autre accès est retiré (mot de passe, sessions) ; sinon refus.
 pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja: Option<&Compte>) -> Issue {
     if let Ok(Some(c)) = base::compte_par_fournisseur(b, fournisseur, &id.ident) {
         if deja.is_some_and(|d| d.id != c.id) {
@@ -929,7 +929,9 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
             if c.suspendu {
                 return Issue::Refus("Ce compte est suspendu.");
             }
-            if base::lier_fournisseur(b, c.id, fournisseur, &id.ident).unwrap_or(false) { Issue::Connecter(c.id) } else { Issue::Refus("Liaison impossible.") }
+            // E-mail prouvé par le fournisseur : son titulaire reprend le compte (les autres accès,
+            // dont un mot de passe posé par quelqu'un d'autre, sont retirés).
+            if base::reprendre_par_fournisseur(b, c.id, fournisseur, &id.ident).unwrap_or(false) { Issue::Connecter(c.id) } else { Issue::Refus("Liaison impossible.") }
         }
         Ok(Some(_)) => Issue::Refus("Un compte existe déjà avec cet e-mail : se connecter avec le mot de passe, puis lier ce fournisseur depuis « Mon compte »."),
         Ok(None) => {

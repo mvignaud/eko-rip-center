@@ -136,6 +136,23 @@ pub fn lier_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &
     Ok(c.execute(&format!("UPDATE OR IGNORE comptes SET {col} = ?1 WHERE id = ?2"), params![ident, compte])? == 1)
 }
 
+/// Un fournisseur qui a VÉRIFIÉ l'e-mail (Google) prend un compte existant à cet e-mail : celui
+/// qui prouve l'adresse en est le titulaire. Tout autre accès est retiré (mot de passe,
+/// autre fournisseur, sessions ouvertes) : quelqu'un qui aurait inscrit cet e-mail avant son
+/// titulaire, sans pouvoir le prouver, perd la main. Le titulaire se connecte ensuite par ce
+/// fournisseur.
+pub fn reprendre_par_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &str) -> rusqlite::Result<bool> {
+    let col = colonne_fournisseur(fournisseur);
+    let t = c.unchecked_transaction()?;
+    t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, echecs = 0, bloque_jusqua = 0 WHERE id = ?1", [compte])?;
+    t.execute("DELETE FROM sessions WHERE compte = ?1", [compte])?;
+    let lie = t.execute(&format!("UPDATE OR IGNORE comptes SET {col} = ?1 WHERE id = ?2"), params![ident, compte])? == 1;
+    if lie {
+        t.commit()?;
+    }
+    Ok(lie)
+}
+
 pub enum Connexion {
     Ok(i64),
     Refusee,
@@ -274,6 +291,23 @@ mod tests {
         suspendre(&c, id, true).unwrap();
         assert!(session(&c, &jeton).unwrap().is_none(), "suspendu : sessions fermées");
         assert!(email_valide("x@y.fr") && !email_valide("x@y") && !email_valide("a b@c.fr"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn reprise_par_email_verifie() {
+        let d = std::env::temp_dir().join(format!("eko-cloud-base-{}", crate::aleatoire_hex(6)));
+        let c = ouvrir(&d).unwrap();
+        // Un tiers inscrit l'e-mail du titulaire avec son propre mot de passe.
+        let id = creer_compte(&c, "titulaire@exemple.fr", "Tiers", Some(&hacher("phrase-du-tiers"))).unwrap().unwrap();
+        assert!(lier_fournisseur(&c, id, "facebook", "fb-tiers").unwrap());
+        let (jeton, _) = ouvrir_session(&c, id).unwrap();
+        // Le titulaire arrive par Google (e-mail vérifié) : il reprend le compte.
+        assert!(reprendre_par_fournisseur(&c, id, "google", "g-titulaire").unwrap());
+        assert!(matches!(connecter(&c, "titulaire@exemple.fr", "phrase-du-tiers").unwrap(), Connexion::Refusee), "mot de passe du tiers retiré");
+        assert!(session(&c, &jeton).unwrap().is_none(), "sessions du tiers fermées");
+        assert!(compte_par_fournisseur(&c, "facebook", "fb-tiers").unwrap().is_none(), "autre fournisseur retiré");
+        assert_eq!(compte_par_fournisseur(&c, "google", "g-titulaire").unwrap().unwrap().id, id);
         let _ = std::fs::remove_dir_all(&d);
     }
 }
