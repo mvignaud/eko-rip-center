@@ -249,7 +249,10 @@ pub fn attendre_retour(ecoute: TcpListener, state: &str, delai: Duration, annule
         let _ = flux.set_read_timeout(Some(Duration::from_secs(2)));
         let mut tampon = [0u8; 8192];
         let mut n = 0;
-        while n < tampon.len() {
+        // Au plus 2 s par connexion en tout, pour que l'annulation et le délai restent tenus
+        // même face à un programme local qui envoie octet par octet.
+        let limite = Instant::now() + Duration::from_secs(2);
+        while n < tampon.len() && Instant::now() < limite {
             match flux.read(&mut tampon[n..]) {
                 Ok(0) | Err(_) => break,
                 Ok(k) => n += k,
