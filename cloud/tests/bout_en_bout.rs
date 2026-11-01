@@ -292,3 +292,93 @@ async fn rapports_et_issues_github() {
     assert_eq!(eko_rip_cloud::rapports::nombre(&d), 3);
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Appairage d'un site par l'API ; rend `(site, clé)`.
+async fn appairer(base: &str, d: &std::path::Path) -> (String, String) {
+    let b = base.to_string();
+    let demande: serde_json::Value = bloquant(move || agent().post(format!("{b}/api/appairage")).send_json(serde_json::json!({ "nom": "Atelier" })).unwrap().body_mut().read_json().unwrap()).await;
+    appairage::valider(d, demande["code"].as_str().unwrap(), "essai").unwrap();
+    let (b, i) = (base.to_string(), demande["demande"].as_str().unwrap().to_string());
+    let valide: serde_json::Value = bloquant(move || agent().get(format!("{b}/api/appairage/{i}")).call().unwrap().body_mut().read_json().unwrap()).await;
+    (valide["site"].as_str().unwrap().to_string(), valide["cle"].as_str().unwrap().to_string())
+}
+
+/// Frontal comme celui d'o2switch : sur la connexion du WebSocket (`GET /tunnel`), il passe
+/// la poignée de main puis garde pour lui tout ce que le serveur RIP envoie ensuite ; les
+/// autres requêtes passent normalement. Rend l'adresse du frontal.
+async fn frontal_qui_garde_le_montant(cible: String) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let adresse = format!("http://{}", ecoute.local_addr().unwrap());
+    let cible = cible.trim_start_matches("http://").to_string();
+    tokio::spawn(async move {
+        loop {
+            let (mut entree, _) = ecoute.accept().await.unwrap();
+            let cible = cible.clone();
+            tokio::spawn(async move {
+                let mut tete = Vec::new();
+                let mut octet = [0u8; 1];
+                while !tete.ends_with(b"\r\n\r\n") {
+                    if entree.read(&mut octet).await.unwrap_or(0) == 0 {
+                        return;
+                    }
+                    tete.push(octet[0]);
+                }
+                let mut sortie = tokio::net::TcpStream::connect(&cible).await.unwrap();
+                sortie.write_all(&tete).await.unwrap();
+                if tete.starts_with(b"GET /tunnel ") {
+                    let (mut el, mut ee) = entree.into_split();
+                    let (mut sl, _se) = sortie.into_split();
+                    tokio::spawn(async move { while el.read(&mut [0u8; 4096]).await.unwrap_or(0) > 0 {} });
+                    let _ = tokio::io::copy(&mut sl, &mut ee).await;
+                } else {
+                    let _ = tokio::io::copy_bidirectional(&mut entree, &mut sortie).await;
+                }
+            });
+        }
+    });
+    adresse
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn montant_en_post_derriere_un_frontal_qui_garde_le_websocket() {
+    let d = dossier();
+    let r = relais::nouveau(relais::Config { donnees: d.clone(), url_publique: "https://platform.test".into(), max_octets: 8 * 1024 * 1024, jeton_stats: "jeton-stats".into() });
+    r.regler_montant_post(true);
+    let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let direct = format!("http://{}", ecoute.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(ecoute, relais::routes(r)).await.unwrap() });
+    let base = frontal_qui_garde_le_montant(direct.clone()).await;
+    let (site, cle) = appairer(&base, &d).await;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (b, s, c) = (base.clone(), site.clone(), cle.clone());
+    let tunnel = tokio::spawn(async move { client::servir(&b, &s, &c, "essai", rip(), move || tx.send(()).unwrap()).await });
+    tokio::time::timeout(Duration::from_secs(10), rx).await.expect("tunnel établi").unwrap();
+
+    let (b, s) = (base.clone(), site.clone());
+    let json: serde_json::Value = bloquant(move || agent().get(format!("{b}/s/{s}/api/echo?a=1")).call().unwrap().body_mut().read_json().unwrap()).await;
+    assert_eq!(json["uri"].as_str().unwrap().rsplit_once("rip").unwrap().1, "/api/echo?a=1");
+
+    // Envoi et réponse plus gros qu'un envoi montant.
+    let (b, s) = (base.clone(), site.clone());
+    let n: String = bloquant(move || agent().post(format!("{b}/s/{s}/api/taille")).send(vec![7u8; 3 * 1024 * 1024]).unwrap().body_mut().read_to_string().unwrap()).await;
+    assert_eq!(n, (3 * 1024 * 1024).to_string());
+
+    let mut taches = vec![];
+    for _ in 0..20 {
+        let (b, s) = (base.clone(), site.clone());
+        taches.push(tokio::task::spawn_blocking(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()));
+    }
+    for t in taches {
+        assert_eq!(t.await.unwrap(), 200);
+    }
+
+    // Un envoi montant sur une session inconnue est refusé.
+    let b = direct.clone();
+    let statut = bloquant(move || agent().post(format!("{b}/tunnel/{}/montant", "0".repeat(32))).header("X-EKO-Seq", "0").send(&b"x"[..]).unwrap().status().as_u16()).await;
+    assert_eq!(statut, 409);
+
+    tunnel.abort();
+    let _ = std::fs::remove_dir_all(&d);
+}

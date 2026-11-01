@@ -12,6 +12,7 @@ use crate::appairage::{self, Appairages, Suivi};
 use crate::installations::{self, Registre};
 use crate::{CHEMIN_TUNNEL, COOKIE_RIP, PROTOCOLE, portail, sites};
 use axum::body::Body;
+use bytes::Bytes;
 use axum::extract::{Path as Chemin, Request, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
@@ -57,6 +58,11 @@ pub struct Relais {
     pub(crate) courriels: Mutex<crate::courriels::Expediteur>,
     /// Où partent les pushs (réseau, ou mémoire dans les tests).
     pub(crate) push: Mutex<crate::notifications::Transport>,
+    /// Sens montant des tunnels `eko-tunnel/2` (requêtes HTTP).
+    montants: crate::montant::Sessions,
+    /// Proposer `eko-tunnel/2` aux serveurs RIP qui le connaissent (frontal qui retient le
+    /// sens montant des WebSocket : hébergement mutualisé).
+    montant_post: std::sync::atomic::AtomicBool,
 }
 
 pub type Partage = Arc<Relais>;
@@ -67,10 +73,16 @@ pub fn nouveau(config: Config) -> Partage {
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
     // Clés VAPID du Web Push : créées au premier démarrage.
     crate::notifications::cle_vapid(&base).expect("clés VAPID");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau) })
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")) })
 }
 
 impl Relais {
+    /// Choisit `eko-tunnel/2` (sens montant en requêtes HTTP) pour les serveurs qui le
+    /// proposent ; par défaut, `EKO_CLOUD_MONTANT_POST=1`.
+    pub fn regler_montant_post(&self, oui: bool) {
+        self.montant_post.store(oui, Ordering::Relaxed);
+    }
+
     /// Statistiques anonymes des installations (page d'administration).
     pub fn statistiques_installations(&self) -> installations::Statistiques {
         self.installations.lock().unwrap().statistiques(crate::maintenant())
@@ -169,6 +181,7 @@ pub fn routes(relais: Partage) -> Router {
         .route("/sante", get(|| async { "ok" }))
         .route("/logo-courriel.png", get(logo_courriel))
         .route(CHEMIN_TUNNEL, get(ouvrir_tunnel))
+        .route("/tunnel/{session}/montant", post(recevoir_montant).layer(axum::extract::DefaultBodyLimit::max(crate::montant::MAX_CORPS + 4096)))
         .route("/api/appairage", post(demander_appairage))
         .route("/api/appairage/{demande}", get(suivre_appairage))
         .route("/api/ping", post(recevoir_ping).layer(axum::extract::DefaultBodyLimit::max(4096)))
@@ -345,8 +358,9 @@ fn identifiants(entetes: &HeaderMap) -> Option<(String, String)> {
 
 /// Forme de la poignée de main du tunnel.
 enum Poignee {
-    /// `Upgrade: websocket` : la clé `Sec-WebSocket-Accept` à rendre.
-    WebSocket(String),
+    /// `Upgrade: websocket` : la clé `Sec-WebSocket-Accept` à rendre, et si le serveur
+    /// propose aussi `eko-tunnel/2`.
+    WebSocket(String, bool),
     /// `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
     Directe,
 }
@@ -360,14 +374,11 @@ fn poignee(entetes: &HeaderMap) -> Option<Poignee> {
         return None;
     }
     let version_ok = entetes.get(header::SEC_WEBSOCKET_VERSION).is_some_and(|v| v.as_bytes() == b"13");
-    let protocole_ok = entetes
-        .get_all(header::SEC_WEBSOCKET_PROTOCOL)
-        .iter()
-        .filter_map(|v| v.to_str().ok())
-        .flat_map(|v| v.split(','))
-        .any(|p| p.trim().eq_ignore_ascii_case(PROTOCOLE));
+    let proposes: Vec<String> = entetes.get_all(header::SEC_WEBSOCKET_PROTOCOL).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(',')).map(|p| p.trim().to_ascii_lowercase()).collect();
+    let protocole_ok = proposes.iter().any(|p| p == PROTOCOLE);
+    let v2 = proposes.iter().any(|p| p == crate::montant::PROTOCOLE_2);
     let cle = entetes.get(header::SEC_WEBSOCKET_KEY)?;
-    (version_ok && protocole_ok).then(|| Poignee::WebSocket(crate::ws::acceptation(cle.as_bytes())))
+    (version_ok && protocole_ok).then(|| Poignee::WebSocket(crate::ws::acceptation(cle.as_bytes()), v2))
 }
 
 async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> Response {
@@ -389,25 +400,65 @@ async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> R
     }
     let Some(montee) = requete.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else { return refus(StatusCode::BAD_REQUEST, "protocole_inconnu") };
     let r = relais.clone();
-    let websocket = matches!(forme, Poignee::WebSocket(_));
+    // 0 : ancien tunnel direct ; 1 : WebSocket dans les deux sens ; 2 : WebSocket descendant
+    // et requêtes montantes.
+    let mode = match forme {
+        Poignee::Directe => 0,
+        Poignee::WebSocket(_, v2) => {
+            if v2 && relais.montant_post.load(Ordering::Relaxed) {
+                2
+            } else {
+                1
+            }
+        }
+    };
     tokio::spawn(async move {
         let Ok(flux) = montee.await else { return };
-        if websocket {
-            let flux = crate::ws::FluxWs::nouveau(TokioIo::new(flux), tokio_tungstenite::tungstenite::protocol::Role::Server).await;
-            brancher(r, id, donnees, TokioIo::new(flux)).await;
-        } else {
-            brancher(r, id, donnees, flux).await;
+        let role = tokio_tungstenite::tungstenite::protocol::Role::Server;
+        match mode {
+            0 => brancher(r, id, donnees, flux).await,
+            1 => brancher(r, id, donnees, TokioIo::new(crate::ws::FluxWs::nouveau(TokioIo::new(flux), role).await)).await,
+            _ => {
+                let mut ws = crate::ws::FluxWs::nouveau(TokioIo::new(flux), role).await;
+                let (session, lecteur) = r.montants.ouvrir();
+                if ws.envoyer_texte(&format!("session {session}")).await.is_err() {
+                    r.montants.fermer(&session);
+                    return;
+                }
+                let (mut entree, sortie) = tokio::io::split(ws);
+                // Le sens montant du WebSocket ne sert pas (le frontal le retient) ; il est lu
+                // quand même pour que la connexion se ferme proprement s'il en arrive la fin.
+                let vidange = tokio::spawn(async move {
+                    let _ = tokio::io::copy(&mut entree, &mut tokio::io::sink()).await;
+                });
+                brancher(r.clone(), id, donnees, TokioIo::new(tokio::io::join(lecteur, sortie))).await;
+                vidange.abort();
+                r.montants.fermer(&session);
+            }
         }
     });
     let reponse = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "Upgrade");
     match forme {
         Poignee::Directe => reponse.header(header::UPGRADE, PROTOCOLE),
-        Poignee::WebSocket(acceptation) => {
-            reponse.header(header::UPGRADE, "websocket").header(header::SEC_WEBSOCKET_ACCEPT, acceptation).header(header::SEC_WEBSOCKET_PROTOCOL, PROTOCOLE)
-        }
+        Poignee::WebSocket(acceptation, _) => reponse
+            .header(header::UPGRADE, "websocket")
+            .header(header::SEC_WEBSOCKET_ACCEPT, acceptation)
+            .header(header::SEC_WEBSOCKET_PROTOCOL, if mode == 2 { crate::montant::PROTOCOLE_2 } else { PROTOCOLE }),
     }
     .body(Body::empty())
     .expect("réponse 101")
+}
+
+/// `POST /tunnel/<session>/montant` : un morceau du sens montant d'un tunnel `eko-tunnel/2`.
+async fn recevoir_montant(State(relais): State<Partage>, Chemin(session): Chemin<String>, entetes: HeaderMap, corps: Bytes) -> Response {
+    let Some(seq) = entetes.get(crate::montant::ENTETE_SEQ).and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok()) else { return refus(StatusCode::BAD_REQUEST, "seq_invalide") };
+    if !crate::montant::session_valide(&session) {
+        return refus(StatusCode::CONFLICT, "session_perdue");
+    }
+    match relais.montants.recevoir(&session, seq, corps).await {
+        crate::montant::Reception::Ok => StatusCode::NO_CONTENT.into_response(),
+        crate::montant::Reception::Perdu => refus(StatusCode::CONFLICT, "session_perdue"),
+    }
 }
 
 /// Ouvre l'HTTP/2 dans le tunnel et le garde dans la table jusqu'à sa fermeture.

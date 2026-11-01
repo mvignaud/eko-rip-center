@@ -329,6 +329,24 @@ requêtes à la fois, fichiers en flux, ping toutes les 25 s. Le WebSocket ne se
 les frontaux qui refusent tout autre `Upgrade` (LiteSpeed, Passenger). La plate-forme accepte
 encore l'ancienne forme, `Upgrade: eko-tunnel/1` seul, des serveurs RIP 0.30.
 
+**Sens montant en requêtes POST (`eko-tunnel/2`).** Certains frontaux d'hébergement mutualisé
+(celui d'o2switch) laissent passer le WebSocket dans un seul sens : ce que le serveur RIP
+envoie après la poignée de main reste dans leur tampon. Le serveur RIP propose donc
+`Sec-WebSocket-Protocol: eko-tunnel/2, eko-tunnel/1`. Quand la plate-forme est réglée pour
+(`EKO_CLOUD_MONTANT_POST=1`, posé par défaut par le lanceur o2switch), elle choisit
+`eko-tunnel/2` :
+
+- son premier message dans le WebSocket est un texte `session <id>` (32 caractères
+  hexadécimaux, aléatoires) ; le WebSocket ne porte ensuite que le sens plate-forme → RIP ;
+- le serveur RIP envoie le sens montant par `POST /tunnel/<id>/montant`, en-tête
+  `X-EKO-Seq: 0, 1, 2…`, corps de 1 Mio au plus, sur une connexion HTTP/1.1 gardée ouverte.
+  Réponse `204` ; un numéro déjà reçu est acquitté sans effet (renvoi après une coupure) ;
+  un numéro en avance ou une session inconnue rend `409 session_perdue` et le serveur RIP
+  rouvre le tunnel.
+
+Sinon la plate-forme répond `eko-tunnel/1` et le WebSocket porte les deux sens. Les serveurs
+RIP 0.31 et plus anciens ne proposent que `eko-tunnel/1`.
+
 Appairage : `POST /api/appairage` `{ "nom": "…" }` → `201 { demande, code, lien, expire_dans }` ;
 `GET /api/appairage/<demande>` → `{ "etat": "en_attente" }`, puis une seule fois
 `{ "etat": "valide", "site", "cle", "adresse" }`, puis `404 appairage_expire`.

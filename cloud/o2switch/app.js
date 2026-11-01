@@ -10,6 +10,9 @@
 //     Pas de port TCP : o2switch abat en quelques secondes tout programme du compte qui
 //     écoute sur un port.
 //   EKO_CLOUD_JETON_STATS, EKO_CLOUD_MAX_MO : transmis tels quels au relais.
+//   EKO_CLOUD_MONTANT_POST  1 par défaut : le frontal de l'hébergeur garde pour lui ce que
+//     le serveur RIP envoie dans le WebSocket ; le sens montant du tunnel passe donc en
+//     requêtes POST (eko-tunnel/2). 0 pour revenir au WebSocket dans les deux sens.
 //
 // Journal du relais : relais.log, à côté de ce fichier (la sortie de l'application, elle,
 // part dans les journaux de l'hébergeur, illisibles depuis le compte).
@@ -130,6 +133,7 @@ function demarrer() {
     ...process.env,
     EKO_CLOUD_ADDR: `unix:${SOCKET}`,
     EKO_CLOUD_DATA: process.env.EKO_CLOUD_DATA || path.join(os.homedir(), 'eko-cloud-data'),
+    EKO_CLOUD_MONTANT_POST: process.env.EKO_CLOUD_MONTANT_POST || '1',
   };
   tourner_journal();
   let sortie = 'ignore';

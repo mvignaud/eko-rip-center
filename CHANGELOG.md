@@ -50,6 +50,13 @@ parité ; d'ici là, 0.Y.Z.
   is signed in.*
 
 ### Modifié
+- **Cloud E-KO RIP : sens montant du tunnel en requêtes POST (`eko-tunnel/2`).** Le frontal
+  d'o2switch garde pour lui ce que le serveur RIP envoie dans le WebSocket : le tunnel
+  s'établissait puis tombait au bout de 45 s. Le serveur RIP envoie maintenant ce sens par
+  petites requêtes `POST` numérotées, le WebSocket ne portant plus que le sens descendant. La
+  plate-forme ne choisit ce mode que si le serveur le propose ; les serveurs 0.31 restent en
+  `eko-tunnel/1`. *Tunnel upstream as numbered HTTP POSTs (eko-tunnel/2), for front ends that
+  buffer the WebSocket upstream.*
 - **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket
   ordinaire (sous-protocole `eko-tunnel/1`) qui porte la même connexion HTTP/2 qu'avant ; il
   traverse ainsi les frontaux des hébergements mutualisés (LiteSpeed, Passenger). La

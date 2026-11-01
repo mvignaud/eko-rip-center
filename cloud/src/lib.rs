@@ -16,6 +16,7 @@ pub mod client;
 pub mod courriels;
 pub mod evenements;
 pub mod installations;
+pub mod montant;
 pub mod notifications;
 pub mod portail;
 pub mod rapports;

@@ -28,6 +28,23 @@ impl<S: AsyncRead + AsyncWrite + Unpin> FluxWs<S> {
         let config = WebSocketConfig::default().max_message_size(Some(64 << 20)).max_frame_size(Some(64 << 20));
         FluxWs { ws: WebSocketStream::from_raw_socket(io, role, Some(config)).await, lu: Bytes::new() }
     }
+
+    /// Envoie un message texte (avant le début du flux d'octets : annonce de session).
+    pub async fn envoyer_texte(&mut self, texte: &str) -> io::Result<()> {
+        self.ws.send(Message::text(texte)).await.map_err(erreur)
+    }
+
+    /// Lit le premier message, qui doit être du texte (avant le début du flux d'octets).
+    pub async fn lire_texte(&mut self) -> io::Result<String> {
+        loop {
+            match self.ws.next().await {
+                Some(Ok(Message::Text(t))) => return Ok(t.to_string()),
+                Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
+                Some(Ok(_)) | None => return Err(io::Error::new(io::ErrorKind::InvalidData, "annonce de session attendue")),
+                Some(Err(e)) => return Err(erreur(e)),
+            }
+        }
+    }
 }
 
 fn erreur(e: tokio_tungstenite::tungstenite::Error) -> io::Error {
