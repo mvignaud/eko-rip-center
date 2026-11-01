@@ -522,3 +522,6 @@ section { padding: 96px 0; }
 /* Page Cloud : prix des offres */
 .tuile .prix { margin: 4px 0 2px; color: var(--texte-2); font-size: 15px; }
 .tuile .prix strong { color: var(--texte); font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin-right: 4px; }
+.encadre-facultatif { max-width: 860px; margin: 0 auto; padding: 22px 26px; border-radius: var(--rayon); background: var(--fond-2); border: 1px solid var(--trait); border-left: 4px solid var(--accent); box-shadow: var(--ombre); }
+.encadre-facultatif h2 { font-size: 22px; margin: 0 0 8px; }
+.encadre-facultatif p { margin: 8px 0 0; color: var(--texte-2); }
