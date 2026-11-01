@@ -28,6 +28,7 @@ mod images;
 mod imbrication;
 mod linearisation;
 mod g7;
+mod mobile;
 mod mosaique;
 mod nid;
 mod pont;
@@ -436,6 +437,7 @@ async fn main() {
     tokio::spawn(relever(etat.clone()));
     tokio::spawn(pont::boucle(etat.config.donnees.clone()));
     tokio::spawn(prendre_envois(etat.clone()));
+    tokio::spawn(veiller_la_file(etat.clone()));
     // Cloud E-KO RIP : la même API sert dans le tunnel vers la plate-forme, marquée pour
     // que `garder` en ferme une partie (pont ERP, renvoi, réglages du cloud).
     let par_cloud = routes(etat.clone()).layer(DefaultBodyLimit::max(max)).layer(axum::Extension(cloud::ParCloud));
@@ -525,6 +527,11 @@ fn routes(etat: Partage) -> Router {
         .route("/api/erp/contrat", get(contrat_erp))
         .route("/api/pont", get(lire_pont).post(regler_pont))
         .route("/api/pont/instance", axum::routing::post(nouvelle_instance))
+        .route("/api/mobile/etat", get(etat_mobile))
+        .route("/api/mobile/evenements", get(evenements_mobiles))
+        .route("/api/mobile/appareils", axum::routing::post(inscrire_appareil))
+        .route("/api/mobile/appareils/retirer", axum::routing::post(retirer_appareil))
+        .route("/api/mobile/essai", axum::routing::post(essai_mobile))
         .route("/api/cloud", get(lire_cloud).delete(detacher_cloud))
         .route("/api/cloud/appairage", axum::routing::post(appairer_cloud))
         .route("/api/telemetrie", get(lire_telemetrie).post(regler_telemetrie))
@@ -545,6 +552,7 @@ fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
     etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)?;
     if !t.estimation {
         pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le, t.erp.as_ref());
+        mobile::noter_travail(donnees, t.id, &t.nom, matches!(t.statut, Statut::Echec), t.erreur.as_deref().or(t.code_erreur.as_deref()));
     }
     Ok(())
 }
@@ -2321,9 +2329,14 @@ async fn relever_maintenant(etat: &Etat, m: &machines::Machine) -> Option<u64> {
 async fn relever(etat: Partage) {
     let mut derniers: std::collections::HashMap<String, Option<releves::Releve>> = Default::default();
     loop {
-        let cibles: Vec<(String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.snmp.clone()?))).collect();
-        for (id, hote) in cibles {
-            let Some(Lecture { releve: r, numero, largeur_mm, chauffages, alertes }) = lire_releve(hote).await else { continue };
+        let cibles: Vec<(String, String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.nom.clone(), m.snmp.clone()?))).collect();
+        for (id, nom, hote) in cibles {
+            let Some(Lecture { releve: r, numero, largeur_mm, chauffages, alertes }) = lire_releve(hote).await else {
+                mobile::noter_releve_manque(&etat.config.donnees, &id, &nom);
+                continue;
+            };
+            // Notifications de l'app mobile (alertes, encres) : à chaque relevé, même inchangé.
+            mobile::noter_releve(&etat.config.donnees, &id, &nom, &r.encres, &alertes, r.longueur_m, r.le);
             // Support chargé lu sur la machine (n° de support), s'il a changé (roadmap 1.3).
             if let Some(n) = numero {
                 let support_uuid = supports::par_numero(&supports::lire(&etat.config.donnees, "epson"), &id, n).and_then(|s| s.id);
@@ -2734,7 +2747,8 @@ async fn garder(State(etat): State<Partage>, mut requete: axum::extract::Request
     let role = match &identite {
         Some(i) => {
             let (role, lecture_seule) = role_cloud(i);
-            if lecture_seule && requete.method() != axum::http::Method::GET {
+            // Lecture seule : s'inscrire aux notifications du téléphone reste permis.
+            if lecture_seule && requete.method() != axum::http::Method::GET && !chemin.starts_with("/api/mobile/") {
                 return refus(StatusCode::FORBIDDEN, "lecture_seule", None);
             }
             role
@@ -3005,6 +3019,136 @@ async fn fermer_session(State(etat): State<Partage>, entetes: axum::http::Header
     }
     let cookie = format!("{}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0", acces::COOKIE);
     (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+}
+
+// --- Application mobile de suivi (iOS, Android) ---
+
+/// Code d'état d'une sortie, tel que l'API le donne.
+fn code_sortie(e: file::Etat) -> &'static str {
+    match e {
+        file::Etat::EnAttente => "en_attente",
+        file::Etat::Suspendue => "suspendue",
+        file::Etat::EnCours => "en_cours",
+        file::Etat::Terminee => "terminee",
+        file::Etat::Echec => "echec",
+        file::Etat::Annulee => "annulee",
+        file::Etat::Imbriquee => "imbriquee",
+    }
+}
+
+/// Toutes les 5 s, la file comparée à la précédente : échecs et fins vers les téléphones.
+async fn veiller_la_file(etat: Partage) {
+    loop {
+        let sorties = etat.file.lock().unwrap().sorties.clone();
+        let noms: std::collections::HashMap<String, String> = etat.machines.read().unwrap().iter().map(|m| (m.id.clone(), m.nom.clone())).collect();
+        let vues: Vec<mobile::VueSortie> = sorties
+            .iter()
+            .filter(|s| !s.archivee)
+            .map(|s| mobile::VueSortie { id: s.id, travail: s.travail, machine: &s.machine, nom: &s.nom, page: s.page, etat: code_sortie(s.etat), decoupe: s.operation() == machines::Operation::Decoupe, erreur: s.erreur.as_deref().or(s.code_erreur.as_deref()) })
+            .collect();
+        mobile::noter_file(&etat.config.donnees, &vues, &noms);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+/// Écran d'accueil de l'app : chaque machine avec son dernier relevé, sa sortie en cours
+/// et ce qui l'attend ; et le numéro du dernier événement (pastille « Alertes »).
+async fn etat_mobile(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    let donnees = &etat.config.donnees;
+    let sorties = etat.file.lock().unwrap().sorties.clone();
+    let catalogue = etat.machines.read().unwrap().clone();
+    let machines: Vec<serde_json::Value> = catalogue
+        .iter()
+        .map(|m| {
+            let releve = mobile::etat_machine(donnees, &m.id).unwrap_or_default();
+            let a_elle = || sorties.iter().filter(|s| s.machine == m.id && !s.archivee);
+            let en_cours = a_elle().find(|s| s.etat == file::Etat::EnCours).map(|s| serde_json::json!({ "sortie": s.id, "nom": s.nom, "page": s.page, "debut": s.debut }));
+            let operations: Vec<machines::Operation> = [machines::Operation::Impression, machines::Operation::Decoupe].into_iter().filter(|&o| m.fait(o)).collect();
+            serde_json::json!({
+                "id": m.id,
+                "nom": m.nom,
+                "modele": m.modele,
+                "operations": operations,
+                "snmp": m.snmp.is_some(),
+                "joignable": releve.joignable(),
+                "releve_le": releve.releve_le,
+                "encres": releve.encres.iter().map(|(e, pc)| serde_json::json!({ "encre": e, "pourcent": pc })).collect::<Vec<_>>(),
+                "longueur_restante_m": releve.longueur_m,
+                "alertes": releve.alertes,
+                "en_cours": en_cours,
+                "en_attente": a_elle().filter(|s| s.etat == file::Etat::EnAttente).count(),
+                "suspendues": a_elle().filter(|s| s.etat == file::Etat::Suspendue).count(),
+            })
+        })
+        .collect();
+    let (_, dernier) = mobile::evenements(donnees, u64::MAX, 0);
+    Json(serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "dernier_evenement": dernier, "machines": machines }))
+}
+
+#[derive(Deserialize)]
+struct DepuisEvenement {
+    #[serde(default)]
+    depuis: u64,
+    limite: Option<usize>,
+}
+
+async fn evenements_mobiles(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<DepuisEvenement>) -> Json<serde_json::Value> {
+    let (evenements, dernier) = mobile::evenements(&etat.config.donnees, q.depuis, q.limite.unwrap_or(50).min(200));
+    Json(serde_json::json!({ "evenements": evenements, "dernier": dernier }))
+}
+
+#[derive(Deserialize)]
+struct Inscription {
+    jeton: String,
+    #[serde(default)]
+    nom: String,
+    #[serde(default)]
+    plateforme: String,
+    #[serde(default)]
+    fins: bool,
+}
+
+/// Inscrit un téléphone pour les notifications, au nom du compte connecté.
+async fn inscrire_appareil(State(etat): State<Partage>, cloud: Option<axum::Extension<eko_rip_cloud::applis::IdentiteCloud>>, entetes: axum::http::HeaderMap, Json(i): Json<Inscription>) -> Response {
+    if !mobile::jeton_valide(&i.jeton) {
+        return refus(StatusCode::BAD_REQUEST, "jeton_push_invalide", None);
+    }
+    // Par le cloud : l'e-mail du compte de la plate-forme, gardé tant que le téléphone se
+    // réinscrit (voir `mobile::DUREE_INSCRIPTION_CLOUD`) ; sinon le compte local de la session.
+    let (utilisateur, par_cloud) = match cloud {
+        Some(axum::Extension(c)) => (Some(c.email), true),
+        None => (jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now())), false),
+    };
+    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant(), cloud: par_cloud };
+    match mobile::inscrire(&etat.config.donnees, a) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+#[derive(Deserialize)]
+struct JetonPush {
+    jeton: String,
+}
+
+async fn retirer_appareil(State(etat): State<Partage>, Json(j): Json<JetonPush>) -> Response {
+    match mobile::retirer(&etat.config.donnees, &j.jeton) {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Notification d'essai, vers un téléphone inscrit seulement (le serveur ne relaie pas
+/// vers n'importe quel jeton).
+async fn essai_mobile(State(etat): State<Partage>, Json(j): Json<JetonPush>) -> Response {
+    if !mobile::appareils(&etat.config.donnees).iter().any(|a| a.jeton == j.jeton) {
+        return refus(StatusCode::NOT_FOUND, "appareil_inconnu", None);
+    }
+    match tokio::task::spawn_blocking(move || mobile::essai(&j.jeton)).await {
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "envoi_push_echoue", Some(e)),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
 }
 
 async fn lister_reglages(State(etat): State<Partage>) -> Json<Vec<reglages::Reglage>> {
@@ -5356,7 +5500,16 @@ async fn executer(etat: Partage, s: file::Sortie) {
     // avant, pour que le pont ERP la voie même retirée.
     if s.operation() == machines::Operation::Decoupe {
         let _ = f.ecrire(&etat.config.donnees);
-        f.apres_coupe(s.id, decoupe::reglages().apres_coupe);
+        let politique = decoupe::reglages().apres_coupe;
+        // Archivée ou retirée tout de suite : la veille de la file ne la verrait pas finie.
+        if politique != file::ApresCoupe::Rien
+            && let Some(x) = f.sorties.iter().find(|x| x.id == s.id && x.etat == file::Etat::Terminee)
+        {
+            let noms: std::collections::HashMap<String, String> = etat.machines.read().unwrap().iter().map(|m| (m.id.clone(), m.nom.clone())).collect();
+            let vue = mobile::VueSortie { id: x.id, travail: x.travail, machine: &x.machine, nom: &x.nom, page: x.page, etat: "terminee", decoupe: true, erreur: None };
+            mobile::noter_fin(&etat.config.donnees, &vue, &noms);
+        }
+        f.apres_coupe(s.id, politique);
     }
     let _ = f.ecrire(&etat.config.donnees);
     drop(f);
@@ -5850,6 +6003,9 @@ mod tests {
             let r = avec("POST", "/api/travaux/x/relancer", "lecture", true).await;
             assert_eq!(code(r).await, "lecture_seule");
             assert_eq!(avec("GET", "/api/travaux", "lecture", true).await.status(), StatusCode::OK);
+            // Lecture seule : le téléphone peut quand même s'inscrire aux notifications.
+            let r = avec("POST", "/api/mobile/appareils", "lecture", true).await;
+            assert_ne!(r.status(), StatusCode::FORBIDDEN, "inscription mobile permise en lecture seule");
             // Toujours fermé par le cloud, même identifié.
             assert_eq!(code(avec("POST", "/api/pont", "admin", true).await).await, "ferme_par_cloud");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();

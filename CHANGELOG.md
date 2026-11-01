@@ -15,6 +15,27 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.33.0] — 2026-11-01
+
+### Ajouté
+- **Application mobile de suivi** (iOS, Android ; `clients/mobile/`, Expo). File des sorties
+  par machine avec Lancer / Pause / Stop / Relancer / Passer en tête, état des machines
+  (encres, rouleau, alertes), historique des alertes, et **notifications push** : nouvelle
+  alerte de la machine (capot ouvert, support épuisé…), encre sous 5 % ou vide, machine qui
+  ne répond plus puis revient, sortie ou rendu en échec, et en option les fins d'impression.
+  Côté serveur : `GET /api/mobile/etat`, `GET /api/mobile/evenements`,
+  `POST /api/mobile/appareils` (et `/retirer`), `POST /api/mobile/essai` ; envoi par le service
+  push d'Expo (le serveur doit joindre `exp.host` en HTTPS). Voir
+  [docs/fr/application-mobile.md](docs/fr/application-mobile.md). Connexion **par le cloud
+  E-KO RIP** (OAuth + PKCE) pour suivre l'atelier sans VPN, avec choix du site ; un
+  téléphone inscrit par le cloud reste destinataire tant qu'il se réinscrit (30 jours).
+  *Mobile monitoring app (iOS, Android) with push notifications of machine errors, also
+  through the E-KO RIP cloud.*
+
+### Corrigé
+- Le code d'erreur `lecture_seule` (rôle cloud en lecture seule) est traduit dans l'interface.
+  *The cloud read-only error code is now translated.*
+
 ## [0.32.0] — 2026-11-01
 
 ### Ajouté
