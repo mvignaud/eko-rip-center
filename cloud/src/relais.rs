@@ -51,6 +51,8 @@ pub struct Relais {
     base: Mutex<rusqlite::Connection>,
     /// Limites par adresse ou par compte : (essais, début de la fenêtre).
     limites: Mutex<HashMap<String, (u32, std::time::Instant)>>,
+    /// Codes d'autorisation des apps en attente d'échange.
+    codes_applis: Mutex<crate::applis::Codes>,
 }
 
 pub type Partage = Arc<Relais>;
@@ -59,7 +61,7 @@ pub type Partage = Arc<Relais>;
 pub fn nouveau(config: Config) -> Partage {
     let registre = installations::lire(&config.donnees).expect("installations.json");
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default() })
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default() })
 }
 
 impl Relais {
@@ -79,6 +81,10 @@ impl Relais {
 
     pub fn connectes(&self) -> Vec<String> {
         self.tunnels.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub(crate) fn codes_applis(&self) -> std::sync::MutexGuard<'_, crate::applis::Codes> {
+        self.codes_applis.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn base(&self) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
@@ -126,6 +132,11 @@ pub fn routes(relais: Partage) -> Router {
         .route("/sites/{site}/retirer", post(portail::retirer))
         .route("/appairer", get(portail::appairer))
         .route("/compte", get(portail::mon_compte))
+        .route("/compte/applis/deconnecter", post(portail::deconnecter_applis))
+        .route("/oauth/autoriser", get(crate::applis::autoriser).post(crate::applis::decider))
+        .route("/oauth/jeton", post(crate::applis::jeton))
+        .route("/api/moi", get(crate::applis::moi))
+        .route("/api/moi/deconnexion", post(crate::applis::deconnecter))
         .route("/compte/supprimer", post(portail::supprimer_compte))
         .route("/admin", get(portail::admin))
         .route("/admin/oauth", post(portail::regler_oauth))
@@ -522,6 +533,28 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
     if longueur.is_some_and(|l| l > max) {
         return refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros");
     }
+    // Jeton d'app : le compte doit avoir un droit sur ce site ; le serveur RIP reçoit son
+    // identité (le jeton, lui, ne sort jamais vers un atelier).
+    let identite = if crate::applis::porte_jeton_appli(requete.headers()) {
+        let r = relais.clone();
+        let (h, s) = (requete.headers().clone(), site.clone());
+        let verdict = tokio::task::spawn_blocking(move || {
+            let compte = crate::applis::compte_bearer(&r, &h)?;
+            let role = crate::base::droit(&r.base(), &s, compte.id).ok().flatten();
+            Some((compte, role))
+        })
+        .await
+        .ok()
+        .flatten();
+        match verdict {
+            None => return refus(StatusCode::UNAUTHORIZED, "jeton_invalide"),
+            // Même réponse qu'un site inconnu : on ne dit pas quels sites existent.
+            Some((_, None)) => return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne"),
+            Some((compte, Some(role))) => Some(crate::applis::entete_identite(&compte, &role)),
+        }
+    } else {
+        None
+    };
     let (parties, corps) = requete.into_parts();
     let requete_site = format!("/{sous}{}", parties.uri.query().map(|q| format!("?{q}")).unwrap_or_default());
     let Ok(uri) = format!("http://rip{requete_site}").parse::<Uri>() else { return refus(StatusCode::BAD_REQUEST, "adresse_invalide") };
@@ -535,6 +568,9 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
         }
         if let Some(c) = cookie_rip(&parties.headers) {
             h.insert(header::COOKIE, c);
+        }
+        if let Some(i) = identite {
+            h.insert(HeaderName::from_static(crate::applis::ENTETE_IDENTITE), i);
         }
     }
     let corps = Body::new(http_body_util::Limited::new(corps, max as usize));

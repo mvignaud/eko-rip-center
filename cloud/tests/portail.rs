@@ -210,3 +210,159 @@ async fn inscription_rattachement_administration() {
     assert_eq!(b(move || get(&q, &format!("/s/{s10}/api/x"), None)).await.statut, 503);
     let _ = std::fs::remove_dir_all(&p.donnees);
 }
+
+/// Faux serveur RIP : renvoie l'identité et l'autorisation reçues.
+fn rip_echo() -> axum::Router {
+    axum::Router::new().route(
+        "/api/echo",
+        axum::routing::get(|h: axum::http::HeaderMap| async move {
+            let v = |n: &str| h.get(n).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+            axum::Json(serde_json::json!({ "identite": v("x-eko-cloud-identite"), "authorization": v("authorization") }))
+        }),
+    )
+}
+
+fn parametre(texte: &str, nom: &str) -> String {
+    let i = texte.find(&format!("{nom}=")).unwrap_or_else(|| panic!("{nom} absent de {texte}")) + nom.len() + 1;
+    texte[i..].split(['&', '"', ';']).next().unwrap().to_string()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn connexion_des_apps() {
+    let p = std::sync::Arc::new(plateforme().await);
+    let inscrire = |email: &'static str| {
+        let q = p.clone();
+        async move { session(&b(move || post(&q, "/inscription", None, &[("email", email), ("nom", "Chef d'atelier"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await) }
+    };
+    let chef = inscrire("chef@atelier.fr").await;
+    let autre = inscrire("autre@atelier.fr").await;
+
+    // Un site rattaché au chef, tunnel ouvert.
+    let q = p.clone();
+    let demande: serde_json::Value = b(move || agent().post(format!("{}/api/appairage", q.base)).send_json(serde_json::json!({ "nom": "RIP atelier" })).unwrap().body_mut().read_json().unwrap()).await;
+    let q = p.clone();
+    let (c, code) = (chef.clone(), demande["code"].as_str().unwrap().to_string());
+    b(move || {
+        let j = csrf(&get(&q, "/sites", Some(&c)).corps);
+        assert_eq!(post(&q, "/sites/rattacher", Some(&c), &[("csrf", &j), ("code", &code)], true).statut, 303);
+    })
+    .await;
+    let q = p.clone();
+    let d = demande["demande"].as_str().unwrap().to_string();
+    let valide: serde_json::Value = b(move || agent().get(format!("{}/api/appairage/{d}", q.base)).call().unwrap().body_mut().read_json().unwrap()).await;
+    let site = valide["site"].as_str().unwrap().to_string();
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (bb, s2, k2) = (p.base.clone(), site.clone(), valide["cle"].as_str().unwrap().to_string());
+    tokio::spawn(async move { client::servir(&bb, &s2, &k2, "essai", rip_echo(), move || tx.send(()).unwrap()).await });
+    rx.await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // PKCE (RFC 7636, annexe B).
+    let verificateur = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+    let defi = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+    let retour = "http://127.0.0.1:53124/retour";
+    let demande_app = format!("/oauth/autoriser?client_id=eko-rip-center&response_type=code&redirect_uri={}&code_challenge={defi}&code_challenge_method=S256&state=etat-123&appareil=Mac%20de%20test", eko_rip_cloud::portail::encoder(retour));
+
+    // Sans session : connexion d'abord, puis retour à la demande.
+    let q = p.clone();
+    let da = demande_app.clone();
+    let r = b(move || get(&q, &da, None)).await;
+    assert_eq!(r.statut, 303);
+    assert!(r.lieu.starts_with("/connexion?suite=%2Foauth%2Fautoriser%3F"), "{}", r.lieu);
+    // Adresse de retour hors de la machine : refusée.
+    let q = p.clone();
+    let (c, mauvais) = (chef.clone(), demande_app.replace("127.0.0.1%3A53124", "evil.test"));
+    assert_eq!(b(move || get(&q, &mauvais, Some(&c))).await.statut, 400);
+
+    // Consentement puis code, deux fois (le premier sera grillé par un mauvais vérificateur).
+    let obtenir_code = || {
+        let (q, c, da) = (p.clone(), chef.clone(), demande_app.clone());
+        async move {
+            b(move || {
+                let page = get(&q, &da, Some(&c));
+                assert!(page.statut == 200 && page.corps.contains("Mac de test") && page.corps.contains("chef@atelier.fr"), "{}", page.corps);
+                let j = csrf(&page.corps);
+                let champs = [("csrf", j.as_str()), ("client_id", "eko-rip-center"), ("response_type", "code"), ("code_challenge_method", "S256"), ("redirect_uri", retour), ("code_challenge", defi), ("state", "etat-123"), ("appareil", "Mac de test"), ("decision", "oui")];
+                assert_eq!(post(&q, "/oauth/autoriser", Some(&c), &champs, false).statut, 403, "origine exigée");
+                let r = post(&q, "/oauth/autoriser", Some(&c), &champs, true);
+                assert!(r.corps.contains(&format!("url={retour}?code=")), "{}", r.corps);
+                assert_eq!(parametre(&r.corps, "state"), "etat-123");
+                parametre(&r.corps, "code")
+            })
+            .await
+        }
+    };
+    let echanger = |code: String, verif: &'static str| {
+        let q = p.clone();
+        b(move || {
+            let mut r = agent().post(format!("{}/oauth/jeton", q.base)).send_form([("grant_type", "authorization_code"), ("client_id", "eko-rip-center"), ("code", code.as_str()), ("redirect_uri", retour), ("code_verifier", verif)]).unwrap();
+            (r.status().as_u16(), r.body_mut().read_json::<serde_json::Value>().unwrap())
+        })
+    };
+    let code1 = obtenir_code().await;
+    let (statut, rep) = echanger(code1.clone(), "mauvais-verificateur-mauvais-verificateur-mauvais").await;
+    assert_eq!((statut, rep["error"].as_str()), (400, Some("invalid_grant")));
+    let (statut, _) = echanger(code1, verificateur).await;
+    assert_eq!(statut, 400, "un code ne sert qu'une fois");
+    let (statut, rep) = echanger(obtenir_code().await, verificateur).await;
+    assert_eq!(statut, 200, "{rep}");
+    assert_eq!(rep["token_type"], "Bearer");
+    let jeton = rep["access_token"].as_str().unwrap().to_string();
+    assert!(jeton.starts_with("ekoa_"));
+
+    // Mes sites, vus par l'app.
+    let appel = |chemin: String, hote: Option<String>, jeton: String| {
+        let q = p.clone();
+        b(move || {
+            let mut r = agent().get(format!("{}{chemin}", q.base)).header("Authorization", &format!("Bearer {jeton}"));
+            if let Some(h) = hote {
+                r = r.header("Host", &h);
+            }
+            let mut r = r.call().unwrap();
+            (r.status().as_u16(), r.body_mut().read_json::<serde_json::Value>().unwrap_or_default())
+        })
+    };
+    let (statut, moi) = appel("/api/moi".into(), None, jeton.clone()).await;
+    assert_eq!(statut, 200);
+    assert_eq!(moi["compte"]["email"], "chef@atelier.fr");
+    assert_eq!(moi["sites"][0]["id"], site.as_str());
+    assert_eq!(moi["sites"][0]["en_ligne"], true);
+    assert_eq!(moi["sites"][0]["role"], "proprietaire");
+    assert_eq!(moi["sites"][0]["adresse"], relais::adresse_du_site(URL, &site));
+
+    // Le site, ouvert avec le jeton : identité transmise, jeton retenu.
+    let hote = format!("{site}.plateforme.test");
+    let (statut, echo) = appel("/api/echo".into(), Some(hote.clone()), jeton.clone()).await;
+    assert_eq!(statut, 200);
+    assert_eq!(echo["authorization"], "", "le jeton ne sort jamais vers un atelier");
+    let identite = eko_rip_cloud::applis::lire_identite(echo["identite"].as_str().unwrap()).unwrap();
+    assert_eq!((identite.email.as_str(), identite.role.as_str()), ("chef@atelier.fr", "admin"));
+    let (statut, _) = appel(format!("/s/{site}/api/echo"), None, jeton.clone()).await;
+    assert_eq!(statut, 200, "aussi sous /s/<site>");
+
+    // Jeton inconnu : 401 ; compte sans droit sur ce site : même réponse qu'un site absent.
+    let (statut, rep) = appel("/api/echo".into(), Some(hote.clone()), "ekoa_invente".into()).await;
+    assert_eq!((statut, rep["code"].as_str()), (401, Some("jeton_invalide")));
+    let jeton_autre = {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        let id = base::compte_par_email(&c, "autre@atelier.fr").unwrap().unwrap().id;
+        base::creer_jeton_appli(&c, id, "Autre").unwrap()
+    };
+    let (statut, rep) = appel("/api/echo".into(), Some(hote.clone()), jeton_autre).await;
+    assert_eq!((statut, rep["code"].as_str()), (503, Some("site_hors_ligne")));
+    let _ = autre;
+
+    // Mon compte : l'app apparaît ; « Déconnecter toutes les apps » révoque le jeton.
+    let q = p.clone();
+    let c = chef.clone();
+    b(move || {
+        let compte = get(&q, "/compte", Some(&c));
+        assert!(compte.corps.contains("Mac de test"), "{}", compte.corps);
+        let j = csrf(&compte.corps);
+        assert_eq!(post(&q, "/compte/applis/deconnecter", Some(&c), &[("csrf", &j)], true).lieu, "/compte?ok=applis");
+    })
+    .await;
+    let (statut, _) = appel("/api/moi".into(), None, jeton).await;
+    assert_eq!(statut, 401);
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}

@@ -2680,15 +2680,35 @@ async fn accueil(State(etat): State<Partage>, entetes: axum::http::HeaderMap) ->
     Html(include_str!("../static/accueil.html").replace("{version}", env!("CARGO_PKG_VERSION")).replace("{hote}", &echapper(hote)).replace("{machines}", &lignes))
 }
 
-async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
-    let chemin = requete.uri().path();
+/// Rôle d'une personne connectée par la plate-forme cloud (« Se connecter au cloud ») ;
+/// `lecture` : rôle d'opérateur, en lecture seule.
+fn role_cloud(i: &eko_rip_cloud::applis::IdentiteCloud) -> (acces::Role, bool) {
+    match i.role.as_str() {
+        "admin" => (acces::Role::Admin, false),
+        "operateur" => (acces::Role::Operateur, false),
+        _ => (acces::Role::Operateur, true),
+    }
+}
+
+async fn garder(State(etat): State<Partage>, mut requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
+    let par_cloud = requete.extensions().get::<cloud::ParCloud>().is_some();
+    // Identité posée par la plate-forme : crue seulement venue par le tunnel (la plate-forme
+    // retire cet en-tête des requêtes qu'elle reçoit) ; sur le réseau local, ignorée.
+    let identite = if par_cloud { requete.headers().get(eko_rip_cloud::applis::ENTETE_IDENTITE).and_then(|v| v.to_str().ok()).and_then(eko_rip_cloud::applis::lire_identite) } else { None };
+    requete.headers_mut().remove(eko_rip_cloud::applis::ENTETE_IDENTITE);
+    if let Some(i) = &identite {
+        requete.extensions_mut().insert(i.clone());
+    }
+    let chemin = requete.uri().path().to_string();
+    let chemin = chemin.as_str();
     // Venue par le tunnel du cloud : jamais le pont ERP, le renvoi entre RIP ni les réglages
-    // du pont et du cloud ; et jamais sans compte (l'accès libre reste au réseau local).
-    if requete.extensions().get::<cloud::ParCloud>().is_some() {
+    // du pont et du cloud ; et jamais sans compte (l'accès libre reste au réseau local), sauf
+    // pour une personne identifiée par la plate-forme.
+    if par_cloud {
         if chemin.starts_with("/api/renvoi/") || chemin.starts_with(erp::PREFIXE) || chemin.starts_with("/api/pont") || chemin.starts_with("/api/cloud") && requete.method() != axum::http::Method::GET {
             return refus(StatusCode::FORBIDDEN, "ferme_par_cloud", None);
         }
-        if acces::libre(&etat.config.donnees) {
+        if identite.is_none() && acces::libre(&etat.config.donnees) {
             return refus(StatusCode::FORBIDDEN, "cloud_sans_compte", None);
         }
     }
@@ -2708,10 +2728,23 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
     if chemin.starts_with("/api/") && !est_client(&etat, requete.headers()) {
         return refus(StatusCode::FORBIDDEN, "client_requis", None);
     }
-    if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::libre(&etat.config.donnees) {
+    if !chemin.starts_with("/api/") || chemin == "/api/session" {
         return suite.run(requete).await;
     }
-    let Some(role) = role_session(&etat, requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) };
+    let role = match &identite {
+        Some(i) => {
+            let (role, lecture_seule) = role_cloud(i);
+            if lecture_seule && requete.method() != axum::http::Method::GET {
+                return refus(StatusCode::FORBIDDEN, "lecture_seule", None);
+            }
+            role
+        }
+        None if acces::libre(&etat.config.donnees) => return suite.run(requete).await,
+        None => match role_session(&etat, requete.headers()) {
+            Some(r) => r,
+            None => return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None),
+        },
+    };
     if role != acces::Role::Admin && acces::reserve_admin(requete.method(), chemin) {
         return refus(StatusCode::FORBIDDEN, "admin_requis", None);
     }
@@ -2930,7 +2963,12 @@ fn role_session(etat: &Etat, entetes: &axum::http::HeaderMap) -> Option<acces::R
     acces::lire(&etat.config.donnees).into_iter().find(|u| u.nom == nom).map(|u| u.role)
 }
 
-async fn lire_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
+async fn lire_session(State(etat): State<Partage>, cloud: Option<axum::Extension<eko_rip_cloud::applis::IdentiteCloud>>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
+    // Connecté par la plate-forme : pas de compte local à ouvrir.
+    if let Some(axum::Extension(i)) = cloud {
+        let (role, lecture_seule) = role_cloud(&i);
+        return Json(serde_json::json!({ "acces_libre": false, "utilisateur": i.email, "role": role, "cloud": { "email": i.email, "nom": i.nom, "lecture_seule": lecture_seule } }));
+    }
     let ouvert = acces::libre(&etat.config.donnees);
     let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
     // Accès libre : tout est permis, comme un administrateur.
@@ -5790,6 +5828,30 @@ mod tests {
             // Le reste suit les règles habituelles : session demandée.
             assert_eq!(par_cloud("GET", "/api/travaux").await.status(), StatusCode::UNAUTHORIZED);
             assert_eq!(par_cloud("GET", "/api/cloud").await.status(), StatusCode::UNAUTHORIZED);
+
+            // Personne connectée par la plate-forme (« Se connecter au cloud ») : pas de session
+            // locale, son rôle sur le site décide ; l'en-tête n'est cru que venu par le tunnel.
+            let identite = |role: &str| eko_rip_cloud::base64url(serde_json::json!({ "compte": 1, "email": "chef@atelier.fr", "nom": "Chef", "role": role }).to_string().as_bytes());
+            let avec = |methode: &str, uri: &str, role: &str, tunnel: bool| {
+                let mut r = Request::builder().method(methode).uri(uri).header(header::USER_AGENT, "EKO-RIP-Client/1.0").header("x-eko-cloud-identite", identite(role)).body(Body::empty()).unwrap();
+                if tunnel {
+                    r.extensions_mut().insert(cloud::ParCloud);
+                }
+                let e = e.clone();
+                async move { routes(e).oneshot(r).await.unwrap() }
+            };
+            assert_eq!(avec("GET", "/api/travaux", "admin", true).await.status(), StatusCode::OK);
+            assert_eq!(avec("GET", "/api/travaux", "admin", false).await.status(), StatusCode::UNAUTHORIZED, "en local, l'en-tête est ignoré");
+            let r = avec("GET", "/api/session", "operateur", true).await;
+            let session: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!((session["utilisateur"].as_str(), session["role"].as_str(), session["cloud"]["lecture_seule"].as_bool()), (Some("chef@atelier.fr"), Some("operateur"), Some(false)));
+            let r = avec("POST", "/api/tarifs", "operateur", true).await;
+            assert_eq!(code(r).await, "admin_requis");
+            let r = avec("POST", "/api/travaux/x/relancer", "lecture", true).await;
+            assert_eq!(code(r).await, "lecture_seule");
+            assert_eq!(avec("GET", "/api/travaux", "lecture", true).await.status(), StatusCode::OK);
+            // Toujours fermé par le cloud, même identifié.
+            assert_eq!(code(avec("POST", "/api/pont", "admin", true).await).await, "ferme_par_cloud");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 

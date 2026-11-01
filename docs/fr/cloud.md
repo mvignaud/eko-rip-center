@@ -5,9 +5,10 @@ d'atelier depuis l'extérieur, **sans VPN et sans ouvrir de port** : c'est le se
 ouvre lui-même une connexion sortante (HTTPS, port 443) vers la plate-forme, et la plate-forme
 fait passer par elle les requêtes des postes et de l'app mobile.
 
-Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 et 2** (tunnel,
-appairage, portail). À distance, on se connecte encore avec **les comptes du serveur RIP**,
-comme à l'atelier ; l'identité de la plate-forme passera jusqu'au serveur au lot 3.
+Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 à 4** (tunnel,
+appairage, portail, « Se connecter au cloud » depuis les apps, une adresse par site). À
+distance, on se connecte soit avec **son compte de la plate-forme** (les apps), soit avec
+**un compte du serveur RIP** (navigateur, anciennes versions).
 
 ```
 Poste ou téléphone hors atelier
@@ -70,6 +71,36 @@ connexion se fait avec un compte du serveur RIP.
 
 L'ancienne forme `https://platform.e-ko.rip/s/<site>` reste servie pour les appels d'API, mais
 une page y est isolée (`sandbox`, pas de script) : préférer l'adresse propre au site.
+
+## Se connecter au cloud depuis les apps
+
+Sur l'écran de connexion, une app propose **Serveur local** ou **Se connecter au cloud**. Le
+second ouvre le navigateur sur la plate-forme (mot de passe, Google ou Facebook), demande
+d'autoriser l'app, puis revient à l'app, qui affiche les sites du compte : un clic ouvre le
+serveur RIP, **sans second mot de passe**. Les droits viennent du rôle sur le site, donné dans
+le portail : propriétaire ou administrateur → administrateur du RIP ; opérateur → opérateur ;
+lecture → opérateur en lecture seule (`lecture_seule` pour toute écriture).
+
+Protocole (OAuth 2, code d'autorisation + PKCE, clients publics, RFC 6749, 7636, 8252) :
+
+1. `GET /oauth/autoriser?client_id=eko-rip-center&response_type=code&redirect_uri=…&code_challenge=…&code_challenge_method=S256&state=…&appareil=<nom de l'appareil>`
+   (navigateur). Adresses de retour acceptées : `http://127.0.0.1:<port>/…`,
+   `http://[::1]:<port>/…`, `http://localhost:<port>/…`, `eko-rip://…`, `ekorip://…` (mobile).
+2. Retour : `<redirect_uri>?code=…&state=…` (ou `error=access_denied`). Code valable 2 minutes,
+   une seule fois.
+3. `POST /oauth/jeton` (formulaire) : `grant_type=authorization_code`, `client_id`, `code`,
+   `redirect_uri`, `code_verifier` → `{ "access_token": "ekoa_…", "token_type": "Bearer",
+   "expires_in": 15552000 }` (180 jours). Erreurs : `invalid_grant`, `invalid_client`…
+4. `GET /api/moi` (`Authorization: Bearer ekoa_…`) → `{ "compte": { "email", "nom" },
+   "sites": [{ "id", "nom", "adresse", "en_ligne", "role" }] }`.
+5. Requêtes vers `adresse` (ou `/s/<site>/…`) avec le même `Authorization`. Le relais vérifie
+   le droit du compte sur ce site (sinon `503 site_hors_ligne`, comme un site absent ; jeton
+   inconnu : `401 jeton_invalide`), retire le jeton et ajoute `X-EKO-Cloud-Identite` (base64url
+   de `{ "compte", "email", "nom", "role": "admin" | "operateur" | "lecture" }`). Le serveur
+   RIP ne croit cet en-tête que venu par son tunnel ; `GET /api/session` rend alors
+   `{ "utilisateur": <e-mail>, "role", "cloud": { "email", "nom", "lecture_seule" } }`.
+6. `POST /api/moi/deconnexion` (Bearer) révoque le jeton. Dans le portail, **Mon compte ›
+   Apps connectées** liste les apps et les déconnecte toutes.
 
 ## Ce qui ne passe jamais par le cloud
 

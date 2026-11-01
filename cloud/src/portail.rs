@@ -38,6 +38,24 @@ pub fn encoder(s: &str) -> String {
     s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
 }
 
+/// Inverse d'`encoder` (séquences `%XX` ; invalide : texte vide).
+fn decoder(s: &str) -> String {
+    let o = s.as_bytes();
+    let mut v = Vec::with_capacity(o.len());
+    let mut i = 0;
+    while i < o.len() {
+        if o[i] == b'%' {
+            let Some(b) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) else { return String::new() };
+            v.push(b);
+            i += 3;
+        } else {
+            v.push(o[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(v).unwrap_or_default()
+}
+
 fn cookie(entetes: &HeaderMap, nom: &str) -> Option<String> {
     entetes.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).filter_map(|c| c.trim().split_once('=')).find(|(n, _)| *n == nom).map(|(_, v)| v.to_string())
 }
@@ -228,6 +246,29 @@ fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
     (StatusCode::BAD_REQUEST, page("Erreur", s, &format!(r#"<div class="carte"><p class="erreur">{}</p><p><a href="/">Retour</a></p></div>"#, echapper(texte)))).into_response()
 }
 
+// Pour l'autorisation des apps (`applis`).
+pub(crate) fn session_ouverte(r: &Partage, h: &HeaderMap) -> Option<(Compte, String)> {
+    session(r, h).map(|s| (s.compte, s.csrf))
+}
+
+pub(crate) fn page_erreur(r: &Partage, h: &HeaderMap, texte: &str) -> Response {
+    let s = session(r, h);
+    erreur_page(r, s.as_ref(), texte)
+}
+
+pub(crate) fn page_publique(titre: &str, r: &Partage, h: &HeaderMap, corps: &str) -> Response {
+    let s = session(r, h);
+    page(titre, s.as_ref(), corps).into_response()
+}
+
+pub(crate) fn origine_acceptee(r: &Partage, h: &HeaderMap) -> bool {
+    origine_ok(r, h)
+}
+
+pub(crate) fn adresse_visiteur(h: &HeaderMap) -> String {
+    ip(h)
+}
+
 fn refuse_origine() -> Response {
     (StatusCode::FORBIDDEN, "Requête refusée : elle ne vient pas de la plate-forme.").into_response()
 }
@@ -254,14 +295,15 @@ pub async fn accueil(State(r): State<Partage>, h: HeaderMap) -> Response {
     .into_response()
 }
 
-fn boutons_fournisseurs(r: &Partage, verbe: &str) -> String {
+fn boutons_fournisseurs(r: &Partage, verbe: &str, suite: &str) -> String {
     let b = r.base();
+    let suite = if suite.is_empty() || suite == "/sites" { String::new() } else { format!("?suite={}", encoder(suite)) };
     let mut html = String::new();
     if base::reglage(&b, "google_client_id").ok().flatten().is_some() && base::reglage(&b, "google_secret").ok().flatten().is_some() {
-        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/google">{verbe} avec Google</a>"#));
+        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/google{suite}">{verbe} avec Google</a>"#));
     }
     if base::reglage(&b, "facebook_app_id").ok().flatten().is_some() && base::reglage(&b, "facebook_secret").ok().flatten().is_some() {
-        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/facebook">{verbe} avec Facebook</a>"#));
+        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/facebook{suite}">{verbe} avec Facebook</a>"#));
     }
     if html.is_empty() { String::new() } else { format!(r#"<div class="fournisseurs">{html}</div><p class="meta">En continuant avec Google ou Facebook, vous acceptez les <a href="/cgu">CGU</a> et la <a href="/confidentialite">politique de confidentialité</a>.</p>"#) }
 }
@@ -270,7 +312,7 @@ fn formulaire_inscription(r: &Partage, erreur: &str, email: &str, nom: &str) -> 
     format!(
         r#"<div class="carte"><h1>Créer un compte</h1>{}{}<form method="post" action="/inscription"><label>Nom ou atelier<input type="text" name="nom" required maxlength="80" value="{}"></label><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><label>Mot de passe (10 caractères au moins)<input type="password" name="mot_de_passe" required minlength="10" autocomplete="new-password"></label><label class="case"><input type="checkbox" name="cgu" value="1" required> <span>J'accepte les <a href="/cgu">conditions générales d'utilisation</a> et la <a href="/confidentialite">politique de confidentialité</a>.</span></label><button type="submit">Créer mon compte</button></form><p class="meta">Déjà inscrit ? <a href="/connexion">Se connecter</a></p></div>"#,
         if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
-        boutons_fournisseurs(r, "S'inscrire"),
+        boutons_fournisseurs(r, "S'inscrire", ""),
         echapper(nom),
         echapper(email)
     )
@@ -317,7 +359,7 @@ fn formulaire_connexion(r: &Partage, erreur: &str, email: &str, suite: &str) -> 
     format!(
         r#"<div class="carte"><h1>Se connecter</h1>{}{}<form method="post" action="/connexion"><input type="hidden" name="suite" value="{}"><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><label>Mot de passe<input type="password" name="mot_de_passe" required autocomplete="current-password"></label><button type="submit">Se connecter</button></form><p class="meta">Pas encore de compte ? <a href="/inscription">Créer un compte</a></p></div>"#,
         if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
-        boutons_fournisseurs(r, "Continuer"),
+        boutons_fournisseurs(r, "Continuer", suite),
         echapper(suite),
         echapper(email)
     )
@@ -521,8 +563,16 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
         Some("lie") => r#"<p class="ok">Connexion liée à votre compte.</p>"#,
         _ => "",
     };
+    let applis = base::jetons_du_compte(&r.base(), c.id).unwrap_or_default();
+    let carte_applis = if applis.is_empty() {
+        r#"<div class="carte"><h2>Apps connectées</h2><p class="meta">Aucune. Dans une app E-KO RIP Center, « Se connecter au cloud » vous connecte avec ce compte.</p></div>"#.to_string()
+    } else {
+        let lignes: String = applis.iter().map(|(appareil, cree, vu)| format!("<li>{} <span class=\"meta\">— connectée le {}, vue le {}</span></li>", echapper(appareil), date(Some(*cree)), date(Some(*vu)))).collect();
+        format!(r#"<div class="carte"><h2>Apps connectées</h2><ul>{lignes}</ul><form method="post" action="/compte/applis/deconnecter">{}<button class="discret" type="submit">Déconnecter toutes les apps</button></form></div>"#, hidden_csrf(&s))
+    };
+    let message = if q.get("ok").map(String::as_str) == Some("applis") { r#"<p class="ok">Toutes les apps ont été déconnectées.</p>"# } else { message };
     let corps = format!(
-        r#"<h1>Mon compte</h1>{message}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div><div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
+        r#"<h1>Mon compte</h1>{message}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div>{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
         echapper(&c.nom),
         echapper(&c.email),
         date(Some(c.cree_le)),
@@ -532,6 +582,21 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
         hidden_csrf(&s)
     );
     page("Mon compte", Some(&s), &corps).into_response()
+}
+
+pub async fn deconnecter_applis(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/compte") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let _ = base::revoquer_jetons_du_compte(&r.base(), s.compte.id);
+    Redirect::to("/compte?ok=applis").into_response()
 }
 
 pub async fn supprimer_compte(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
@@ -855,7 +920,9 @@ fn retour(r: &Partage, f: &Fournisseur) -> String {
     format!("{}/auth/{}/retour", r.config.url_publique, f.nom)
 }
 
-pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>) -> Response {
+pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
+    // Destination après connexion (autorisation d'une app…), gardée dans le cookie d'état.
+    let suite = suite_sure(q.get("suite"));
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
     let Some(id) = base::reglage(&r.base(), f.cle_id).ok().flatten() else { return erreur_page(&r, None, "Connexion non configurée.") };
     let etat = crate::aleatoire_hex(16);
@@ -870,7 +937,7 @@ pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>)
     );
     let mut rep = Redirect::to(&url).into_response();
     let secure = if https(&r) { "; Secure" } else { "" };
-    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom)).expect("cookie"));
+    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}:{}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom, encoder(&suite))).expect("cookie"));
     rep
 }
 
@@ -958,7 +1025,12 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
 
 pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
-    let attendu = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
+    let valeur = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
+    // Cookie : `<fournisseur>:<état>:<suite encodée>`.
+    let (attendu, suite) = match valeur.as_deref().map(|v| v.splitn(3, ':').collect::<Vec<_>>()) {
+        Some(p) if p.len() >= 2 => (Some(format!("{}:{}", p[0], p[1])), suite_sure(p.get(2).map(|s| decoder(s)).as_ref())),
+        _ => (None, "/sites".to_string()),
+    };
     let recu = q.get("state").map(|s| format!("{}:{s}", f.nom));
     let etat_ok = matches!((&attendu, &recu), (Some(a), Some(b)) if crate::egal_constant(a, b));
     let effacer = HeaderValue::from_str(&format!("{}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0{}", nom_cookie(&r, COOKIE_OAUTH), if https(&r) { "; Secure" } else { "" })).expect("cookie");
@@ -985,7 +1057,7 @@ pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): C
     let Some(ident) = ident else { return avec_effacement(erreur_page(&r, s.as_ref(), "Le fournisseur n'a pas confirmé la connexion : recommencer.")) };
     let issue = resoudre(&r.base(), nom_f, ident, s.as_ref().map(|s| &s.compte));
     avec_effacement(match issue {
-        Issue::Connecter(id) => connecte(&r, id, "/sites"),
+        Issue::Connecter(id) => connecte(&r, id, &suite),
         Issue::Lie => Redirect::to("/compte?ok=lie").into_response(),
         Issue::Refus(m) => erreur_page(&r, s.as_ref(), m),
     })

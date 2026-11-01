@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : « Se connecter au cloud » depuis les apps.** Connexion au compte de la
+  plate-forme par le navigateur (OAuth 2 + PKCE), liste des sites du compte, ouverture d'un
+  serveur RIP sans second mot de passe : le rôle sur le site (portail) donne les droits sur le
+  RIP. Apps connectées visibles et révocables dans « Mon compte ». Voir `docs/fr/cloud.md`.
+  *Cloud sign-in from the apps (OAuth 2 + PKCE): platform account, site list, no second
+  password on the RIP server.*
 - **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
   (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
   (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie

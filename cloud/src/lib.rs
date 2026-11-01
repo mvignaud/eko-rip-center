@@ -54,6 +54,34 @@ pub fn base64url(octets: &[u8]) -> String {
     s
 }
 
+/// Inverse de `base64url` ; None si le texte n'en est pas.
+pub fn base64url_decoder(texte: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'-' => 62,
+            b'_' => 63,
+            _ => return None,
+        } as u32)
+    };
+    if texte.len() % 4 == 1 {
+        return None;
+    }
+    let mut v = Vec::with_capacity(texte.len() * 3 / 4);
+    for bloc in texte.as_bytes().chunks(4) {
+        let mut n = 0u32;
+        for (i, &c) in bloc.iter().enumerate() {
+            n |= val(c)? << (18 - 6 * i);
+        }
+        for i in 0..bloc.len() - 1 {
+            v.push((n >> (16 - 8 * i)) as u8);
+        }
+    }
+    Some(v)
+}
+
 /// Comparaison en temps constant (longueurs égales attendues : empreintes).
 pub fn egal_constant(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
