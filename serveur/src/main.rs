@@ -2747,7 +2747,8 @@ async fn garder(State(etat): State<Partage>, mut requete: axum::extract::Request
     let role = match &identite {
         Some(i) => {
             let (role, lecture_seule) = role_cloud(i);
-            if lecture_seule && requete.method() != axum::http::Method::GET {
+            // Lecture seule : s'inscrire aux notifications du téléphone reste permis.
+            if lecture_seule && requete.method() != axum::http::Method::GET && !chemin.starts_with("/api/mobile/") {
                 return refus(StatusCode::FORBIDDEN, "lecture_seule", None);
             }
             role
@@ -3108,15 +3109,17 @@ struct Inscription {
 }
 
 /// Inscrit un téléphone pour les notifications, au nom du compte connecté.
-async fn inscrire_appareil(State(etat): State<Partage>, entetes: axum::http::HeaderMap, Json(i): Json<Inscription>) -> Response {
+async fn inscrire_appareil(State(etat): State<Partage>, cloud: Option<axum::Extension<eko_rip_cloud::applis::IdentiteCloud>>, entetes: axum::http::HeaderMap, Json(i): Json<Inscription>) -> Response {
     if !mobile::jeton_valide(&i.jeton) {
         return refus(StatusCode::BAD_REQUEST, "jeton_push_invalide", None);
     }
-    let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
-    // Inscription par une identité cloud (en-tête signé du cloud E-KO RIP) : à brancher
-    // ici avec `utilisateur = e-mail du compte cloud` et `cloud: true` quand cette identité
-    // arrive dans le serveur (fil du cloud) ; voir `mobile::DUREE_INSCRIPTION_CLOUD`.
-    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant(), cloud: false };
+    // Par le cloud : l'e-mail du compte de la plate-forme, gardé tant que le téléphone se
+    // réinscrit (voir `mobile::DUREE_INSCRIPTION_CLOUD`) ; sinon le compte local de la session.
+    let (utilisateur, par_cloud) = match cloud {
+        Some(axum::Extension(c)) => (Some(c.email), true),
+        None => (jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now())), false),
+    };
+    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant(), cloud: par_cloud };
     match mobile::inscrire(&etat.config.donnees, a) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
@@ -5991,6 +5994,9 @@ mod tests {
             let r = avec("POST", "/api/travaux/x/relancer", "lecture", true).await;
             assert_eq!(code(r).await, "lecture_seule");
             assert_eq!(avec("GET", "/api/travaux", "lecture", true).await.status(), StatusCode::OK);
+            // Lecture seule : le téléphone peut quand même s'inscrire aux notifications.
+            let r = avec("POST", "/api/mobile/appareils", "lecture", true).await;
+            assert_ne!(r.status(), StatusCode::FORBIDDEN, "inscription mobile permise en lecture seule");
             // Toujours fermé par le cloud, même identifié.
             assert_eq!(code(avec("POST", "/api/pont", "admin", true).await).await, "ferme_par_cloud");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();

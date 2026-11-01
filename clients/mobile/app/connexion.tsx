@@ -32,6 +32,12 @@ export default function Connexion() {
     setErreur(null);
     setOccupe(true);
     try {
+      // L'adresse de la plate-forme n'est pas un serveur RIP : on passe par « Se connecter au cloud »
+      if (/^(https?:\/\/)?platform\.e-ko\.rip\/?$/i.test(url.trim())) {
+        setUrl('');
+        await connexionCloud();
+        return;
+      }
       if (!identifiants) {
         const info = await sonder(url);
         if (info.acces_libre) await connexion(url);
