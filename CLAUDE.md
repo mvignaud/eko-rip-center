@@ -12,12 +12,13 @@ Sur le serveur de test (`mathieu@eko-rip`, 192.168.10.109), une fois les `.deb` 
 ```bash
 ~/eko-depot/outils/publier-depot.sh \
   eko-rip-serveur_<version>-1_amd64.deb \
-  "E-KO RIP Center_<version>_amd64.deb"
+  e-ko-rip-center_<version>-1_amd64.deb
 ```
 
 - **Les deux paquets à chaque release** : le serveur (`eko-rip-serveur`, via cargo-deb) et le
-  client Linux (`e-ko-rip-center`, via `npx @tauri-apps/cli@2 build --bundles deb` dans
-  `client/`). La CI ne construit plus le client Linux, il se construit sur le serveur de test.
+  client Linux natif (`e-ko-rip-center`, GTK 4, via cargo-deb dans `clients/linux/`, qui a
+  remplacé le client Tauri de `client/` depuis la 0.29). La CI ne construit plus le client
+  Linux, il se construit sur le serveur de test.
 - Le script signe avec la clé GPG `depot@e-ko.fr` du trousseau du serveur de test et envoie par
   rsync au VPS OVH (`Host apt.e-ko.fr` dans `~/.ssh/config`, clé `~/.ssh/eko_depot`, compte
   `depot` limité à `/srv/depot`). Ne jamais régénérer cette clé : les postes refuseraient les

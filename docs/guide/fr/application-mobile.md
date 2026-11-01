@@ -43,7 +43,7 @@ Le cloud permet de joindre le serveur de l'atelier depuis l'extérieur, sans VPN
 Deux façons de faire :
 
 - Saisir dans **Serveur** l'adresse à distance du site, de la forme `https://<site>.platform.e-ko.rip`, puis un compte du serveur RIP.
-- Toucher **Se connecter au cloud** sous la mention « hors de l'atelier ».
+- Toucher **Se connecter au cloud** sous la mention « hors de l'atelier ». Saisir `platform.e-ko.rip` dans **Serveur** revient au même.
 
 Avec **Se connecter au cloud** :
 
@@ -114,7 +114,8 @@ L'onglet **Réglages** affiche :
 - le serveur, l'utilisateur et le rôle (**Administrateur** ou **Opérateur**) ;
 - les interrupteurs de notifications ;
 - le bouton **Envoyer une notification d'essai** ;
-- le bouton **Se déconnecter** et le numéro de version de l'application.
+- le bouton **Se déconnecter** et le numéro de version de l'application ;
+- le lien **Aide / Documentation**, qui ouvre cette page.
 
 ## Notifications
 
