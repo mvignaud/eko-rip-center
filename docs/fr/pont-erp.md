@@ -198,7 +198,7 @@ dernière erreur, et l'instance, avec **Tirer une nouvelle instance** (confirmat
   Système avec son code ; le RIP réessaie après 60 s, puis toutes les 5 min. Il ne saute
   jamais un événement refusé.
 - `travaux` : les travaux envoyés par l'ERP (lot R3, § 7).
-- `actions` : annuler, suspendre, reprendre, priorité, échéance (lot R3.2, § 8). Elles
+- `actions` : annuler, suspendre, reprendre, priorité, échéance, opérateur, réimpression (lot R3.2 et roadmap 7.8, § 8). Elles
   remplacent l'ancien champ `annulations`, qui n'est plus appliqué (signalé au journal du
   serveur s'il arrive non vide).
 - `estimations` : les estimations demandées par l'ERP (lot R4, § 9).
@@ -240,6 +240,8 @@ Un travail né d'un envoi de l'ERP (§ 7) porte en plus `envoi_id`, et sa réfé
 ```json
 { "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
 ```
+
+Un travail d'un groupe (§ 7, travaux liés) porte aussi `groupe` et `partie`.
 
 `sortie.etat` — à chaque changement d'état d'une sortie :
 
@@ -285,11 +287,18 @@ seulement quand il change (l'heure seule ne compte pas) :
 - `bac_encre_usagee_pourcent` : `null` tant qu'il n'est pas lu sur l'Epson.
 - Aucun envoi à la demande pour l'instant : l'ERP garde le dernier `machine.etat` reçu.
 
+Inventaire média et journal machine (roadmap 7.8) : pas d'événement à part. L'inventaire, ce
+sont les `supports` de `catalogue.modifie` (ce que le RIP sait imprimer) et, machine par
+machine, le support chargé et sa longueur restante de `machine.etat`. Le journal d'une machine,
+ce sont ses `sortie.etat` (qui passe, quand, en échec ou non), ses `travail.consommation`
+(support, longueur, encre, durée) et ses `machine.etat` (alertes), tous avec `machine_uuid`.
+
 ## 7. Travaux envoyés par l'ERP (lot R3)
 
-Forme d'un élément de `travaux` : § 11 du contrat côté ERP (`docs/onyx/pont-erp-cote-erp.md`
-d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
-`echeance`, `fichier { chemin, nom, taille, sha256 }`.
+Forme d'un élément de `travaux` : § 11 du contrat côté ERP (dans
+eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
+`echeance`, `fichier { chemin, nom, taille, sha256 }`, et pour des travaux liés `groupe` et
+`partie` (roadmap 7.8).
 
 - **Téléchargement** : à chaque `en-attente`, chaque envoi jamais pris est téléchargé par
   `GET <base><fichier.chemin>`, signé comme `en-attente`, 5 par cycle au plus, 4 Go au plus.
@@ -298,6 +307,11 @@ d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `
 - **Création** : le travail prend l'uuid de l'envoi, le réglage enregistré désigné par
   `prereglage_uuid`, et sa fiche : commande = `ref_erp`, quantité = `copies`, échéance. Un
   serveur coupé entre la création et le ménage ne refait pas de second travail.
+- **Travaux liés** : `groupe` (texte, 200 caractères au plus) et `partie` (rang, de 1 à
+  10 000) vont ensemble ; l'un sans l'autre est un `envoi_invalide`. Les sorties d'une partie
+  se posent dans la file juste après celles des parties de rang inférieur ou égal encore en
+  file, sinon juste avant celles d'un rang supérieur : le groupe passe d'un bloc et dans
+  l'ordre, même si les rendus finissent dans le désordre. Une priorité (§ 8) reste possible.
 - **Accusé** : le premier `travail.etat` du travail porte `envoi_id` (§ 6.5).
 - **Refus** : `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes :
   `envoi_invalide` (élément mal formé ; `detail` nomme le champ), `telechargement_impossible`
@@ -310,8 +324,10 @@ d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `
 ## 8. Actions de l'ERP sur la file (lot R3.2)
 
 Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "ref_erp", "action",
-"echeance" }`, `action` parmi `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
-(`echeance`, en secondes Unix, exigée pour cette dernière seulement).
+"echeance", "operateur", "page" }`, `action` parmi `suspendre`, `reprendre`, `annuler`,
+`priorite`, `echeance`, `operateur`, `reimprimer`. `echeance` (secondes Unix) est exigée pour
+`echeance`, `operateur` (texte, 200 caractères au plus, vide = personne) pour `operateur` ;
+`page` (de 1 à n) n'est permise que pour `reimprimer`.
 
 - **Portée** : une action vise tous les travaux nés d'un envoi de l'ERP qui portent ce
   `ref_erp`, et leurs sorties (impression et découpe) encore en file. Un travail créé au RIP
@@ -327,11 +343,19 @@ Forme d'un élément de `actions` : § 12 du contrat côté ERP — `{ "id", "re
     travail déjà imprimé ne s'annule pas : il se signale par `code` = `deja_imprime`.
   - `priorite` : les sorties passent en tête de file, dans leur ordre.
   - `echeance` : l'échéance de la fiche change (sans toucher à la file).
+  - `operateur` : l'opérateur de la fiche change (sans toucher à la file) ; il apparaît dans
+    les rapports du RIP.
+  - `reimprimer` : chaque travail rendu du dossier repart en file comme à son arrivée (même
+    machine, découpe comprise, retenue `suspendre` respectée), sans refaire le rendu ;
+    `page` limite à cette page. Un travail en cours de rendu ou qui a encore des sorties en
+    file n'est pas doublé : il est compté dans `non_modifiables`. Un dossier annulé ne
+    repart pas (envoyer d'abord `reprendre`).
 - **Accusé** : `travail.action` — `{ "action_id", "ref_erp", "action", "code", "touchees",
   "non_modifiables" }`. `code` vaut `null` si tout s'est fait, `aucun_travail` si aucun
   travail de l'ERP ne porte ce `ref_erp`, `deja_imprime` (ci-dessus), ou `action_invalide`
-  (élément mal formé ; `detail` nomme le champ). `touchees` compte les sorties changées, ou
-  les travaux pour `echeance`.
+  (élément mal formé ; `detail` nomme le champ), `rien_a_reimprimer` (aucune sortie
+  ajoutée). `touchees` compte les sorties changées ou ajoutées, ou les travaux pour
+  `echeance` et `operateur`.
 - **Doublons** : comme les envois (§ 7) — une action prise n'est jamais reprise, même
   reproposée, et elle est oubliée 30 jours après que l'ERP a cessé de la proposer.
 

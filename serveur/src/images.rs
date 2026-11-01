@@ -476,7 +476,7 @@ fn canaux_photoshop(r: &[(u16, &[u8])], n: usize) -> Vec<Option<TonDirect>> {
         let mut i = 0;
         while let Some(l) = d.get(i..i + 4).map(|o| u32::from_be_bytes(o.try_into().unwrap()) as usize) {
             let Some(u) = d.get(i + 4..i + 4 + 2 * l) else { break };
-            let unites: Vec<u16> = u.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).take_while(|&c| c != 0).collect();
+            let unites: Vec<u16> = u.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).take_while(|&c| c != 0).collect();
             noms.push(String::from_utf16_lossy(&unites));
             i += 4 + 2 * l;
         }
@@ -490,8 +490,8 @@ fn canaux_photoshop(r: &[(u16, &[u8])], n: usize) -> Vec<Option<TonDirect>> {
     }
     // (nature, couleur) par canal.
     let affichage: Vec<(u8, [f64; 4])> = match (bloc(1077), bloc(1007)) {
-        (Some(d), _) if d.len() >= 4 => d[4..].chunks_exact(13).map(|c| (c[12], couleur_photoshop(c))).collect(),
-        (_, Some(d)) => d.chunks_exact(14).map(|c| (c[12], couleur_photoshop(c))).collect(),
+        (Some(d), _) if d.len() >= 4 => d[4..].as_chunks::<13>().0.iter().map(|c| (c[12], couleur_photoshop(c))).collect(),
+        (_, Some(d)) => d.as_chunks::<14>().0.iter().map(|c| (c[12], couleur_photoshop(c))).collect(),
         _ => vec![],
     };
     let mut plaques: Vec<String> = vec![];

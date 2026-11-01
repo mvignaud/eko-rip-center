@@ -15,7 +15,81 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.31.0] — 2026-11-01
+
 ### Ajouté
+- **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
+  (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
+  (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie
+  de l'adresse reste possible (et seule proposée si rien n'est trouvé). Désactivable côté
+  serveur par `EKO_RIP_ANNONCE=0`. Voir `docs/fr/installation-client.md`.
+  *Automatic LAN discovery of the server (DNS-SD); manual address entry kept as a fallback.*
+
+### Modifié
+- **Cloud E-KO RIP : une adresse par site.** Chaque serveur rattaché est servi sur sa propre
+  origine, `https://<site>.platform.e-ko.rip` : elle se saisit telle quelle dans les clients
+  Mac, Linux, Windows et mobile, et l'interface d'administration fonctionne dans un navigateur.
+  Cookies du portail en `__Host-` ; certificats à la demande autorisés par
+  `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
+  pour l'API.
+
+### Corrigé
+- **Rendus bloqués sous Ubuntu 26.04.** AppArmor 5 y confine Ghostscript (profil `gs`) et lui
+  interdit de lire `/var/lib/eko-rip` : tout rendu échouait (« Permission denied » sur
+  `source.pdf`, 0 page). Le paquet serveur ouvre désormais les travaux du RIP à ce profil
+  (`/etc/apparmor.d/local/gs`) et le recharge à l'installation ; retiré à la purge.
+  *Renders failed on Ubuntu 26.04: AppArmor 5 confines Ghostscript; the server package now
+  grants it access to the RIP jobs folder.*
+
+## [0.30.0] — 2026-10-31
+
+### Ajouté
+- **Statistiques anonymes d'installation.** Le serveur et les clients Mac et Linux envoient à
+  `platform.e-ko.rip/api/ping`, à l'installation, à chaque mise à jour puis chaque semaine, un
+  identifiant aléatoire, le type de poste, l'OS, la version (et pour le serveur le nombre de
+  machines et de réglages), même sans rattachement au cloud. Désactivable dans Système ou par
+  `EKO_TELEMETRIE=0`. La plate-forme tient le registre et ses statistiques
+  (`eko-rip-cloud installations`, `GET /api/installations`). Voir
+  `docs/fr/statistiques-anonymes.md`.
+- **Rapports de bug.** « Signaler un problème » dans les clients Mac et Linux et dans Système ;
+  rapports automatiques (plantage, rendu ou sortie en échec, rendu anormalement long) sur
+  accord de l'administrateur, demandé à la première ouverture. Journal du serveur joint avec
+  chemins, noms de fichiers et e-mails masqués, gardé en privé 90 jours sur la plate-forme ;
+  issue GitHub ouverte automatiquement sans journal ni e-mail, une seule par erreur
+  automatique répétée. Voir `docs/fr/rapports-de-bug.md`.
+- **Cloud E-KO RIP, lot 1 : accès à distance sans VPN ni port ouvert.** Nouvelle plate-forme
+  `eko-rip-cloud` (paquet à part, `platform.e-ko.rip`) : le serveur RIP lui ouvre un tunnel
+  sortant et elle y fait passer les requêtes des postes et de l'app mobile, à
+  `https://platform.e-ko.rip/s/<site>`. Rattachement depuis Système › Cloud E-KO RIP par un
+  code court à valider sur la plate-forme. Jamais sans compte ; ni pont ERP, ni renvoi, ni
+  réglages du pont ou du cloud par le tunnel ; cookies et pages des ateliers isolés les uns des
+  autres. Voir `docs/fr/cloud.md`.
+  *E-KO RIP Cloud step 1: remote access without VPN or open port, through an outgoing tunnel
+  from the RIP server to platform.e-ko.rip; pairing by short code.*
+- **Cloud E-KO RIP, lot 2 : le portail** de `platform.e-ko.rip`. Inscription libre ou connexion
+  Google / Facebook ; « Mes sites » (rattacher un serveur par son code, état en ligne, retirer) ;
+  « Mon compte » (liaisons, suppression) ; administration (clés Google et Facebook avec les URL de
+  retour à déclarer, sites, comptes suspendus) ; CGU, mentions légales et politique de
+  confidentialité (SAS GOLDEN PRINT). Formulaires protégés (origine, jeton par session),
+  blocage après 5 échecs, limites par adresse, en-têtes de sécurité.
+  *E-KO RIP Cloud step 2: the platform portal (sign-up, Google/Facebook sign-in, sites, account,
+  admin with OAuth keys and callback URLs, legal pages).*
+- **Étalonnage du gris de type G7** (feuille de route 8.10), côté serveur. Le serveur
+  fournit une mire, une rampe CMY et une rampe noire. À partir de ses mesures, il calcule
+  les écarts au gris cible et les courbes de correction C, M, Y et K. Il garde aussi
+  l'historique des itérations, où la meilleure reste même si une suivante est moins
+  bonne. Les courbes s'appliqueront au rendu avec la linéarisation par mode. L'écran
+  viendra avec les clients natifs.
+  *G7-style grey calibration: chart, correction curves, iteration history keeping the best
+  one.*
+- **Pont ERP : travaux liés, opérateur et réimpression** (feuille de route 7.8). L'ERP peut
+  envoyer les parties d'un même **groupe** avec leur rang : elles passent dans la file d'un
+  bloc et dans l'ordre, même si leurs rendus finissent dans le désordre. Deux actions
+  s'ajoutent : **affecter l'opérateur** d'un dossier, et **faire réimprimer** un dossier (ou
+  une seule page) sans refaire le rendu. L'inventaire des supports et le journal des
+  machines passent déjà par les événements existants ; la documentation du pont le précise.
+  *ERP bridge: linked jobs kept together and in order, operator assignment and reprint
+  actions.*
 - **Planche manuelle** (feuille de route 5.10), côté serveur. Une planche peut maintenant
   recevoir des **copies posées à la main** (coin en mm, angle, **verrou**), calées sur une
   **grille** et **aimantées** aux bords voisins, avec un refus en cas de chevauchement ou de
@@ -54,6 +128,23 @@ parité ; d'ici là, 0.Y.Z.
   *Ordered multi-layer printing (e.g. white-colour-white) in the Epson output.*
 
 ### Corrigé
+- Un PDF abîmé dont une page est son propre « parent » ne bloque plus les dossiers
+  surveillés : la recherche du format s'arrête au bout de 32 niveaux. Le format prend aussi
+  le cadrage hérité (CropBox) avant la MediaBox de la page, comme le veut la norme.
+  *A damaged PDF whose page is its own parent no longer stalls hot folders; inherited CropBox
+  wins over the page MediaBox.*
+- Trois lectures d'octets écrites autrement pour que `cargo clippy` repasse sans erreur avec
+  Rust 1.99 (règle `chunks_exact_to_as_chunks`), sans changement de comportement.
+  *Clippy clean again on Rust 1.99.*
+- Dossiers surveillés : un fichier refusé est rangé sous `nom-2`, `nom-3`… au lieu d'écraser,
+  dans `refuses/`, un refus précédent du même nom et sa raison.
+  *A rejected file no longer overwrites an earlier rejection of the same name.*
+- Balise `{support}` : à nom égal, c'est le support de l'imprimante retenue qui est pris (même
+  si `{machine}` vient après dans le motif), et plus le premier de ce nom dans le catalogue.
+  *`{support}` picks the media of the chosen printer when two share a name.*
+- Pont ERP : une action reçue pendant le rendu d'un travail (opérateur, échéance, suspension,
+  annulation) n'est plus effacée par la fin du rendu.
+  *ERP actions received while a job renders are no longer lost when the render ends.*
 - Renvoi vers un autre RIP : le jeton enregistré n'est plus repris quand l'hôte ou le port
   de la machine change ; il faut le ressaisir. *The stored forwarding token is no longer
   reused when the host or port changes.*
@@ -62,6 +153,11 @@ parité ; d'ici là, 0.Y.Z.
 - Renvoi : un flux reçu d'un autre RIP ne peut plus viser une machine qui renvoie
   elle-même vers un troisième (`renvoi_en_chaine`), notre jeton ne sert plus de relais.
   *No chained forwarding through this RIP.*
+
+*Added: E-KO RIP Cloud (remote access without VPN through platform.e-ko.rip, pairing by
+code, portal), anonymous installation statistics (opt-out), bug reports ("Report a problem"
+in the Mac and Linux clients, opt-in automatic reports with masked server log, GitHub issue
+without log or e-mail), G7 grey calibration and other roadmap items.*
 
 ## [0.29.0] — 2026-10-30
 
@@ -518,7 +614,7 @@ La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la
 
 ### Modifié
 - Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
-  **Couches**, comme dans ONYX.
+  **Couches**.
 - État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
   impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
   dossier (pas imprimée)**.

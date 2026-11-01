@@ -5,5 +5,23 @@ if [ "$1" = "configure" ]; then
         adduser --system --group --home /var/lib/eko-rip --no-create-home eko-rip
     fi
     install -d -o eko-rip -g eko-rip -m 0750 /var/lib/eko-rip
+    # Ubuntu 26.04 (apparmor 5) confine Ghostscript (profil « gs ») : il ne lit plus que
+    # /usr/share, $HOME, /mnt, /media… Les travaux du RIP lui sont ouverts par l'ajout local
+    # prévu par ce profil, puis le profil est rechargé.
+    if [ -f /etc/apparmor.d/gs ] && grep -qs "local/gs" /etc/apparmor.d/gs; then
+        install -d -m 0755 /etc/apparmor.d/local
+        if ! grep -qsF 'owner /var/lib/eko-rip/** rwk,' /etc/apparmor.d/local/gs; then
+            printf '# E-KO RIP Center : Ghostscript lit et écrit les travaux du RIP.\n%s\n' 'owner /var/lib/eko-rip/** rwk,' >> /etc/apparmor.d/local/gs
+        fi
+        # Verrou du cache des polices (fontconfig le pose par lien physique).
+        if ! grep -qsF 'owner /var/lib/eko-rip/.cache/fontconfig/** l,' /etc/apparmor.d/local/gs; then
+            printf '%s\n' 'owner /var/lib/eko-rip/.cache/fontconfig/** l,' >> /etc/apparmor.d/local/gs
+        fi
+        if command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+            apparmor_parser -r /etc/apparmor.d/gs || echo "E-KO RIP : profil AppArmor gs non rechargé (sudo apparmor_parser -r /etc/apparmor.d/gs)."
+        fi
+    fi
+    echo "E-KO RIP : accès à distance par le Cloud E-KO RIP (https://platform.e-ko.rip) :"
+    echo "  Système › Cloud E-KO RIP › Connecter à la plate-forme, puis saisir le code sur la plate-forme."
 fi
 #DEBHELPER#

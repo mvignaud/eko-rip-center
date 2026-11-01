@@ -1,6 +1,9 @@
 //! Écrans de connexion : adresse du serveur, puis identifiants si le serveur en demande.
 
+use crate::decouverte::Serveur;
 use adw::prelude::*;
+use gtk::glib;
+use std::cell::RefCell;
 
 pub const ICONE: &str = "fr.e-ko.rip-center";
 
@@ -9,6 +12,11 @@ pub struct PageServeur {
     pub adresse: adw::EntryRow,
     pub bouton: gtk::Button,
     pub annuler: gtk::Button,
+    /// Serveurs trouvés sur le réseau local (découverte DNS-SD).
+    pub trouves: adw::PreferencesGroup,
+    pub rechercher: gtk::Button,
+    attente: gtk::Spinner,
+    rangees: RefCell<Vec<adw::ActionRow>>,
 }
 
 pub struct PageIdentification {
@@ -39,9 +47,16 @@ fn habiller(contenu: &gtk::Box, entete: &adw::HeaderBar) -> adw::ToolbarView {
 impl PageServeur {
     pub fn new() -> Self {
         let contenu = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(18).build();
-        contenu.append(&en_tete_de_page("E-KO RIP Center", "Adresse du serveur, par exemple 192.168.10.109:8640."));
+        contenu.append(&en_tete_de_page("E-KO RIP Center", "Choisissez votre serveur, ou saisissez son adresse, par exemple 192.168.10.109:8640."));
+        let attente = gtk::Spinner::builder().spinning(true).valign(gtk::Align::Center).build();
+        let rechercher = gtk::Button::builder().label("Rechercher à nouveau").css_classes(["flat"]).valign(gtk::Align::Center).build();
+        let entete_trouves = gtk::Box::builder().spacing(6).build();
+        entete_trouves.append(&attente);
+        entete_trouves.append(&rechercher);
+        let trouves = adw::PreferencesGroup::builder().title("Serveurs trouvés sur le réseau").header_suffix(&entete_trouves).build();
+        contenu.append(&trouves);
         let adresse = adw::EntryRow::builder().title("Adresse du serveur").input_purpose(gtk::InputPurpose::Url).build();
-        let groupe = adw::PreferencesGroup::new();
+        let groupe = adw::PreferencesGroup::builder().title("Saisir une adresse").build();
         groupe.add(&adresse);
         contenu.append(&groupe);
         let bouton = gtk::Button::builder().label("Se connecter").css_classes(["suggested-action", "pill"]).halign(gtk::Align::Center).build();
@@ -49,7 +64,35 @@ impl PageServeur {
         let annuler = gtk::Button::builder().label("Annuler").visible(false).build();
         let entete = adw::HeaderBar::new();
         entete.pack_start(&annuler);
-        PageServeur { racine: habiller(&contenu, &entete), adresse, bouton, annuler }
+        PageServeur { racine: habiller(&contenu, &entete), adresse, bouton, annuler, trouves, rechercher, attente, rangees: RefCell::new(Vec::new()) }
+    }
+
+    /// Affiche la liste des serveurs trouvés (ou l'état de la recherche) ; `choisir` reçoit
+    /// l'adresse `http://ip:port` du serveur sur lequel on clique.
+    pub fn maj_trouves(&self, serveurs: &[Serveur], en_cours: bool, choisir: impl Fn(String) + Clone + 'static) {
+        for r in self.rangees.borrow_mut().drain(..) {
+            self.trouves.remove(&r);
+        }
+        self.attente.set_visible(en_cours);
+        self.rechercher.set_sensitive(!en_cours);
+        let mut rangees = Vec::new();
+        for s in serveurs {
+            let sous_titre = if s.version.is_empty() { s.hote_port().to_string() } else { format!("{} · version {}", s.hote_port(), s.version) };
+            let rangee = adw::ActionRow::builder().title(&s.nom).subtitle(glib::markup_escape_text(&sous_titre)).activatable(true).build();
+            rangee.set_use_markup(false);
+            rangee.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+            let (adresse, choisir) = (s.adresse.clone(), choisir.clone());
+            rangee.connect_activated(move |_| choisir(adresse.clone()));
+            self.trouves.add(&rangee);
+            rangees.push(rangee);
+        }
+        if serveurs.is_empty() {
+            let texte = if en_cours { "Recherche en cours…" } else { "Aucun serveur trouvé : saisissez son adresse ci-dessous." };
+            let rangee = adw::ActionRow::builder().title(texte).css_classes(["dim-label"]).build();
+            self.trouves.add(&rangee);
+            rangees.push(rangee);
+        }
+        *self.rangees.borrow_mut() = rangees;
     }
 }
 

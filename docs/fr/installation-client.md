@@ -30,16 +30,22 @@ sudo apt update && sudo apt upgrade
 
 ## Premier lancement
 
-Saisir l'adresse du serveur, par exemple `192.168.1.20:8640`. Le client la retient.
+L'écran de connexion cherche seul les serveurs E-KO RIP du réseau local et les propose dans
+**Serveurs trouvés sur le réseau** (nom, adresse et version) : un clic suffit. **Rechercher à
+nouveau** relance la recherche (environ 3 secondes). Si aucun serveur n'apparaît, saisir son
+adresse sous **Saisir une adresse**, par exemple `192.168.1.20:8640`. Le client retient le
+serveur choisi.
 Pour en changer : menu **Serveur → Changer de serveur** (`Cmd/Ctrl + Maj + S`).
+
+La découverte utilise DNS-SD (mDNS, `_eko-rip._tcp`, port UDP 5353) : elle ne traverse pas les
+routeurs ni les VPN (utiliser alors l'adresse). Sur Mac, macOS demande d'autoriser l'accès au
+réseau local au premier lancement. Le serveur s'annonce sous le nom de la machine
+(`EKO_RIP_CLOUD_NOM` s'il est réglé) ; `EKO_RIP_ANNONCE=0` désactive l'annonce.
 
 ## Avertissement au premier lancement
 
-Les paquets ne sont pas encore signés (choix assumé pour l'instant : la signature Apple et
-Microsoft viendra avec les versions abouties). Une autorisation suffit, une fois par poste :
-- **macOS 15 et plus** : au refus, ouvrir **Réglages Système → Confidentialité et
-  sécurité**, descendre jusqu'au message sur E-KO RIP Center → **Ouvrir quand même**, puis
-  confirmer avec le mot de passe du Mac. Sur macOS plus ancien : clic droit sur
-  l'application → **Ouvrir**, puis confirmer.
+Le client Mac publié dans les releases est signé (Developer ID) et notarisé par Apple : il
+s'ouvre sans avertissement. Le client Windows n'est pas encore signé ; une autorisation
+suffit, une fois par poste :
 - **Windows** : « Windows a protégé votre ordinateur » → **Informations
   complémentaires** → **Exécuter quand même**.

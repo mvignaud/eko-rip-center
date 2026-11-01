@@ -163,6 +163,20 @@ struct Api: Sendable {
         }
     }
 
+    // MARK: Signalement
+
+    /// `POST /api/rapports` : le serveur joint son journal (si demandé) et transmet à la
+    /// plate-forme. Rend la référence du rapport (`R-…`).
+    func signaler(_ rapport: CorpsRapport) async throws -> String {
+        let json = try JSONEncoder().encode(rapport)
+        let donnees = try await executer(try requete("POST", "/api/rapports", json: json, delai: 90))
+        do {
+            return try JSONDecoder().decode(ReponseRapport.self, from: donnees).reference
+        } catch {
+            throw ErreurApi(statut: 0, code: "reponse_illisible", detail: String(describing: error))
+        }
+    }
+
     // MARK: Aperçu et épreuve
 
     /// PNG de la page (numérotée à partir de 1), avec le cookie de la session.

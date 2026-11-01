@@ -118,6 +118,11 @@ impl<T> Rendus<T> {
         }
     }
 
+    /// Un rendu fini qui attend encore son tour de sortie (arrivée automatique) répond à `f`.
+    pub fn retenu(&self, f: impl Fn(&T) -> bool) -> bool {
+        self.sorties.lock().unwrap().prets.values().flatten().any(f)
+    }
+
     /// Range un rendu fini à son rang et sort, dans l'ordre, tout ce qui est prêt.
     fn poser(&self, rang: u64, sortie: Option<T>, mut sortir: impl FnMut(T)) {
         let mut s = self.sorties.lock().unwrap();
@@ -168,6 +173,18 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::time::Duration;
+
+    /// Un rendu fini qui attend un rendu plus ancien est « retenu » jusqu'à sa sortie.
+    #[test]
+    fn rendu_retenu_jusqu_a_sa_sortie() {
+        let r: Rendus<u32> = Rendus::new(2);
+        let mut sortis = vec![];
+        r.poser(1, Some(7), |t| sortis.push(t));
+        assert!(r.retenu(|t| *t == 7) && sortis.is_empty());
+        r.poser(0, Some(3), |t| sortis.push(t));
+        assert_eq!(sortis, [3, 7]);
+        assert!(!r.retenu(|t| *t == 7));
+    }
 
     /// 20 fichiers déposés, 4 rendus à la fois, durées dans le désordre : jamais plus de 4
     /// rendus, 4 atteints, et la sortie suit l'ordre de dépôt.

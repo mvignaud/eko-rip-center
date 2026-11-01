@@ -157,6 +157,10 @@ pub enum GenreAction {
     Priorite,
     /// Nouvelle échéance de la fiche.
     Echeance,
+    /// Opérateur affecté au dossier, dans la fiche (roadmap 7.8).
+    Operateur,
+    /// Le dossier repart en file comme à son arrivée, sans refaire le rendu (roadmap 7.8).
+    Reimprimer,
 }
 
 /// Une action de l'ERP reçue, qui attend d'être appliquée (`pont/actions/<id>.json`).
@@ -167,6 +171,12 @@ pub struct ActionErp {
     pub action: GenreAction,
     #[serde(default)]
     pub echeance: Option<u64>,
+    /// `operateur` : le nom (vide = personne).
+    #[serde(default)]
+    pub operateur: Option<String>,
+    /// `reimprimer` : cette page seulement (de 1 à n), sinon toutes.
+    #[serde(default)]
+    pub page: Option<usize>,
 }
 
 /// Une estimation demandée par l'ERP (lot R4) sur les travaux d'un dossier, qui attend
@@ -182,6 +192,16 @@ pub struct DemandeEstimation {
 pub struct Lien {
     pub envoi: Uuid,
     pub ref_erp: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partie: Option<Partie>,
+}
+
+/// Travaux liés (roadmap 7.8) : les parties d'un même groupe de l'ERP passent ensemble dans la
+/// file, dans l'ordre de leur rang.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Partie {
+    pub groupe: String,
+    pub rang: u32,
 }
 
 /// Un envoi de l'ERP téléchargé, qui attend de devenir un travail (`pont/recus/<id>/`).
@@ -200,6 +220,8 @@ pub struct Recu {
     /// Fichier à estimer (lot R4, devis) : rendu à part, jamais un travail de la file.
     #[serde(default)]
     pub estimation: bool,
+    #[serde(default)]
+    pub partie: Option<Partie>,
 }
 
 fn dossier(donnees: &Path) -> PathBuf {
@@ -388,6 +410,9 @@ pub fn noter_travail(donnees: &Path, id: Uuid, etat: &str, code_erreur: Option<&
             let mut d = json!({ "travail_uuid": id, "ref_erp": lien.map(|l| &l.ref_erp), "etat": etat, "code_erreur": code_erreur, "pages": pages });
             if let Some(l) = lien {
                 d["envoi_id"] = json!(l.envoi);
+                if let Some(p) = &l.partie {
+                    (d["groupe"], d["partie"]) = (json!(p.groupe), json!(p.rang));
+                }
             }
             if let Err(e) = o.ajouter("travail.etat", d) {
                 eprintln!("pont ERP : événement non journalisé : {e}");
@@ -670,6 +695,7 @@ const REFUS_EMPREINTE: &str = "empreinte_fausse";
 const ACTION_INVALIDE: &str = "action_invalide";
 pub const ACTION_SANS_TRAVAIL: &str = "aucun_travail";
 pub const ACTION_DEJA_IMPRIME: &str = "deja_imprime";
+pub const ACTION_RIEN_A_REIMPRIMER: &str = "rien_a_reimprimer";
 const ESTIMATION_INVALIDE: &str = "estimation_invalide";
 /// Aucun travail de l'ERP rendu pour ce dossier : rien à estimer.
 pub const ESTIMATION_SANS_TRAVAIL: &str = "aucun_travail";
@@ -737,7 +763,15 @@ fn lire_action(a: &Value) -> Result<ActionErp, &'static str> {
     if action == GenreAction::Echeance && echeance.is_none() {
         return Err("echeance");
     }
-    Ok(ActionErp { id, ref_erp, action, echeance })
+    let operateur = match action {
+        GenreAction::Operateur => Some(a["operateur"].as_str().map(str::trim).filter(|o| o.chars().count() <= 200 && !o.chars().any(char::is_control)).ok_or("operateur")?.to_string()),
+        _ => None,
+    };
+    let page = match &a["page"] {
+        Value::Null => None,
+        v => Some(v.as_u64().filter(|p| *p >= 1 && action == GenreAction::Reimprimer).ok_or("page")? as usize),
+    };
+    Ok(ActionErp { id, ref_erp, action, echeance, operateur, page })
 }
 
 /// Lit un élément de `estimations` (§ 13 du contrat côté ERP).
@@ -838,7 +872,15 @@ fn lire_envoi(t: &Value) -> Result<(Recu, String), String> {
         v => Some(v.as_str().filter(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit())).ok_or("fichier.sha256")?.to_ascii_lowercase()),
     };
     let nom = t["fichier"]["nom"].as_str().or(t["nom"].as_str()).unwrap_or("sans nom").chars().filter(|c| !c.is_control() && *c != '/' && *c != '\\').take(200).collect::<String>();
-    Ok((Recu { id, ref_erp, nom, prereglage_uuid, copies, echeance, sha256, estimation: false }, chemin))
+    let partie = match (&t["groupe"], &t["partie"]) {
+        (Value::Null, Value::Null) => None,
+        (g, r) => {
+            let groupe = g.as_str().map(str::trim).filter(|g| !g.is_empty() && g.chars().count() <= 200).ok_or("groupe")?.to_string();
+            let rang = r.as_u64().filter(|r| (1..=10_000).contains(r)).ok_or("partie")? as u32;
+            Some(Partie { groupe, rang })
+        }
+    };
+    Ok((Recu { id, ref_erp, nom, prereglage_uuid, copies, echeance, sha256, estimation: false, partie }, chemin))
 }
 
 /// Télécharge le fichier d'un envoi dans `recus/<id>/source`, vérifie son SHA-256 s'il est
@@ -1539,7 +1581,7 @@ mod tests {
         let recus = recus(&d);
         assert_eq!(recus.len(), 1, "seul l'envoi lisible et servi est reçu");
         let (r, fichier) = &recus[0];
-        assert_eq!(r, &Recu { id: bon, ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies: 2, echeance: Some(1793600000), sha256: Some(empreinte), estimation: false });
+        assert_eq!(r, &Recu { id: bon, ref_erp: "PROD-2026-00123".into(), nom: "bache.pdf".into(), prereglage_uuid: preset, copies: 2, echeance: Some(1793600000), sha256: Some(empreinte), estimation: false, partie: None });
         assert_eq!(std::fs::read(fichier).unwrap(), b"%PDF-1.4 essai");
         // Les refus partent dans le même cycle, journalisés avant l'envoi des lots.
         assert_eq!(refus_recus(&f), [(json!(mauvais), json!("envoi_invalide")), (json!(absent), json!("telechargement_impossible")), (json!(abime), json!("empreinte_fausse"))]);
@@ -1600,8 +1642,8 @@ mod tests {
         assert_eq!(tourner(&d, false).await, Fin::Repos);
         let rangees = actions(&d);
         assert_eq!(rangees.len(), 2);
-        assert!(rangees.contains(&ActionErp { id: pause, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Suspendre, echeance: None }));
-        assert!(rangees.contains(&ActionErp { id: date, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Echeance, echeance: Some(1793600000) }));
+        assert!(rangees.contains(&ActionErp { id: pause, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Suspendre, echeance: None, operateur: None, page: None }));
+        assert!(rangees.contains(&ActionErp { id: date, ref_erp: "PROD-2026-00123".into(), action: GenreAction::Echeance, echeance: Some(1793600000), operateur: None, page: None }));
         assert_eq!(actions_recues(&f), [(json!(sans_date), json!("action_invalide")), (json!(inconnue), json!("action_invalide"))]);
         let refus = f.lock().unwrap().recus.iter().find(|x| x.donnees["action_id"] == json!(sans_date)).unwrap().donnees.clone();
         assert_eq!(refus["detail"], "echeance", "le champ fautif est nommé");
@@ -1676,7 +1718,7 @@ mod tests {
     fn un_travail_lie_a_l_erp_porte_l_envoi_et_la_reference() {
         let d = donnees("lien", "http://127.0.0.1:9/rip/atelier");
         let (t, envoi) = (Uuid::new_v4(), Uuid::new_v4());
-        let lien = Lien { envoi, ref_erp: "PROD-2026-00123".into() };
+        let lien = Lien { envoi, ref_erp: "PROD-2026-00123".into(), partie: None };
         noter_travail(&d, t, "en_attente", None, 0, neuf(), Some(&lien));
         noter_travail(&d, Uuid::new_v4(), "en_attente", None, 0, neuf(), None);
         let j = lire_journal(&d);
@@ -1713,6 +1755,27 @@ mod tests {
         let mut t = bon.clone();
         t["fichier"]["nom"] = json!("../a/b\\c\u{7}.pdf");
         assert_eq!(lire_envoi(&t).unwrap().0.nom, "..abc.pdf");
+        // Travaux liés (roadmap 7.8) : groupe et rang vont ensemble.
+        let mut t = bon.clone();
+        (t["groupe"], t["partie"]) = (json!(" vitrine "), json!(2));
+        assert_eq!(lire_envoi(&t).unwrap().0.partie, Some(Partie { groupe: "vitrine".into(), rang: 2 }));
+        assert_eq!(avec("groupe", json!("vitrine")), "partie");
+        assert_eq!(avec("partie", json!(1)), "groupe");
+        t["partie"] = json!(0);
+        assert_eq!(lire_envoi(&t).map(|_| ()).unwrap_err(), "partie");
+    }
+
+    #[test]
+    fn operateur_et_reimpression_lus_avec_leurs_champs() {
+        let a = |v: Value| lire_action(&json!({ "id": Uuid::new_v4(), "ref_erp": "PROD-2026-00123" }).as_object().unwrap().clone().into_iter().chain(v.as_object().unwrap().clone()).collect::<serde_json::Map<_, _>>().into());
+        let o = a(json!({ "action": "operateur", "operateur": " Léa " })).unwrap();
+        assert_eq!((o.action, o.operateur.as_deref(), o.page), (GenreAction::Operateur, Some("Léa"), None));
+        assert_eq!(a(json!({ "action": "operateur", "operateur": "" })).unwrap().operateur.as_deref(), Some(""), "vide : personne");
+        assert_eq!(a(json!({ "action": "operateur" })).unwrap_err(), "operateur");
+        let r = a(json!({ "action": "reimprimer", "page": 2 })).unwrap();
+        assert_eq!((r.action, r.page), (GenreAction::Reimprimer, Some(2)));
+        assert_eq!(a(json!({ "action": "reimprimer", "page": 0 })).unwrap_err(), "page");
+        assert_eq!(a(json!({ "action": "suspendre", "page": 1 })).unwrap_err(), "page", "page : pour reimprimer seulement");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

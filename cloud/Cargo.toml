@@ -1,0 +1,54 @@
+[package]
+name = "eko-rip-cloud"
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+edition = "2024"
+description = "Plate-forme E-KO RIP Cloud : relais qui donne accès, depuis l'extérieur, aux serveurs RIP des ateliers"
+
+# La bibliothèque porte aussi le côté « serveur RIP » du tunnel (module `client`),
+# utilisé par eko-rip-serveur.
+[lib]
+name = "eko_rip_cloud"
+path = "src/lib.rs"
+
+[[bin]]
+name = "eko-rip-cloud"
+path = "src/main.rs"
+
+[dependencies]
+argon2 = "0.6.0"
+axum = "0.8.9"
+bytes = "1"
+getrandom = "0.4.3"
+# Portail : comptes, sessions, droits, réglages (SQLite embarqué, rien à installer).
+rusqlite = { version = "0.37", features = ["bundled"] }
+http-body-util = "0.1.5"
+hyper = { version = "1.12.0", features = ["client", "server", "http1", "http2"] }
+hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = "1.0.11"
+# Connexion Google / Facebook : échange du code côté serveur.
+ureq = { version = "~3.4.2", default-features = false, features = ["rustls", "json"] }
+
+
+[package.metadata.deb]
+name = "eko-rip-cloud"
+maintainer = "2M Numérique <mathieu.vignaud2@gmail.com>"
+copyright = "2026, 2M Numérique"
+extended-description = "Plate-forme E-KO RIP Cloud (platform.e-ko.rip) : les serveurs RIP des ateliers s'y connectent par un tunnel sortant, les postes et l'app mobile y accèdent depuis l'extérieur sans VPN."
+depends = "$auto, adduser"
+section = "net"
+priority = "optional"
+maintainer-scripts = "debian/"
+systemd-units = { unit-name = "eko-rip-cloud", enable = true, start = true }
+assets = [
+    ["target/release/eko-rip-cloud", "usr/bin/", "755"],
+    ["debian/eko-rip-cloud.default", "etc/default/eko-rip-cloud", "644"],
+]
+conf-files = ["/etc/default/eko-rip-cloud"]

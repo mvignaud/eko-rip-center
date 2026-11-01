@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-KO RIP Center : le RIP grand format libre, pensé par un atelier</title>
+<meta name="description" content="E-KO RIP Center rend vos PDF en plaques d'encre CMJN, blanc et argent, prépare l'impression et la découpe et pilote les machines de l'atelier. Serveur Linux, clients Mac, Linux et Windows, accès à distance sans VPN.">
+<link rel="canonical" href="https://e-ko.rip/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="website">
+<meta property="og:title" content="E-KO RIP Center">
+<meta property="og:description" content="Le RIP grand format qui pilote l'atelier : rendu, blanc, argent, découpe, file des machines, pont ERP et accès à distance.">
+<meta property="og:url" content="https://e-ko.rip/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/linux-travaux.webp">
+<link rel="stylesheet" href="/assets/style.css">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"E-KO RIP Center","applicationCategory":"BusinessApplication","operatingSystem":"Linux, macOS, Windows","url":"https://e-ko.rip/","publisher":{"@type":"Organization","name":"GOLDEN PRINT","email":"contact@e-ko.rip"},"offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}
+</script>
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="#fonctionnalites">Fonctionnalités</a>
+      <a href="#fonctionnement">Fonctionnement</a>
+      <a href="#captures">Captures</a>
+      <a href="#open-source">Open source</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="#installer">Installer</a>
+  </div>
+</header>
+
+<main id="contenu">
+
+<!-- ================= Héros ================= -->
+<section class="heros">
+  <div class="heros-fond" aria-hidden="true"><span class="c"></span><span class="m"></span><span class="j"></span></div>
+  <div class="conteneur">
+    <div class="rosace apparait" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <p class="apparait"><span class="pastille">Version <span data-derniere-version>0.30</span> · Gratuit · Open source (AGPL-3.0)</span></p>
+    <h1 class="apparait">Le RIP grand format<br><span class="degrade">qui pilote tout l'atelier.</span></h1>
+    <p class="chapo apparait">E-KO RIP Center reçoit vos PDF, les rend en plaques d'encre CMJN, blanc et argent, prépare l'impression et la découpe, et parle directement à vos machines. Un serveur Linux au cœur de l'atelier, une vraie application sur chaque poste.</p>
+    <div class="actions apparait">
+      <a class="bouton bouton-plein" href="#installer">Installer gratuitement</a>
+      <a class="bouton bouton-clair" href="#fonctionnement">Comment ça marche</a>
+    </div>
+    <p class="note-heros apparait">Serveur Ubuntu ou Debian · Clients Mac, Linux, et bientôt Windows natif</p>
+
+    <!-- Maquettes des clients -->
+    <div class="systemes" role="tablist" aria-label="Choisir le système">
+      <button role="tab" aria-selected="true" data-os="mac">macOS</button>
+      <button role="tab" aria-selected="false" data-os="windows">Windows</button>
+      <button role="tab" aria-selected="false" data-os="linux">Linux</button>
+      <button role="tab" aria-selected="false" data-theme-bascule aria-label="Basculer clair ou sombre">Sombre</button>
+    </div>
+    <div class="scene apparait">
+      <div class="fenetre mac" id="maquette" role="img" aria-label="Fenêtre du client E-KO RIP Center : barre latérale, file des travaux et inspecteur avec l'aperçu et les plaques d'encre">
+        <div class="f-barre">
+          <div class="f-feux"><i></i><i></i><i></i></div>
+          <span class="f-nom"><img src="/assets/img/icone.svg" alt="" width="16" height="16">E-KO RIP Center</span>
+          <div class="f-outils">
+            <span class="f-outil bleu">＋ Envoyer</span>
+            <span class="f-outil actif">Imprimer</span>
+            <span class="f-outil">Suspendre</span>
+            <span class="f-outil">Épreuve</span>
+          </div>
+          <span class="f-recherche">Rechercher un travail…</span>
+          <div class="f-ctrl"><i>─</i><i>▢</i><i>✕</i></div>
+        </div>
+        <div class="f-corps">
+          <div class="f-cote">
+            <h6>Production</h6>
+            <div class="sel"><b></b>Travaux</div>
+            <h6>Atelier</h6>
+            <div><b></b>Machines</div>
+            <h6>Serveur</h6>
+            <div><b></b>Système</div>
+          </div>
+          <div class="f-liste">
+            <div class="f-ligne tete"><span>Nom</span><span>Dossier</span><span>Pages</span><span>Statut</span></div>
+            <div class="f-ligne sel"><span>vitrine-boulangerie.pdf</span><span>PROD-2026-00123</span><span>1</span><span class="st ok">Prêt · 5 plaques</span></div>
+            <div class="f-ligne"><span>bache-salon-3x2.pdf</span><span>PROD-2026-00124</span><span>2</span><span class="st cours">Rendu en cours<span class="barre-progres"><i></i></span></span></div>
+            <div class="f-ligne"><span>stickers-planche.pdf</span><span>PROD-2026-00125</span><span>1</span><span class="st att">En file · Kona</span></div>
+            <div class="f-ligne"><span>adhesif-vitrophanie.pdf</span><span>PROD-2026-00119</span><span>1</span><span class="st ok">Imprimé</span></div>
+            <div class="f-ligne"><span>kakemono-80x200.pdf</span><span>PROD-2026-00118</span><span>1</span><span class="st ok">Imprimé</span></div>
+            <div class="f-ligne"><span>etiquettes-vin.pdf</span><span>PROD-2026-00117</span><span>4</span><span class="st ok">Découpé</span></div>
+            <div class="f-ligne"><span>panneau-dibond.pdf</span><span>PROD-2026-00116</span><span>1</span><span class="st ok">Imprimé</span></div>
+          </div>
+          <div class="f-inspecteur">
+            <div class="f-apercu"><div class="mini-rosace"><i></i><i></i><i></i><i></i></div></div>
+            <div class="f-plaques">
+              <span style="--p:#00aeef">Cyan</span><span style="--p:#ec008c">Magenta</span><span style="--p:#ffe600">Jaune</span><span style="--p:#231f20">Noir</span><span style="--p:#ffffff">White</span>
+            </div>
+            <dl class="f-fiche">
+              <dt>Réglage</dt><dd>Vinyle blanc sous couleur</dd>
+              <dt>Format</dt><dd>1200 × 800 mm</dd>
+              <dt>Machine</dt><dd>Epson SC-S80600</dd>
+              <dt>Encre estimée</dt><dd>14,2 ml</dd>
+            </dl>
+            <div class="f-boutons"><span>Épreuve TIFF</span><span class="bleu">Imprimer</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="legende-os" id="legende-os">Client macOS en SwiftUI, natif, universel Apple Silicon et Intel.</p>
+  </div>
+</section>
+
+<!-- ================= Fonctionnalités ================= -->
+<section id="fonctionnalites" class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Fonctionnalités</span>
+      <h2>Tout ce qu'il faut entre le PDF et la machine.</h2>
+      <p>Pensé dans un atelier d'impression numérique grand format, pour les opérateurs qui lancent des travaux toute la journée.</p>
+    </div>
+    <div class="grille">
+      <article class="tuile apparait" style="--t:var(--cyan)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="9" r="5"/><circle cx="12" cy="15" r="5"/></svg></div>
+        <h3>Rendu en plaques d'encre</h3>
+        <p>Chaque page devient une plaque par encre : Cyan, Magenta, Jaune, Noir, plus une par ton direct. Plusieurs rendus en parallèle, et les très grands formats sont rendus par bandes.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--magenta)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 3v9h9"/></svg></div>
+        <h3>Couleur maîtrisée</h3>
+        <p>Profils ICC d'entrée et de support, quatre intentions de rendu, table de tons directs en Lab, courbes C/M/J/N et aperçu avant/après. Étalonnage du gris de type G7 et linéarisation.</p>
+      </article>
+      <article class="tuile apparait" style="--t:#8e8e93">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="3"/><rect x="8" y="8" width="8" height="8" rx="1.5" fill="currentColor" opacity=".25"/></svg></div>
+        <h3>Blanc et argent</h3>
+        <p>Plaques White et Silver reconnues sous leurs alias. Blanc généré automatiquement en sous-couche ou en aplat, avec rétraction, sous ou sur la couleur, ou tiré du canal alpha d'un PNG ou d'un TIFF.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--accent)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        <h3>Imposition et planches</h3>
+        <p>Mosaïque en lés avec recouvrement, imbrication automatique selon les contours, step &amp; repeat, imbrication en file, pose manuelle aimantée, gabarits et données variables par CSV.</p>
+      </article>
+      <article class="tuile apparait" style="--t:#ff9f0a">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></div>
+        <h3>Découpe intégrée</h3>
+        <p>Les tracés CutContour, Thrucut, Kisscut, VCut… deviennent du HP-GL, par couches ordonnées. Détourage automatique, repérage par croix ou cadres, compensation et tri des tracés.</p>
+      </article>
+      <article class="tuile apparait" style="--t:#30d158">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg></div>
+        <h3>Pilotage direct des machines</h3>
+        <p>Epson SureColor SC-S80600 en ESC/P2 par le réseau, découpeuses Mutoh Kona, Graphtec et Roland. Aussi : IPP, dossier, renvoi vers un autre RIP E-KO, et pools de machines identiques.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--cyan)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5 12 16l2.5-2.5"/></svg></div>
+        <h3>Dossiers surveillés</h3>
+        <p>Un dossier par réglage, partagé aux postes par le réseau, et un dossier automatique qui choisit le réglage d'après le nom du fichier ou le format de la page.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--magenta)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+        <h3>Suivi et coûts</h3>
+        <p>Vue Production, file par machine avec raisons d'attente, niveaux d'encre et média lus en SNMP, journal de consommation réelle, coût encre et support, export CSV.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--accent)">
+        <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 7.9"/><path d="M12 13v8M9 16l3-3 3 3"/></svg></div>
+        <h3>Cloud E-KO RIP</h3>
+        <p>Accès au serveur de l'atelier depuis l'extérieur, sans VPN ni port ouvert : le serveur ouvre lui-même un tunnel sortant. Gratuit, chaque atelier isolé des autres, et suivi depuis le téléphone avec l'<a href="/app/">application mobile</a>.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Séparation des plaques ================= -->
+<section>
+  <div class="conteneur separation">
+    <div class="apparait">
+      <span class="surtitre">Au cœur du RIP</span>
+      <h2>Un PDF entre, des plaques sortent.</h2>
+      <p style="color:var(--texte-2);font-size:18px">Un RIP (Raster Image Processor) traduit un fichier vectoriel en ce que la tête d'impression comprend : une image par encre, à la résolution de la machine. E-KO RIP Center le fait avec Ghostscript, isolé en mode sécurisé, puis ajoute ce que le fichier ne dit pas : le blanc sous la couleur, l'argent, la limite d'encre, le tramage.</p>
+      <p style="color:var(--texte-2);font-size:18px">Les tons de découpe ne sont jamais imprimés : ils partent vers la découpeuse.</p>
+    </div>
+    <div class="pile apparait" aria-hidden="true">
+      <div class="plaque" style="--p:var(--cyan)"><b>Cyan</b><i></i></div>
+      <div class="plaque" style="--p:var(--magenta)"><b>Magenta</b><i></i></div>
+      <div class="plaque" style="--p:var(--jaune)"><b>Jaune</b><i></i></div>
+      <div class="plaque" style="--p:#231f20"><b>Noir</b><i></i></div>
+      <div class="plaque" style="--p:#c9ccd2"><b>White</b><i></i></div>
+      <div class="plaque" style="--p:#ff9f0a"><b>CutContour</b><i></i></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Fonctionnement ================= -->
+<section id="fonctionnement" class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Fonctionnement détaillé</span>
+      <h2>Le trajet d'un fichier, étape par étape.</h2>
+      <p>Un serveur Linux fait le travail lourd. Les postes n'envoient que des fichiers et des ordres.</p>
+    </div>
+    <div class="trajet-boite apparait-seul">
+    <span class="goutte" aria-hidden="true"></span>
+    <ol class="trajet">
+      <li class="apparait" style="--e:var(--cyan)">
+        <h3>Réception</h3>
+        <p>Le fichier arrive par le client (glisser-déposer, avec le réglage choisi), par un dossier surveillé ou par l'ERP. PDF, AI compatible PDF, TIFF, PNG, JPEG, et SVG pour la découpe, jusqu'à 8 Go. Un contrôle signale tout de suite les polices non incorporées et les images de moins de 100 ppi.</p>
+      </li>
+      <li class="apparait" style="--e:#00a0e0">
+        <h3>Rendu</h3>
+        <p>Ghostscript rend chaque page en plaques TIFF, une par encre et une par ton direct. Le serveur mène plusieurs rendus à la fois ; au-delà de 3 Go par page, il rend par bandes puis recolle, sans jamais saturer la mémoire.</p>
+      </li>
+      <li class="apparait" style="--e:var(--magenta)">
+        <h3>Couleur, blanc et argent</h3>
+        <p>Les tons directs sont convertis d'après leur couleur Lab, les profils ICC appliqués, puis le blanc est généré si le réglage le demande : sous-couche, aplat, rétraction du bord, ou canal alpha. Un aperçu simule le rendu sur le support.</p>
+      </li>
+      <li class="apparait" style="--e:#c4007a">
+        <h3>Aperçu, épreuve et BAT</h3>
+        <p>L'opérateur voit l'aperçu de chaque page et de la découpe dans l'inspecteur, télécharge une épreuve TIFF à la taille exacte, ou un BAT en PDF A4 pour le client.</p>
+      </li>
+      <li class="apparait" style="--e:#e6c800">
+        <h3>Planche</h3>
+        <p>Les copies sont imposées : mosaïque en lés, imbrication selon les contours, step &amp; repeat, ou pose à la main. L'imbrication en file regroupe automatiquement les petits travaux selon un délai, une surface ou une longueur.</p>
+      </li>
+      <li class="apparait" style="--e:#ff9f0a">
+        <h3>File des machines</h3>
+        <p>Chaque sortie entre dans la file de sa machine, qui en traite une à la fois. Les travaux liés d'un même dossier passent ensemble et dans l'ordre. La raison d'attente est toujours affichée.</p>
+      </li>
+      <li class="apparait" style="--e:#30d158">
+        <h3>Impression</h3>
+        <p>Pour l'Epson, le RIP sépare les 9 encres et leurs couples clair/foncé, applique la limite d'encre, trame en 4 tailles de point et envoie l'ESC/P2 bande par bande sur le réseau, en surveillant les alertes de la machine en SNMP.</p>
+      </li>
+      <li class="apparait" style="--e:#ff6b00">
+        <h3>Découpe</h3>
+        <p>Les tracés de découpe sont convertis en HP-GL au pas de la machine et envoyés à la découpeuse, en série ou en USB, avec les repères de calage. Le fichier .plt reste téléchargeable.</p>
+      </li>
+      <li class="apparait" style="--e:var(--accent)">
+        <h3>Journal et ERP</h3>
+        <p>Chaque impression terminée est notée : encre estimée et réelle, longueur, gâche, coût. L'ERP de l'atelier reçoit ces quantités par un pont signé, et le client affiche une notification de fin.</p>
+      </li>
+    </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Architecture ================= -->
+<section>
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Architecture</span>
+      <h2>Un serveur, de vrais clients, et c'est tout.</h2>
+    </div>
+    <div class="grille deux">
+      <article class="tuile apparait" style="--t:var(--accent)">
+        <h3>Le serveur</h3>
+        <p>Écrit en Rust, il tourne sous Ubuntu 24.04 ou Debian récente, sur un PC 64 bits de l'atelier. Paquet <code>.deb</code> avec service systemd, image Docker ou binaire seul. Un PC de 2012 à deux cœurs suffit pour démarrer ; 4 cœurs, 16 Go et un SSD pour être à l'aise.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--magenta)">
+        <h3>Les clients</h3>
+        <p>Des applications natives : SwiftUI sur Mac, GTK 4 et libadwaita sur Linux, WinUI 3 sur Windows en préparation. Elles trouvent seules les serveurs du réseau local. Un navigateur, lui, ne voit qu'une page d'état.</p>
+      </article>
+      <article class="tuile apparait" style="--t:var(--cyan)">
+        <h3>Le réseau</h3>
+        <p>Le serveur reste dans le réseau de l'atelier, sur le port 8640. Les comptes (administrateur, opérateur) ont des mots de passe hachés en Argon2id. Pour l'extérieur, c'est le Cloud E-KO RIP, jamais un port ouvert.</p>
+      </article>
+      <article class="tuile apparait" style="--t:#30d158">
+        <h3>Le pont ERP</h3>
+        <p>Un contrat public, <code>eko-rip-erp/1</code> : le RIP appelle l'ERP en HTTPS sortant, ses événements sont signés et numérotés. Aucun montant ne circule, seulement des quantités physiques que l'ERP valorise.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Captures ================= -->
+<section id="captures" class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Captures d'écran</span>
+      <h2>Tel qu'il tourne à l'atelier.</h2>
+      <p>Des captures du logiciel réel, sans retouche.</p>
+    </div>
+    <div class="galerie">
+      <figure class="capture c8 apparait">
+        <div class="cadre-mac" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/assets/img/linux-travaux.webp" width="1436" height="814" loading="lazy" alt="Client Linux : la file des travaux avec leurs statuts">
+        <figcaption>Client Linux : la file des travaux, leur dossier et leur statut.</figcaption>
+      </figure>
+      <figure class="capture c4 apparait">
+        <img src="/assets/img/reglage-blanc.webp" width="432" height="388" loading="lazy" alt="Réglage du blanc : rétraction, encre minimale, canal alpha">
+        <figcaption>Le blanc : rétraction, canal alpha, sous ou sur la couleur.</figcaption>
+      </figure>
+      <figure class="capture c8 apparait">
+        <div class="cadre-mac" aria-hidden="true"><i></i><i></i><i></i></div>
+        <img src="/assets/img/linux-envoi.webp" width="1436" height="814" loading="lazy" alt="Envoi d'un fichier au RIP avec choix du réglage et fiche travail">
+        <figcaption>Envoyer au RIP : le réglage et la fiche travail, en un geste.</figcaption>
+      </figure>
+      <figure class="capture c4 apparait">
+        <img src="/assets/img/reglage-epreuve.webp" width="432" height="317" loading="lazy" alt="Réglage de l'épreuve TIFF">
+        <figcaption>L'épreuve TIFF, à la taille exacte de la page.</figcaption>
+      </figure>
+      <figure class="capture c6 apparait">
+        <img src="/assets/img/cloud-sites.webp" width="1280" height="820" loading="lazy" alt="Portail du Cloud E-KO RIP : rattacher un serveur avec un code">
+        <figcaption>Cloud E-KO RIP : rattacher le serveur de l'atelier par un code court.</figcaption>
+      </figure>
+      <figure class="capture c6 apparait">
+        <img src="/assets/img/cloud-compte-sombre.webp" width="1280" height="820" loading="lazy" alt="Portail du Cloud E-KO RIP en mode sombre">
+        <figcaption>Le portail, en mode sombre.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Open source ================= -->
+<section id="open-source">
+  <div class="conteneur libre">
+    <div>
+      <div class="apparait">
+        <span class="surtitre">Open source</span>
+        <h2>Pourquoi le code est ouvert.</h2>
+        <p style="color:var(--texte-2);font-size:18px;margin-bottom:28px">E-KO RIP Center est né dans un atelier qui voulait comprendre et maîtriser l'outil qui fait tourner ses machines. Le publier est la suite logique.</p>
+      </div>
+      <ul class="raisons">
+        <li class="apparait"><strong>Votre production ne dépend de personne.</strong><span>Pas de licence à renouveler, pas de clé matérielle, pas de serveur d'activation. Si l'éditeur disparaît, le RIP continue de tourner, et quelqu'un peut le reprendre.</span></li>
+        <li class="apparait"><strong>On sait ce que fait le logiciel.</strong><span>Le rendu, la séparation, le tramage, la découpe : tout est lisible. Quand une couleur sort mal, on peut aller voir pourquoi au lieu d'attendre un support.</span></li>
+        <li class="apparait"><strong>Vos fichiers restent chez vous.</strong><span>Tout se passe sur le serveur de l'atelier. Les statistiques d'installation sont anonymes, détaillées et désactivables ; le code permet de le vérifier.</span></li>
+        <li class="apparait"><strong>Les machines méritent mieux qu'un pilote fermé.</strong><span>Chaque atelier a ses machines. Un pilote ouvert, d'autres peuvent l'étendre à leur imprimante ou leur découpeuse, et tout le monde en profite.</span></li>
+        <li class="apparait"><strong>Formats et contrats publics.</strong><span>Le pont ERP <code>eko-rip-erp/1</code> est documenté : n'importe quel ERP ou outil maison peut s'y brancher.</span></li>
+        <li class="apparait"><strong>Les bugs se corrigent à plusieurs.</strong><span>Les problèmes signalés depuis le logiciel deviennent des tickets publics, et chacun peut proposer sa correction.</span></li>
+      </ul>
+    </div>
+    <aside class="carte-depot apparait">
+      <span class="pastille" style="background:rgba(255,255,255,.12);color:#fff">Public · AGPL-3.0</span>
+      <h3 style="margin-top:14px">Le dépôt GitHub</h3>
+      <p>Serveur, clients Mac, Linux et Windows, Cloud et documentation en français et en anglais : tout le code est dans un seul dépôt public, sous licence libre AGPL-3.0. Chacun peut l'utiliser, l'étudier et l'améliorer ; une version modifiée qui est redistribuée ou proposée en ligne doit rester ouverte.</p>
+      <pre>git clone https://github.com/mvignaud/eko-rip-center
+cd eko-rip-center
+cargo run --release -p eko-rip-serveur</pre>
+      <a class="bouton bouton-clair" href="https://github.com/mvignaud/eko-rip-center" rel="noopener">Voir sur GitHub</a>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= Installer ================= -->
+<section id="installer" class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Installer</span>
+      <h2>Prêt en quelques minutes.</h2>
+      <p>Installez d'abord le serveur sur un PC de l'atelier, puis le client sur chaque poste. Avant de commencer : les <a href="/prerequis/">pré-requis techniques</a> et la <a href="/compatibilite/">compatibilité des machines</a>.</p>
+    </div>
+    <div class="onglets-install" role="tablist" aria-label="Que voulez-vous installer ?">
+      <button role="tab" aria-selected="true" aria-controls="inst-serveur" id="t-serveur">Serveur Linux</button>
+      <button role="tab" aria-selected="false" aria-controls="inst-linux" id="t-linux">Client Linux</button>
+      <button role="tab" aria-selected="false" aria-controls="inst-mac" id="t-mac">Client Mac</button>
+      <button role="tab" aria-selected="false" aria-controls="inst-windows" id="t-windows">Client Windows</button>
+    </div>
+    <div class="panneau-install" role="tabpanel" id="inst-serveur" aria-labelledby="t-serveur">
+      <p>Ubuntu 24.04 ou Debian récente, 64 bits. Le dépôt APT signé installe le serveur, Ghostscript et le service, puis ses mises à jour. La dernière commande crée le premier compte administrateur.</p>
+      <pre><span class="invite">$ </span>wget -qO- https://apt.e-ko.fr/rip/eko-rip.gpg | sudo tee /usr/share/keyrings/eko-rip.gpg &gt;/dev/null
+<span class="invite">$ </span>echo "deb [signed-by=/usr/share/keyrings/eko-rip.gpg] https://apt.e-ko.fr/rip ./" | sudo tee /etc/apt/sources.list.d/eko-rip.list
+<span class="invite">$ </span>sudo apt update &amp;&amp; sudo apt install eko-rip-serveur
+<span class="invite">$ </span>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter admin</pre>
+      <p>Le service démarre tout seul sur le port 8640. Mises à jour : <code style="background:rgba(255,255,255,.1)">sudo apt update &amp;&amp; sudo apt upgrade</code>.</p>
+    </div>
+    <div class="panneau-install" role="tabpanel" id="inst-linux" aria-labelledby="t-linux" hidden>
+      <p>Ubuntu et dérivées. Le client trouve seul le serveur du réseau local.</p>
+      <pre><span class="invite">$ </span>wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh</pre>
+    </div>
+    <div class="panneau-install" role="tabpanel" id="inst-mac" aria-labelledby="t-mac" hidden>
+      <p>macOS 14 ou plus récent, Apple Silicon et Intel. L'application signée et notarisée est jointe à chaque version, sur <a href="https://github.com/mvignaud/eko-rip-center/releases/latest" rel="noopener" style="color:#7cc4ff">la page des versions GitHub</a> (fichier <code style="background:rgba(255,255,255,.1)">.dmg</code>).</p>
+    </div>
+    <div class="panneau-install" role="tabpanel" id="inst-windows" aria-labelledby="t-windows" hidden>
+      <p>Le client Windows natif est en préparation. D'ici là, un client Windows x64 (.msi) est fourni sur demande à <a href="mailto:contact@e-ko.rip" style="color:#7cc4ff">contact@e-ko.rip</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Nouveautés ================= -->
+<section>
+  <div class="conteneur" style="text-align:center">
+    <div class="apparait">
+      <span class="surtitre">Nouveautés</span>
+      <h2>Une version presque chaque semaine.</h2>
+      <p class="chapo">Le journal des versions est publié à chaque sortie, en français et en anglais, avec un e-mail aux abonnés.</p>
+      <div id="apercu-journal" class="journal" style="text-align:left"></div>
+      <div class="actions" style="margin-top:12px"><a class="bouton bouton-plein" href="/changelog/">Tout le journal</a></div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/compatibilite/">Compatibilité machines</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/journal.js" defer></script>
+</body>
+</html>

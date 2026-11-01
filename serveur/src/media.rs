@@ -5,7 +5,7 @@
 //! Validé sur la SC-S80600 le 24/10 : largeur imprimable (1592,7 mm d'un rouleau de 1600),
 //! longueur restante (`prtInputCurrentLevel`, décroît pendant l'impression), alertes
 //! (`prtAlertDescription`). En plus, la réponse d'état Epson « @BDC ST2 » de sa MIB
-//! privée (lue par ONYX toutes les 10 s) : niveaux d'encre, n° de support, chauffages.
+//! privée (interrogeable toutes les 10 s) : niveaux d'encre, n° de support, chauffages.
 // ponytail: client SNMP v1 minimal (GetNext, BER à la main).
 
 use std::net::UdpSocket;

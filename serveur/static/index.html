@@ -518,6 +518,9 @@
   <section id="vue-systeme" class="vue-systeme" hidden>
     <section class="panneau systeme"><h2 data-t="nav_systeme"></h2><div class="corps" id="systeme"></div></section>
     <section class="panneau systeme"><h2 data-t="pont_erp"></h2><div class="corps" id="pont"></div></section>
+    <section class="panneau systeme"><h2 data-t="cloud_titre"></h2><div class="corps" id="cloud"></div></section>
+    <section class="panneau systeme"><h2 data-t="telemetrie_titre"></h2><div class="corps" id="telemetrie"></div></section>
+    <section class="panneau systeme"><h2 data-t="rapports_titre"></h2><div class="corps" id="rapports"></div></section>
     <section class="panneau admin"><h2 data-t="machines_titre"></h2><form class="corps" id="editeur-machines"></form></section>
     <section class="panneau"><h2 data-t="media"></h2><div class="corps" id="media"></div></section>
     <section class="panneau"><h2 data-t="journal_titre"></h2><div class="corps" id="journal"></div></section>
@@ -697,6 +700,22 @@ const textes = {
     pont_actif: "Activer le pont", pont_enregistre: "Pont ERP enregistré.", pont_nouvelle_instance: "Tirer une nouvelle instance",
     pont_confirmer_instance: "Tirer une nouvelle instance ? Le journal des événements repart de 1 et l'ERP prendra ce RIP comme une installation neuve (l'autre installation, s'il y en a une, s'arrêtera).",
     pont_instance_tiree: "Nouvelle instance tirée.", pont_note: "Le RIP appelle l'ERP (aucun port ouvert à l'atelier) : catalogue, états des travaux et des sorties, consommation. Le secret n'est jamais réaffiché.",
+    rapports_titre: "Rapports de bug", rapports_auto: "Envoyer automatiquement les rapports d'erreur",
+    rapports_note: "En cas de plantage, de rendu ou de sortie en échec, ou de rendu anormalement long : la version, le système, le code de l'erreur et les dernières lignes du journal du serveur, avec chemins, noms de fichiers et e-mails masqués. Ils restent privés sur la plate-forme E-KO RIP ; une issue GitHub publique, sans journal, en garde la trace.",
+    rapports_question: "Envoyer automatiquement à E-KO RIP les rapports d'erreur de ce serveur (plantage, échecs, lenteurs) ? La version, le système, le code de l'erreur et le journal du serveur, avec noms de fichiers masqués. Modifiable ensuite dans Système › Rapports de bug.",
+    rapports_signaler: "Signaler un problème…", rapports_champ_titre: "Titre", rapports_champ_description: "Description", rapports_champ_email: "E-mail (facultatif, pour être recontacté)",
+    rapports_joindre: "Joindre le journal du serveur (noms de fichiers masqués)", rapports_envoyer: "Envoyer",
+    rapports_public: "Le titre et la description seront publiés sur GitHub (dépôt public) : n'y mettez pas d'information confidentielle. Le journal et l'e-mail restent privés.",
+    rapports_merci: (r) => `Merci, rapport envoyé (référence ${r}).`,
+    telemetrie_titre: "Statistiques anonymes", telemetrie_case: "Envoyer des statistiques anonymes d'installation",
+    telemetrie_note: "Un identifiant aléatoire, le type de poste, l'OS, la version et le nombre de machines et de réglages, à l'installation, à chaque mise à jour puis une fois par semaine, pour compter les installations E-KO RIP. Aucune donnée personnelle ni fichier.",
+    telemetrie_env: "Désactivé sur ce serveur par EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
+    cloud_titre: "Cloud E-KO RIP", cloud_etat: "État", cloud_adresse: "Adresse à distance",
+    cloud_statut_inactif: "Non rattaché", cloud_statut_connexion: "Connexion en cours…", cloud_statut_connecte: "Connecté : accessible à distance", cloud_statut_attente: "Coupé, nouvel essai sous une minute",
+    cloud_note: "Le serveur ouvre lui-même une connexion sortante vers la plate-forme E-KO RIP Cloud (aucun port ouvert à l'atelier). Hors de l'atelier, les postes et l'app mobile y accèdent avec les comptes de ce serveur.",
+    cloud_connecter: "Connecter à la plate-forme", cloud_detacher: "Détacher de la plate-forme", cloud_abandonner: "Abandonner",
+    cloud_code_note: "Saisir ce code sur la plate-forme pour rattacher ce serveur :", cloud_code_lien: "ou ouvrir :",
+    cloud_confirmer_detacher: "Détacher ce serveur ? L'accès à distance s'arrête aussitôt ; il faudra un nouvel appairage pour le rétablir.",
     systeme_tons: "Tons directs", note_tons: "Un ton direct du fichier dont le nom (ou un alias) figure ici, à l'identique (casse et espaces compris), est imprimé en CMJN d'après sa couleur Lab, avec le profil et l'intention du travail. Les autres tons gardent leur comportement. Importer la bibliothèque Lab de votre fournisseur : un CSV nom;L;a;b par ligne. Pris aux rendus suivants.", tons_importer: "Importer un CSV Lab", tons_aucun: "Aucun ton direct dans la table.", tons_importes: (n, t) => `${n} teinte(s) importée(s), ${t} dans la table.`, tons_supprimer: (n) => `Retirer « ${n} » de la table ?`, tons_nombre: (n) => `${n} teinte(s)`, tons_inconnus: "Tons rencontrés absents de la table", tons_inconnu_ligne: (n, d) => `${n} travail(s), dernier le ${d}`, tons_ajouter: "Ajouter", tons_saisir_lab: (n) => `Couleur Lab de « ${n} » (L a b, par ex. 48 68 48) :`, tons_lab_illisible: "Valeur Lab illisible : trois nombres L a b.",
     systeme_decoupe: "Découpe", prefixes_decoupe: "Préfixes de découpe (séparés par ;)", note_prefixes: "Un ton est de découpe si son nom commence par un préfixe (CutContour reconnaît CutContour1 et CutContourKissCut, pas 1CutContour ; sans casse, espaces ni tirets). Pris aux rendus suivants : relancer un travail déjà rendu.",
     ancien_reglage_coupe: (n) => `Ancien réglage de coupe du travail entier : « ${n} ». Il va à la couche du même nom, ou à la seule couche ; sinon, le choisir couche par couche puis enregistrer.`,
@@ -775,6 +794,15 @@ const textes = {
     releve_sortie: (e, l) => `Relevé : encre ${e}${l ? `, support ${l}` : ""}`,
     aucune_sortie: "Rien en file.", historique: "Historique", archive: (n) => `Archive (${n})`, ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
+      cloud_sans_compte: "Le cloud demande au moins un compte sur ce serveur (eko-rip-serveur utilisateur ajouter <nom>) : sans compte, l'accès est libre.",
+      cloud_injoignable: "Plate-forme injoignable : vérifier la connexion Internet du serveur.",
+      rapport_invalide: "Rapport incomplet : un titre (120 caractères au plus) et une description sont demandés.",
+      rapports_sature: "Trop de rapports envoyés aujourd'hui : réessayer demain.",
+      plateforme_injoignable: "Plate-forme E-KO RIP injoignable : vérifier la connexion Internet du serveur.",
+      appairage_expire: "Code expiré sans avoir été validé : en demander un nouveau.",
+      cloud_deja_rattache: "Ce serveur est déjà rattaché à la plate-forme.",
+      ferme_par_cloud: "Impossible à distance : à faire depuis l'atelier.",
+      cle_invalide: "La plate-forme ne reconnaît plus ce serveur : le détacher, puis le rattacher à nouveau.",
       format_inconnu: "Format non reconnu : envoyer un PDF, un AI, un SVG ou une image TIFF, PNG ou JPEG.",
       image_illisible: "Image illisible",
       image_non_prise_en_charge: "Image non prise en charge",
@@ -1007,6 +1035,22 @@ const textes = {
     pont_actif: "Enable the bridge", pont_enregistre: "ERP bridge saved.", pont_nouvelle_instance: "Draw a new instance",
     pont_confirmer_instance: "Draw a new instance? The event log restarts from 1 and the ERP will take this RIP as a new installation (the other installation, if any, will stop).",
     pont_instance_tiree: "New instance drawn.", pont_note: "The RIP calls the ERP (no port opened at the workshop): catalogue, job and output states, consumption. The secret is never shown again.",
+    rapports_titre: "Bug reports", rapports_auto: "Send error reports automatically",
+    rapports_note: "On a crash, a failed render or output, or an abnormally long render: the version, the system, the error code and the last lines of the server log, with paths, file names and e-mails masked. They stay private on the E-KO RIP platform; a public GitHub issue, without the log, keeps track of it.",
+    rapports_question: "Automatically send this server's error reports (crashes, failures, slowness) to E-KO RIP? The version, the system, the error code and the server log, with file names masked. Can be changed later in System › Bug reports.",
+    rapports_signaler: "Report a problem…", rapports_champ_titre: "Title", rapports_champ_description: "Description", rapports_champ_email: "E-mail (optional, to be contacted)",
+    rapports_joindre: "Attach the server log (file names masked)", rapports_envoyer: "Send",
+    rapports_public: "The title and description will be published on GitHub (public repository): do not include confidential information. The log and the e-mail stay private.",
+    rapports_merci: (r) => `Thank you, report sent (reference ${r}).`,
+    telemetrie_titre: "Anonymous statistics", telemetrie_case: "Send anonymous installation statistics",
+    telemetrie_note: "A random identifier, the kind of station, the OS, the version and the number of machines and presets, at install time, on each update and then once a week, to count E-KO RIP installations. No personal data, no files.",
+    telemetrie_env: "Disabled on this server by EKO_TELEMETRIE=0 (/etc/default/eko-rip-serveur).",
+    cloud_titre: "E-KO RIP Cloud", cloud_etat: "State", cloud_adresse: "Remote address",
+    cloud_statut_inactif: "Not linked", cloud_statut_connexion: "Connecting…", cloud_statut_connecte: "Connected: reachable remotely", cloud_statut_attente: "Disconnected, retrying within a minute",
+    cloud_note: "The server itself opens an outgoing connection to the E-KO RIP Cloud platform (no port opened at the workshop). Outside the workshop, workstations and the mobile app reach it with this server's accounts.",
+    cloud_connecter: "Connect to the platform", cloud_detacher: "Unlink from the platform", cloud_abandonner: "Give up",
+    cloud_code_note: "Enter this code on the platform to link this server:", cloud_code_lien: "or open:",
+    cloud_confirmer_detacher: "Unlink this server? Remote access stops at once; a new pairing will be needed to restore it.",
     systeme_tons: "Spot colours", note_tons: "A spot colour in the file whose name (or an alias) is listed here, exactly (case and spaces included), is printed in CMYK from its Lab colour, with the job's profile and intent. Other spot colours keep their behaviour. Import your supplier's Lab library: a CSV with name;L;a;b per line. Used by the next renderings.", tons_importer: "Import a Lab CSV", tons_aucun: "No spot colour in the table.", tons_importes: (n, t) => `${n} colour(s) imported, ${t} in the table.`, tons_supprimer: (n) => `Remove "${n}" from the table?`, tons_nombre: (n) => `${n} colour(s)`, tons_inconnus: "Spot colours met that are not in the table", tons_inconnu_ligne: (n, d) => `${n} job(s), last on ${d}`, tons_ajouter: "Add", tons_saisir_lab: (n) => `Lab colour of "${n}" (L a b, e.g. 48 68 48):`, tons_lab_illisible: "Unreadable Lab value: three numbers L a b.",
     systeme_decoupe: "Cutting", prefixes_decoupe: "Cut prefixes (separated by ;)", note_prefixes: "A spot colour is a cut one if its name starts with a prefix (CutContour matches CutContour1 and CutContourKissCut, not 1CutContour; case, spaces and dashes ignored). Used by the next renderings: restart a job already rendered.",
     ancien_reglage_coupe: (n) => `Former cut setting of the whole job: “${n}”. It goes to the layer of the same name, or to the only layer; otherwise choose it layer by layer, then save.`,
@@ -1085,6 +1129,15 @@ const textes = {
     releve_sortie: (e, l) => `Measured: ink ${e}${l ? `, media ${l}` : ""}`,
     aucune_sortie: "Nothing queued.", historique: "History", archive: (n) => `Archive (${n})`, ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
+      cloud_sans_compte: "The cloud needs at least one account on this server (eko-rip-serveur utilisateur ajouter <name>): without accounts, access is open.",
+      cloud_injoignable: "Platform unreachable: check the server's Internet connection.",
+      rapport_invalide: "Incomplete report: a title (120 characters at most) and a description are required.",
+      rapports_sature: "Too many reports sent today: try again tomorrow.",
+      plateforme_injoignable: "E-KO RIP platform unreachable: check the server's Internet connection.",
+      appairage_expire: "Code expired before being validated: ask for a new one.",
+      cloud_deja_rattache: "This server is already linked to the platform.",
+      ferme_par_cloud: "Not possible remotely: do it from the workshop.",
+      cle_invalide: "The platform no longer recognises this server: unlink it, then link it again.",
       format_inconnu: "Unknown format: send a PDF, AI, SVG file or a TIFF, PNG or JPEG image.",
       image_illisible: "Unreadable image",
       image_non_prise_en_charge: "Image not supported",
@@ -1263,6 +1316,7 @@ function afficherSession() {
   $("deconnexion").hidden = !session.utilisateur;
   // L'opérateur ne voit pas les réglages du serveur (le serveur les lui refuse de toute façon).
   document.body.dataset.role = session.role || "operateur";
+  if (session.utilisateur || session.acces_libre) demanderAccordRapports();
   $("qui").textContent = session.utilisateur ? T().connecte(session.utilisateur) : "";
 }
 formConnexion.addEventListener("submit", async (e) => {
@@ -1548,6 +1602,50 @@ function formulairePont() {
   return f;
 }
 
+/** Cloud E-KO RIP (Système) : rattachement à la plate-forme, état du tunnel, appairage.
+ *  Pendant un appairage, l'état est relu toutes les 3 s (le code est validé ailleurs). */
+let cloudEtat = null, suiviCloud = null;
+async function chargerCloud() {
+  const c = await api("/api/cloud");
+  if (c) { cloudEtat = c; afficherCloud(); }
+  if (c?.appairage) suivreCloud();
+}
+function suivreCloud() {
+  if (suiviCloud) return;
+  suiviCloud = setTimeout(() => { suiviCloud = null; chargerCloud(); }, 3000);
+}
+function afficherCloud() {
+  const c = cloudEtat, d = T();
+  if (!c) return;
+  const enErreur = c.erreur && c.etat !== "connecte";
+  const etat = el("dl", {},
+    el("dt", {}, d.cloud_etat), el("dd", { className: enErreur ? "erreur" : "" }, d[`cloud_statut_${c.etat}`] || c.etat),
+    c.adresse ? el("dt", {}, d.cloud_adresse) : null, c.adresse ? el("dd", {}, el("code", {}, c.adresse)) : null,
+    c.erreur ? el("dt", {}, d.pont_derniere_erreur) : null, c.erreur ? el("dd", { className: "erreur" }, texteErreurPont({ code: c.erreur })) : null);
+  const contenu = [el("p", { className: "meta", style: "margin: 0" }, d.cloud_note), etat];
+  if (c.sans_compte) contenu.push(el("p", { className: "erreur" }, texteErreur("cloud_sans_compte")));
+  if (c.appairage) {
+    contenu.push(el("p", {}, d.cloud_code_note),
+      el("p", { style: "font-size: 2em; letter-spacing: .12em; margin: .2em 0" }, el("strong", {}, c.appairage.code)),
+      el("p", { className: "meta" }, d.cloud_code_lien, " ", el("a", { href: c.appairage.lien, target: "_blank", rel: "noopener" }, c.appairage.lien)));
+  }
+  const ligne = el("div", { className: "ligne" });
+  if (!c.rattache && !c.appairage) {
+    ligne.append(bouton(d.cloud_connecter, async () => {
+      const lu = await api("/api/cloud/appairage", { method: "POST" });
+      if (lu) { cloudEtat = lu; afficherCloud(); suivreCloud(); }
+    }, ""));
+  } else {
+    ligne.append(bouton(c.rattache ? d.cloud_detacher : d.cloud_abandonner, async () => {
+      if (c.rattache && !(await demander(T().cloud_confirmer_detacher, { danger: true }))) return;
+      const lu = await api("/api/cloud", { method: "DELETE" });
+      if (lu) { cloudEtat = lu; afficherCloud(); }
+    }));
+  }
+  contenu.push(ligne);
+  $("cloud").replaceChildren(...contenu);
+}
+
 let infoSysteme = null;
 /** Poids lisible : en Mo sous le Go. */
 const octets = (o) => (o < 1e9 ? `${Math.max(o / 1e6, o ? 0.1 : 0).toLocaleString(locale(), { maximumFractionDigits: 1 })} ${langue === "fr" ? "Mo" : "MB"}` : go(o));
@@ -1557,6 +1655,70 @@ async function chargerSysteme() {
   [infoSysteme, reglagesDecoupe, tonsDirects, tonsInconnus] = await Promise.all([api("/api/systeme"), api("/api/decoupe"), api("/api/tons-directs"), api("/api/tons-directs/inconnus")]);
   afficherSysteme();
   chargerPont();
+  chargerCloud();
+  chargerTelemetrie();
+  chargerRapports();
+}
+
+/** Rapports de bug (Système) : accord pour les envois automatiques, et « Signaler un problème ». */
+async function chargerRapports() {
+  const r = await api("/api/rapports/reglage");
+  if (r) afficherRapports(r);
+}
+let caseRapportsAuto = null;
+function afficherRapports(r) {
+  // Rafraîchissement de Système (chaque minute) : seule la case suit, le brouillon en cours reste.
+  if (caseRapportsAuto?.isConnected) { caseRapportsAuto.checked = r.auto === true; return; }
+  const d = T();
+  const caseAuto = caseRapportsAuto = el("input", { type: "checkbox", checked: r.auto === true, className: "admin" });
+  caseAuto.addEventListener("change", async () => {
+    const lu = await api("/api/rapports/reglage", json("POST", { auto: caseAuto.checked }));
+    if (!lu) caseAuto.checked = !caseAuto.checked;
+  });
+  const titre = el("input", { type: "text", maxLength: 120, required: true });
+  const description = el("textarea", { rows: 5, maxLength: 5000, required: true });
+  const email = el("input", { type: "email", maxLength: 120 });
+  const joindre = el("input", { type: "checkbox", checked: true });
+  const formulaire = el("form", { hidden: true },
+    el("label", {}, d.rapports_champ_titre, titre), el("label", {}, d.rapports_champ_description, description),
+    el("label", {}, d.rapports_champ_email, email), el("label", {}, joindre, " ", d.rapports_joindre),
+    el("p", { className: "meta" }, d.rapports_public), el("div", { className: "ligne" }, el("button", { type: "submit" }, d.rapports_envoyer)));
+  formulaire.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const lu = await api("/api/rapports", json("POST", { titre: titre.value, description: description.value, email: email.value, joindre_journal: joindre.checked }));
+    if (lu) { dire(T().rapports_merci(lu.reference)); formulaire.reset(); formulaire.hidden = true; }
+  });
+  $("rapports").replaceChildren(
+    el("label", { className: "admin" }, caseAuto, " ", d.rapports_auto), el("p", { className: "meta admin" }, d.rapports_note),
+    el("div", { className: "ligne" }, bouton(d.rapports_signaler, () => { formulaire.hidden = !formulaire.hidden; if (!formulaire.hidden) titre.focus(); })),
+    formulaire);
+}
+/** Première ouverture par un administrateur : on demande une fois l'accord pour les rapports automatiques. */
+let rapportsDemandes = false;
+async function demanderAccordRapports() {
+  if (rapportsDemandes || document.body.dataset.role !== "admin") return;
+  rapportsDemandes = true;
+  const r = await api("/api/rapports/reglage");
+  if (!r || r.auto !== null) return;
+  const oui = await demander(T().rapports_question);
+  await api("/api/rapports/reglage", json("POST", { auto: !!oui }));
+}
+
+/** Statistiques anonymes d'installation (Système) : une case, réservée à l'administrateur. */
+async function chargerTelemetrie() {
+  const t = await api("/api/telemetrie");
+  if (t) afficherTelemetrie(t);
+}
+function afficherTelemetrie(t) {
+  const d = T();
+  const caseTel = el("input", { type: "checkbox", checked: t.actif, disabled: t.desactive_par_env });
+  caseTel.addEventListener("change", async () => {
+    const lu = await api("/api/telemetrie", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actif: caseTel.checked }) });
+    if (lu) afficherTelemetrie(lu); else caseTel.checked = !caseTel.checked;
+  });
+  const contenu = [el("label", {}, caseTel, " ", d.telemetrie_case), el("p", { className: "meta" }, d.telemetrie_note)];
+  if (t.desactive_par_env) contenu.push(el("p", { className: "meta" }, d.telemetrie_env));
+  $("telemetrie").replaceChildren(...contenu);
 }
 function afficherSysteme() {
   const s = infoSysteme;
@@ -1572,6 +1734,7 @@ function afficherSysteme() {
   if (s.alertes?.length) dl.append(el("dt", {}, T().fichiers_etat), el("dd", { className: "erreur" }, s.alertes.map((a) => a.dossier ? T().dossier_absent(a.fichier, a.reprise) : T().fichier_illisible(a.fichier, a.reprise)).join(" ; ")));
   $("systeme").replaceChildren(...[dl, formulaireDecoupe(), formulaireTons()].filter(Boolean));
   afficherPont(true);
+  afficherCloud();
 }
 /** Préfixes des tons de découpe et calques non imprimables : réglages du serveur (admin). */
 function formulaireDecoupe() {
@@ -3520,7 +3683,7 @@ function vuePage(t, page, n) {
     return el("figure", {}, img, el("figcaption", {}, legende));
   };
   // Seul l'aperçu (composite, sinon la découpe) est montré d'office ; les couches (découpe,
-  // plaques) sont derrière le bouton « Couches », comme dans ONYX.
+  // plaques) sont derrière le bouton « Couches ».
   const principal = t.mode === "decouper" ? vignette(`${base}/decoupe.svg`, T().apercu_decoupe) : vignette(`${base}/apercu.png`, T().composite);
   const vignettes = [];
   if (page.traces_decoupe && t.mode !== "decouper") vignettes.push(vignette(`${base}/decoupe.svg`, T().apercu_decoupe));

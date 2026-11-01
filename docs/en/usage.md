@@ -955,6 +955,27 @@ the limit in the mode.
 `encres=C,Lc,M`) gives a CGATS chart with one patch per ink and step, denser in the
 highlights: 8 patches under 20 % out of 21, against 4 for an even ramp.
 
+**Grey calibration (G7-style, API)**: `GET /api/g7/mire.cgats?n=21` gives the chart, a
+CMY ramp with equal parts and a black ramp, from 0 to 100 %. Once the chart is printed,
+send its measurements (L*a*b* per patch) to `POST /api/g7/iterations`:
+`{"nom": "Epson / banner", "mesures": [{"rampe": "cmy", "pct": 50, "l": 58.1, "a": 1.2, "b": -0.4}, …]}`
+(optionally with `engraissement`, the dot gain at 50 %, 22 % by default, and `aplats`:
+the a*b* of the C, M and Y solids). Each ramp needs its paper (0 %), its solid (100 %) and
+at least three patches in between. The answer gives:
+- the gaps to the target, mean ΔL* and mean grey gap, with `conforme` under 1.5 and 1.5
+  (indicative thresholds);
+- the C, M, Y and K correction curves, every 5 %;
+- every iteration of this calibration, and the number of the best one.
+
+Print the next chart with the curves of the best iteration, and say so with
+`"avec": <its number>` when sending the measurements. The new correction is then composed
+with those curves. A worse iteration does not erase the best one, and the last 50 are
+kept. Changing `engraissement` or `aplats` recomputes every iteration against the new
+target. The grey target keeps the paper's tint, which fades
+as the grey darkens. Our own method and values: this is not a G7 certification. The
+curves will apply to rendering with per-mode linearisation (8.2). Admin only, and
+included in the backup.
+
 **When sending**, **Media and print mode**: the mode sets the rendering resolution; the
 media links to the price list. **— resolution set by hand —** keeps the panel's
 resolution. Changing mode on a received job renders again.

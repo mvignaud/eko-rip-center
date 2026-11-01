@@ -1,0 +1,21 @@
+[Unit]
+Description=E-KO RIP Cloud (plate-forme : relais des serveurs RIP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=eko-rip-cloud
+EnvironmentFile=-/etc/default/eko-rip-cloud
+Environment=EKO_CLOUD_DATA=/var/lib/eko-rip-cloud
+ExecStart=/usr/bin/eko-rip-cloud
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/eko-rip-cloud
+PrivateTmp=true
+# Beaucoup de tunnels ouverts en même temps.
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

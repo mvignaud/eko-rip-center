@@ -23,6 +23,10 @@ struct EKORIPCenterApp: App {
                     .keyboardShortcut("o")
                     .disabled(etat.phase != .connecte)
             }
+            CommandGroup(replacing: .help) {
+                Button("Signaler un problème…") { etat.signalementOuvert = true }
+                    .disabled(etat.phase != .connecte)
+            }
             CommandMenu("Serveur") {
                 Button("Actualiser") { Task { await etat.rafraichir() } }
                     .keyboardShortcut("r")
@@ -67,6 +71,12 @@ struct RacineVue: View {
         )) {
             FeuilleEnvoi(fichiers: etat.fichiersAEnvoyer)
         }
+        .sheet(isPresented: Binding(
+            get: { etat.signalementOuvert && etat.phase == .connecte },
+            set: { etat.signalementOuvert = $0 }
+        )) {
+            FeuilleSignalement()
+        }
         .alert(
             etat.message?.titre ?? "",
             isPresented: Binding(get: { etat.message != nil }, set: { if !$0 { etat.message = nil } }),
@@ -86,6 +96,8 @@ final class DelegueApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
         if Notifier.disponible {
             UNUserNotificationCenter.current().delegate = self
         }
+        // Ping anonyme d'installation, hors de l'interface : au lancement puis toutes les 6 h.
+        Task.detached(priority: .background) { await Telemetrie.boucle() }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

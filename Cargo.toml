@@ -1,10 +1,10 @@
 [workspace]
 resolver = "3"
-members = ["serveur", "client"]
+members = ["serveur", "client", "cloud"]
 
 [workspace.package]
-version = "0.29.0"
-license = "LicenseRef-proprietaire"
+version = "0.31.0"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [profile.release]

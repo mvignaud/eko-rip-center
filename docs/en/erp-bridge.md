@@ -169,7 +169,7 @@ last contact, the last error, and the instance, with **Draw a new instance** (co
   System with its code; the RIP retries after 60 s, then every 5 min. It never skips a
   refused event.
 - `travaux`: jobs sent by the ERP (lot R3, § 7).
-- `actions`: cancel, hold, resume, priority, due date (lot R3.2, § 8). They replace the old
+- `actions`: cancel, hold, resume, priority, due date, operator, reprint (lot R3.2 and roadmap 7.8, § 8). They replace the old
   `annulations` field, which is no longer applied (reported in the server log if non-empty).
 - `estimations`: estimates requested by the ERP (lot R4, § 9).
 
@@ -207,6 +207,8 @@ A job created from an ERP send (§ 7) also carries `envoi_id`, and its reference
 ```json
 { "travail_uuid": "…", "ref_erp": "PROD-2026-00123", "envoi_id": "…", "etat": "en_attente", "code_erreur": null, "pages": 0 }
 ```
+
+A job in a group (§ 7, linked jobs) also carries `groupe` and `partie`.
 
 `sortie.etat` — on each output state change:
 
@@ -252,11 +254,18 @@ when it changes (the time alone does not count):
 - `bac_encre_usagee_pourcent`: `null` until it is read on the Epson.
 - No on-demand send yet: the ERP keeps the last `machine.etat` received.
 
+Media inventory and machine log (roadmap 7.8): no separate event. The inventory is the
+`supports` of `catalogue.modifie` (what the RIP can print) and, machine by machine, the loaded
+media and its remaining length from `machine.etat`. A machine's log is its `sortie.etat` (what
+runs, when, failed or not), its `travail.consommation` (media, length, ink, duration) and its
+`machine.etat` (alerts), all with `machine_uuid`.
+
 ## 7. Jobs sent by the ERP (lot R3)
 
-Shape of a `travaux` item: § 11 of the ERP-side contract (`docs/onyx/pont-erp-cote-erp.md` in
+Shape of a `travaux` item: § 11 of the ERP-side contract (in
 eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`, `echeance`,
-`fichier { chemin, nom, taille, sha256 }`.
+`fichier { chemin, nom, taille, sha256 }`, and for linked jobs `groupe` and `partie`
+(roadmap 7.8).
 
 - **Download**: on each `en-attente`, every send never taken is downloaded with
   `GET <base><fichier.chemin>`, signed like `en-attente`, at most 5 per cycle and 4 GB. The
@@ -265,6 +274,11 @@ eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
 - **Creation**: the job takes the send's uuid, the saved setting named by
   `prereglage_uuid`, and its job sheet: order = `ref_erp`, quantity = `copies`, due date. A
   server stopped between creation and clean-up does not create a second job.
+- **Linked jobs**: `groupe` (text, at most 200 characters) and `partie` (rank, 1 to 10,000)
+  go together; one without the other is an `envoi_invalide`. A part's outputs are placed in
+  the queue right after those of parts of lower or equal rank still queued, otherwise right
+  before those of a higher rank: the group goes through as one block and in order, even if
+  the renders finish out of order. A priority (§ 8) is still possible.
 - **Acknowledgement**: the job's first `travail.etat` carries `envoi_id` (§ 6.5).
 - **Refusal**: `travail.refuse` — `{ "envoi_id", "ref_erp", "code", "detail" }`. Codes:
   `envoi_invalide` (malformed item; `detail` names the field), `telechargement_impossible`
@@ -277,8 +291,10 @@ eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
 ## 8. ERP actions on the queue (lot R3.2)
 
 Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp", "action",
-"echeance" }`, `action` one of `suspendre`, `reprendre`, `annuler`, `priorite`, `echeance`
-(`echeance`, Unix seconds, required for the last one only).
+"echeance", "operateur", "page" }`, `action` one of `suspendre`, `reprendre`, `annuler`,
+`priorite`, `echeance`, `operateur`, `reimprimer`. `echeance` (Unix seconds) is required for
+`echeance`, `operateur` (text, at most 200 characters, empty = nobody) for `operateur`;
+`page` (1 to n) is allowed for `reimprimer` only.
 
 - **Scope**: an action targets every job born from an ERP send that carries this `ref_erp`,
   and their outputs (print and cut) still in the queue. A job created on the RIP is never
@@ -294,10 +310,18 @@ Shape of an `actions` item: § 12 of the ERP-side contract — `{ "id", "ref_erp
     `deja_imprime`.
   - `priorite`: outputs move to the head of the queue, in their order.
   - `echeance`: the job sheet's due date changes (the queue is untouched).
+  - `operateur`: the job sheet's operator changes (the queue is untouched); it shows in the
+    RIP's reports.
+  - `reimprimer`: each rendered job of the order goes back to the queue as on arrival (same
+    machine, cut included, `suspendre` hold respected), without rendering again; `page`
+    limits it to that page. A job still rendering or with outputs still queued is not
+    doubled: it is counted in `non_modifiables`. A cancelled order does not restart (send
+    `reprendre` first).
 - **Acknowledgement**: `travail.action` — `{ "action_id", "ref_erp", "action", "code",
   "touchees", "non_modifiables" }`. `code` is `null` if all went through, `aucun_travail` if
   no ERP job carries this `ref_erp`, `deja_imprime` (above), or `action_invalide` (malformed
-  item; `detail` names the field). `touchees` counts changed outputs, or jobs for `echeance`.
+  item; `detail` names the field), `rien_a_reimprimer` (no output added). `touchees` counts
+  changed or added outputs, or jobs for `echeance` and `operateur`.
 - **Duplicates**: like sends (§ 7) — an action taken is never taken again, even if offered
   again, and is forgotten 30 days after the ERP stops offering it.
 
