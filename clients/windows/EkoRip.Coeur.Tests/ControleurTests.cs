@@ -55,6 +55,26 @@ public class ControleurTests
     }
 
     [Fact]
+    public async Task Un_reglage_cree_apres_la_connexion_est_relu_a_l_envoi()
+    {
+        var reglages = """[]""";
+        var (c, _, _, _) = Fabriquer(r => r.Chemin == "/api/reglages"
+            ? GestionnaireFictif.Json(reglages)
+            : r.Chemin == "/api/session"
+                ? GestionnaireFictif.Json("""{"acces_libre":true,"utilisateur":null}""")
+                : r.Chemin is "/api/travaux" or "/api/file" or "/api/machines"
+                    ? GestionnaireFictif.Json("[]")
+                    : GestionnaireFictif.Json("""{"code":"introuvable","detail":null}""", HttpStatusCode.NotFound), "rip.local:8640");
+        await c.Demarrer();
+        Assert.Empty(c.Reglages);
+
+        reglages = """[{"nom":"Essai"}]""";
+        await c.ActualiserReglages();
+        Assert.Equal("Essai", Assert.Single(c.Reglages).Nom);
+        c.Dispose();
+    }
+
+    [Fact]
     public async Task Serveur_sans_acces_libre_demande_l_identifiant_puis_entre()
     {
         var connecte = false;

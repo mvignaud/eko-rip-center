@@ -11,6 +11,7 @@ namespace EkoRip.Client;
 // Boîtes de dialogue, sélecteurs de fichiers, glisser-déposer, fenêtre Administration.
 public sealed partial class MainWindow
 {
+    private const string SansReglage = "Sans réglage (réglages par défaut du serveur)";
     private readonly SemaphoreSlim _verrouDialogue = new(1, 1);
     private bool _messageAffiche;
     private FenetreAdministration? _administration;
@@ -122,6 +123,7 @@ public sealed partial class MainWindow
     {
         try
         {
+            await _c.ActualiserReglages();
             var panneau = new StackPanel { Spacing = 14, MinWidth = 380 };
 
             var liste = new StackPanel { Spacing = 2 };
@@ -142,6 +144,9 @@ public sealed partial class MainWindow
             else
             {
                 reglages = new ComboBox { Header = "Réglage", HorizontalAlignment = HorizontalAlignment.Stretch };
+                // Premier choix : aucun réglage (le serveur applique ses réglages par défaut), comme
+                // « saisie libre » dans l'interface web.
+                reglages.Items.Add(SansReglage);
                 foreach (var r in _c.Reglages) reglages.Items.Add(r.Nom);
                 var retenu = _c.Parametres.DernierReglage;
                 reglages.SelectedItem = _c.Reglages.Any(r => r.Nom == retenu) ? retenu : _c.Reglages[0].Nom;
@@ -177,7 +182,9 @@ public sealed partial class MainWindow
             var reponse = await Afficher(dialogue);
             if (reponse == ContentDialogResult.Primary)
             {
-                _c.LancerEnvoi(fichiers, reglages?.SelectedItem as string, client.Text, commande.Text, quantite.Text);
+                var choisi = reglages?.SelectedItem as string;
+                if (choisi == SansReglage) choisi = null;
+                _c.LancerEnvoi(fichiers, choisi, client.Text, commande.Text, quantite.Text);
             }
         }
         catch (Exception e)

@@ -255,11 +255,11 @@
 
                             <Grid x:Name="EnTeteTableau" Grid.Row="0" Margin="20,4,28,4" ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" MinWidth="160" />
-                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="*" MinWidth="90" />
+                                    <ColumnDefinition Width="110" />
                                     <ColumnDefinition Width="60" />
-                                    <ColumnDefinition Width="130" />
-                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="110" />
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="EnTeteNom" Grid.Column="0" Tag="Nom" Click="EnTete_Click"
                                         Style="{StaticResource TextBlockButtonStyle}" Content="Nom" />
@@ -283,11 +283,11 @@
                                     <DataTemplate x:DataType="local:LigneTravail">
                                         <Grid ColumnSpacing="8" Padding="0,10">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" MinWidth="160" />
-                                                <ColumnDefinition Width="130" />
+                                                <ColumnDefinition Width="*" MinWidth="90" />
+                                                <ColumnDefinition Width="110" />
                                                 <ColumnDefinition Width="60" />
-                                                <ColumnDefinition Width="130" />
-                                                <ColumnDefinition Width="130" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="110" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0"
                                                        Text="{x:Bind Nom, Mode=OneWay}"

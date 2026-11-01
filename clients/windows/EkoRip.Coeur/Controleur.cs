@@ -312,6 +312,24 @@ public sealed class Controleur : IDisposable
         try { Reglages = await api.Reglages(); } catch (Exception e) when (e is ErreurApi) { }
     }
 
+    /// <summary>
+    /// Relit les réglages du serveur (à l'ouverture de la feuille d'envoi) : un réglage créé depuis
+    /// l'administration après la connexion doit être proposé sans se reconnecter. En cas d'échec,
+    /// on garde la liste connue.
+    /// </summary>
+    public async Task ActualiserReglages()
+    {
+        var api = Api;
+        if (api is null || Phase != Phase.Connecte) return;
+        try
+        {
+            var reglages = await api.Reglages();
+            if (Api != api || Phase != Phase.Connecte) return;
+            Reglages = reglages;
+        }
+        catch (Exception e) when (e is ErreurApi) { }
+    }
+
     // ------------------------------------------------------------ Actualisation
 
     private void LancerBoucle()
