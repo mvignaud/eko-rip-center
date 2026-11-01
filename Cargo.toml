@@ -4,7 +4,7 @@ members = ["serveur", "client", "cloud"]
 
 [workspace.package]
 version = "0.30.0"
-license = "LicenseRef-proprietaire"
+license = "AGPL-3.0-or-later"
 publish = false
 
 [profile.release]

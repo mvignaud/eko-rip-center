@@ -47,14 +47,14 @@ cd site && python3 -m http.server 8765   # puis http://localhost:8765
 ## Publier
 
 ```bash
-outils/publier-site.sh
+EKO_SITE_HOTE=<compte>@<hôte> outils/publier-site.sh
 ```
 
 Le CSS et le JS sont mis en cache une heure (`.htaccess`), les pages jamais. Le script
 suffixe donc à la publication les liens vers chaque `.css` et `.js` de `assets/` d'une
 empreinte de leur contenu (`?v=…`) : rien à changer à la main.
 
-Hôte (`EKO_SITE_HOTE`, défaut `sc3nihe1770@fleur.o2switch.net`) et dossier racine du
+Hôte (`EKO_SITE_HOTE`, obligatoire : compte SSH o2switch ou alias de `~/.ssh/config`) et dossier racine du
 domaine dans cPanel (`EKO_SITE_DOSSIER`, défaut `public_html`, racine du domaine e-ko.rip chez o2switch) se changent par variables.
 L'accès SSH d'o2switch n'est ouvert qu'aux adresses IP déclarées dans cPanel
 (« Autorisation SSH »).
