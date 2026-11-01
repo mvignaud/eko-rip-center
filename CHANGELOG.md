@@ -40,6 +40,14 @@ parité ; d'ici là, 0.Y.Z.
   RIP. Apps connectées visibles et révocables dans « Mon compte ». Voir `docs/fr/cloud.md`.
   *Cloud sign-in from the apps (OAuth 2 + PKCE): platform account, site list, no second
   password on the RIP server.*
+- **Clients Mac et Linux : notifications du cloud.** Tant qu'un compte cloud est connecté (même
+  sur un serveur local), l'app interroge `GET /api/moi/notifications` chaque minute et affiche une
+  notification système (site hors ligne ou de retour en ligne, nouvelle app) ; le clic ouvre le
+  site concerné, sinon le lien. Le curseur est mémorisé, sans rattrapage à la première
+  interrogation. Mac : autorisation demandée après la première connexion au cloud ; Linux :
+  réglage « Notifications du cloud » (activé par défaut) et toast à la première connexion.
+  *Mac and Linux clients: native cloud notifications, polled every minute while a cloud account
+  is signed in.*
 
 ### Modifié
 - **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket

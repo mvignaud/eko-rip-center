@@ -5,6 +5,7 @@
 
 use crate::api::{Erreur, Resultat, VERSION};
 use crate::config;
+use crate::notifications_cloud::ReponseNotifications;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -311,6 +312,17 @@ pub fn echanger_code(plateforme: &str, code: &str, redirect_uri: &str, verifier_
 /// `GET /api/moi` : le compte et ses sites. 401 (`session_perdue`) : jeton révoqué ou expiré.
 pub fn moi(plateforme: &str, jeton: &str) -> Resultat<Moi> {
     let url = format!("{}/api/moi", plateforme.trim_end_matches('/'));
+    let rep = verifier(agent().get(&url).set("Authorization", &format!("Bearer {jeton}")).call())?;
+    rep.into_json().map_err(|e| Erreur::locale("reponse_illisible", e.to_string()))
+}
+
+/// `GET /api/moi/notifications` : sans `apres`, rend seulement `dernier` ; avec, au plus 50
+/// notifications plus récentes. 401 (`session_perdue`) : jeton invalide.
+pub fn notifications(plateforme: &str, jeton: &str, apres: Option<u64>) -> Resultat<ReponseNotifications> {
+    let mut url = format!("{}/api/moi/notifications", plateforme.trim_end_matches('/'));
+    if let Some(a) = apres {
+        url.push_str(&format!("?apres={a}"));
+    }
     let rep = verifier(agent().get(&url).set("Authorization", &format!("Bearer {jeton}")).call())?;
     rep.into_json().map_err(|e| Erreur::locale("reponse_illisible", e.to_string()))
 }

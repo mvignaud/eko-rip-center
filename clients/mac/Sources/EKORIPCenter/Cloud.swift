@@ -225,6 +225,22 @@ struct ClientCloud: Sendable {
         }
     }
 
+    /// `GET /api/moi/notifications` : sans `apres`, seulement `dernier` ; avec, au plus 50
+    /// notifications plus récentes. 401 : jeton invalide.
+    func notifications(jeton: String, apres: Int?) async throws -> ReponseNotifications {
+        let chemin = "/api/moi/notifications" + (apres.map { "?apres=\($0)" } ?? "")
+        let (donnees, http) = try await envoyer(try requete("GET", chemin, jeton: jeton))
+        guard (200..<300).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw ErreurApi(statut: 401, code: "jeton_invalide", detail: nil) }
+            throw ErreurApi.depuis(statut: http.statusCode, corps: donnees)
+        }
+        do {
+            return try JSONDecoder.serveur.decode(ReponseNotifications.self, from: donnees)
+        } catch {
+            throw ErreurApi(statut: 0, code: "reponse_illisible", detail: String(describing: error))
+        }
+    }
+
     /// `POST /api/moi/deconnexion` (204) : révoque le jeton côté plate-forme.
     func deconnecter(jeton: String) async throws {
         let (donnees, http) = try await envoyer(try requete("POST", "/api/moi/deconnexion", jeton: jeton))

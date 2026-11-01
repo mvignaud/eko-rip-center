@@ -114,4 +114,13 @@ final class DelegueApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound]
     }
+
+    /// Clic sur une notification du cloud : ouvre le site concerné, sinon le lien.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let infos = response.notification.request.content.userInfo
+        let site = infos["site"] as? String
+        let lien = infos["lien"] as? String
+        guard site?.isEmpty == false || lien?.isEmpty == false else { return }
+        await Etat.partage.ouvrirNotificationCloud(site: site, lien: lien)
+    }
 }

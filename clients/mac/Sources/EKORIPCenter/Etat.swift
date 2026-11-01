@@ -13,6 +13,10 @@ enum Cles {
     static let siteCloud = "dernierSiteCloud"
     /// Dernier onglet de l'écran de connexion : « local » ou « cloud ».
     static let modeConnexion = "modeConnexion"
+    /// Id de la dernière notification du cloud traitée (absent : rien de mémorisé).
+    static let dernierNotificationCloud = "dernierNotificationCloud"
+    /// L'autorisation des notifications a déjà été demandée à la première connexion au cloud.
+    static let autorisationNotificationsCloud = "autorisationNotificationsCloudDemandee"
 }
 
 enum Rubrique: String, CaseIterable, Identifiable {
@@ -117,6 +121,7 @@ final class Etat {
     @ObservationIgnored private let autorisationCloud = AutorisationCloud()
 
     @ObservationIgnored private var boucle: Task<Void, Never>?
+    @ObservationIgnored private var boucleNotificationsCloud: Task<Void, Never>?
     @ObservationIgnored private var annonceTache: Task<Void, Never>?
     @ObservationIgnored private var statutsVus: [String: StatutTravail] = [:]
     @ObservationIgnored private var etatsVus: [String: EtatSortie] = [:]
@@ -176,6 +181,7 @@ final class Etat {
     func demarrer() async {
         guard phase == .demarrage else { return }
         Notifier.demander()
+        lancerNotificationsCloud()
         // Dernier choix : un site du cloud (jeton dans le trousseau), sinon le serveur local.
         if let site = UserDefaults.standard.string(forKey: Cles.siteCloud), !site.isEmpty, Trousseau.lire() != nil {
             await rouvrirCloud(siteId: site)
@@ -311,6 +317,8 @@ final class Etat {
     /// Oublie le jeton (trousseau) et tout ce qui en dépend, sans appel réseau.
     private func oublierCloud() {
         Trousseau.oublier()
+        arreterNotificationsCloud()
+        UserDefaults.standard.removeObject(forKey: Cles.dernierNotificationCloud)
         cloudCompte = nil
         cloudSites = []
         siteCloud = nil
@@ -351,6 +359,10 @@ final class Etat {
         do {
             let jeton = try await autorisationCloud.autoriser()
             try Trousseau.ecrire(jeton)
+            // Un autre compte a pu se connecter : le curseur repart de zéro.
+            UserDefaults.standard.removeObject(forKey: Cles.dernierNotificationCloud)
+            Notifier.demanderPourLeCloud()
+            lancerNotificationsCloud()
             await actualiserCloud()
         } catch let e as ErreurApi where e.code == "cloud_annule" {
             // Fenêtre fermée par l'opérateur : rien à dire.
@@ -428,6 +440,82 @@ final class Etat {
         erreurConnexion = nil
         phase = .adresse
         if let jeton { try? await ClientCloud().deconnecter(jeton: jeton) }
+    }
+
+    // MARK: Notifications du cloud
+
+    /// Intervalle entre deux interrogations de la plate-forme.
+    private static let periodeNotificationsCloud: Duration = .seconds(60)
+    /// Relances immédiates au plus, par tour, quand la plate-forme a plus de 50 notifications.
+    private static let relancesMax = 10
+
+    /// Interroge la plate-forme toutes les 60 s tant qu'un jeton est au trousseau, quel que
+    /// soit le serveur ouvert (local ou site du cloud).
+    private func lancerNotificationsCloud() {
+        boucleNotificationsCloud?.cancel()
+        guard Trousseau.lire() != nil else { return }
+        boucleNotificationsCloud = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.interrogerNotificationsCloud()
+                try? await Task.sleep(for: Etat.periodeNotificationsCloud)
+            }
+        }
+    }
+
+    private func arreterNotificationsCloud() {
+        boucleNotificationsCloud?.cancel()
+        boucleNotificationsCloud = nil
+    }
+
+    /// Un tour. Erreur réseau : silence, au tour suivant. 401 : comme une connexion expirée.
+    private func interrogerNotificationsCloud() async {
+        let defauts = UserDefaults.standard
+        for _ in 0..<Etat.relancesMax {
+            guard !Task.isCancelled, let jeton = Trousseau.lire() else { return }
+            var suivi = SuiviNotifications(apres: defauts.object(forKey: Cles.dernierNotificationCloud) as? Int)
+            let reponse: ReponseNotifications
+            do {
+                reponse = try await ClientCloud().notifications(jeton: jeton, apres: suivi.apres)
+            } catch let e as ErreurApi where e.statut == 401 {
+                jetonCloudInvalide()
+                return
+            } catch {
+                return
+            }
+            // Déconnecté (ou autre compte) pendant l'appel : la réponse ne compte plus.
+            guard !Task.isCancelled, Trousseau.lire() == jeton else { return }
+            let suite = suivi.absorber(reponse)
+            if let apres = suivi.apres { defauts.set(apres, forKey: Cles.dernierNotificationCloud) }
+            for n in suite.aAfficher { Notifier.envoyerCloud(n) }
+            if !suite.relancer { return }
+        }
+    }
+
+    /// 401 sur la plate-forme hors d'un site cloud ouvert : jeton oublié, comme `actualiserCloud`.
+    private func jetonCloudInvalide() {
+        if phase == .connecte, siteCloud != nil {
+            retourConnexion()
+        } else {
+            oublierCloud()
+            erreurConnexion = Libelles.erreur("jeton_invalide", nil)
+        }
+    }
+
+    /// Clic sur une notification du cloud : le site s'il est dans le compte, sinon le lien.
+    func ouvrirNotificationCloud(site: String?, lien: String?) async {
+        NSApp.activate(ignoringOtherApps: true)
+        if cloudSites.isEmpty, site?.isEmpty == false, Trousseau.lire() != nil {
+            await actualiserCloud()
+        }
+        switch CibleNotification.choisir(site: site, lien: lien, sites: cloudSites) {
+        case .site(let id):
+            if let s = cloudSites.first(where: { $0.id == id }) { await ouvrirSite(s) }
+        case .lien(let url):
+            NSWorkspace.shared.open(url)
+        case nil:
+            break
+        }
     }
 
     // MARK: Actualisation
@@ -732,6 +820,26 @@ enum Notifier {
     static func demander() {
         guard disponible else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Première connexion au cloud : demande l'autorisation, une seule fois (drapeau UserDefaults).
+    static func demanderPourLeCloud() {
+        let defauts = UserDefaults.standard
+        guard disponible, !defauts.bool(forKey: Cles.autorisationNotificationsCloud) else { return }
+        defauts.set(true, forKey: Cles.autorisationNotificationsCloud)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Notification du cloud : `userInfo` porte le site et le lien pour le clic (DelegueApp).
+    static func envoyerCloud(_ n: NotificationCloud) {
+        guard disponible else { return }
+        let contenu = UNMutableNotificationContent()
+        contenu.title = n.titre
+        contenu.body = n.corps
+        contenu.sound = .default
+        contenu.userInfo = ["site": n.site ?? "", "lien": n.lien]
+        let requete = UNNotificationRequest(identifier: "cloud-\(n.id)", content: contenu, trigger: nil)
+        UNUserNotificationCenter.current().add(requete)
     }
 
     static func envoyer(titre: String, texte: String) {

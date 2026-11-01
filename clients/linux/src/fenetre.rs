@@ -4,6 +4,7 @@
 use crate::api::{Client, Erreur, Resultat, VERSION};
 use crate::commande::Commande;
 use crate::cloud::{self, Moi, Site};
+use crate::notifications_cloud::{self, Cible, Curseur, NotificationCloud};
 use crate::config;
 use crate::connexion::{ICONE, PageCloud, PageIdentification, PageServeur};
 use crate::decouverte::{self, Serveur};
@@ -45,6 +46,18 @@ struct EtatCloud {
     jeton: String,
 }
 
+const CLE_CURSEUR: &str = "notifications_cloud_dernier";
+const CLE_REGLAGE: &str = "notifications_cloud";
+const CLE_ANNONCE: &str = "notifications_cloud_annoncees";
+/// Intervalle d'interrogation des notifications du cloud.
+const PERIODE_NOTIFICATIONS: u32 = 60;
+/// Relances immédiates au plus, par tour, quand la plate-forme a plus de 50 notifications.
+const RELANCES_MAX: usize = 10;
+
+fn notifications_cloud_actives() -> bool {
+    config::lire(CLE_REGLAGE).as_deref() != Some("non")
+}
+
 type Instantane = (Vec<Travail>, Vec<Sortie>, Vec<Machine>, Option<EtatSysteme>);
 
 pub struct Fenetre {
@@ -80,6 +93,12 @@ pub struct Fenetre {
     cloud_annule: RefCell<Arc<AtomicBool>>,
     /// Une connexion au cloud est en cours (anti double clic).
     cloud_occupe: Cell<bool>,
+    /// Sites du compte cloud, tels qu'ils ont été listés la dernière fois.
+    sites_cloud: RefCell<Vec<Site>>,
+    /// Curseur des notifications du cloud (persisté dans la config).
+    curseur_notifications: Cell<Curseur>,
+    /// Une interrogation des notifications est en cours.
+    notifications_en_vol: Cell<bool>,
     session: RefCell<Session>,
     donnees: RefCell<Donnees>,
     choisi: RefCell<Option<String>>,
@@ -164,6 +183,7 @@ impl Fenetre {
         menu.append(Some("Administration…"), Some("win.administration"));
         menu.append(Some("Signaler un problème…"), Some("win.signaler"));
         menu.append(Some("Changer de serveur…"), Some("win.changer-serveur"));
+        menu.append(Some("Notifications du cloud"), Some("win.notifications-cloud"));
         menu.append(Some("Se déconnecter"), Some("win.deconnecter"));
         let menu_bas = gio::Menu::new();
         menu_bas.append(Some("À propos d'E-KO RIP Center"), Some("win.apropos"));
@@ -229,6 +249,9 @@ impl Fenetre {
             etat_cloud: RefCell::new(None),
             cloud_annule: RefCell::new(Arc::new(AtomicBool::new(false))),
             cloud_occupe: Cell::new(false),
+            sites_cloud: RefCell::new(vec![]),
+            curseur_notifications: Cell::new(Curseur::depuis(config::lire(CLE_CURSEUR).as_deref())),
+            notifications_en_vol: Cell::new(false),
             session: RefCell::new(Session::default()),
             donnees: RefCell::new(Donnees::default()),
             choisi: RefCell::new(None),
@@ -375,6 +398,22 @@ impl Fenetre {
         });
         ajouter("apropos", |f| f.a_propos());
         ajouter("administration", |f| f.administration());
+        // « Notifications du cloud » : case à cocher du menu, activée par défaut.
+        let bascule = gio::SimpleAction::new_stateful("notifications-cloud", None, &notifications_cloud_actives().to_variant());
+        let faible = Rc::downgrade(self);
+        bascule.connect_activate(move |a, _| {
+            let actif = !a.state().and_then(|v| v.get::<bool>()).unwrap_or(true);
+            a.set_state(&actif.to_variant());
+            config::ecrire(CLE_REGLAGE, if actif { "oui" } else { "non" });
+            if let Some(m) = faible.upgrade() {
+                // Réactivées, elles repartent de « maintenant » : pas de rattrapage.
+                m.reinitialiser_notifications_cloud();
+                if actif {
+                    m.interroger_notifications();
+                }
+            }
+        });
+        self.fen.add_action(&bascule);
         // « Se déconnecter » garde son action en champ : elle s'active selon la session.
         let faible = Rc::downgrade(self);
         self.action_deconnecter.connect_activate(move |_, _| {
@@ -418,6 +457,7 @@ impl Fenetre {
 
     /// Premier affichage : serveur retenu, sinon saisie de l'adresse.
     pub fn demarrer(self: &Rc<Self>) {
+        self.demarrer_notifications_cloud();
         if config::lire("mode").as_deref() == Some("cloud")
             && let Some(jeton) = cloud::jeton_retenu(&cloud::plateforme())
         {
@@ -632,7 +672,11 @@ impl Fenetre {
                         if cloud::retenir_jeton(&cloud::plateforme(), &jeton).is_err() {
                             moi.toast("Connexion non mémorisée : le jeton n'a pas pu être enregistré.");
                         }
+                        // Un autre compte a pu se connecter : le curseur repart de zéro.
+                        moi.reinitialiser_notifications_cloud();
                         moi.afficher_sites(jeton, m);
+                        moi.annoncer_notifications_cloud();
+                        moi.interroger_notifications();
                     }
                     Err(e) => moi.montrer_serveur(Some(&e.message())),
                 }
@@ -674,6 +718,7 @@ impl Fenetre {
                 f.ouvrir_site(site);
             }
         });
+        *self.sites_cloud.borrow_mut() = m.sites;
         *self.etat_cloud.borrow_mut() = Some(EtatCloud { jeton });
         self.pile.set_visible_child_name("cloud");
     }
@@ -690,6 +735,8 @@ impl Fenetre {
         cloud::oublier_jeton();
         config::supprimer("site_cloud");
         config::supprimer("mode");
+        self.reinitialiser_notifications_cloud();
+        self.sites_cloud.borrow_mut().clear();
         *self.etat_cloud.borrow_mut() = None;
         self.action_deconnecter.set_enabled(false);
         self.action_signaler.set_enabled(false);
@@ -963,6 +1010,137 @@ impl Fenetre {
         n.set_body(Some(corps.trim()));
         n.set_default_action("app.montrer");
         self.app.send_notification(Some(id), &n);
+    }
+
+    // --- Notifications du cloud ---
+
+    /// Interrogation toutes les 60 s tant qu'un jeton est retenu, quel que soit le serveur ouvert.
+    fn demarrer_notifications_cloud(self: &Rc<Self>) {
+        let f = Rc::downgrade(self);
+        glib::timeout_add_seconds_local(PERIODE_NOTIFICATIONS, move || match f.upgrade() {
+            Some(f) => {
+                f.interroger_notifications();
+                glib::ControlFlow::Continue
+            }
+            None => glib::ControlFlow::Break,
+        });
+        self.interroger_notifications();
+    }
+
+    /// Oublie le curseur (déconnexion, autre compte, réglage rallumé).
+    fn reinitialiser_notifications_cloud(&self) {
+        config::supprimer(CLE_CURSEUR);
+        self.curseur_notifications.set(Curseur::default());
+    }
+
+    /// Première connexion au cloud : le toast annonce les notifications (une seule fois).
+    fn annoncer_notifications_cloud(&self) {
+        if config::lire(CLE_ANNONCE).is_some() {
+            return;
+        }
+        config::ecrire(CLE_ANNONCE, "oui");
+        if notifications_cloud_actives() {
+            self.toast("Les notifications du cloud sont activées (site hors ligne, nouvelle app). Réglage : menu principal > Notifications du cloud.");
+        }
+    }
+
+    /// Un tour : interroge la plate-forme (fil à part), affiche les nouveautés. Erreur réseau :
+    /// silence, au tour suivant. 401 : comme une connexion expirée.
+    fn interroger_notifications(self: &Rc<Self>) {
+        if !notifications_cloud_actives() || self.notifications_en_vol.get() {
+            return;
+        }
+        let plateforme = cloud::plateforme();
+        let Some(jeton) = cloud::jeton_retenu(&plateforme) else { return };
+        self.notifications_en_vol.set(true);
+        let moi = self.clone();
+        glib::spawn_future_local(async move {
+            for _ in 0..RELANCES_MAX {
+                let mut curseur = moi.curseur_notifications.get();
+                let (p, j, apres) = (plateforme.clone(), jeton.clone(), curseur.apres());
+                let r = gio::spawn_blocking(move || cloud::notifications(&p, &j, apres)).await.unwrap_or_else(|_| Err(Erreur::locale("erreur_interne", None)));
+                // Déconnecté (ou autre compte) pendant l'appel : la réponse ne compte plus.
+                if cloud::jeton_retenu(&plateforme).as_deref() != Some(jeton.as_str()) {
+                    break;
+                }
+                match r {
+                    Ok(rep) => {
+                        let suite = curseur.absorber(rep);
+                        moi.curseur_notifications.set(curseur);
+                        if let Some(v) = curseur.a_retenir() {
+                            config::ecrire(CLE_CURSEUR, &v);
+                        }
+                        for n in &suite.a_afficher {
+                            moi.notification_cloud(n);
+                        }
+                        if !suite.relancer {
+                            break;
+                        }
+                    }
+                    Err(e) if e.session_perdue() => {
+                        moi.notifications_en_vol.set(false);
+                        moi.cloud_expire();
+                        return;
+                    }
+                    Err(_) => break,
+                }
+            }
+            moi.notifications_en_vol.set(false);
+        });
+    }
+
+    fn notification_cloud(&self, n: &NotificationCloud) {
+        let notif = gio::Notification::new(&n.titre);
+        notif.set_body(Some(n.corps.trim()));
+        let parametre = notifications_cloud::encoder_cible(n.site.as_deref(), &n.lien);
+        notif.set_default_action_and_target_value("app.ouvrir-notification-cloud", Some(&parametre.to_variant()));
+        self.app.send_notification(Some(&format!("cloud-{}", n.id)), &notif);
+    }
+
+    /// Clic sur une notification du cloud : le site s'il est dans le compte, sinon le lien.
+    pub fn ouvrir_notification_cloud(self: &Rc<Self>, parametre: &str) {
+        self.fen.present();
+        let (site, lien) = notifications_cloud::decoder_cible(parametre);
+        // Sites pas encore listés (app sur un serveur local) : on les lit d'abord.
+        if self.sites_cloud.borrow().is_empty()
+            && site.is_some()
+            && let Some(jeton) = cloud::jeton_retenu(&cloud::plateforme())
+        {
+            let moi = self.clone();
+            glib::spawn_future_local(async move {
+                let (plateforme, j) = (cloud::plateforme(), jeton.clone());
+                match gio::spawn_blocking(move || cloud::moi(&plateforme, &j)).await.unwrap_or_else(|_| Err(Erreur::locale("erreur_interne", None))) {
+                    Ok(m) => {
+                        *moi.sites_cloud.borrow_mut() = m.sites.clone();
+                        if moi.etat_cloud.borrow().is_none() {
+                            *moi.etat_cloud.borrow_mut() = Some(EtatCloud { jeton });
+                        }
+                        moi.suivre_cible(site.as_deref(), &lien);
+                    }
+                    Err(e) if e.session_perdue() => moi.cloud_expire(),
+                    Err(_) => moi.suivre_cible(None, &lien),
+                }
+            });
+            return;
+        }
+        self.suivre_cible(site.as_deref(), &lien);
+    }
+
+    fn suivre_cible(self: &Rc<Self>, site: Option<&str>, lien: &str) {
+        let sites = self.sites_cloud.borrow().clone();
+        match notifications_cloud::cible(site, lien, &sites) {
+            Some(Cible::Site(id)) if self.etat_cloud.borrow().is_some() => {
+                if let Some(s) = sites.into_iter().find(|s| s.id == id) {
+                    self.ouvrir_site(s);
+                }
+            }
+            Some(Cible::Site(_)) | None => {
+                if !lien.trim().is_empty() {
+                    gtk::UriLauncher::new(lien.trim()).launch(Some(&self.fen), gio::Cancellable::NONE, |_| {});
+                }
+            }
+            Some(Cible::Lien(url)) => gtk::UriLauncher::new(&url).launch(Some(&self.fen), gio::Cancellable::NONE, |_| {}),
+        }
     }
 
     // --- Commandes ---

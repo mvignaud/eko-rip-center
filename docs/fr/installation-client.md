@@ -47,7 +47,10 @@ suivant ; **Serveur → Se déconnecter du cloud** (ou le bouton de l'écran) r�
 est gardé dans le trousseau du Mac (service `fr.e-ko.rip.cloud`). En essai, la clé
 `plateformeCloud` (`defaults write fr.e-ko.rip-center plateformeCloud https://…`) vise une
 autre plate-forme. **Administration…** est indisponible à distance pour
-l'instant (page web qui ne peut pas porter le jeton). Détails : [cloud.md](cloud.md).
+l'instant (page web qui ne peut pas porter le jeton). Tant que le compte est connecté, même sur
+un serveur local, l'app interroge la plate-forme chaque minute et affiche une notification système
+(site hors ligne, de retour en ligne, nouvelle app) ; macOS demande l'autorisation juste après la
+première connexion, et un clic sur la notification ouvre le site concerné. Détails : [cloud.md](cloud.md).
 
 ### Se connecter au cloud (Linux)
 
@@ -60,6 +63,11 @@ grisé) ; le dernier site ouvert est rouvert au lancement suivant. Le jeton est 
 sites, ou menu **Se déconnecter** sur un site cloud) le révoque et l'oublie. La variable
 `EKO_RIP_CLOUD_URL` vise une autre plate-forme (essais). **Administration…** est indisponible à
 distance pour l'instant.
+
+Tant que le compte est connecté, même sur un serveur local, le client interroge la plate-forme
+chaque minute et affiche une notification système (site hors ligne, de retour en ligne, nouvelle
+app) ; un clic ouvre le site concerné. Un toast l'annonce à la première connexion, et la case
+**Notifications du cloud** du menu principal (activée par défaut) les coupe.
 
 La découverte utilise DNS-SD (mDNS, `_eko-rip._tcp`, port UDP 5353) : elle ne traverse pas les
 routeurs ni les VPN (utiliser alors l'adresse). Sur Mac, macOS demande d'autoriser l'accès au
