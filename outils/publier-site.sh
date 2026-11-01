@@ -22,6 +22,14 @@ trap 'rm -rf "$TMP"' EXIT
 # Une copie du journal traînant dans site/ ne doit jamais remplacer celle en ligne (revue Graphify).
 rsync -a --exclude README.md --exclude 'changelog.*.json' "$RACINE/site/" "$TMP/"
 
+# Les pages ne sont jamais mises en cache, mais le CSS et le JS le sont une heure (.htaccess) :
+# sans version dans l'URL, un téléphone garde l'ancien style.css sous une page neuve. Chaque
+# publication suffixe donc ces liens d'une empreinte de leur contenu (?v=…).
+for f in assets/style.css assets/site.js assets/journal.js; do
+  v=$(cksum < "$TMP/$f" | cut -d' ' -f1)
+  find "$TMP" -name '*.html' -exec perl -pi -e "s#\"/\Q$f\E\"#\"/$f?v=$v\"#g" {} +
+done
+
 for langue in fr en; do
   if curl -fsS --max-time 20 "$ERP/changelog-rip.json?lang=$langue" -o "$TMP/changelog.$langue.json.tmp" \
      && grep -q '"releases"' "$TMP/changelog.$langue.json.tmp"; then
