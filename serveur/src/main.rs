@@ -3075,7 +3075,10 @@ async fn inscrire_appareil(State(etat): State<Partage>, entetes: axum::http::Hea
         return refus(StatusCode::BAD_REQUEST, "jeton_push_invalide", None);
     }
     let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
-    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant() };
+    // Inscription par une identité cloud (en-tête signé du cloud E-KO RIP) : à brancher
+    // ici avec `utilisateur = e-mail du compte cloud` et `cloud: true` quand cette identité
+    // arrive dans le serveur (fil du cloud) ; voir `mobile::DUREE_INSCRIPTION_CLOUD`.
+    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant(), cloud: false };
     match mobile::inscrire(&etat.config.donnees, a) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),

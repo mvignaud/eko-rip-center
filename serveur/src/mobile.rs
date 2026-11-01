@@ -42,7 +42,16 @@ pub struct Appareil {
     #[serde(default)]
     pub fins: bool,
     pub inscrit_le: u64,
+    /// Inscrit à travers le cloud E-KO RIP : `utilisateur` est alors l'e-mail du compte
+    /// cloud, que le serveur ne peut pas confronter à ses comptes locaux.
+    #[serde(default)]
+    pub cloud: bool,
 }
+
+/// Un téléphone inscrit par le cloud n'est gardé que s'il s'est réinscrit récemment
+/// (l'app le fait à chaque connexion) : le serveur ne sait pas si l'accès cloud a été
+/// retiré, il cesse donc d'envoyer à un téléphone qui ne se manifeste plus.
+pub const DUREE_INSCRIPTION_CLOUD: u64 = 30 * 24 * 3600;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -375,10 +384,16 @@ fn message(jeton: &str, e: &Evenement) -> Value {
 
 /// Les téléphones qui reçoivent `e` : un compte supprimé ne reçoit plus rien, les fins
 /// ne vont qu'à qui les a demandées.
-fn destinataires<'a>(appareils: &'a [Appareil], comptes: Option<&[String]>, e: &Evenement) -> Vec<&'a Appareil> {
+fn destinataires<'a>(appareils: &'a [Appareil], comptes: Option<&[String]>, e: &Evenement, maintenant: u64) -> Vec<&'a Appareil> {
     appareils
         .iter()
-        .filter(|a| comptes.is_none_or(|c| a.utilisateur.as_ref().is_some_and(|u| c.contains(u))))
+        .filter(|a| {
+            if a.cloud {
+                maintenant.saturating_sub(a.inscrit_le) <= DUREE_INSCRIPTION_CLOUD
+            } else {
+                comptes.is_none_or(|c| a.utilisateur.as_ref().is_some_and(|u| c.contains(u)))
+            }
+        })
         .filter(|a| e.genre != Genre::SortieTerminee || a.fins)
         .collect()
 }
@@ -386,7 +401,7 @@ fn destinataires<'a>(appareils: &'a [Appareil], comptes: Option<&[String]>, e: &
 fn envoyer_aux_appareils(donnees: &Path, evenements: &[Evenement]) {
     let liste = appareils(donnees);
     let comptes = (!crate::acces::libre(donnees)).then(|| crate::acces::lire(donnees).into_iter().map(|u| u.nom).collect::<Vec<_>>());
-    let messages: Vec<Value> = evenements.iter().flat_map(|e| destinataires(&liste, comptes.as_deref(), e).into_iter().map(move |a| message(&a.jeton, e))).collect();
+    let messages: Vec<Value> = evenements.iter().flat_map(|e| destinataires(&liste, comptes.as_deref(), e, maintenant()).into_iter().map(move |a| message(&a.jeton, e))).collect();
     if messages.is_empty() {
         return;
     }
@@ -468,14 +483,16 @@ mod tests {
 
     #[test]
     fn destinataires_selon_compte_et_fins() {
-        let a = |j: &str, u: Option<&str>, fins: bool| Appareil { jeton: j.into(), nom: String::new(), plateforme: "ios".into(), utilisateur: u.map(Into::into), fins, inscrit_le: 0 };
-        let liste = [a("1", Some("paul"), false), a("2", Some("supprime"), true), a("3", Some("marie"), true)];
+        let a = |j: &str, u: Option<&str>, fins: bool| Appareil { jeton: j.into(), nom: String::new(), plateforme: "ios".into(), utilisateur: u.map(Into::into), fins, inscrit_le: 0, cloud: false };
+        let nuage = |j: &str, le: u64| Appareil { utilisateur: Some("paul@exemple.fr".into()), inscrit_le: le, cloud: true, ..a(j, None, true) };
+        let liste = [a("1", Some("paul"), false), a("2", Some("supprime"), true), a("3", Some("marie"), true), nuage("4", 1000), nuage("5", 10)];
+        let t = 1000 + DUREE_INSCRIPTION_CLOUD - 500;
         let ev = |genre| Evenement { id: 1, le: 0, genre, gravite: Genre::gravite(genre), machine: None, titre: String::new(), texte: String::new(), sortie: None, travail: None };
         let comptes = vec!["paul".to_string(), "marie".to_string()];
-        let jetons = |g| destinataires(&liste, Some(&comptes), &ev(g)).iter().map(|a| a.jeton.clone()).collect::<Vec<_>>();
-        assert_eq!(jetons(Genre::EncreVide), ["1", "3"]);
-        assert_eq!(jetons(Genre::SortieTerminee), ["3"]);
-        assert_eq!(destinataires(&liste, None, &ev(Genre::EncreVide)).len(), 3, "accès libre : tous");
+        let jetons = |g| destinataires(&liste, Some(&comptes), &ev(g), t).iter().map(|a| a.jeton.clone()).collect::<Vec<_>>();
+        assert_eq!(jetons(Genre::EncreVide), ["1", "3", "4"], "cloud : gardé s'il s'est réinscrit récemment, pas le 5");
+        assert_eq!(jetons(Genre::SortieTerminee), ["3", "4"]);
+        assert_eq!(destinataires(&liste, None, &ev(Genre::EncreVide), t).len(), 4, "accès libre : tous les locaux");
     }
 
     #[test]
