@@ -3683,7 +3683,7 @@ function vuePage(t, page, n) {
     return el("figure", {}, img, el("figcaption", {}, legende));
   };
   // Seul l'aperçu (composite, sinon la découpe) est montré d'office ; les couches (découpe,
-  // plaques) sont derrière le bouton « Couches », comme dans ONYX.
+  // plaques) sont derrière le bouton « Couches ».
   const principal = t.mode === "decouper" ? vignette(`${base}/decoupe.svg`, T().apercu_decoupe) : vignette(`${base}/apercu.png`, T().composite);
   const vignettes = [];
   if (page.traces_decoupe && t.mode !== "decouper") vignettes.push(vignette(`${base}/decoupe.svg`, T().apercu_decoupe));

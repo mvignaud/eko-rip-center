@@ -114,5 +114,17 @@ where
         .max_concurrent_streams(64)
         .serve_connection(flux, TowerToHyperService::new(service))
         .await
-        .map_err(reseau)
+        .map_err(|e| Erreur::Reseau(chaine(&e)))
+}
+
+/// Erreur et ses causes successives (« connection error : … : … »), pour le journal.
+pub fn chaine(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut texte = e.to_string();
+    let mut cause = e.source();
+    while let Some(c) = cause {
+        texte.push_str(" : ");
+        texte.push_str(&c.to_string());
+        cause = c.source();
+    }
+    texte
 }

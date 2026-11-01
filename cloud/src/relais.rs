@@ -398,8 +398,11 @@ where
     let Ok((envoi, connexion)) = b.handshake::<_, Body>(flux).await else { return };
     let generation = r.generation.fetch_add(1, Ordering::Relaxed);
     let (fin_tx, fin_rx) = tokio::sync::oneshot::channel::<()>();
+    let site = id.clone();
     let tache = tokio::spawn(async move {
-        let _ = connexion.await;
+        if let Err(e) = connexion.await {
+            eprintln!("tunnel {site} : {}", crate::client::chaine(&e));
+        }
         let _ = fin_tx.send(());
     });
     // Une nouvelle connexion du même site remplace l'ancienne (reconnexion après une
@@ -542,6 +545,10 @@ async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
     transmettre(&relais, site, &sous, requete, Mode::Chemin).await
 }
 
+/// Délai maximal pour recevoir les en-têtes de la réponse d'un site à une requête sans corps
+/// (le corps de la réponse, lui, peut durer : téléchargements).
+const DELAI_REPONSE_SITE: Duration = Duration::from_secs(120);
+
 async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Request, mode: Mode) -> Response {
     let envoi = relais.tunnels.lock().unwrap().get(&site).map(|t| t.envoi.clone());
     // Site inconnu ou hors ligne : même réponse (on ne dit pas quels sites existent).
@@ -593,10 +600,19 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
     }
     let corps = Body::new(http_body_util::Limited::new(corps, max as usize));
     let Ok(sortante) = sortante.body(corps) else { return refus(StatusCode::BAD_REQUEST, "requete_invalide") };
-    if envoi.ready().await.is_err() {
+    // Tunnel mort mais pas encore vu (le keep-alive met jusqu'à 45 s) : on ne fait pas
+    // attendre indéfiniment.
+    if !matches!(tokio::time::timeout(Duration::from_secs(10), envoi.ready()).await, Ok(Ok(()))) {
         return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne");
     }
-    let reponse = match envoi.send_request(sortante).await {
+    // Sans corps à envoyer, la réponse doit venir vite ; un envoi de fichier, lui, n'a de
+    // réponse qu'une fois le fichier parti.
+    let delai = if matches!(parties.method, Method::GET | Method::HEAD | Method::OPTIONS | Method::DELETE) { DELAI_REPONSE_SITE } else { Duration::from_secs(24 * 3600) };
+    let reponse = match tokio::time::timeout(delai, envoi.send_request(sortante)).await {
+        Err(_) => return refus(StatusCode::GATEWAY_TIMEOUT, "site_muet"),
+        Ok(r) => r,
+    };
+    let reponse = match reponse {
         Ok(r) => r,
         Err(e) => {
             // Corps trop gros découvert en route (sans Content-Length).

@@ -31,12 +31,6 @@ parité ; d'ici là, 0.Y.Z.
   RIP. Apps connectées visibles et révocables dans « Mon compte ». Voir `docs/fr/cloud.md`.
   *Cloud sign-in from the apps (OAuth 2 + PKCE): platform account, site list, no second
   password on the RIP server.*
-- **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
-  (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
-  (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie
-  de l'adresse reste possible (et seule proposée si rien n'est trouvé). Désactivable côté
-  serveur par `EKO_RIP_ANNONCE=0`. Voir `docs/fr/installation-client.md`.
-  *Automatic LAN discovery of the server (DNS-SD); manual address entry kept as a fallback.*
 
 ### Modifié
 - **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket
@@ -47,12 +41,32 @@ parité ; d'ici là, 0.Y.Z.
   `docs/fr/cloud.md`.
   *Cloud tunnel now runs over a standard WebSocket (works behind shared hosting front ends);
   old tunnels still accepted; Node.js launcher for o2switch.*
+
+## [0.31.0] — 2026-11-01
+
+### Ajouté
+- **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
+  (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
+  (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie
+  de l'adresse reste possible (et seule proposée si rien n'est trouvé). Désactivable côté
+  serveur par `EKO_RIP_ANNONCE=0`. Voir `docs/fr/installation-client.md`.
+  *Automatic LAN discovery of the server (DNS-SD); manual address entry kept as a fallback.*
+
+### Modifié
 - **Cloud E-KO RIP : une adresse par site.** Chaque serveur rattaché est servi sur sa propre
   origine, `https://<site>.platform.e-ko.rip` : elle se saisit telle quelle dans les clients
   Mac, Linux, Windows et mobile, et l'interface d'administration fonctionne dans un navigateur.
   Cookies du portail en `__Host-` ; certificats à la demande autorisés par
   `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
   pour l'API.
+
+### Corrigé
+- **Rendus bloqués sous Ubuntu 26.04.** AppArmor 5 y confine Ghostscript (profil `gs`) et lui
+  interdit de lire `/var/lib/eko-rip` : tout rendu échouait (« Permission denied » sur
+  `source.pdf`, 0 page). Le paquet serveur ouvre désormais les travaux du RIP à ce profil
+  (`/etc/apparmor.d/local/gs`) et le recharge à l'installation ; retiré à la purge.
+  *Renders failed on Ubuntu 26.04: AppArmor 5 confines Ghostscript; the server package now
+  grants it access to the RIP jobs folder.*
 
 ## [0.30.0] — 2026-10-31
 
@@ -627,7 +641,7 @@ La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la
 
 ### Modifié
 - Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
-  **Couches**, comme dans ONYX.
+  **Couches**.
 - État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
   impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
   dossier (pas imprimée)**.

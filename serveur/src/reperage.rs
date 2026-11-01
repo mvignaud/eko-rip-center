@@ -132,7 +132,7 @@ pub struct Mise {
     pub decalage: (f64, f64),
     pub rectangles: Vec<[f64; 4]>,
     /// Cadre Mutoh : coins opposés (x1, y1, x2, y2) au MILIEU des traits, ce que le Kona
-    /// attend dans `AL5` (mesuré sur la capture ONYX du 24/10 : écart = cadre − épaisseur).
+    /// attend dans `AL5` (mesuré à l'atelier le 24/10 : écart = cadre − épaisseur).
     pub coins: Option<[f64; 4]>,
     /// Repérage réellement appliqué à la page (le cadre simple devient multi-cadre au-delà de
     /// `MULTI_DES_MM`).
@@ -174,7 +174,7 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
             let decalage = (x0 + e + (int_l - largeur) / 2.0, y0 + e + (int_h - hauteur) / 2.0);
             let (x1, y1) = (x0 + ext_l - e, y0 + ext_h - e);
             let mut rectangles = match reperage {
-                // Cadre continu, coins pleins (Type 2 : comme le cadre d'ONYX qui passe sur notre
+                // Cadre continu, coins pleins (Type 2, éprouvé sur notre
                 // Kona ; les fenêtres du schéma EasySign ne servent pas).
                 Reperage::Cadre | Reperage::CadreCode => vec![[x0, y0, ext_l, e], [x0, y1, ext_l, e], [x0, y0, e, ext_h], [x1, y0, e, ext_h]],
                 _ => {
@@ -204,7 +204,7 @@ pub fn mise_en_page(reperage: Reperage, largeur: f64, hauteur: f64, numero: u64)
                 rectangles.extend(postnet(numero, hx, hy));
                 rectangles.extend(chiffres(numero, hx + mm(code::LARGEUR) / 2.0, iy1 - mm(code::CHIFFRES_AU_CADRE + code::CHIFFRES_HAUTEUR)));
             }
-            // Sens d'insertion, comme le ▲ d'ONYX : vers le haut de la page, le bord qui sort
+            // Sens d'insertion, marqué ▲ : vers le haut de la page, le bord qui sort
             // le premier de l'Epson (constaté à l'atelier le 24/10). Dans le coin intérieur
             // bas-droit, hors de l'image (marge de 10 mm).
             rectangles.extend(fleche_vers_le_haut(x1 - mm(3.0) - mm(FLECHE) / 2.0, y0 + e + mm(3.0)));
