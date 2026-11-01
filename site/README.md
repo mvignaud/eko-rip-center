@@ -61,3 +61,11 @@ L'accès SSH d'o2switch n'est ouvert qu'aux adresses IP déclarées dans cPanel
 
 Captures : `assets/img/*.webp`, tirées des captures réelles du logiciel. Pour en ajouter
 une, la convertir en WebP (qualité 85) et lui donner `width`, `height` et un `alt`.
+
+## Téléchargement direct des clients
+
+`/telecharger/mac` et `/telecharger/windows` (règle dans `.htaccess`, script
+`telecharger/telecharger.php`) renvoient vers le fichier de la dernière release GitHub qui en a
+un : `.dmg` pour Mac, `.exe` (sinon `.msi`) pour Windows. La liste des releases est gardée
+10 minutes en cache ; sans réponse de GitHub, on renvoie vers la page des versions. Rien à
+changer à chaque version : il suffit de joindre le fichier à la release.
