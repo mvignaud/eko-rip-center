@@ -31,16 +31,20 @@ struct EKORIPCenterApp: App {
                 Button("Actualiser") { Task { await etat.rafraichir() } }
                     .keyboardShortcut("r")
                     .disabled(etat.phase != .connecte)
-                Button("Administration…") {
+                // La page d'administration est une page web : le jeton du cloud ne peut pas y
+                // passer. En mode cloud, le menu est grisé avec sa raison.
+                Button(etat.siteCloud == nil ? "Administration…" : "Administration… (\(Libelles.cloudAdminIndisponible.lowercased()))") {
                     if let racine = etat.api?.racine { Administration.ouvrir(racine: racine) }
                 }
                     .keyboardShortcut(",", modifiers: [.command, .option])
-                    .disabled(etat.phase != .connecte)
+                    .disabled(etat.phase != .connecte || etat.siteCloud != nil)
                 Divider()
                 Button("Changer de serveur…") { etat.changerServeur() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
                 Button("Se déconnecter") { Task { await etat.deconnecter() } }
-                    .disabled(etat.phase != .connecte || etat.session?.accesLibre == true)
+                    .disabled(etat.phase != .connecte || etat.siteCloud != nil || etat.session?.accesLibre == true)
+                Button(Libelles.cloudDeconnexion) { Task { await etat.deconnecterCloud() } }
+                    .disabled(etat.cloudCompte == nil)
             }
         }
     }

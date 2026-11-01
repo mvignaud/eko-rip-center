@@ -37,6 +37,18 @@ adresse sous **Saisir une adresse**, par exemple `192.168.1.20:8640`. Le client 
 serveur choisi.
 Pour en changer : menu **Serveur → Changer de serveur** (`Cmd/Ctrl + Maj + S`).
 
+### Se connecter au cloud (Mac)
+
+En tête de l'écran de connexion, **Serveur local** (ci-dessus) ou **Se connecter au cloud**. Le
+second ouvre le navigateur sur la plate-forme E-KO (`https://platform.e-ko.rip`) pour autoriser
+l'app avec son compte, puis liste les sites du compte (en ligne ou hors ligne, avec son rôle) :
+un clic ouvre le site, sans mot de passe du RIP. Le client rouvre le dernier site au lancement
+suivant ; **Serveur → Se déconnecter du cloud** (ou le bouton de l'écran) révoque l'accès. Le jeton
+est gardé dans le trousseau du Mac (service `fr.e-ko.rip.cloud`). En essai, la clé
+`plateformeCloud` (`defaults write fr.e-ko.rip-center plateformeCloud https://…`) vise une
+autre plate-forme. **Administration…** est indisponible à distance pour
+l'instant (page web qui ne peut pas porter le jeton). Détails : [cloud.md](cloud.md).
+
 La découverte utilise DNS-SD (mDNS, `_eko-rip._tcp`, port UDP 5353) : elle ne traverse pas les
 routeurs ni les VPN (utiliser alors l'adresse). Sur Mac, macOS demande d'autoriser l'accès au
 réseau local au premier lancement. Le serveur s'annonce sous le nom de la machine
