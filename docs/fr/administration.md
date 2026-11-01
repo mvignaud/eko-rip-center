@@ -87,7 +87,7 @@ Les postes Linux se mettent à jour depuis `https://apt.e-ko.fr/rip/` (VPS OVH, 
 eko-infra `ansible/depot.yml`). Après chaque release, sur le serveur de test (Linux) :
 
 ```bash
-~/eko-depot/outils/publier-depot.sh "E-KO RIP Center_<version>_amd64.deb" eko-rip-serveur_<version>-1_amd64.deb
+~/eko-depot/outils/publier-depot.sh eko-rip-serveur_<version>-1_amd64.deb e-ko-rip-center_<version>-1_amd64.deb
 ```
 
 (`~/eko-depot/outils/` est une copie de `outils/` de ce dépôt.) Publier **les deux paquets à

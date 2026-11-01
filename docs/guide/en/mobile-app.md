@@ -43,7 +43,7 @@ The Cloud lets you reach the shop's server from outside, with no VPN. The server
 There are two ways to do it:
 
 - Enter the site's remote address in **Server**, in the form `https://<site>.platform.e-ko.rip`, then an account of the RIP server.
-- Tap **Sign in to the cloud** (*Se connecter au cloud*) under the "away from the shop" note.
+- Tap **Sign in to the cloud** (*Se connecter au cloud*) under the "away from the shop" note. Entering `platform.e-ko.rip` in **Server** does the same.
 
 With **Sign in to the cloud**:
 
@@ -114,7 +114,8 @@ The **Settings** tab shows:
 - the server, the user and the role (**Administrator** or **Operator**; *Administrateur*, *Opérateur*);
 - the notification switches;
 - the **Send a test notification** button (*Envoyer une notification d'essai*);
-- the **Sign out** button (*Se déconnecter*) and the app's version number.
+- the **Sign out** button (*Se déconnecter*) and the app's version number;
+- the **Help / Documentation** link (*Aide / Documentation*), which opens this page.
 
 ## Notifications
 
