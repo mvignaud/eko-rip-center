@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSortie, api, EtatSortie, messageErreur, Sortie } from '../../src/api';
 import { duree } from '../../src/format';
@@ -59,6 +59,9 @@ export default function File() {
   );
   const [choisie, setChoisie] = useState<Sortie | null>(null);
   const [recentesOuvert, setRecentesOuvert] = useState(false);
+  // iOS ignore une alerte ouverte pendant que la feuille d'actions se ferme : elle attend
+  // la fin de la fermeture (onDismiss de la Modal).
+  const apresFermeture = useRef<(() => void) | null>(null);
 
   const { groupes, recentes } = useMemo(() => {
     const file = donnees?.file ?? [];
@@ -95,10 +98,12 @@ export default function File() {
       charger();
     };
     if (c.confirmation) {
-      Alert.alert(c.titre, `${c.confirmation}\n\n${s.nom} (page ${s.page})`, [
+      const confirmer = () => Alert.alert(c.titre, `${c.confirmation}\n\n${s.nom} (page ${s.page})`, [
         { text: 'Non', style: 'cancel' },
         { text: c.titre, style: c.destructif ? 'destructive' : 'default', onPress: faire },
       ]);
+      if (Platform.OS === 'ios') apresFermeture.current = confirmer;
+      else confirmer();
     } else {
       await faire();
     }
@@ -139,7 +144,12 @@ export default function File() {
         )}
       </ScrollView>
 
-      <FeuilleActions sortie={choisie} onFermer={() => setChoisie(null)} onChoix={lancer} />
+      <FeuilleActions
+        sortie={choisie}
+        onFermer={() => setChoisie(null)}
+        onChoix={lancer}
+        onFermee={() => { const f = apresFermeture.current; apresFermeture.current = null; f?.(); }}
+      />
     </>
   );
 }
@@ -173,14 +183,14 @@ function Ligne({ s, machine, onPress }: { s: Sortie; machine?: string; onPress: 
   );
 }
 
-function FeuilleActions({ sortie, onFermer, onChoix }: {
-  sortie: Sortie | null; onFermer: () => void; onChoix: (s: Sortie, c: Choix) => void;
+function FeuilleActions({ sortie, onFermer, onChoix, onFermee }: {
+  sortie: Sortie | null; onFermer: () => void; onChoix: (s: Sortie, c: Choix) => void; onFermee: () => void;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const choix = sortie ? actionsValides(sortie) : [];
   return (
-    <Modal visible={!!sortie} transparent animationType="fade" onRequestClose={onFermer}>
+    <Modal visible={!!sortie} transparent animationType="fade" onRequestClose={onFermer} onDismiss={onFermee}>
       <Pressable style={styles.fond} onPress={onFermer}>
         <Pressable style={[styles.feuille, { backgroundColor: t.carte, paddingBottom: insets.bottom + 12 }]}>
           <Text style={[styles.feuilleTitre, { color: t.texte }]} numberOfLines={2}>{sortie?.nom}</Text>
