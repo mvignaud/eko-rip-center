@@ -1,0 +1,24 @@
+# Contents of the public documentation in English (https://e-ko.rip/documentation/en/).
+# One line per page: id[:address]<TAB>file in docs/<TAB>title<TAB>description (one sentence).
+# The id links a page to its French version (docs/guide/fr/sommaire.tsv). « == Section » opens a section.
+# After any change: python3 outils/generer-documentation.py
+== Getting started
+index	guide/en/index.md	Documentation	Everything to install, use and run E-KO RIP Center: server, Mac, Linux and Windows clients, mobile app and Cloud.
+demarrage:getting-started	guide/en/getting-started.md	Getting started	How the server, clients, mobile app and Cloud fit together, then setting up a print shop in five steps.
+== Install
+serveur:server	guide/en/server.md	Install the server	Choose the computer, install the RIP server on Ubuntu from the APT repository, create accounts and connect the machines.
+clients	guide/en/clients.md	Install the clients	Install and connect the E-KO RIP Center client on Mac, Linux and Windows.
+application-mobile:mobile-app	guide/en/mobile-app.md	Mobile app	Follow production from an iOS or Android phone and get machine alerts.
+cloud	guide/en/cloud.md	E-KO RIP Cloud	Reach the print shop's RIP server from outside, with no VPN and no open port, through the free platform.e-ko.rip.
+== Use
+utilisation:usage	en/usage.md	User guide	Sending a job, the queue, printing, cutting, proofs, sheets, colour and media: every feature of the RIP.
+machines	en/machines.md	Machine guide	Settings and connections for each supported printer and cutter.
+== Administer
+administration	guide/en/administration.md	Run the server	Accounts, backups, updates, shared folders, advanced settings and server data.
+depannage:troubleshooting	guide/en/troubleshooting.md	Troubleshooting	Common messages, their cause and what to do.
+glossaire:glossary	en/glossary.md	Glossary	RIP and wide-format printing terms, explained simply.
+# Redirects: a link to one of these files in docs/ leads to the given page (anchor dropped).
+-> en/server-installation.md	serveur
+-> en/client-installation.md	clients
+-> en/administration.md	administration
+-> en/cloud.md	cloud

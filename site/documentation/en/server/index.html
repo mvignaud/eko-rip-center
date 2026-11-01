@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install the server · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Choose the computer, install the RIP server on Ubuntu from the APT repository, create accounts and connect the machines.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/server/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/server/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/serveur/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/server.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/#installer">Install</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/documentation/serveur/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/" aria-current="page">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li><li><a href="/documentation/en/machines/">Machine guide</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Install</p>
+    <h1>Install the server</h1>
+    <p class="doc-chapo">Choose the computer, install the RIP server on Ubuntu from the APT repository, create accounts and connect the machines.</p>
+<p>The server is the heart of the RIP: it runs on Linux on a PC in the shop, receives the files from the workstations, calculates the renders and drives the machines. This page covers choosing the PC, installation, accounts and first start-up.</p>
+<h2 id="choosing-the-server-pc"><a class="ancre" href="#choosing-the-server-pc" aria-hidden="true">#</a>Choosing the server PC</h2>
+<p>The server is the computer that must never stop. Rendering the files (Ghostscript) is the heaviest task.</p>
+<div class="tableau"><table><thead><tr><th></th><th>Trials, small volume</th><th>Shop in production</th></tr></thead><tbody><tr><td><strong>System</strong></td><td>Ubuntu 24.04 or 26.04 LTS, Debian 13</td><td>Ubuntu 26.04 LTS</td></tr><tr><td><strong>Processor</strong></td><td>2 cores, x86 64-bit</td><td>4 cores or more</td></tr><tr><td><strong>Memory</strong></td><td>16 GB</td><td>16 to 32 GB</td></tr><tr><td><strong>Data disk</strong></td><td>500 GB</td><td>dedicated SSD of 1 TB or more</td></tr><tr><td><strong>Network</strong></td><td>cable</td><td>cable, fixed IP address</td></tr></tbody></table></div>
+<p>The packages are built for <strong>x86 64-bit (amd64)</strong> PCs. More memory and more cores shorten the renders of banners of several tens of m² at high resolution.</p>
+<p><strong>Disk</strong>: a render takes about <strong>1 GB per m² at 600 dpi</strong> (a quarter of that at 300 dpi, four times more at 1,200 dpi). An SSD reserved for the data folder (<code>/var/lib/eko-rip</code>), separate from the system disk, stops a large render from filling the system. Mount it before the first start-up. Below 5 GB free, the server deletes the oldest inactive jobs and refuses a job that would not fit; below 20 GB, every new job carries the "disk almost full" alert.</p>
+<p><strong>UPS</strong>: plug the server, the switch and, if possible, the router into it. A power cut stops the render in progress (the job has to be restarted) and any output being sent (to be redone). The settings files, however, survive the cut.</p>
+<p><strong>Fixed IP addresses</strong>: reserve them on the router for the server, the network printers and the network cutters.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Tip</p><p>The full requirements, with a comparison, are also on the <a href="https://e-ko.rip/prerequis/" rel="noopener">Requirements</a> page of the website.</p></aside>
+<h2 id="installing-from-the-apt-repository"><a class="ancre" href="#installing-from-the-apt-repository" aria-hidden="true">#</a>Installing from the APT repository</h2>
+<p>This is the recommended method: the server is then updated along with the rest of the system. On the server PC, in a terminal:</p>
+<pre class="langue-bash"><code># 1. Add the E-KO key and repository (once)
+sudo wget -qO /usr/share/keyrings/eko-rip.gpg https://apt.e-ko.fr/rip/eko-rip.gpg
+echo "deb [signed-by=/usr/share/keyrings/eko-rip.gpg] https://apt.e-ko.fr/rip ./" | sudo tee /etc/apt/sources.list.d/eko-rip.list
+
+# 2. Install the server
+sudo apt update
+sudo apt install eko-rip-serveur</code></pre>
+<p>The package installs Ghostscript, creates the <code>eko-rip</code> system account and starts the <code>eko-rip-serveur</code> service, which restarts by itself with the machine. Jobs are stored in <code>/var/lib/eko-rip</code>.</p>
+<p>Check that it is running:</p>
+<pre class="langue-bash"><code>systemctl status eko-rip-serveur</code></pre>
+<p>Then open <code>http://&lt;server-address&gt;:8640</code> in a browser on another computer: the status page should appear.</p>
+<figure><a href="/documentation/images/serveur-page-etat.png"><img src="/documentation/images/serveur-page-etat.png" alt="Status page shown by a browser" loading="lazy"></a><figcaption>The status page confirms that the server is responding</figcaption></figure>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>A PC that is both server and workstation can use the client installation script (<code>wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh</code>), which adds the same repository: you then only need to run <code>sudo apt install eko-rip-serveur</code>.</p></aside>
+<h3 id="without-the-repository-the-deb-package"><a class="ancre" href="#without-the-repository-the-deb-package" aria-hidden="true">#</a>Without the repository: the .deb package</h3>
+<p>The <code>eko-rip-serveur_&lt;version&gt;-1_amd64.deb</code> package is also attached to each release on <a href="https://github.com/mvignaud/eko-rip-center/releases" rel="noopener">GitHub</a>. Install it with:</p>
+<pre class="langue-bash"><code>sudo apt install ./eko-rip-serveur_&lt;version&gt;-1_amd64.deb</code></pre>
+<p>Updates are then done by hand, in the same way.</p>
+<h3 id="ubuntu-2604"><a class="ancre" href="#ubuntu-2604" aria-hidden="true">#</a>Ubuntu 26.04</h3>
+<p>Since version 0.31.0, the package allows Ghostscript to read the RIP's jobs despite the AppArmor confinement of Ubuntu 26.04. An older version fails on every render ("Permission denied"): update.</p>
+<h2 id="creating-the-accounts"><a class="ancre" href="#creating-the-accounts" aria-hidden="true">#</a>Creating the accounts</h2>
+<p>Without accounts, access is open to the whole network and the screen shows this in red. The Cloud and the mobile app require accounts.</p>
+<p>Create the first account (administrator) on the server:</p>
+<pre class="langue-bash"><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter marie</code></pre>
+<p>The password is requested twice, without being displayed (at least 10 characters). Then one account per operator:</p>
+<pre class="langue-bash"><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter julie operateur</code></pre>
+<div class="tableau"><table><thead><tr><th>Role</th><th>Can</th></tr></thead><tbody><tr><td><strong>Administrator</strong> (<code>admin</code>)</td><td>everything, including machines, media and prices, ICC profiles, saved presets, backup, Cloud</td></tr><tr><td><strong>Operator</strong> (<code>operateur</code>)</td><td>send, edit, print, cut, manage the queue and the sheets; sees the machines but cannot change their settings</td></tr></tbody></table></div>
+<p>With no role given: administrator if there is none yet, operator otherwise. No restart is needed. Day-to-day management (list, forgotten password, deletion) is in <a href="/documentation/en/administration/#accounts">Run the server</a>.</p>
+<h2 id="connecting-the-machines"><a class="ancre" href="#connecting-the-machines" aria-hidden="true">#</a>Connecting the machines</h2>
+<p>The server talks to the machines over the network, by USB or through a folder:</p>
+<ul><li><strong>Network printer</strong> (Epson SureColor…): fixed IP address, cable, same network as the server.</li><li><strong>USB cutter</strong> (Mutoh Kona…): a free USB port on the server; the service already has the right to write to it.</li><li><strong>Network cutter</strong> (Graphtec, Roland): fixed IP address.</li><li><strong>Office printer or other RIP</strong>: through IPP/CUPS or by forwarding to another E-KO RIP server.</li></ul>
+<p>The machines are then declared in the client, <strong>Administration… › System › Machines</strong>. Every model has its own page (settings on the machine and in the RIP, checks): <a href="/documentation/en/machines/">machine guide</a>.</p>
+<figure><a href="/documentation/images/interface-systeme-machines.png"><img src="/documentation/images/interface-systeme-machines.png" alt="Machine list in System" loading="lazy"></a><figcaption>System › Machines: the catalogue of the server's machines</figcaption></figure>
+<h2 id="hot-folders"><a class="ancre" href="#hot-folders" aria-hidden="true">#</a>Hot folders</h2>
+<p>Each saved preset has its own folder: a file dropped into it goes to the RIP with that preset, without opening the client. To drop files there from Macs and Windows PCs, share the folder with Samba: see <a href="/documentation/en/administration/#sharing-the-hot-folders">Sharing the hot folders</a>.</p>
+<h2 id="server-settings"><a class="ancre" href="#server-settings" aria-hidden="true">#</a>Server settings</h2>
+<p>The advanced settings (port, data folder, how long jobs are kept, maximum file size…) are set in <code>/etc/default/eko-rip-serveur</code>, then:</p>
+<pre class="langue-bash"><code>sudo systemctl restart eko-rip-serveur</code></pre>
+<p>The full list is in <a href="/documentation/en/administration/#advanced-settings">Run the server</a>.</p>
+<h2 id="dedicated-pc-installation-image"><a class="ancre" href="#dedicated-pc-installation-image" aria-hidden="true">#</a>Dedicated PC: installation image</h2>
+<p>For a new PC reserved for the RIP, a ready-to-use Ubuntu installation image (server, client and desktop, or server only) is described in the <a href="https://github.com/mvignaud/eko-rip-center/blob/main/docs/en/server-installation.md#0-dedicated-pc-ubuntu-installation-image" rel="noopener">installation reference</a>. It <strong>erases the whole disk</strong>; the server is then updated through the APT repository.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/getting-started/"><span>Previous</span>Getting started</a><a class="doc-suiv" href="/documentation/en/clients/"><span>Next</span>Install the clients</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/server.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#choosing-the-server-pc">Choosing the server PC</a></li><li class="niveau-2"><a href="#installing-from-the-apt-repository">Installing from the APT repository</a></li><li class="niveau-3"><a href="#without-the-repository-the-deb-package">Without the repository: the .deb package</a></li><li class="niveau-3"><a href="#ubuntu-2604">Ubuntu 26.04</a></li><li class="niveau-2"><a href="#creating-the-accounts">Creating the accounts</a></li><li class="niveau-2"><a href="#connecting-the-machines">Connecting the machines</a></li><li class="niveau-2"><a href="#hot-folders">Hot folders</a></li><li class="niveau-2"><a href="#server-settings">Server settings</a></li><li class="niveau-2"><a href="#dedicated-pc-installation-image">Dedicated PC: installation image</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

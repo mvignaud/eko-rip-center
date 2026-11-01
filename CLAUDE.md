@@ -27,3 +27,21 @@ Sur le serveur de test (`mathieu@eko-rip`, 192.168.10.109), une fois les `.deb` 
 - Vérification : `curl -s https://apt.e-ko.fr/rip/Packages | grep -A1 '^Package:'` doit lister
   les nouvelles versions.
 - Le VPS est décrit dans eko-infra (`ansible/depot.yml`).
+
+## Documentation publique : à jour à chaque changement (obligatoire)
+
+La documentation utilisateur est publiée sur `https://e-ko.rip/documentation/` (FR) et
+`/documentation/en/` (EN). Source : `docs/guide/fr|en/` + références `docs/fr|en/`
+(utilisation, machines, glossaire) ; pages générées dans `site/documentation/`.
+
+- Toute PR qui change ce que voit ou fait un utilisateur (serveur, interface, clients Mac,
+  Linux, Windows, app mobile, Cloud, installation) met à jour la doc **dans la même PR**, en
+  français et en anglais, refait les captures touchées (`docs/guide/images/`), puis lance
+  `python3 outils/generer-documentation.py` et commite `site/documentation/`.
+- `python3 outils/generer-documentation.py --verifier` (dans `outils/verifier.sh`, la CI et
+  `outils/publier-site.sh`) échoue si la doc générée est en retard.
+- Une release n'est finie que quand le site est republié (`outils/publier-site.sh` depuis le
+  Mac) : c'est lui qui met la doc en ligne.
+- Liens « Aide » câblés dans les logiciels : tableau de `docs/guide/README.md`. Ne pas
+  renommer une page ou un titre cité sans les mettre à jour.
+- Jamais de nom de RIP concurrent ni de détail d'hébergement interne dans la doc.

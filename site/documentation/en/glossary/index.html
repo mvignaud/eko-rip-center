@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary · Documentation · E-KO RIP Center</title>
+<meta name="description" content="RIP and wide-format printing terms, explained simply.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/glossary/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/glossary/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/glossaire/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/en/glossary.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/#installer">Install</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/documentation/glossaire/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li><li><a href="/documentation/en/machines/">Machine guide</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/" aria-current="page">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Administer</p>
+    <h1>Glossary</h1>
+    <p class="doc-chapo">RIP and wide-format printing terms, explained simply.</p>
+<p>The words of the screen and of the documentation, with their French equivalent (the one on the French screen and in the <a href="https://github.com/mvignaud/eko-rip-center/blob/main/docs/fr/glossaire.md" rel="noopener">French documentation</a>). Each feature is described in <a href="/documentation/en/usage/">usage</a>.</p>
+<h2 id="jobs-and-queue"><a class="ancre" href="#jobs-and-queue" aria-hidden="true">#</a>Jobs and queue</h2>
+<div class="tableau"><table><thead><tr><th>Term</th><th>In French</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Job</strong></td><td>Travail</td><td>One received file (PDF, SVG, TIFF, PNG, JPEG) with its request: settings, pages, rendered plates, ticket.</td></tr><tr><td><strong>Rendering</strong></td><td>Rendu</td><td>Turning the file into ink plates (Ghostscript), done once on arrival; a print or a cut goes out again without rendering again.</td></tr><tr><td><strong>Preflight</strong></td><td>Pré-vérification</td><td>Check on arrival: fonts not embedded, low-resolution images, cut paths, sizes. It warns, or refuses when the preset says so.</td></tr><tr><td><strong>Preset</strong></td><td>Réglage</td><td>A named set of choices (resolution, media, white, cutting, registration…), applied when sending or by a hot folder.</td></tr><tr><td><strong>Hot folder</strong></td><td>Dossier surveillé</td><td>Server folder where every dropped file becomes a job, with the folder's preset (<code>entrees/&lt;preset&gt;/</code>).</td></tr><tr><td><strong>Rule</strong></td><td>Règle</td><td>In <code>entrees-auto/</code>, picks a file's preset from its name or page size.</td></tr><tr><td><strong>Tagged name pattern</strong></td><td>Motif à balises</td><td>In <code>entrees-auto/</code>, shape of the file name (<code>{nom}__{machine}__{reglage}__{copies}</code>) giving preset, machine, copies…</td></tr><tr><td><strong>Job ticket</strong></td><td>Fiche travail</td><td>A job's order number, customer, company, quantity, due date, notes and operator.</td></tr><tr><td><strong>Output</strong></td><td>Sortie</td><td>One page of a job sent to a machine (print or cut), in the queue.</td></tr><tr><td><strong>Queue</strong></td><td>File d'attente</td><td>The outputs still to run, machine by machine, in order; a machine runs one output at a time.</td></tr><tr><td><strong>Waiting reason</strong></td><td>Raison d'attente</td><td>Why an output does not go (machine unreachable, other media, too wide…); the next ones go ahead of it.</td></tr><tr><td><strong>Spool</strong></td><td>Tampon</td><td>Size of the files the outputs still to run will send to the machines.</td></tr><tr><td><strong>History</strong></td><td>Historique</td><td>Finished, failed or cancelled outputs; <strong>Redo</strong> runs one again without rendering.</td></tr><tr><td><strong>Proof</strong></td><td>BAT (bon à tirer)</td><td>A copy to approve; on a second machine, the "-BAT" copy goes and the original waits, held.</td></tr><tr><td><strong>Pool</strong></td><td>Pool</td><td>Identical machines grouped under one name: the output goes to the first one ready.</td></tr><tr><td><strong>Purge</strong></td><td>Purge</td><td>Deleting old inactive jobs, after the retention time or below the free space threshold.</td></tr></tbody></table></div>
+<h2 id="ink-and-colour"><a class="ancre" href="#ink-and-colour" aria-hidden="true">#</a>Ink and colour</h2>
+<div class="tableau"><table><thead><tr><th>Term</th><th>In French</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Plate</strong></td><td>Plaque</td><td>8-bit image of one ink (0 = full ink, 255 = no ink).</td></tr><tr><td><strong>Spot colour</strong></td><td>Ton direct</td><td>Named colour in the PDF (<code>White</code>, <code>Silver</code>, <code>CutContour</code>…), output on its own plate instead of being mixed into CMYK.</td></tr><tr><td><strong>Cut spot colour</strong></td><td>Ton de découpe</td><td>Spot colour carrying the cut paths (<code>CutContour</code>…); never printed.</td></tr><tr><td><strong>Spot colour table</strong></td><td>Table des tons directs</td><td>Exact name, aliases and Lab colour of each spot colour, to convert or recognise it.</td></tr><tr><td><strong>White</strong> / <strong>Silver (metallic)</strong></td><td>Blanc / Argent</td><td>The Epson's special inks, recognised by the spot colour name (<code>White</code>, <code>Metallic</code>…).</td></tr><tr><td><strong>Underlay</strong></td><td>Sous-couche</td><td>White laid under the ink, for clear or coloured media.</td></tr><tr><td><strong>Choke</strong></td><td>Rétraction</td><td>White pulled back from the ink edge, so it does not show past the colour.</td></tr><tr><td><strong>ICC profile</strong></td><td>Profil ICC</td><td>Colour description of a media or a colour space, uploaded to the server.</td></tr><tr><td><strong>Rendering intent</strong></td><td>Intention de rendu</td><td>How an out-of-gamut colour is brought into the media's gamut.</td></tr><tr><td><strong>Print mode</strong></td><td>Mode d'impression</td><td>Resolution, passes, heating, light-ink switch and total ink of a media.</td></tr><tr><td><strong>Light-ink switch</strong></td><td>Bascule des claires</td><td>Where the dark ink takes over from the light one (Lc, Lm, Lk): soft, balanced, sharp.</td></tr><tr><td><strong>Total ink limit</strong></td><td>Encre totale / Limite d'encre</td><td>Maximum sum of the inks at one point, in %.</td></tr><tr><td><strong>Linearisation</strong></td><td>Linéarisation</td><td>Measuring ink patches to set each ink's response on a media.</td></tr><tr><td><strong>Screening</strong></td><td>Tramage</td><td>Turning ink values into dots (4 drop sizes on the Epson).</td></tr><tr><td><strong>Reading</strong></td><td>Relevé</td><td>Ink levels and roll read from the printer, for the real consumption.</td></tr></tbody></table></div>
+<h2 id="media-and-layout"><a class="ancre" href="#media-and-layout" aria-hidden="true">#</a>Media and layout</h2>
+<div class="tableau"><table><thead><tr><th>Term</th><th>In French</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Media</strong></td><td>Support</td><td>The printed material (vinyl, banner…), with its roll width, inks and modes.</td></tr><tr><td><strong>Loaded media</strong></td><td>Support chargé</td><td>The media in the machine, read from the Epson or chosen by the operator.</td></tr><tr><td><strong>Roll width</strong></td><td>Laize</td><td>Usable width of the roll.</td></tr><tr><td><strong>Bleed</strong></td><td>Fond perdu</td><td>Image extended past the trim size, so a slightly off cut leaves no white.</td></tr><tr><td><strong>Grommet</strong></td><td>Œillet</td><td>Grommet mark placed around the edge of a banner.</td></tr><tr><td><strong>Tiling</strong></td><td>Mosaïque</td><td>A large visual split into pieces that fit the roll width.</td></tr><tr><td><strong>Panel</strong></td><td>Lé</td><td>Vertical strip of a tiled job, at most as wide as the roll.</td></tr><tr><td><strong>Tile</strong></td><td>Tuile</td><td>One piece of a tiling in columns × rows; each tile is a page.</td></tr><tr><td><strong>Overlap</strong></td><td>Recouvrement</td><td>Part shared by two neighbouring panels, to join them when fitting.</td></tr><tr><td><strong>Sheet</strong></td><td>Planche</td><td>Several jobs laid side by side on one page.</td></tr><tr><td><strong>Nesting</strong></td><td>Imbrication</td><td>Laying jobs on a sheet, by hand or automatically in the queue.</td></tr></tbody></table></div>
+<h2 id="cutting"><a class="ancre" href="#cutting" aria-hidden="true">#</a>Cutting</h2>
+<div class="tableau"><table><thead><tr><th>Term</th><th>In French</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Path</strong></td><td>Tracé</td><td>A line the cutter follows.</td></tr><tr><td><strong>Cut layer</strong></td><td>Couche de découpe</td><td>The paths of one spot colour name, cut together with one cut setting.</td></tr><tr><td><strong>Cut setting</strong></td><td>Réglage de coupe</td><td>Speed, force, acceleration, tool and pattern of a layer.</td></tr><tr><td><strong>Registration</strong></td><td>Repérage</td><td>The cutter reading printed marks, to cut exactly where the print is.</td></tr><tr><td><strong>Marks</strong> / <strong>Frame</strong></td><td>Repères / Cadre</td><td>Crosses or a frame (with a barcode for the Kona) printed around the image for registration.</td></tr><tr><td><strong>Auto contour</strong></td><td>Détourage automatique</td><td>Cut path computed around the image.</td></tr><tr><td><strong>Cutting tolerance</strong></td><td>Tolérance de découpe</td><td>Ink extended past the cut contours, so a slightly off cut leaves no white edge.</td></tr><tr><td><strong>Bowing compensation</strong></td><td>Compensation de cintrage</td><td>The cut follows a print that comes out of the dryers curved (middle behind the edges).</td></tr><tr><td><strong>Offset X / Y</strong></td><td>Décalage X / Y</td><td>Measured gap between cut and print, added to every cut on a machine.</td></tr><tr><td><strong>Cut turned (180°)</strong></td><td>Découpe retournée</td><td>Cut rotated by 180°, when the media goes in from the other end.</td></tr><tr><td><strong>Variant</strong></td><td>Variante</td><td>Copy of a cutter with its own set of marks.</td></tr></tbody></table></div>
+<h2 id="machines-and-server"><a class="ancre" href="#machines-and-server" aria-hidden="true">#</a>Machines and server</h2>
+<div class="tableau"><table><thead><tr><th>Term</th><th>In French</th><th>Definition</th></tr></thead><tbody><tr><td><strong>Machine</strong></td><td>Machine</td><td>Printer or cutter in the catalogue (System &gt; Machines).</td></tr><tr><td><strong>Connection</strong></td><td>Connexion</td><td>How the server reaches the machine: TCP network, serial, device, folder, IPP or forwarding.</td></tr><tr><td><strong>Direct driver</strong></td><td>Pilote direct</td><td>The RIP builds the printer's data stream itself (the Epson's ESC/P2) and sends it.</td></tr><tr><td><strong>Folder connection</strong></td><td>Connexion Dossier</td><td>Nothing is sent: the output is copied into <code>sorties/&lt;machine&gt;/</code>.</td></tr><tr><td><strong>IPP</strong></td><td>IPP</td><td>Network printing protocol (CUPS); the stream goes raw in a Print-Job.</td></tr><tr><td><strong>Forwarding</strong></td><td>Renvoi</td><td>The stream goes to another E-KO RIP Center, which passes it to its machine.</td></tr><tr><td><strong>Token</strong></td><td>Jeton</td><td>Secret opening a machine-to-machine access (forwarding, ERP); never shown again.</td></tr><tr><td><strong>Speed</strong></td><td>Cadence</td><td>Area printed per hour (m²/h), to estimate times.</td></tr><tr><td><strong>SNMP</strong></td><td>SNMP</td><td>Reading the Epson's state over the network (media, inks, alerts).</td></tr><tr><td><strong>ERP bridge</strong></td><td>Pont ERP</td><td>Signed exchanges between the RIP and the E-KO ERP (<code>eko-rip-erp/1</code> contract).</td></tr><tr><td><strong>Free space threshold</strong></td><td>Seuil d'espace libre</td><td>Space to keep on the data disk; below it, purge and refusal of large jobs.</td></tr><tr><td><strong>Client</strong></td><td>Client</td><td>Desktop application (Mac, Windows, Linux) that opens the server's screen.</td></tr></tbody></table></div>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/troubleshooting/"><span>Previous</span>Troubleshooting</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/en/glossary.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#jobs-and-queue">Jobs and queue</a></li><li class="niveau-2"><a href="#ink-and-colour">Ink and colour</a></li><li class="niveau-2"><a href="#media-and-layout">Media and layout</a></li><li class="niveau-2"><a href="#cutting">Cutting</a></li><li class="niveau-2"><a href="#machines-and-server">Machines and server</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

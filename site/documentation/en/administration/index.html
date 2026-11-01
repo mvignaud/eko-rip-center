@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run the server · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Accounts, backups, updates, shared folders, advanced settings and server data.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/administration/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/administration/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/administration/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/administration.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/#installer">Install</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/documentation/administration/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li><li><a href="/documentation/en/machines/">Machine guide</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/" aria-current="page">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Administer</p>
+    <h1>Run the server</h1>
+    <p class="doc-chapo">Accounts, backups, updates, shared folders, advanced settings and server data.</p>
+<p>This page is for the person who looks after the server: accounts, backups, updates, shared folders and advanced settings. The commands are typed on the server, in a terminal or over SSH.</p>
+<h2 id="day-to-day"><a class="ancre" href="#day-to-day" aria-hidden="true">#</a>Day to day</h2>
+<pre class="langue-bash"><code>systemctl status eko-rip-serveur        # is the service running?
+journalctl -u eko-rip-serveur -f        # live log
+sudo systemctl restart eko-rip-serveur  # restart</code></pre>
+<p>The log records every failed render and every failed output, with the machine, the job and the reason. In the client, the <strong>System</strong> view shows the version, the free disk space and how long jobs are kept.</p>
+<p>A restart interrupts the render in progress: the job goes to the "interrupted" failure state, to be restarted with <strong>Retry</strong>. Outputs in the queue stay in the queue; everyone reconnects.</p>
+<h2 id="accounts"><a class="ancre" href="#accounts" aria-hidden="true">#</a>Accounts</h2>
+<div class="tableau"><table><thead><tr><th>Action</th><th>Command</th></tr></thead><tbody><tr><td>Add an administrator</td><td><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter &lt;nom&gt; admin</code></td></tr><tr><td>Add an operator</td><td><code>… utilisateur ajouter &lt;nom&gt; operateur</code></td></tr><tr><td>List the accounts</td><td><code>… utilisateur liste</code></td></tr><tr><td>Delete an account</td><td><code>… utilisateur supprimer &lt;nom&gt;</code></td></tr></tbody></table></div>
+<ul><li><strong>Forgotten password</strong> or <strong>role change</strong>: declare the account again with <code>utilisateur ajouter</code>; the new password and role replace the old ones.</li><li><strong>5 wrong passwords</strong> block the name for 5 minutes.</li><li>Deleting an account closes its sessions at once. No restart is needed.</li></ul>
+<h2 id="backing-up"><a class="ancre" href="#backing-up" aria-hidden="true">#</a>Backing up</h2>
+<p><strong>The configuration</strong> (machines, media, prices, saved presets, cutting, spot colours, ICC profiles): in the client, <strong>Administration… › System › Configuration backup › Download the backup</strong>. Keep the file off the server, and make a new backup after every settings change.</p>
+<p><strong>Everything, accounts included</strong>: copy the <code>/var/lib/eko-rip</code> folder, with the service stopped. Jobs are large and can be rebuilt from their source files: the configuration and the accounts file (<code>utilisateurs.json</code>) are often enough.</p>
+<p><strong>Before every update</strong>, the package copies the configuration by itself into <code>/var/lib/eko-rip/sauvegardes/</code> (the last 10 are kept).</p>
+<h3 id="rebuilding-a-server"><a class="ancre" href="#rebuilding-a-server" aria-hidden="true">#</a>Rebuilding a server</h3>
+<ol><li>Install the server on the new PC (<a href="/documentation/en/server/">Install the server</a>).</li><li>Create the administrator account.</li><li>In the client: <strong>System › Configuration backup › Restore…</strong> and choose the file. Everything is checked before anything is written: a damaged file changes nothing.</li><li>Recreate the operator accounts.</li></ol>
+<h2 id="updating"><a class="ancre" href="#updating" aria-hidden="true">#</a>Updating</h2>
+<p>Through the APT repository (server installed as recommended):</p>
+<pre class="langue-bash"><code>sudo apt update &amp;&amp; sudo apt upgrade</code></pre>
+<p>The data stays in place. The administration interface comes from the server: new features appear there as soon as it is updated. The clients are updated separately (see <a href="/documentation/en/clients/">Install the clients</a>).</p>
+<p>What is new in each version is in the <a href="https://e-ko.rip/changelog/" rel="noopener">release notes</a>, with an e-mail subscription.</p>
+<h2 id="sharing-the-hot-folders"><a class="ancre" href="#sharing-the-hot-folders" aria-hidden="true">#</a>Sharing the hot folders</h2>
+<p>Each saved preset has a folder <code>/var/lib/eko-rip/entrees/&lt;preset&gt;/</code>: a file dropped into it goes to the RIP with that preset. To drop files there from the workstations:</p>
+<figure><a href="/documentation/images/interface-reglages.png"><img src="/documentation/images/interface-reglages.png" alt="Saved presets" loading="lazy"></a><figcaption>Saved presets: each one has its own hot folder</figcaption></figure>
+<pre class="langue-bash"><code>sudo apt install samba</code></pre>
+<p>Add to the end of <code>/etc/samba/smb.conf</code>:</p>
+<pre class="langue-ini"><code>[eko-rip]
+   path = /var/lib/eko-rip/entrees
+   writable = yes
+   force user = eko-rip
+   valid users = eko</code></pre>
+<p>Then <code>sudo smbpasswd -a eko</code> and <code>sudo systemctl restart smbd</code>. Workstations open <code>smb://&lt;server&gt;/eko-rip</code> (Mac, Linux) or <code>\\&lt;server&gt;\eko-rip</code> (Windows).</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>Hot folders do not require a RIP account: access is controlled by the Samba share.</p></aside>
+<h2 id="advanced-settings"><a class="ancre" href="#advanced-settings" aria-hidden="true">#</a>Advanced settings</h2>
+<p>In <code>/etc/default/eko-rip-serveur</code>, then <code>sudo systemctl restart eko-rip-serveur</code>.</p>
+<div class="tableau"><table><thead><tr><th>Setting</th><th>Default</th><th>Role</th></tr></thead><tbody><tr><td><code>EKO_RIP_ADDR</code></td><td><code>0.0.0.0:8640</code></td><td>listening address and port</td></tr><tr><td><code>EKO_RIP_DATA</code></td><td><code>/var/lib/eko-rip</code></td><td>data folder</td></tr><tr><td><code>EKO_RIP_MAX_MO</code></td><td><code>8192</code></td><td>maximum size of a received file, in MB</td></tr><tr><td><code>EKO_RIP_DELAI_S</code></td><td><code>1800</code></td><td>maximum duration of a render, in seconds</td></tr><tr><td><code>EKO_RIP_RENDUS</code></td><td>one per core, 4 at most</td><td>renders run at the same time (1 to 16)</td></tr><tr><td><code>EKO_RIP_CONSERVATION_JOURS</code></td><td><code>30</code></td><td>jobs deleted after this number of days (0: never)</td></tr><tr><td><code>EKO_RIP_SEUIL_LIBRE_MO</code></td><td><code>5120</code></td><td>free space to keep; below it, old jobs are purged</td></tr><tr><td><code>EKO_RIP_SEUIL_ALERTE_MO</code></td><td><code>20480</code></td><td>threshold for the "disk almost full" alert</td></tr><tr><td><code>EKO_RIP_PLOTTER</code></td><td><code>/dev/kona</code></td><td>port of the USB cutter</td></tr><tr><td><code>EKO_RIP_EPSON_SNMP</code></td><td>(empty)</td><td>address of the Epson, to read the loaded media</td></tr><tr><td><code>EKO_RIP_ANNONCE</code></td><td><code>1</code></td><td><code>0</code>: do not announce itself on the network (address to be entered in the clients)</td></tr><tr><td><code>EKO_RIP_CLOUD_NOM</code></td><td>PC name</td><td>name offered for the site on the Cloud</td></tr></tbody></table></div>
+<p>The full reference (all the settings, the location of each data file) is in the <a href="https://github.com/mvignaud/eko-rip-center/blob/main/docs/en/server-installation.md#settings" rel="noopener">technical documentation</a>.</p>
+<h2 id="where-the-data-is"><a class="ancre" href="#where-the-data-is" aria-hidden="true">#</a>Where the data is</h2>
+<p>Everything is in <code>/var/lib/eko-rip</code>: one folder per job (<code>travaux/</code>), the queue (<code>file.json</code>), the machine catalogue (<code>machines.json</code>), the media, the presets, the accounts (hashed passwords), the ICC profiles and the hot folders (<code>entrees/</code>). Each settings file keeps its previous version (<code>.prec</code>): after a power cut, the server picks it up by itself and reports it in <strong>System</strong>.</p>
+<h2 id="statistics-and-bug-reports"><a class="ancre" href="#statistics-and-bug-reports" aria-hidden="true">#</a>Statistics and bug reports</h2>
+<p><strong>Anonymous statistics</strong>: the server and the clients send an installation signal (version, system), with no data from the shop or from the files. To stop it: untick <strong>System › Anonymous statistics</strong> (server), <strong>Système › Confidentialité</strong> (Mac; <em>System › Privacy</em>) or <strong>Système › Ce poste</strong> (Linux; <em>System › This computer</em>); or set <code>EKO_TELEMETRIE=0</code> in <code>/etc/default/eko-rip-serveur</code>.</p>
+<p><strong>Report a problem</strong>: <strong>Help</strong> menu (Mac; <em>Aide</em>), main menu (Linux) or <strong>System › Bug reports</strong> in the administration. The title and description are published on GitHub: put nothing confidential in them. The attached server log and the e-mail stay private. Automatic error reports are sent only after you agree, which is asked the first time you open the administration.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/machines/"><span>Previous</span>Machine guide</a><a class="doc-suiv" href="/documentation/en/troubleshooting/"><span>Next</span>Troubleshooting</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/administration.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#day-to-day">Day to day</a></li><li class="niveau-2"><a href="#accounts">Accounts</a></li><li class="niveau-2"><a href="#backing-up">Backing up</a></li><li class="niveau-3"><a href="#rebuilding-a-server">Rebuilding a server</a></li><li class="niveau-2"><a href="#updating">Updating</a></li><li class="niveau-2"><a href="#sharing-the-hot-folders">Sharing the hot folders</a></li><li class="niveau-2"><a href="#advanced-settings">Advanced settings</a></li><li class="niveau-2"><a href="#where-the-data-is">Where the data is</a></li><li class="niveau-2"><a href="#statistics-and-bug-reports">Statistics and bug reports</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

@@ -22,6 +22,9 @@ acceptation de cet accord.
 
 - Lancer `./outils/verifier.sh` (syntaxe des pages, traductions, clippy, tests).
 - Ne pas lancer `cargo fmt` : le projet n'utilise pas rustfmt.
+- Mettre à jour la documentation dans la même pull request que le changement : guide public
+  `docs/guide/fr/` et `docs/guide/en/`, références `docs/fr/` et `docs/en/`, puis
+  `python3 outils/generer-documentation.py` (voir `docs/guide/README.md`).
 - Toute nouvelle dépendance doit avoir une licence compatible avec l'AGPL-3.0
   (MIT, Apache-2.0, BSD, ISC, Zlib, MPL-2.0, LGPL…) ; les profils ICC, polices ou
   pilotes ajoutés doivent pouvoir être redistribués.
