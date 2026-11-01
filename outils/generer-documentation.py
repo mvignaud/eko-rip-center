@@ -35,8 +35,8 @@ LANGUES = {
                  "chercher_long": "Chercher dans la documentation", "sommaire": "Sommaire de la documentation", "sommaire_court": "Sommaire",
                  "page": "Sur cette page", "prec": "Précédent", "suiv": "Suivant", "voisines": "Pages voisines",
                  "erreur": "Une erreur, un manque ?", "corriger": "Proposer une correction", "ecrire": "ou écrire à",
-                 "nav": [("/#fonctionnalites", "Fonctionnalités"), ("/compatibilite/", "Machines"), ("/documentation/", "Documentation"),
-                         ("/#installer", "Installer"), ("/changelog/", "Nouveautés")],
+                 "nav": [("/#fonctionnalites", "Fonctionnalités"), ("/compatibilite/", "Machines"), ("/cloud/", "Cloud"), ("/documentation/", "Documentation"),
+                         ("/changelog/", "Nouveautés")],
                  "installer": "Installer", "pied": [("/changelog/", "Nouveautés"), ("/prerequis/", "Pré-requis"), ("/app/", "Application mobile"),
                                                      ("/mentions-legales/", "Mentions légales")],
                  "aucun": "Aucun résultat.", "genres": {"NOTE": "À savoir", "TIP": "Astuce", "IMPORTANT": "Important", "WARNING": "Attention", "CAUTION": "Attention"}}},
@@ -45,8 +45,8 @@ LANGUES = {
                  "chercher_long": "Search the documentation", "sommaire": "Documentation contents", "sommaire_court": "Contents",
                  "page": "On this page", "prec": "Previous", "suiv": "Next", "voisines": "Neighbouring pages",
                  "erreur": "Found a mistake or something missing?", "corriger": "Suggest a fix", "ecrire": "or write to",
-                 "nav": [("/#fonctionnalites", "Features"), ("/compatibilite/", "Machines"), ("/documentation/en/", "Documentation"),
-                         ("/#installer", "Install"), ("/changelog/", "What's new")],
+                 "nav": [("/#fonctionnalites", "Features"), ("/compatibilite/", "Machines"), ("/cloud/", "Cloud"), ("/documentation/en/", "Documentation"),
+                         ("/changelog/", "What's new")],
                  "installer": "Install", "pied": [("/changelog/", "What's new"), ("/prerequis/", "Requirements"), ("/app/", "Mobile app"),
                                                    ("/mentions-legales/", "Legal notice")],
                  "aucun": "No results.", "genres": {"NOTE": "Note", "TIP": "Tip", "IMPORTANT": "Important", "WARNING": "Warning", "CAUTION": "Caution"}}},
@@ -425,6 +425,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
     <button class="nav-bouton" aria-label="{t["menu"]}" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <nav class="nav" id="nav">
       {nav_site}
+      <a class="nav-mobile" href="/#installer">{t["installer"]}</a>
       <a href="{lien_autre}" hreflang="{L["autre"]}" lang="{L["autre"]}" class="doc-langue">{L["autre"].upper()}</a>
     </nav>
     <a class="bouton bouton-plein bouton-petit" href="/#installer">{t["installer"]}</a>
