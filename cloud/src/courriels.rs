@@ -365,7 +365,7 @@ fn faits(l: &[(&str, String)]) -> Bloc {
 
 /// 7. Abonnement souscrit, ou offre changée.
 #[allow(clippy::too_many_arguments)]
-pub fn abonnement_souscrit(url: &str, a: &str, nom: &str, offre: &str, prix_ht: &str, prochaine: Option<u64>, essai_fin: Option<u64>, change: bool) -> Courriel {
+pub fn abonnement_souscrit(url: &str, a: &str, nom: &str, offre: &str, prix_ht: &str, prochaine: Option<u64>, essai_fin: Option<u64>, change: bool, premiere_facture: Option<&str>) -> Courriel {
     let mut l = vec![("Offre", offre.to_string()), ("Prix", format!("{prix_ht} HT"))];
     if let Some(e) = essai_fin {
         l.push(("Essai gratuit jusqu'au", date_fr(e)));
@@ -384,7 +384,10 @@ pub fn abonnement_souscrit(url: &str, a: &str, nom: &str, offre: &str, prix_ht: 
             blocs: vec![
                 Bloc::Paragraphe(format!("Bonjour {nom}, {}", if change { "votre changement d'offre est enregistré." } else { "merci : votre abonnement est enregistré." })),
                 faits(&l),
-                Bloc::Paragraphe("Vos factures sont émises au début de chaque période et restent disponibles dans la page Abonnement du portail.".into()),
+                Bloc::Paragraphe(match premiere_facture {
+                    Some(_) => "Votre première facture est émise : elle est disponible dans la page Abonnement du portail, comme les suivantes, émises au début de chaque période.".into(),
+                    None => "Vos factures sont émises au début de chaque période et restent disponibles dans la page Abonnement du portail.".into(),
+                }),
             ],
             bouton: Some(("Voir mon abonnement".into(), format!("{url}/abonnement"))),
             lien_en_clair: false,
@@ -640,8 +643,8 @@ pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
         ("nouvelle-app", nouvelle_app(url, "contact@atelier-dupont.fr", "Atelier Dupont", "MacBook Pro de Claire", lundi - 600)),
         ("resume-hebdomadaire", resume_hebdomadaire(url, &r, lundi - 7 * 86_400, lundi)),
         ("essai", essai(url, "contact@atelier-dupont.fr", "Atelier Dupont", lundi)),
-        ("abonnement-souscrit", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Atelier", "19,00 € par mois", Some(lundi + 30 * 86_400), Some(lundi + 30 * 86_400), false)),
-        ("abonnement-change", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Pro", "490,00 € par an", Some(lundi + 365 * 86_400), None, true)),
+        ("abonnement-souscrit", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Atelier", "19,00 € par mois", Some(lundi + 30 * 86_400), Some(lundi + 30 * 86_400), false, None)),
+        ("abonnement-change", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Pro", "490,00 € par an", Some(lundi + 365 * 86_400), None, true, Some("FA-2026-0042"))),
         ("facture-emise", facture_emise(url, "contact@atelier-dupont.fr", "Atelier Dupont", "FA-2026-00142", "22,80 €", &format!("{url}/abonnement/factures/FA-2026-00142.pdf"))),
         ("paiement-refuse", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 0, Some("22,80 €"), Some("Provision insuffisante"))),
         ("relance-1", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 1, Some("22,80 €"), None)),

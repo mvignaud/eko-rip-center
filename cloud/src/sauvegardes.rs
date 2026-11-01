@@ -60,7 +60,7 @@ fn version(l: &rusqlite::Row) -> rusqlite::Result<Version> {
 const COLONNES: &str = "id, site, compte, cree_le, octets, empreinte, motif, cle_s3";
 
 pub fn versions_du_site(c: &Connection, site: &str) -> rusqlite::Result<Vec<Version>> {
-    c.prepare(&format!("SELECT {COLONNES} FROM sauvegardes WHERE site = ?1 ORDER BY cree_le DESC, id DESC"))?.query_map([site], version)?.collect()
+    c.prepare(&format!("SELECT {COLONNES} FROM sauvegardes WHERE site = ?1 ORDER BY cree_le DESC, rowid DESC"))?.query_map([site], version)?.collect()
 }
 
 pub fn version_par_id(c: &Connection, id: &str) -> rusqlite::Result<Option<Version>> {
@@ -212,7 +212,7 @@ pub fn garder(r: &Partage, site: &str, motif: &str, empreinte: &str, corps: &[u8
         let ab = abonnements::lire(&c, compte).unwrap_or_else(|_| abonnements::Abonnement::gratuit(compte));
         let quota = abonnements::quota(&c, compte).unwrap_or(0);
         let mut liste: Vec<(String, u64)> = versions.iter().map(|v| (v.id.clone(), v.cree_le)).collect();
-        liste.push((id.clone(), t));
+        liste.insert(0, (id.clone(), t));
         let a_supprimer = offres::a_supprimer(&liste, ab.offre, ab.gratuit_depuis, t);
         let libere: u64 = versions.iter().filter(|v| a_supprimer.contains(&v.id)).map(|v| v.octets).sum();
         let utilise = octets_du_compte(&c, compte).unwrap_or(0);

@@ -254,12 +254,13 @@ pub fn date_suspension(depuis: u64, deploye_le: u64) -> u64 {
     (depuis + GRACE_DEPASSEMENT).max(deploye_le + GRACE_DEPLOIEMENT)
 }
 
-/// Versions à supprimer d'un site : `versions` = (identifiant, date), dans n'importe quel ordre.
+/// Versions à supprimer d'un site : `versions` = (identifiant, date), à date égale de la plus récente à la plus ancienne.
 /// La plus récente est toujours gardée. `gratuit_depuis` : date du retour au Gratuit (les
 /// versions d'avant restent 90 jours).
 pub fn a_supprimer(versions: &[(String, u64)], offre: Offre, gratuit_depuis: Option<u64>, t: u64) -> Vec<String> {
     let mut v: Vec<&(String, u64)> = versions.iter().collect();
-    v.sort_by(|a, b| b.1.cmp(&a.1).then(b.0.cmp(&a.0)));
+    // Tri stable : à date égale, l'ordre reçu (de la plus récente à la plus ancienne) est gardé.
+    v.sort_by_key(|x| std::cmp::Reverse(x.1));
     let mut sortie = Vec::new();
     for (i, (id, date)) in v.iter().enumerate() {
         if i == 0 {

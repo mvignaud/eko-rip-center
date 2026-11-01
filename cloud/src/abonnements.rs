@@ -311,6 +311,8 @@ pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result
         return Err(format!("L'abonnement n'a pas pu être créé : {}", rep.erreur()));
     }
     let sub = rep.donnees().clone();
+    // `bill_now` : la première facture est émise tout de suite (absente pendant un essai).
+    let premiere_facture = sub.pointer("/first_cycle/invoice_code").and_then(texte_json);
     let ancien = ab.subscription_code.clone().filter(|_| ab.actif());
     let ancien_sup = ab.supplement_code.clone();
     {
@@ -318,7 +320,7 @@ pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result
         appliquer(&c, id, &sub).map_err(|e| e.to_string())?;
         maj(&c, id, &[("offre", texte(offre.code())), ("cycle", texte(cycle.code())), ("bon_commande", texte(&ab.texte_brouillon("bon_commande"))), ("gratuit_depuis", Sql::Null), ("relance", entier(0)), ("fin_periode_resiliation", entier(0)), ("supplement_code", Sql::Null), ("seats_supplement", entier(0))]).map_err(|e| e.to_string())?;
     }
-    eprintln!("abonnement {} créé pour le compte {id} ({} {})", texte_json(&sub["code"]).unwrap_or_default(), offre.code(), cycle.code());
+    eprintln!("abonnement {} créé pour le compte {id} ({} {}, première facture : {})", texte_json(&sub["code"]).unwrap_or_default(), offre.code(), cycle.code(), premiere_facture.as_deref().unwrap_or("aucune"));
     // Changement d'offre : l'ancien abonnement (et son supplément) s'arrête.
     for code in ancien.iter().chain(ancien_sup.iter()) {
         if Some(code) == texte_json(&sub["code"]).as_ref() {
@@ -332,7 +334,7 @@ pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result
     }
     if let Some(cp) = compte(r, id) {
         let ab2 = lire(&r.base(), id).map_err(|e| e.to_string())?;
-        r.envoyer(courriels::abonnement_souscrit(&r.config.url_publique, &destinataire_facturation(&ab2, &cp), &cp.nom, offre.nom(), &libelle_prix(offre, cycle, ab2.seats), ab2.periode_fin, ab2.essai_fin, ancien.is_some()));
+        r.envoyer(courriels::abonnement_souscrit(&r.config.url_publique, &destinataire_facturation(&ab2, &cp), &cp.nom, offre.nom(), &libelle_prix(offre, cycle, ab2.seats), ab2.periode_fin, ab2.essai_fin, ancien.is_some(), premiere_facture.as_deref()));
     }
     Ok(())
 }
@@ -1263,8 +1265,17 @@ pub async fn souscrire(State(r): State<Partage>, h: HeaderMap, axum::Form(f): Ch
     };
     let enregistre = {
         let c = r.base();
-        maj(&c, id, &[("tier_code", texte(&tier))]).and_then(|_| {
+        // Un mandat SEPA n'est valable que pour son tiers : autre entreprise, mandat à refaire.
+        let autre_tiers = lire(&c, id).map(|a| a.tier_code.is_some_and(|t| t != tier)).unwrap_or(false);
+        let mut champs = vec![("tier_code", texte(&tier))];
+        if autre_tiers {
+            champs.extend([("rum", Sql::Null), ("rum_prevenu", entier(0))]);
+        }
+        maj(&c, id, &champs).and_then(|_| {
             regler_brouillon(&c, id, |b| {
+                if b.get("mandat").and_then(|m| m.get("tier")).and_then(Value::as_str) != Some(tier.as_str()) {
+                    b.remove("mandat");
+                }
                 for (k, v) in [("offre", offre.code()), ("cycle", cycle.code()), ("pays", &x.pays), ("siren", &x.siren), ("raison_sociale", &x.raison_sociale), ("siret", &x.siret), ("tva", &x.tva), ("contact", &x.contact), ("email", &x.email), ("telephone", &x.telephone), ("adresse", &x.adresse), ("code_postal", &x.code_postal), ("ville", &x.ville), ("bon_commande", &x.bon_commande), ("code_saisi", &x.code), ("moyen", &x.moyen)] {
                     b.insert(k.into(), json!(v));
                 }
@@ -1617,7 +1628,7 @@ pub async fn creer_mandat(State(r): State<Partage>, h: HeaderMap, axum::Form(f):
         let rum = texte_json(&d["rum"]).ok_or("Réponse inattendue de la facturation.")?;
         let fin = texte_json(&d["iban_last4"]).unwrap_or_else(|| iban[iban.len() - 4..].to_string());
         regler_brouillon(&r.base(), id, |b| {
-            b.insert("mandat".into(), json!({ "rum": rum, "iban_last4": fin, "statut": d["status"], "code_envoye": false }));
+            b.insert("mandat".into(), json!({ "rum": rum, "iban_last4": fin, "statut": d["status"], "code_envoye": false, "tier": tier }));
         })
         .map_err(|e| e.to_string())?;
         Ok(())
@@ -1684,6 +1695,13 @@ pub fn signer_mandat(r: &Partage, id: i64, otp: &str, nom_signe: &str, ip: &str,
         (Erp::depuis(&c).ok_or("Facturation indisponible.")?, lire(&c, id).map_err(|e| e.to_string())?)
     };
     let rum = rum_en_cours(&ab).ok_or("Créez d'abord le mandat.")?;
+    // L'ERP n'accepte en moyen de paiement qu'un mandat signé du même tiers que l'abonnement.
+    if ab.brouillon.pointer("/mandat/tier").and_then(texte_json) != ab.tier_code {
+        let _ = regler_brouillon(&r.base(), id, |b| {
+            b.remove("mandat");
+        });
+        return Err("Les informations de facturation ont changé : créez un nouveau mandat.".into());
+    }
     let fin = ab.brouillon.pointer("/mandat/iban_last4").and_then(texte_json).unwrap_or_default();
     let rep = erp.post(&format!("/sepa-mandates/{}/signature/verify", encoder(&rum)), &json!({ "otp": otp }), None)?;
     if !rep.ok() {
@@ -1692,6 +1710,9 @@ pub fn signer_mandat(r: &Partage, id: i64, otp: &str, nom_signe: &str, ip: &str,
     let rep = erp.post(&format!("/sepa-mandates/{}/signature/finalize", encoder(&rum)), &json!({ "typed_name": nom_signe, "signer_ip": ip, "signer_user_agent": agent, "consent": true }), None)?;
     if !rep.ok() {
         return Err(format!("Signature refusée : {}", rep.erreur()));
+    }
+    if rep.donnees().get("status").and_then(texte_json).is_some_and(|st| st != "signed") {
+        return Err("Le mandat n'est pas encore signé : réessayez dans un instant.".into());
     }
     eprintln!("mandat SEPA {rum} signé (compte {id})");
     let paiement = json!({ "provider": "stancer_sepa", "mandate_code": rum });
