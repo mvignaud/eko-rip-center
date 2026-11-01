@@ -5,9 +5,10 @@ d'atelier depuis l'extérieur, **sans VPN et sans ouvrir de port** : c'est le se
 ouvre lui-même une connexion sortante (HTTPS, port 443) vers la plate-forme, et la plate-forme
 fait passer par elle les requêtes des postes et de l'app mobile.
 
-Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 et 2** (tunnel,
-appairage, portail). À distance, on se connecte encore avec **les comptes du serveur RIP**,
-comme à l'atelier ; l'identité de la plate-forme passera jusqu'au serveur au lot 3.
+Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 à 4** (tunnel,
+appairage, portail, « Se connecter au cloud » depuis les apps, une adresse par site). À
+distance, on se connecte soit avec **son compte de la plate-forme** (les apps), soit avec
+**un compte du serveur RIP** (navigateur, anciennes versions).
 
 ```
 Poste ou téléphone hors atelier
@@ -53,6 +54,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
+- **E-mails** : voir la section « E-mails de la plate-forme » ci-dessous.
 - **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
   RCS Auch 939 018 024, contact contact@e-ko.rip, pas de téléphone).
 - Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
@@ -70,6 +72,150 @@ connexion se fait avec un compte du serveur RIP.
 
 L'ancienne forme `https://platform.e-ko.rip/s/<site>` reste servie pour les appels d'API, mais
 une page y est isolée (`sandbox`, pas de script) : préférer l'adresse propre au site.
+
+## Se connecter au cloud depuis les apps
+
+Sur l'écran de connexion, une app propose **Serveur local** ou **Se connecter au cloud**. Le
+second ouvre le navigateur sur la plate-forme (mot de passe, Google ou Facebook), demande
+d'autoriser l'app, puis revient à l'app, qui affiche les sites du compte : un clic ouvre le
+serveur RIP, **sans second mot de passe**. Les droits viennent du rôle sur le site, donné dans
+le portail : propriétaire ou administrateur → administrateur du RIP ; opérateur → opérateur ;
+lecture → opérateur en lecture seule (`lecture_seule` pour toute écriture).
+
+Protocole (OAuth 2, code d'autorisation + PKCE, clients publics, RFC 6749, 7636, 8252) :
+
+1. `GET /oauth/autoriser?client_id=eko-rip-center&response_type=code&redirect_uri=…&code_challenge=…&code_challenge_method=S256&state=…&appareil=<nom de l'appareil>`
+   (navigateur). Adresses de retour acceptées : `http://127.0.0.1:<port>/…`,
+   `http://[::1]:<port>/…`, `http://localhost:<port>/…`, `eko-rip://…`, `ekorip://…` (mobile).
+2. Retour : `<redirect_uri>?code=…&state=…` (ou `error=access_denied`). Code valable 2 minutes,
+   une seule fois.
+3. `POST /oauth/jeton` (formulaire) : `grant_type=authorization_code`, `client_id`, `code`,
+   `redirect_uri`, `code_verifier` → `{ "access_token": "ekoa_…", "token_type": "Bearer",
+   "expires_in": 15552000 }` (180 jours). Erreurs : `invalid_grant`, `invalid_client`…
+4. `GET /api/moi` (`Authorization: Bearer ekoa_…`) → `{ "compte": { "email", "nom" },
+   "sites": [{ "id", "nom", "adresse", "en_ligne", "role" }] }`.
+5. Requêtes vers `adresse` (ou `/s/<site>/…`) avec le même `Authorization`. Le relais vérifie
+   le droit du compte sur ce site (sinon `503 site_hors_ligne`, comme un site absent ; jeton
+   inconnu : `401 jeton_invalide`), retire le jeton et ajoute `X-EKO-Cloud-Identite` (base64url
+   de `{ "compte", "email", "nom", "role": "admin" | "operateur" | "lecture" }`). Le serveur
+   RIP ne croit cet en-tête que venu par son tunnel ; `GET /api/session` rend alors
+   `{ "utilisateur": <e-mail>, "role", "cloud": { "email", "nom", "lecture_seule" } }`.
+6. `POST /api/moi/deconnexion` (Bearer) révoque le jeton. Dans le portail, **Mon compte ›
+   Apps connectées** liste les apps et les déconnecte toutes.
+
+## E-mails de la plate-forme
+
+Expéditeur : « E-KO RIP Cloud » `<no-reply@e-ko.fr>`. Envoi par SMTP (chiffré : STARTTLS ou TLS
+direct, jamais en clair) avec les identifiants du serveur SMTP de l'ERP.
+
+**Réglages** : Administration › carte **E-mails** : hôte, port (587 en STARTTLS, 465 en TLS
+direct), sécurité, identifiant, mot de passe (jamais réaffiché ; vide = inchangé), adresse de
+l'expéditeur (`no-reply@e-ko.fr` par défaut) et bouton **Envoyer un e-mail d'essai** (à
+l'administrateur connecté, avec le résultat de l'envoi). Variables d'environnement facultatives
+(dans `/etc/default/eko-rip-cloud`), qui priment sur les réglages : `EKO_CLOUD_SMTP_HOTE`,
+`EKO_CLOUD_SMTP_PORT`, `EKO_CLOUD_SMTP_SECURITE` (`starttls` ou `tls`),
+`EKO_CLOUD_SMTP_IDENTIFIANT`, `EKO_CLOUD_SMTP_MOT_DE_PASSE`, `EKO_CLOUD_SMTP_EXPEDITEUR`.
+Sans hôte SMTP, les envois sont ignorés (une ligne au journal) et rien ne bloque : « Mot de
+passe oublié » affiche sa réponse habituelle, et rattacher un serveur n'exige pas la
+confirmation de l'adresse.
+
+**Les envois** (hors de la requête : une page n'attend jamais le serveur SMTP ; un échec
+s'écrit au journal, sans secret) :
+- **Mot de passe oublié** (`/mot-de-passe/oublie`) : lien `/mot-de-passe/nouveau?jeton=…`
+  valable 1 heure, à usage unique ; la réponse est la même que le compte existe ou non (3 e-mails
+  par heure et par adresse ; compte suspendu : rien n'est envoyé). Le nouveau mot de passe ferme
+  toutes les sessions du compte et déconnecte ses apps.
+- **Confirmation de l'adresse** à l'inscription par mot de passe : lien `/email/confirmer?jeton=…`
+  (24 heures, usage unique ; le clic sur la page confirme, la simple ouverture ne consomme rien).
+  Tant qu'elle n'est pas confirmée, un bandeau sur « Mes sites » et « Mon compte » propose de
+  renvoyer l'e-mail (3 par heure) et rattacher un serveur est refusé ; le reste fonctionne.
+  Les comptes existants et ceux créés par Google (e-mail vérifié) sont confirmés d'office.
+- **Site hors ligne** : le tunnel est fermé depuis 15 minutes → e-mail aux propriétaires et
+  administrateurs du site, puis « de retour en ligne » (seulement si l'alerte est partie). Au plus
+  une alerte par site et par heure.
+- **Nouvelle app connectée** : à chaque connexion d'une app (« Se connecter au cloud »),
+  e-mail de sécurité au titulaire (appareil, date, lien vers « Mon compte »). Toujours envoyé.
+- **Résumé hebdomadaire** : chaque lundi vers 8 h (heure de Paris, heure d'été comprise), un
+  e-mail par propriétaire ou administrateur : pour chacun de ses sites, nombre de coupures (d'une
+  minute au moins), durée hors ligne, plus longue coupure, alertes envoyées, et les apps connectées
+  dans la semaine. Un seul envoi par semaine (mémorisé, y compris après un redémarrage) ; le
+  premier démarrage mémorise la semaine sans rien envoyer.
+
+Dans « Mon compte », les cases **Recevoir les alertes** et **Recevoir le résumé hebdomadaire**
+(activées par défaut) règlent les deux derniers envois. Journal des coupures : table
+`evenements_sites` de `portail.sqlite`, purgée au-delà de 90 jours.
+
+**Aperçu des e-mails** : `eko-rip-cloud apercu-courriels <dossier>` écrit chaque message avec des
+données d'exemple (`.html` autonome et `.txt`).
+
+## Notifications
+
+En plus des e-mails, la plate-forme notifie les mêmes événements sur trois canaux : **site hors
+ligne** (après 15 minutes), **site de retour en ligne** (si l'alerte est partie) et **nouvelle app
+connectée**. Ils suivent la case **Recevoir les alertes** de « Mon compte » (propriétaires et
+administrateurs du site), sauf la nouvelle app, toujours notifiée (sécurité). Un seul point
+d'émission (`notifications::notifier`) fait l'e-mail, l'entrée du journal et les pushs. Les envois
+réseau partent hors de la requête ; échec = une ligne au journal, sans secret. Le journal et les
+pushs partent même sans SMTP réglé.
+
+**Première connexion** : sur chaque poste, les apps demandent l'autorisation d'afficher des
+notifications juste après la première connexion au cloud (Mac, Linux, Windows, mobile). Sur le
+portail, après la première connexion (mot de passe, Google ou Facebook, et juste après
+l'inscription), « Mes sites » propose **Recevoir les alertes sur cet ordinateur ?** avec
+**Activer** (le navigateur demande l'autorisation, puis s'inscrit) et **Plus tard**. Le bandeau
+n'apparaît que si le navigateur gère le Web Push et que l'autorisation n'a pas encore été
+décidée ; une fois « Activer » ou « Plus tard » cliqué, il ne revient plus (drapeau
+`notifications_proposees` du compte). La carte « Mon compte » reste pour changer plus tard.
+
+### Pour les apps (Bearer `ekoa_…`)
+
+- **Journal, pour Mac, Linux et Windows** : `GET /api/moi/notifications?apres=<id>` (interrogé
+  chaque minute). Réponse `200` :
+  `{ "notifications": [ { "id", "type", "site", "titre", "corps", "lien", "cree_le" } ], "dernier": <id> }`.
+  `type` : `site_hors_ligne`, `site_en_ligne` ou `nouvelle_app` ; `site` : identifiant du site ou
+  `null` ; `lien` : adresse absolue de la page à ouvrir ; `cree_le` : secondes Unix. Au plus 50
+  notifications d'identifiant > `apres`, dans l'ordre croissant (si `dernier` dépasse le dernier
+  `id` rendu, redemander avec `apres` = ce dernier `id`). `dernier` est le plus grand identifiant
+  du compte (0 si le journal est vide), jamais réutilisé. **Sans `apres`**, la liste est vide et
+  seul `dernier` est rendu : pas de rattrapage au premier lancement, l'app garde `dernier` puis
+  interroge avec `apres=<dernier>`. `apres` non numérique : `400 {"code":"apres_invalide"}` ;
+  jeton invalide : `401`. Le journal est gardé 30 jours (table `notifications`).
+- **Push mobile (Expo)** : `POST /api/moi/push` avec
+  `{ "jeton_expo": "ExponentPushToken[…]", "plateforme": "ios" | "android" }` → `204`
+  (`400` avec `code` = `jeton_expo_invalide` ou `plateforme_invalide`, `401` sans jeton valide).
+  Le jeton Expo est rattaché au jeton d'app : il disparaît avec lui (déconnexion de l'app,
+  révocation dans Mon compte, compte supprimé), et un même appareil reconnecté avec un autre
+  jeton d'app ne notifie qu'une fois. À rappeler à chaque lancement (le jeton Expo peut changer).
+  `DELETE /api/moi/push` → `204` : cette app n'est plus notifiée. Envoi vers
+  `https://exp.host/--/api/v2/push/send` :
+  `{ "to", "title", "body", "sound": "default", "channelId": "alertes", "data": { "evenement": { "id", "le", "genre", "gravite": "alerte" | "info", "titre", "texte", "site", "lien" } } }`
+  (`id` = identifiant du journal, `le` = secondes Unix, `genre` = `type` du journal ; gravité
+  `alerte` pour hors ligne et nouvelle app, `info` pour le retour en ligne). Si Expo répond
+  `DeviceNotRegistered`, le jeton est oublié. `EKO_CLOUD_EXPO_TOKEN` (facultatif, dans
+  `/etc/default/eko-rip-cloud`) est le jeton d'accès Expo, envoyé en `Authorization: Bearer`.
+
+### Web Push (navigateur)
+
+Standard Web Push (RFC 8030) : messages chiffrés `aes128gcm` (RFC 8291), plate-forme identifiée
+par VAPID (RFC 8292, JWT ES256, `sub` = `mailto:contact@e-ko.rip`, valable 12 h). Tout en Rust
+(RustCrypto : `p256`, `hkdf`, `aes-gcm`, `sha2`), sans OpenSSL : la construction musl reste
+possible. Les clés VAPID sont créées au premier démarrage et gardées dans `reglages` (la clé privée
+n'est jamais affichée ni renvoyée).
+
+- `GET /sw.js` : service worker à la racine (même origine), affiche titre, corps et icône
+  `/logo-courriel.png`, ouvre `lien` au clic (même origine seulement).
+- `GET /api/push/cle` : `{ "cle": <clé publique VAPID, base64url> }`.
+- **Mon compte › Notifications sur cet appareil** : bouton **Activer les notifications du
+  navigateur** et liste des navigateurs inscrits avec **Retirer** (10 au plus par compte).
+  `POST /compte/push` (session du portail, `Origin` de la plate-forme et en-tête `X-CSRF-Token` ;
+  corps JSON d'une `PushSubscription`) et `POST /compte/push/{id}/retirer` (formulaire à jeton
+  anti-falsification). Seules les adresses d'abonnement HTTPS vers un nom d'hôte public sont
+  acceptées. Réponse `404` ou `410` du service de notification : l'abonnement est supprimé.
+- La CSP du portail autorise `connect-src 'self'` et `worker-src 'self'` pour le script
+  d'inscription.
+
+Tables de `portail.sqlite` : `notifications` (journal), `abonnements_web`, et deux colonnes de
+`jetons_applis` (`jeton_expo`, `plateforme_expo`).
 
 ## Ce qui ne passe jamais par le cloud
 
@@ -96,7 +242,7 @@ Sans compte déclaré, toute requête venue par le cloud est refusée (`cloud_sa
 - Sous l'ancienne forme `/s/<site>/`, le cookie d'un site est limité à ce chemin et toute
   réponse porte `Content-Security-Policy: sandbox` (pas de script, origine opaque).
 - Requête de plus de 2 Go (`EKO_CLOUD_MAX_MO`) : refusée (`envoi_trop_gros`). Site hors ligne
-  ou inconnu : même réponse (`site_hors_ligne`).
+  ou inconnu : même réponse (`503 site_hors_ligne`).
 
 ## Installer la plate-forme (VPS)
 
@@ -116,7 +262,7 @@ platform.e-ko.rip, *.platform.e-ko.rip {
     tls {
         on_demand
     }
-    # Le tunnel (Upgrade: eko-tunnel/1) passe tel quel ; les flux ne sont pas mis en tampon.
+    # Le tunnel (WebSocket) passe tel quel ; les flux ne sont pas mis en tampon.
     reverse_proxy 127.0.0.1:8650 {
         flush_interval -1
     }
@@ -131,14 +277,75 @@ sinon, ce qui empêche d'obtenir des certificats pour des noms inventés. Let's 
 
 Commandes : `eko-rip-cloud admin <e-mail>` (super-administrateur), `eko-rip-cloud sites` (liste), `eko-rip-cloud valider <code> [propriétaire]`,
 `eko-rip-cloud supprimer <site>` (son tunnel est coupé dans la minute). Réglages dans
-`/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO`.
+`/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO` (et `EKO_CLOUD_SMTP_*`, voir « E-mails de la plate-forme »).
+
+## Installer la plate-forme (hébergement mutualisé o2switch)
+
+o2switch (cPanel, LiteSpeed) ne lance que des applications Node.js. Le lanceur
+`cloud/o2switch/app.js` (sans dépendance npm) démarre le relais sur un port local, relance
+le relais s'il s'arrête et lui passe les requêtes comme le WebSocket du tunnel.
+
+1. **Binaire.** Le serveur mutualisé a une glibc ancienne : construire en statique (musl).
+   ```bash
+   rustup target add x86_64-unknown-linux-musl   # une fois (+ apt install musl-tools)
+   cargo build --release --locked --target x86_64-unknown-linux-musl -p eko-rip-cloud --bin eko-rip-cloud
+   ```
+2. **Envoi.** Créer `~/eko-rip-cloud/` sur le compte et y copier `app.js` et le binaire
+   (`target/x86_64-unknown-linux-musl/release/eko-rip-cloud`, droits 755). Le SSH n'est
+   ouvert qu'aux adresses déclarées dans cPanel (« Autorisation SSH »).
+3. **Domaines.** cPanel → Domaines : ajouter `platform.e-ko.rip` avec pour racine
+   `~/eko-rip-cloud/public`. DNS chez OVH : `platform` en A vers l'adresse du serveur
+   o2switch. Puis cPanel → « Lets Encrypt SSL » pour `platform.e-ko.rip`.
+4. **Application.** cPanel → « Setup Node.js App » → Create : Node 22, mode Production,
+   racine `eko-rip-cloud`, URL `platform.e-ko.rip`, fichier de démarrage `app.js`. Variables :
+   `EKO_CLOUD_URL=https://platform.e-ko.rip`, `EKO_CLOUD_DATA=/home/<compte>/eko-cloud-data`
+   (hors de la racine web), et si besoin `EKO_CLOUD_JETON_STATS`. Start. Le relais écoute sur
+   un socket local (`~/eko-rip-cloud/relais.sock`, `EKO_CLOUD_ADDR=unix:<chemin>`) et non sur
+   un port : o2switch arrête en quelques secondes tout programme du compte qui ouvre un port.
+5. **Premier compte.** En SSH, dans `~/eko-rip-cloud` :
+   `EKO_CLOUD_DATA=~/eko-cloud-data ./eko-rip-cloud admin <e-mail>`.
+6. **Vérifier.** `curl https://platform.e-ko.rip/sante` répond `ok`, puis rattacher un serveur
+   RIP (le tunnel doit rester « connecté » plusieurs minutes).
+
+Une adresse par site (`<site>.platform.e-ko.rip`) : ajouter aussi le sous-domaine joker
+`*.platform.e-ko.rip` (même racine, rattaché à la même application), DNS `*.platform` en A vers
+le serveur o2switch, et un certificat qui couvre le joker. Sans lui, les clients joignent les
+sites à `https://platform.e-ko.rip/s/<site>/` (l'interface web dans un navigateur, elle,
+demande l'adresse propre au site).
+
+Le frontal d'o2switch remplace toute réponse 502 de l'application par une page « 421
+Misdirected Request » : le relais et le lanceur répondent donc 503 quand un site ou le relais
+est indisponible. Le journal du relais est `~/eko-rip-cloud/relais.log`.
+
+Mise à jour : remplacer le binaire, puis « Restart » dans « Setup Node.js App ».
 
 ## Protocole du tunnel
 
-Le serveur RIP envoie `GET /tunnel` (HTTP/1.1) avec `Authorization: Bearer <site>.<clé>` et
-`Upgrade: eko-tunnel/1`. La plate-forme répond `101 Switching Protocols` ; dans la connexion
-ainsi obtenue, elle parle HTTP/2 **en client** et le serveur RIP sert sa propre API. Plusieurs
-requêtes à la fois, fichiers en flux, ping toutes les 25 s.
+Le serveur RIP envoie `GET /tunnel` (HTTP/1.1) avec `Authorization: Bearer <site>.<clé>`,
+`Upgrade: websocket` et `Sec-WebSocket-Protocol: eko-tunnel/1` (WebSocket ordinaire, RFC
+6455). La plate-forme répond `101 Switching Protocols` ; dans les messages binaires du
+WebSocket, elle parle HTTP/2 **en client** et le serveur RIP sert sa propre API. Plusieurs
+requêtes à la fois, fichiers en flux, ping toutes les 25 s. Le WebSocket ne sert qu'à passer
+les frontaux qui refusent tout autre `Upgrade` (LiteSpeed, Passenger). La plate-forme accepte
+encore l'ancienne forme, `Upgrade: eko-tunnel/1` seul, des serveurs RIP 0.30.
+
+**Sens montant en requêtes POST (`eko-tunnel/2`).** Certains frontaux d'hébergement mutualisé
+(celui d'o2switch) laissent passer le WebSocket dans un seul sens : ce que le serveur RIP
+envoie après la poignée de main reste dans leur tampon. Le serveur RIP propose donc
+`Sec-WebSocket-Protocol: eko-tunnel/2, eko-tunnel/1`. Quand la plate-forme est réglée pour
+(`EKO_CLOUD_MONTANT_POST=1`, posé par défaut par le lanceur o2switch), elle choisit
+`eko-tunnel/2` :
+
+- son premier message dans le WebSocket est un texte `session <id>` (32 caractères
+  hexadécimaux, aléatoires) ; le WebSocket ne porte ensuite que le sens plate-forme → RIP ;
+- le serveur RIP envoie le sens montant par `POST /tunnel/<id>/montant`, en-tête
+  `X-EKO-Seq: 0, 1, 2…`, corps de 1 Mio au plus, sur une connexion HTTP/1.1 gardée ouverte.
+  Réponse `204` ; un numéro déjà reçu est acquitté sans effet (renvoi après une coupure) ;
+  un numéro en avance ou une session inconnue rend `409 session_perdue` et le serveur RIP
+  rouvre le tunnel.
+
+Sinon la plate-forme répond `eko-tunnel/1` et le WebSocket porte les deux sens. Les serveurs
+RIP 0.31 et plus anciens ne proposent que `eko-tunnel/1`.
 
 Appairage : `POST /api/appairage` `{ "nom": "…" }` → `201 { demande, code, lien, expire_dans }` ;
 `GET /api/appairage/<demande>` → `{ "etat": "en_attente" }`, puis une seule fois

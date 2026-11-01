@@ -7,6 +7,11 @@
 //!   eko-rip-cloud supprimer <site>        retire un site (son tunnel est coupé dans la minute)
 //!   eko-rip-cloud installations           statistiques anonymes des installations (JSON)
 //!   eko-rip-cloud admin <e-mail>          donne l'espace d'administration à un compte du portail
+//!   eko-rip-cloud apercu-courriels <dossier>  écrit les e-mails de la plate-forme (données d'exemple) en .html et .txt
+//!
+//! Environnement facultatif (E-mails ; ils priment sur les réglages saisis dans /admin) :
+//!   EKO_CLOUD_SMTP_HOTE, EKO_CLOUD_SMTP_PORT, EKO_CLOUD_SMTP_SECURITE (`starttls` ou `tls`),
+//!   EKO_CLOUD_SMTP_IDENTIFIANT, EKO_CLOUD_SMTP_MOT_DE_PASSE, EKO_CLOUD_SMTP_EXPEDITEUR
 
 use eko_rip_cloud::{appairage, installations, relais, sites};
 use std::path::PathBuf;
@@ -95,6 +100,22 @@ async fn main() {
                 2
             }
         }),
+        Some("apercu-courriels") => std::process::exit(match args.get(1) {
+            Some(dossier) => match ecrire_apercus(std::path::Path::new(dossier)) {
+                Ok(n) => {
+                    println!("{n} e-mails écrits dans {dossier}");
+                    0
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    1
+                }
+            },
+            None => {
+                eprintln!("Usage : eko-rip-cloud apercu-courriels <dossier>");
+                2
+            }
+        }),
         Some(autre) => {
             eprintln!("Commande inconnue : {autre}");
             std::process::exit(2);
@@ -112,10 +133,60 @@ async fn main() {
     let adresse = env_ou("EKO_CLOUD_ADDR", "127.0.0.1:8650");
     let r = relais::nouveau(config);
     tokio::spawn(relais::entretenir(r.clone()));
-    let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
-    println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
-    axum::serve(ecoute, relais::routes(r.clone())).with_graceful_shutdown(arret()).await.expect("service");
+    // `unix:<chemin>` : socket local (hébergement mutualisé, où un port TCP ouvert est abattu).
+    if let Some(chemin) = adresse.strip_prefix("unix:") {
+        let _ = std::fs::remove_file(chemin);
+        let ecoute = tokio::net::UnixListener::bind(chemin).expect("socket d'écoute");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(chemin, std::fs::Permissions::from_mode(0o600));
+        }
+        println!("E-KO RIP Cloud à l'écoute sur {adresse}");
+        servir(ecoute, &r).await;
+        let _ = std::fs::remove_file(chemin);
+    } else {
+        let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
+        println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
+        servir(ecoute, &r).await;
+    }
     relais::enregistrer_installations(&r).await;
+}
+
+/// Écrit chaque e-mail d'exemple en `.html` (autonome) et `.txt` dans `dossier`.
+fn ecrire_apercus(dossier: &std::path::Path) -> std::io::Result<usize> {
+    std::fs::create_dir_all(dossier)?;
+    let apercus = eko_rip_cloud::courriels::apercus("https://platform.e-ko.rip");
+    for (nom, c) in &apercus {
+        std::fs::write(dossier.join(format!("{nom}.html")), &c.html)?;
+        std::fs::write(dossier.join(format!("{nom}.txt")), format!("Sujet : {}\n\n{}", c.sujet, c.texte))?;
+    }
+    Ok(apercus.len())
+}
+
+/// Sert jusqu'à l'arrêt : plus de nouvelles connexions, au plus 5 s pour les requêtes en
+/// cours (les tunnels, eux, ne finissent jamais d'eux-mêmes), puis on sort.
+async fn servir<L>(ecoute: L, r: &relais::Partage)
+where
+    L: axum::serve::Listener,
+    L::Addr: std::fmt::Debug,
+{
+    let (signal, attente) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        arret().await;
+        let _ = signal.send(true);
+    });
+    let mut fin = attente.clone();
+    let service = axum::serve(ecoute, relais::routes(r.clone())).with_graceful_shutdown(async move {
+        let mut a = attente;
+        let _ = a.wait_for(|v| *v).await;
+    });
+    tokio::select! {
+        resultat = service => resultat.expect("service"),
+        _ = async {
+            let _ = fin.wait_for(|v| *v).await;
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        } => eprintln!("arrêt : connexions encore ouvertes après 5 s, fermées"),
+    }
 }
 
 /// Ctrl-C ou SIGTERM (arrêt par systemd) : on écrit le registre des installations avant de sortir.

@@ -280,6 +280,14 @@ struct InfoSession: Decodable, Sendable {
     let accesLibre: Bool?
     let utilisateur: String?
     let role: String?
+    /// Présent quand la session vient du cloud (jeton de la plate-forme).
+    let cloud: InfoCloud?
+
+    struct InfoCloud: Decodable, Sendable {
+        let email: String?
+        let nom: String?
+        let lectureSeule: Bool?
+    }
 }
 
 struct InfoSysteme: Decodable, Sendable {

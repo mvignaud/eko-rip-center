@@ -39,9 +39,13 @@ struct Api: Sendable {
     /// Adresse du serveur sans barre finale : `http://hôte:8640`.
     let racine: String
     let session: URLSession
+    /// Jeton de la plate-forme (mode cloud) : porté par chaque requête, `Authorization: Bearer`.
+    /// Nil sur un serveur local. Jamais écrit dans un journal.
+    private let jeton: String?
 
-    init(racine: String) {
+    init(racine: String, jeton: String? = nil) {
         self.racine = racine
+        self.jeton = jeton
         let cfg = URLSessionConfiguration.ephemeral
         cfg.httpCookieAcceptPolicy = .always
         cfg.httpShouldSetCookies = true
@@ -82,6 +86,7 @@ struct Api: Sendable {
         r.httpMethod = methode
         r.setValue(VersionClient.agent, forHTTPHeaderField: "User-Agent")
         r.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let jeton { r.setValue("Bearer \(jeton)", forHTTPHeaderField: "Authorization") }
         if let json {
             r.httpBody = json
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")

@@ -128,7 +128,18 @@ pub fn libelle(code: &str) -> Option<&'static str> {
         "decoupeuse_indisponible" => "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
         "trop_gros" => "Fichier trop volumineux pour le serveur.",
         "reseau" => "Serveur injoignable.",
+        // Cloud (plate-forme E-KO).
+        "jeton_invalide" => "Connexion au cloud expirée ou révoquée : se reconnecter.",
+        "site_hors_ligne" => "Ce site est hors ligne : son serveur RIP n'est pas joignable par le cloud.",
+        "lecture_seule" => "Compte en lecture seule sur ce site : modification impossible.",
+        "ferme_par_cloud" => "Indisponible à distance pour l'instant.",
+        "access_denied" => "Connexion refusée dans le navigateur.",
+        "invalid_grant" => "Autorisation expirée ou déjà utilisée : recommencer la connexion.",
+        "invalid_client" | "invalid_request" | "unsupported_grant_type" => "La plate-forme a refusé la demande de connexion.",
         // Codes propres au client.
+        "cloud_annule" => "Connexion au cloud annulée.",
+        "cloud_delai" => "Connexion au cloud abandonnée : le navigateur n'a pas répondu à temps.",
+        "cloud_aleatoire" => "Connexion au cloud impossible : pas de source aléatoire sur ce système.",
         "reponse_illisible" => "Réponse du serveur illisible.",
         "ecriture_impossible" => "Écriture du fichier impossible.",
         "envoi_annule" => "Envoi annulé.",

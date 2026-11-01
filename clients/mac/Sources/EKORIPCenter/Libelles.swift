@@ -149,7 +149,41 @@ enum Libelles {
         "reponse_illisible": "Réponse du serveur illisible.",
         "adresse_invalide": "Adresse du serveur invalide : hôte:8640.",
         "fichier_illisible": "Fichier illisible.",
+        // Cloud : erreurs de la plate-forme et du client.
+        "jeton_invalide": "Connexion au cloud expirée ou révoquée : reconnectez-vous.",
+        "site_hors_ligne": "Ce site est hors ligne : son serveur RIP n'est pas relié à la plate-forme.",
+        "lecture_seule": "Votre compte est en lecture seule sur ce site.",
+        "ferme_par_cloud": "Cette fonction n'est pas disponible à distance : à faire depuis l'atelier.",
+        "cloud_sans_compte": "Ce serveur n'a aucun compte déclaré : accès à distance refusé.",
+        "cloud_annule": "Connexion au cloud annulée.",
+        "cloud_refuse": "Autorisation refusée sur la plate-forme.",
+        "cloud_etat_invalide": "Retour de la plate-forme refusé (vérification de sécurité échouée) : réessayez.",
+        "cloud_retour_invalide": "Retour de la plate-forme illisible : réessayez.",
+        "cloud_jeton_refuse": "La plate-forme a refusé l'échange du code : réessayez.",
+        "cloud_echec": "Connexion au cloud impossible.",
+        "cloud_session_inattendue": "Le site n'a pas ouvert de session pour ce compte.",
+        "trousseau_echec": "Le jeton n'a pas pu être gardé dans le trousseau.",
     ]
+
+    // Écrans du cloud.
+    static let cloudChoixLocal = "Serveur local"
+    static let cloudChoixCloud = "Se connecter au cloud"
+    static let cloudIntro = "Connectez-vous avec votre compte E-KO : vos sites s'affichent ici, sans second mot de passe."
+    static let cloudDeconnexion = "Se déconnecter du cloud"
+    static let cloudEnLigne = "En ligne"
+    static let cloudHorsLigne = "Hors ligne"
+    static let cloudAdminIndisponible = "Indisponible à distance pour l'instant"
+
+    /// Rôle sur un site, comme au portail.
+    static func roleCloud(_ role: String?) -> String {
+        switch role {
+        case "proprietaire": return "Propriétaire"
+        case "admin": return "Administrateur"
+        case "operateur": return "Opérateur"
+        case "lecture": return "Lecture seule"
+        default: return role ?? ""
+        }
+    }
 
     /// Pourquoi une sortie attend : (titre, explication), comme `raisons` de l'interface web.
     static let raisons: [String: (titre: String, aide: String)] = [
