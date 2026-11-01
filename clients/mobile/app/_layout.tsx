@@ -31,12 +31,11 @@ function Racine() {
     const id = reponse.notification.request.identifier;
     if (traitee.current === id) return;
     traitee.current = id;
-    const data = reponse.notification.request.content.data;
-    // Notifications du cloud (site hors ligne / de retour, nouvelle app connectée) : vers Machines
-    if (typeof data?.type === 'string' && data.type.startsWith('site_')) return router.navigate('/machines');
-    if (data?.type === 'nouvelle_app') return;
-    const ev = data?.evenement as Evenement | undefined;
-    router.navigate(ev && estEvenementMachine(ev.genre) ? '/machines' : '/alertes');
+    const ev = reponse.notification.request.content.data?.evenement as { genre?: string } | undefined;
+    // Notifications du cloud : site hors ligne / de retour → Machines ; nouvelle app connectée → rien
+    if (ev?.genre === 'nouvelle_app') return;
+    if (ev?.genre?.startsWith('site_')) return router.navigate('/machines');
+    router.navigate(ev && estEvenementMachine(ev.genre as Evenement['genre']) ? '/machines' : '/alertes');
   }, [reponse, statut]);
 
   return (
