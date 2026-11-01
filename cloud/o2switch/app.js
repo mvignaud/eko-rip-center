@@ -60,31 +60,49 @@ function port_libre(suite) {
 }
 
 // Un relais resté d'un lanceur arrêté brutalement : s'il répond, on s'en sert ; s'il bloque
-// le port sans répondre, on l'arrête (son pid est dans relais.pid).
+// le port sans répondre, on l'arrête (son pid est dans relais.pid). Le pid n'est utilisé
+// que s'il désigne bien notre binaire (un pid peut être réattribué).
 function ancien_pid() {
   try {
     const pid = Number(fs.readFileSync(PID, 'utf8').trim());
-    return Number.isInteger(pid) && pid > 1 ? pid : null;
+    if (!Number.isInteger(pid) || pid <= 1) return null;
+    const ligne = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+    return ligne.split('\0')[0] === BINAIRE ? pid : null;
   } catch (_) {
     return null;
   }
 }
 
+let adopte = false;
+let arret_demande = 0;
+
 function lancer() {
   if (arret || relais) return;
   sain((oui) => {
     if (oui) {
-      // Relais orphelin en bonne santé : on le garde, et on revérifie régulièrement.
+      // Relais orphelin en bonne santé : on le garde (sa sortie ne va pas dans relais.log),
+      // et on revérifie régulièrement.
+      if (!adopte) noter('relais déjà en marche, repris tel quel');
+      adopte = true;
       setTimeout(lancer, 10000);
       return;
     }
+    adopte = false;
     port_libre((libre) => {
-      if (libre) return demarrer();
+      if (libre) {
+        arret_demande = 0;
+        return demarrer();
+      }
       const pid = ancien_pid();
       if (pid) {
-        noter(`port ${PORT_INTERNE} occupé par un relais qui ne répond pas (pid ${pid}) : arrêt forcé`);
+        // D'abord SIGTERM (le relais enregistre ses données et s'arrête en 5 s au plus),
+        // SIGKILL seulement s'il est encore là 6 s plus tard.
+        const maintenant = Date.now();
+        if (!arret_demande) arret_demande = maintenant;
+        const signal = maintenant - arret_demande > 6000 ? 'SIGKILL' : 'SIGTERM';
+        noter(`port ${PORT_INTERNE} occupé par un relais qui ne répond pas (pid ${pid}) : ${signal}`);
         try {
-          process.kill(pid, 'SIGKILL');
+          process.kill(pid, signal);
         } catch (_) {
           // Déjà parti.
         }
@@ -96,12 +114,22 @@ function lancer() {
   });
 }
 
+// Journal : au-delà de 5 Mo, l'ancien devient relais.log.1 (un seul gardé).
+function tourner_journal() {
+  try {
+    if (fs.statSync(JOURNAL).size > 5 * 1024 * 1024) fs.renameSync(JOURNAL, `${JOURNAL}.1`);
+  } catch (_) {
+    // Pas de journal encore.
+  }
+}
+
 function demarrer() {
   const env = {
     ...process.env,
     EKO_CLOUD_ADDR: `127.0.0.1:${PORT_INTERNE}`,
     EKO_CLOUD_DATA: process.env.EKO_CLOUD_DATA || path.join(os.homedir(), 'eko-cloud-data'),
   };
+  tourner_journal();
   let sortie = 'ignore';
   try {
     sortie = fs.openSync(JOURNAL, 'a');
