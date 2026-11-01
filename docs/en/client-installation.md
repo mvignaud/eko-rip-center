@@ -29,9 +29,7 @@ turns the announcement off.
 
 ## First-launch warning
 
-Packages are not signed yet (a deliberate choice for now: Apple and Microsoft signing will
-come with mature releases). One approval per computer is enough:
-- **macOS 15 and later**: after the refusal, open **System Settings → Privacy & Security**,
-  scroll to the message about E-KO RIP Center → **Open Anyway**, then confirm with the Mac
-  password. On older macOS: right-click the app → **Open**, then confirm.
+The Mac client published in the releases is signed (Developer ID) and notarized by Apple: it
+opens without a warning. The Windows client is not signed yet; one approval per computer is
+enough:
 - **Windows**: “Windows protected your PC” → **More info** → **Run anyway**.
