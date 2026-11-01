@@ -516,3 +516,7 @@ section { padding: 96px 0; }
 .retour-demande.ok { background: rgba(48, 209, 88, .14); color: #1e8e3e; }
 .retour-demande.erreur { background: rgba(236, 0, 140, .1); color: #b0006a; }
 @media (prefers-color-scheme: dark) { .retour-demande.ok { color: #5fe08a; } .retour-demande.erreur { color: #ff6fbf; } }
+
+/* Page Cloud : prix des offres */
+.tuile .prix { margin: 4px 0 2px; color: var(--texte-2); font-size: 15px; }
+.tuile .prix strong { color: var(--texte); font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin-right: 4px; }

@@ -10,6 +10,7 @@ Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
 | Compatibilité machines et demande de pilote | `compatibilite/index.html`, `compatibilite/demande.php` |
 | Journal des versions | `changelog/index.html` |
 | Application mobile, confidentialité | `app/index.html`, `app/confidentialite/index.html` |
+| Cloud E-KO RIP : présentation, tarifs des offres, liens vers platform.e-ko.rip | `cloud/index.html` |
 | Mentions légales | `mentions-legales/index.html` |
 | Documentation (FR, EN) : générée, ne pas modifier à la main | `documentation/`, `assets/documentation.css`, `assets/documentation.js` |
 | Page 404 | `404.html` |
