@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pré-requis techniques · E-KO RIP Center</title>
+<meta name="description" content="Serveur Linux, processeur, mémoire, disque, réseau et postes clients : tout ce qu'il faut pour installer E-KO RIP Center dans un atelier.">
+<link rel="canonical" href="https://e-ko.rip/prerequis/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/#fonctionnement">Fonctionnement</a>
+      <a href="/#captures">Captures</a>
+      <a href="/#open-source">Open source</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<main id="contenu">
+<section class="heros" style="padding-bottom:24px">
+  <div class="heros-fond" aria-hidden="true"><span class="c"></span><span class="m"></span><span class="j"></span></div>
+  <div class="conteneur">
+    <span class="surtitre apparait">Pré-requis techniques</span>
+    <h1 class="apparait" style="font-size:clamp(36px,6vw,64px)">Ce qu'il faut pour installer le RIP.</h1>
+    <p class="chapo apparait">Un PC Linux dans l'atelier fait le serveur : il reçoit les fichiers, calcule les rendus et pilote les machines. Les postes de travail s'y connectent par le réseau, avec le client Mac ou Linux.</p>
+  </div>
+</section>
+
+<section style="padding-top:24px">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">Le serveur</span><h2>Choisir le poste serveur</h2><p>Le rendu des fichiers est la tâche la plus lourde. Ces chiffres sont des conseils tirés de l'atelier, pas une mesure : le temps d'un rendu dit vite si le poste est trop juste.</p></div>
+    <div class="grille">
+      <article class="tuile apparait niveau">
+        <span class="pastille">Plancher</span>
+        <h3>Essais et petit volume</h3>
+        <ul>
+          <li><strong>Processeur</strong> : 2 cœurs x86 64 bits</li>
+          <li><strong>Mémoire</strong> : 16 Go</li>
+          <li><strong>Disque</strong> : 500 Go</li>
+        </ul>
+        <p class="note-niveau">Le serveur de test de l'atelier tourne sur un Pentium de 2012 avec 16 Go et un disque mécanique : il suffit aux essais, c'est un plancher, pas une cible.</p>
+      </article>
+      <article class="tuile apparait niveau conseille">
+        <span class="pastille">Conseillé</span>
+        <h3>Atelier en production</h3>
+        <ul>
+          <li><strong>Processeur</strong> : 4 cœurs ou plus</li>
+          <li><strong>Mémoire</strong> : 16 Go</li>
+          <li><strong>Disque</strong> : SSD dédié aux données, 500 Go ou plus, en plus du disque système</li>
+        </ul>
+        <p class="note-niveau">Le serveur mène jusqu'à 4 rendus en même temps, un par cœur.</p>
+      </article>
+      <article class="tuile apparait niveau">
+        <span class="pastille">Grand format</span>
+        <h3>Bâches et haute résolution</h3>
+        <ul>
+          <li><strong>Processeur</strong> : 8 cœurs ou plus</li>
+          <li><strong>Mémoire</strong> : 32 Go ou plus</li>
+          <li><strong>Disque</strong> : SSD de données de 1 To ou plus</li>
+        </ul>
+        <p class="note-niveau">Pour des bâches de plusieurs dizaines de m² à 1 200 dpi, ou des travaux gardés longtemps.</p>
+      </article>
+    </div>
+
+    <div class="tableau-cadre apparait">
+      <table class="tableau">
+        <caption>Le poste serveur, point par point</caption>
+        <tbody>
+          <tr><th scope="row">Système</th><td>Ubuntu 24.04 LTS ou Debian 13. Une image d'installation Ubuntu toute prête est fournie (elle efface le disque du PC).</td></tr>
+          <tr><th scope="row">Architecture</th><td>PC 64 bits x86 (<code>amd64</code>). Les paquets et l'image sont construits pour elle uniquement : pas de Raspberry Pi ni de processeur ARM pour le serveur.</td></tr>
+          <tr><th scope="row">Disque des données</th><td>Un rendu pèse environ <strong>1 Go par m² à 600 dpi</strong> (le quart à 300 dpi, quatre fois plus à 1 200 dpi) : une bâche de 1,6 × 10 m à 600 dpi, c'est environ 16 Go. Un SSD réservé aux données évite qu'un gros rendu remplisse le système, et se change sans réinstaller. Le serveur purge seul les plus vieux travaux sous 5 Go libres et prévient sous 20 Go.</td></tr>
+          <tr><th scope="row">Réseau</th><td>Câble Ethernet entre le serveur, les machines et le switch, plutôt que le Wi-Fi. Adresse IP fixe (bail DHCP réservé) pour le serveur et pour chaque machine en réseau.</td></tr>
+          <tr><th scope="row">Ports USB</th><td>Un port libre par découpeuse branchée en USB.</td></tr>
+          <tr><th scope="row">Onduleur</th><td>Conseillé pour le serveur, le switch et la box. Une coupure arrête le rendu et la sortie en cours, qu'il faut relancer. Un onduleur qui prévient le serveur permet un arrêt propre.</td></tr>
+          <tr><th scope="row">Internet</th><td>Seulement en sortie (HTTPS), pour les mises à jour, l'ERP E-KO et, si vous l'activez, le Cloud E-KO RIP. Aucun port à ouvrir sur la box.</td></tr>
+          <tr><th scope="row">Logiciels</th><td>Installés tout seuls avec le paquet : Ghostscript pour le rendu des PDF. Rien d'autre à acheter.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">Les postes</span><h2>Clients de bureau et mobile</h2><p>Chaque poste de l'atelier envoie ses fichiers et suit la production. Le client est léger : tout le calcul se fait sur le serveur.</p></div>
+    <div class="grille deux">
+      <article class="tuile apparait"><h3>macOS</h3><p>macOS 14 Sonoma ou plus récent, Apple Silicon et Intel (application universelle, signée et notarisée).</p></article>
+      <article class="tuile apparait"><h3>Linux</h3><p>Ubuntu 24.04 ou Debian 13 et plus récents, en 64 bits, avec GTK 4 et libadwaita 1.4. Installé et mis à jour par APT.</p></article>
+      <article class="tuile apparait"><h3>Windows</h3><p>Le client Windows natif est en préparation. En attendant, un client Windows x64 est fourni sur demande.</p></article>
+      <article class="tuile apparait"><h3>iPhone et Android</h3><p>L'<a href="/app/">application mobile</a> suit la file, les machines et les alertes, à l'atelier ou de l'extérieur par le Cloud E-KO RIP.</p></article>
+    </div>
+    <p class="apparait" style="text-align:center;margin-top:28px;color:var(--texte-2)">Pas besoin de poste puissant : un ordinateur de bureau récent suffit pour le client.</p>
+  </div>
+</section>
+
+<section>
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">Réseau</span><h2>Ports à laisser passer dans l'atelier</h2><p>Uniquement sur le réseau local. Le port du serveur ne doit jamais être ouvert sur Internet : pour l'accès à distance, le Cloud E-KO RIP passe sans VPN ni redirection de port.</p></div>
+    <div class="tableau-cadre apparait">
+      <table class="tableau">
+        <thead><tr><th scope="col">Port</th><th scope="col">Sens</th><th scope="col">Pour</th></tr></thead>
+        <tbody>
+          <tr><td><code>8640</code> TCP</td><td>postes → serveur</td><td>Clients de bureau et mobile, renvoi entre deux RIP E-KO</td></tr>
+          <tr><td><code>5353</code> UDP</td><td>réseau local</td><td>Découverte automatique du serveur par les clients (mDNS)</td></tr>
+          <tr><td><code>9100</code> TCP</td><td>serveur → imprimante</td><td>Pilote direct de l'imprimante</td></tr>
+          <tr><td><code>161</code> UDP</td><td>serveur → imprimante</td><td>Lecture SNMP : support chargé, encres, alertes</td></tr>
+          <tr><td><code>631</code> TCP</td><td>serveur → CUPS</td><td>Sortie par IPP, si vous passez par une file CUPS</td></tr>
+          <tr><td><code>445</code> TCP</td><td>postes → serveur</td><td>Dossiers surveillés partagés (Samba), seulement si vous les utilisez</td></tr>
+          <tr><td><code>443</code> TCP</td><td>serveur → Internet</td><td>Mises à jour, ERP E-KO, Cloud E-KO RIP</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="appel apparait">
+      <h3>Votre machine est-elle prise en charge ?</h3>
+      <p>Imprimantes et découpeuses compatibles, types de branchement, et demande de pilote si la vôtre manque.</p>
+      <div class="actions"><a class="bouton bouton-plein" href="/compatibilite/">Voir la compatibilité machines</a><a class="bouton bouton-clair" href="/#installer">Installer</a></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/compatibilite/">Compatibilité machines</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

@@ -6,7 +6,10 @@ Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
 | Page | Fichier |
 |---|---|
 | Accueil : maquettes Mac / Windows / Linux, fonctionnalités, fonctionnement, open source, installation | `index.html` |
+| Pré-requis techniques (serveur, postes, réseau) | `prerequis/index.html` |
+| Compatibilité machines et demande de pilote | `compatibilite/index.html`, `compatibilite/demande.php` |
 | Journal des versions | `changelog/index.html` |
+| Application mobile, confidentialité | `app/index.html`, `app/confidentialite/index.html` |
 | Mentions légales | `mentions-legales/index.html` |
 | Page 404 | `404.html` |
 
@@ -23,6 +26,18 @@ L'abonnement du site appelle `POST https://app.e-ko.fr/changelog-rip/subscribe` 
 toujours l'ERP qui confirme l'adresse et envoie l'e-mail à son déploiement. Une nouvelle
 version apparaît donc sur le site sans le republier.
 
+## Demande de pilote
+
+Seul script du site : `compatibilite/demande.php` (PHP d'o2switch). Il reçoit le formulaire
+de `/compatibilite/`, envoie la demande par `mail()` à `contact@e-ko.rip` (Reply-To = le
+demandeur) et ne garde rien, sauf un compteur par IP hachée (5 envois par heure, dans le
+dossier temporaire de PHP). Pot de miel `website`, origine `https://e-ko.rip` seule, champs
+coupés et nettoyés des retours à la ligne. Avec JavaScript, la page reçoit la réponse en
+JSON ; sans, le script renvoie sur `/compatibilite/#demande-envoyee` ou `#demande-erreur` (message affiché par `:target`, sans JavaScript).
+
+Les chiffres des pré-requis et la liste des machines suivent `docs/fr/installation-serveur.md`
+et `docs/fr/machines.md` : les mettre à jour ensemble.
+
 ## Essayer en local
 
 ```bash
@@ -36,7 +51,7 @@ outils/publier-site.sh
 ```
 
 Hôte (`EKO_SITE_HOTE`, défaut `sc3nihe1770@fleur.o2switch.net`) et dossier racine du
-domaine dans cPanel (`EKO_SITE_DOSSIER`, défaut `e-ko.rip`) se changent par variables.
+domaine dans cPanel (`EKO_SITE_DOSSIER`, défaut `public_html`, racine du domaine e-ko.rip chez o2switch) se changent par variables.
 L'accès SSH d'o2switch n'est ouvert qu'aux adresses IP déclarées dans cPanel
 (« Autorisation SSH »).
 
