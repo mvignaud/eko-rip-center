@@ -10,7 +10,7 @@ demarrage:getting-started	guide/en/getting-started.md	Getting started	How the se
 serveur:server	guide/en/server.md	Install the server	Choose the computer, install the RIP server on Ubuntu from the APT repository, create accounts and connect the machines.
 clients	guide/en/clients.md	Install the clients	Install and connect the E-KO RIP Center client on Mac, Linux and Windows.
 application-mobile:mobile-app	guide/en/mobile-app.md	Mobile app	Follow production from an iOS or Android phone and get machine alerts.
-cloud	guide/en/cloud.md	E-KO RIP Cloud	Reach the print shop's RIP server from outside, with no VPN and no open port, through the free platform.e-ko.rip.
+cloud	guide/en/cloud.md	E-KO RIP Cloud	Reach the print shop's RIP server from outside, with no VPN and no open port, through the platform.e-ko.rip, free for a small shop, with paid plans for larger ones.
 == Use
 utilisation:usage	en/usage.md	User guide	Sending a job, the queue, printing, cutting, proofs, sheets, colour and media: every feature of the RIP.
 == Machines

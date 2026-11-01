@@ -5,7 +5,9 @@ d'atelier depuis l'extérieur, **sans VPN et sans ouvrir de port** : c'est le se
 ouvre lui-même une connexion sortante (HTTPS, port 443) vers la plate-forme, et la plate-forme
 fait passer par elle les requêtes des postes et de l'app mobile.
 
-Service gratuit, ouvert à tout serveur E-KO RIP Center. État : **lots 1 à 4** (tunnel,
+Ouvert à tout serveur E-KO RIP Center : l'offre **Gratuite** (1 site, 1 imprimante, 1 découpeur)
+est sans limite de durée ; les offres payantes ajoutent des machines, des sites et un historique
+de sauvegardes (voir « Offres et abonnement »). État : **lots 1 à 4** (tunnel,
 appairage, portail, « Se connecter au cloud » depuis les apps, une adresse par site). À
 distance, on se connecte soit avec **son compte de la plate-forme** (les apps), soit avec
 **un compte du serveur RIP** (navigateur, anciennes versions).
@@ -47,15 +49,18 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   **Google** / **Facebook** une fois leurs clés saisies en administration. Un e-mail déjà inscrit
   n'est lié à Google que si Google l'a vérifié ; jamais à Facebook sans connexion préalable
   (liaison depuis « Mon compte »).
-- **Mes sites** : état en ligne / hors ligne, adresse à distance, rôle ; rattacher (10 sites par
-  compte), retirer (le propriétaire ; tunnel coupé aussitôt).
+- **Mes sites** : état en ligne / hors ligne, adresse à distance, rôle, lien **Sauvegardes** ;
+  rattacher (autant de sites que l'offre en comprend), retirer (le propriétaire ; tunnel coupé
+  aussitôt).
+- **Abonnement** : offre en cours, machines comptées, moyen de paiement, factures (PDF), changer
+  d'offre ou résilier. Voir « Offres et abonnement ».
 - **Mon compte** : connexions liées, suppression du compte (et des sites possédés).
 - **Administration** (super-administrateur, donné par `eko-rip-cloud admin <e-mail>` sur le VPS) :
   clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
 - **E-mails** : voir la section « E-mails de la plate-forme » ci-dessous.
-- **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
+- **Pages légales** : `/mentions-legales`, `/cgu`, `/cgv`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
   RCS Auch 939 018 024, contact contact@e-ko.rip, pas de téléphone).
 - Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
   session ; 5 échecs de mot de passe bloquent le compte 5 minutes ; limites par adresse
@@ -217,6 +222,146 @@ n'est jamais affichée ni renvoyée).
 Tables de `portail.sqlite` : `notifications` (journal), `abonnements_web`, et deux colonnes de
 `jetons_applis` (`jeton_expo`, `plateforme_expo`).
 
+## Offres et abonnement
+
+Prix hors taxes, utilisateurs illimités dans toutes les offres. L'abonnement annuel coûte
+10 mois pour 12. Le détail est sur `/abonnement/offres` et dans les CGV (`/cgv`).
+
+| Offre | Prix | Sites | Machines | Sauvegardes | Stockage |
+|---|---|---|---|---|---|
+| Gratuit | 0 € | 1 | 1 imprimante + 1 découpeur | dernière version | 1 Go |
+| À la machine | 6 € / mois par machine au-delà des 2 gratuites | 1 | à la demande | 30 versions | 5 Go par machine |
+| Atelier | 19 € / mois | 1 | 5 (+4 € / mois par machine en plus) | 90 jours | 25 Go |
+| Pro | 49 € / mois | 3 | 15 (+4 € / mois par machine en plus) | 1 an, restauration vers un autre site | 100 Go |
+| Entreprise | sur devis | | | | |
+
+Les machines comptées sont celles que chaque serveur RIP déclare à la plate-forme (inventaire
+envoyé au démarrage, puis régulièrement) : rien à saisir à la main. La page **Abonnement** les
+liste site par site.
+
+### Souscrire
+
+1. **Abonnement › Voir les offres**, choisir l'offre et la périodicité (mensuelle ou annuelle).
+2. Renseigner l'entreprise : le SIREN remplit la raison sociale et l'adresse ; contact et e-mail
+   de facturation, téléphone mobile (pour le code du mandat SEPA), n° de bon de commande
+   facultatif, code promotionnel ou code partenaire facultatif (vérifié aussitôt, ses conditions
+   s'affichent). Cocher l'acceptation des CGV.
+3. Payer, sans quitter le portail :
+   - **Carte bancaire** : la carte est saisie dans le champ sécurisé du prestataire de paiement
+     (la plate-forme ne voit jamais son numéro). Si la banque demande une authentification
+     (3-D Secure), elle s'ouvre dans une fenêtre au-dessus de la page.
+   - **Prélèvement SEPA** : saisir l'IBAN et le titulaire ; le mandat s'affiche dans la page,
+     un code est envoyé par SMS, puis on signe en tapant son nom. Le mandat signé reste
+     téléchargeable depuis la page Abonnement. Un mandat vaut pour l'entreprise renseignée : si
+     elle change avant la signature, il faut en créer un nouveau.
+4. La première souscription d'une offre payante ouvre droit à **30 jours d'essai** quand l'offre
+   le prévoit. Un e-mail confirme l'abonnement, puis chaque facture émise.
+
+Tous les e-mails (confirmation, factures, relances, fin d'essai) viennent de la plate-forme,
+au contact de facturation ; les factures sont émises au début de chaque période.
+
+### Changer d'offre, résilier, impayés
+
+- **Changer d'offre ou de périodicité** : immédiat ; l'abonnement précédent s'arrête et une
+  nouvelle période commence au prix de la nouvelle offre, avec le même moyen de paiement.
+- **Changer de moyen de paiement** : depuis la page Abonnement (nouvelle carte ou nouveau mandat).
+- **Résilier** : effet à la fin de la période en cours (non remboursée), puis retour à l'offre
+  Gratuite.
+- **Paiement refusé** : e-mail aussitôt, nouvelles tentatives, relances vers J+3, J+7 et J+14 ;
+  sans régularisation, l'abonnement est résilié et le compte revient à l'offre Gratuite.
+
+### Dépassement de l'offre
+
+Quand le parc dépasse l'offre (site ou machines en trop), le propriétaire et les administrateurs
+des sites sont prévenus (e-mail, notification, bandeau sur Mes sites et Abonnement). Ils ont
+**14 jours** pour souscrire une offre adaptée ou retirer ce qui dépasse (30 jours après la mise
+en service des offres pour les comptes existants). Passé ce délai, **l'accès à distance** des
+sites concernés est suspendu (réponse `402 offre_depassee`, page explicative dans le
+navigateur) ; le travail dans l'atelier n'est jamais interrompu. L'accès revient dès que le parc
+rentre dans l'offre.
+
+## Sauvegardes en ligne
+
+Un serveur RIP rattaché peut envoyer à la plate-forme une sauvegarde de ses réglages (la nuit,
+après un changement ou à la demande). Elles sont **chiffrées** et stockées chez un hébergeur en
+France. Une sauvegarde identique à la précédente n'est pas stockée deux fois ; celle de la nuit
+part quand même et confirme à la plate-forme que le serveur sauvegarde bien.
+
+- **Mes sites › Sauvegardes** : liste des versions (date, motif, taille), place utilisée et
+  quota de l'offre. Chaque version se télécharge, ou se **restaure** sur le serveur RIP (le
+  serveur reçoit l'ordre par le tunnel, vérifie qu'il vient bien de la plate-forme et applique
+  la sauvegarde). Avec l'offre **Pro**, une sauvegarde peut être restaurée vers un autre site
+  du même propriétaire.
+- Conservation selon l'offre : dernière version (Gratuit), 30 versions (À la machine), 90 jours
+  (Atelier), 1 an (Pro). La version la plus récente est toujours gardée.
+- Quota plein : la plate-forme prévient le propriétaire et refuse les nouvelles sauvegardes
+  jusqu'à ce qu'il y ait de la place (offre supérieure ou versions supprimées par la rotation).
+- Pas de sauvegarde de nuit reçue depuis plus de deux jours : e-mail au propriétaire et aux
+  administrateurs du site. Le résumé hebdomadaire indique l'état des sauvegardes de chaque site.
+- Retour à l'offre Gratuite : les versions existantes restent 90 jours, puis seule la dernière
+  est gardée. Site retiré : ses sauvegardes sont supprimées 90 jours après la dernière.
+
+Côté serveur RIP, l'échange se fait avec la clé du site (`Authorization: Bearer <site>.<clé>`) :
+
+| Requête | Rôle |
+|---|---|
+| `POST /api/site/inventaire` | machines déclarées (`{version, imprimantes:[{id, nom, modele}], decoupeurs:[…]}`) ; réponse `{offre, sauvegardes, depassement}` |
+| `POST /api/site/sauvegardes` | envoi d'une archive (200 Mo au plus), en-têtes `X-EKO-Motif` (`nuit`, `changement`, `demande`) et `X-EKO-Empreinte` (SHA-256) ; `201 {id}`, `409 identique`, `413 quota`, `402 offre` |
+| `GET /api/site/sauvegardes` | versions disponibles pour ce site |
+| `GET /api/site/sauvegardes/<id>` | contenu d'une version |
+
+La restauration est un `POST /api/cloud/restaurer` (`{id}`) envoyé par la plate-forme dans le
+tunnel, signé dans l'en-tête `X-EKO-Cloud-Service: t=<horodatage>,v1=<HMAC-SHA256>` (clé : empreinte
+de la clé du site, message `<t>.<corps>`) ; le serveur refuse une signature fausse ou de plus de
+5 minutes.
+
+## Régler la facturation et le stockage (administration)
+
+Tout se règle dans **Administration**, jamais dans un fichier : les clés et secrets saisis ne
+sont jamais réaffichés (champ vide = valeur gardée, case « Effacer » pour la retirer). Chaque
+carte a un bouton **Tester**.
+
+- **Facturation** : adresse de l'API de l'outil de facturation et son jeton (droits tiers,
+  abonnements, plans, codes partenaires, mandats SEPA et factures en lecture), secret de
+  signature des webhooks, clé publique du prestataire de paiement (`pk_…`), et le code de plan
+  de chaque offre et périodicité (À la machine, Atelier, Pro, machines supplémentaires ×
+  mensuel / annuel). Une offre sans code de plan n'est pas proposée. Le webhook à déclarer dans
+  l'outil de facturation est `https://platform.e-ko.rip/api/erp/webhooks` (événements abonnement,
+  cycle de facturation, relance, mandat SEPA) ; les e-mails aux clients de l'outil de
+  facturation restent désactivés, la plate-forme les envoie elle-même.
+- **Stockage** : point d'accès S3, région, compartiment, clé d'accès et clé secrète, chiffrement
+  côté serveur ; et un compartiment séparé pour la copie quotidienne de la base du portail.
+- **Abonnements** : vue d'ensemble des comptes, de leur offre, de leurs machines et des
+  dépassements en cours.
+
+## Côté serveur RIP : inventaire, sauvegarde et restauration
+
+L'offre se paie **par machine** (gratuit : 1 site, 1 imprimante et 1 découpeur). Pour que la
+plate-forme les compte, le serveur RIP déclare ses machines (identifiant, nom, modèle ; les
+imprimantes d'un côté, les traceurs et tables de découpe de l'autre) à l'ouverture du tunnel,
+à chaque changement du catalogue et toutes les 6 heures. Une machine qui imprime (y compris
+la Roland VersaCAMM, qui découpe elle-même) compte comme imprimante. La plate-forme répond
+avec l'offre du site, et si elle inclut les sauvegardes ou si le site dépasse son forfait.
+
+Les offres payantes incluent la **sauvegarde en ligne de la configuration** : la même archive
+que Système › Sauvegarde (machines, réglages, profils ICC, règles, gabarits, tons directs,
+tarifs, découpe…, ni les comptes ni les travaux), envoyée à la plate-forme qui la conserve. Le serveur la pousse :
+
+- **chaque nuit**, à une minute tirée au hasard entre 1 h et 5 h (heure du serveur), seulement
+  si la configuration a changé ;
+- **2 minutes après un changement** de configuration ;
+- **à la demande**, par un administrateur : `POST /api/cloud/sauvegarder`.
+
+Sur une offre sans sauvegarde, le serveur n'insiste pas jusqu'au prochain inventaire qui l'autorise.
+`GET /api/cloud` expose `sauvegarde` (`derniere` : date Unix ou `null`, `etat` : `ok`, `offre`,
+`quota` ou `erreur`, `message`) et `abonnement` (`offre`, `sauvegardes`, `depassement`).
+
+**Restaurer** : depuis le portail, la plate-forme envoie par le tunnel `POST /api/cloud/restaurer`
+`{"id": "…"}`, signé (`X-EKO-Cloud-Service: t=<unix>,v1=<hex>`, HMAC-SHA256 avec le SHA-256 de
+la clé du site, message `<t>.<corps>`, tolérance 300 s, une signature ne sert qu'une fois). Le
+serveur télécharge l'archive et l'applique comme `POST /api/sauvegarde`. Sans signature valide :
+401 `signature_cloud_invalide`, session ou non.
+
 ## Ce qui ne passe jamais par le cloud
 
 Une requête arrivée par le tunnel est marquée par le serveur lui-même (une requête du réseau
@@ -224,7 +369,7 @@ local ne peut pas porter cette marque). Le serveur refuse alors, avec le code `f
 
 - les routes du pont ERP et le renvoi entre RIP (`/api/renvoi/…`) ;
 - les réglages du pont ERP (`/api/pont…`) et les changements du cloud lui-même (appairage,
-  détachement : à faire depuis l'atelier).
+  détachement : à faire depuis l'atelier), sauf l'ordre de restauration signé de la plate-forme.
 
 Sans compte déclaré, toute requête venue par le cloud est refusée (`cloud_sans_compte`).
 

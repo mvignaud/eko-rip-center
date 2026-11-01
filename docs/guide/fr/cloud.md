@@ -1,4 +1,4 @@
-Le cloud **E-KO RIP** donne accès au serveur RIP de l'atelier depuis l'extérieur : à la maison, chez un client, en déplacement. Il fonctionne sans VPN et sans rien changer à la box Internet. Le service est gratuit pour tout serveur E-KO RIP Center.
+Le cloud **E-KO RIP** donne accès au serveur RIP de l'atelier depuis l'extérieur : à la maison, chez un client, en déplacement. Il fonctionne sans VPN et sans rien changer à la box Internet. Le service est gratuit pour un petit atelier ; des [offres payantes](#offres-et-abonnement) couvrent les ateliers plus grands.
 
 ![Schéma du cloud : atelier, connexion sortante, plate-forme, postes et téléphones à distance](../images/schema-cloud.svg "Le serveur de l'atelier se connecte à la plate-forme, les postes et téléphones à distance passent par elle")
 
@@ -226,6 +226,81 @@ L'accès à distance s'arrête aussitôt. Pour le rétablir, refaire le rattache
 
 Seul le propriétaire peut retirer un site.
 
+## Offres et abonnement
+
+Le cloud reste **gratuit pour un petit atelier** (1 site, 1 imprimante et 1 découpeur). Des offres payantes s'ajoutent pour les ateliers qui ont plus de machines ou plusieurs sites. Les prix sont **hors taxes**, et le nombre d'utilisateurs est **illimité** dans toutes les offres. Les offres payantes s'adressent aux professionnels.
+
+| Offre | Prix (HT) | Sites | Machines | Sauvegardes en ligne | Stockage |
+|---|---|---|---|---|---|
+| Gratuit | 0 €, sans limite de durée | 1 | 1 imprimante + 1 découpeur | dernière version | 1 Go |
+| À la machine | 6 € / mois par machine en plus des machines gratuites | 1 | à la demande | 30 versions | 5 Go par machine |
+| Atelier | 19 € / mois | 1 | jusqu'à 5 (+4 € / mois par machine en plus) | 90 jours | 25 Go |
+| Pro | 49 € / mois | 3 | jusqu'à 15 (+4 € / mois par machine en plus) | 1 an, restauration vers un autre site | 100 Go |
+| Entreprise | sur devis | | | | |
+
+- **Abonnement annuel** : 10 mois payés pour 12 mois de service.
+- **Essai** : la première souscription d'une offre payante peut ouvrir droit à 30 jours d'essai de l'offre Atelier, quand il est proposé ; il est indiqué au moment de souscrire.
+- **Machines comptées** : ce sont celles que votre serveur RIP déclare lui-même à la plate-forme. Il n'y a rien à saisir à la main ; la page **Abonnement** les liste site par site.
+- **Entreprise** : pour un besoin plus large, écrire à contact@e-ko.rip.
+- Les conditions complètes sont dans les [CGV](https://platform.e-ko.rip/cgv).
+
+### Souscrire une offre
+
+1. Ouvrir **Abonnement**, puis **Voir les offres**.
+2. Choisir l'offre et la périodicité (mensuelle ou annuelle).
+3. Renseigner l'entreprise. Saisir le SIREN ou le SIRET remplit automatiquement la raison sociale et l'adresse. Ajouter le contact, l'adresse e-mail de facturation et, si besoin, un numéro de bon de commande.
+4. Si vous avez un code, le saisir dans le champ unique **Code promo ou partenaire**. Il est vérifié aussitôt et ses conditions s'affichent.
+5. Cocher l'acceptation des CGV, puis choisir le moyen de paiement. Tout se fait dans la page, sans la quitter :
+   - **Carte bancaire** : saisir la carte dans le champ sécurisé. Si la banque demande une confirmation (3-D Secure), elle s'affiche dans la page.
+   - **Prélèvement SEPA** : saisir l'IBAN. Le mandat s'affiche dans la page ; un code est envoyé par SMS au téléphone mobile indiqué, et on signe le mandat par voie électronique en saisissant ce code.
+
+Un e-mail confirme l'abonnement, puis chaque facture. Les factures sont émises par **GOLDEN PRINT** ; tous les e-mails viennent de **E-KO RIP**.
+
+### Gérer son abonnement
+
+La page **Abonnement** permet de :
+
+- voir l'**utilisation** : machines et sites comptés, place de sauvegarde utilisée ;
+- télécharger les **factures** au format PDF ;
+- **changer d'offre** ou de périodicité : le changement est immédiat et une nouvelle période commence au prix de la nouvelle offre ;
+- changer de **moyen de paiement** (nouvelle carte ou nouveau mandat) ;
+- **résilier** : la résiliation prend effet à la fin de la période en cours, qui n'est pas remboursée, puis le compte revient à l'offre Gratuite.
+
+Si un paiement échoue, un e-mail le signale et de nouvelles tentatives ont lieu, avec des relances. Sans régularisation, l'abonnement est résilié et le compte revient à l'offre Gratuite.
+
+### Si le parc dépasse l'offre
+
+Quand il y a plus de sites ou de machines que l'offre n'en comprend :
+
+1. Un **e-mail** prévient le propriétaire et les administrateurs des sites.
+2. Un **délai de 14 jours** permet de souscrire une offre adaptée ou de retirer les machines ou sites en trop.
+3. Passé ce délai, l'**accès à distance** des sites concernés est **suspendu** jusqu'à régularisation.
+
+> [!NOTE]
+> L'utilisation à l'atelier n'est jamais touchée : le serveur RIP continue d'imprimer et de découper normalement. Seul l'accès à distance est suspendu.
+
+## Sauvegardes en ligne
+
+Le serveur RIP peut envoyer à la plate-forme une sauvegarde de sa **configuration** : c'est la même archive que **Système › Sauvegarde** (machines, réglages, profils ICC…). Elle ne contient **ni les travaux ni les comptes**. Les sauvegardes sont chiffrées et hébergées en France.
+
+- **Quand** : chaque nuit (si la configuration a changé), environ 2 minutes après une modification, et à la demande d'un administrateur.
+- **Combien de temps** : selon l'offre, la dernière version (Gratuit), 30 versions (À la machine), 90 jours (Atelier) ou 1 an (Pro). La plus récente est toujours gardée.
+- **Alertes de place** : le propriétaire est prévenu quand le quota atteint 80 %, puis 100 %. À 100 %, les nouvelles sauvegardes sont refusées jusqu'à ce que de la place se libère ou que l'offre change.
+- **Alerte d'échec** : si aucune sauvegarde de nuit n'arrive pendant deux nuits, un e-mail prévient le propriétaire et les administrateurs du site.
+
+### Restaurer une sauvegarde
+
+Le propriétaire et les administrateurs du site peuvent restaurer depuis le portail.
+
+1. Ouvrir **Mes sites**, puis les **Sauvegardes** du site.
+2. Repérer la version voulue (date, motif, taille). Elle peut aussi être téléchargée.
+3. Cliquer sur **Restaurer** et confirmer. La configuration du serveur RIP est remplacée par celle de la sauvegarde.
+
+Avec l'offre **Pro**, une sauvegarde peut aussi être restaurée vers un **autre site** du même propriétaire.
+
+> [!WARNING]
+> Une restauration remplace la configuration actuelle du serveur. En cas de doute, télécharger d'abord une sauvegarde de l'état actuel.
+
 ## Ce qui ne passe jamais par le cloud
 
 Certaines fonctions restent réservées à l'atelier, même avec le cloud :
@@ -266,6 +341,14 @@ Créer un compte sur le serveur (voir [Administrer le serveur](administration.md
 ### J'ai oublié mon mot de passe
 
 Utiliser **Mot de passe oublié ?** sur la page de connexion (voir plus haut). S'il s'agit d'un compte du serveur RIP, voir [Administrer le serveur](administration.md#comptes).
+
+### Mon accès à distance est suspendu
+
+L'offre est dépassée depuis plus de 14 jours (trop de machines ou de sites). Ouvrir **Abonnement** : souscrire une offre adaptée ou retirer les machines en trop rétablit l'accès. L'utilisation à l'atelier n'a pas été interrompue.
+
+### Je ne trouve pas mes sauvegardes en ligne
+
+Elles se trouvent dans **Mes sites › Sauvegardes**. Si la dernière est ancienne, vérifier que le site est en ligne et que le quota de l'offre n'est pas plein.
 
 ### Je ne reçois pas les e-mails
 

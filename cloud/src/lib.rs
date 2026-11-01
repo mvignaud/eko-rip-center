@@ -9,17 +9,22 @@
 //! qu'à traverser les frontaux (LiteSpeed, Passenger…) qui refusent tout autre `Upgrade`.
 //! La plate-forme accepte encore `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
 
+pub mod abonnements;
 pub mod appairage;
 pub mod applis;
 pub mod base;
 pub mod client;
 pub mod courriels;
+pub mod erp;
 pub mod evenements;
 pub mod installations;
 pub mod montant;
 pub mod notifications;
+pub mod offres;
 pub mod portail;
 pub mod rapports;
+pub mod s3;
+pub mod sauvegardes;
 pub mod relais;
 pub mod sites;
 pub mod temps;
@@ -45,6 +50,25 @@ pub fn aleatoire_hex(octets: usize) -> String {
 pub fn sha256_hex(texte: &str) -> String {
     use sha2::Digest;
     sha2::Sha256::digest(texte.as_bytes()).iter().map(|o| format!("{o:02x}")).collect()
+}
+
+/// Hexadécimal minuscule.
+pub fn hex(octets: &[u8]) -> String {
+    octets.iter().map(|o| format!("{o:02x}")).collect()
+}
+
+/// Empreinte SHA-256 d'octets, en hexadécimal.
+pub fn sha256_octets_hex(octets: &[u8]) -> String {
+    use sha2::Digest;
+    hex(&sha2::Sha256::digest(octets))
+}
+
+/// HMAC-SHA256 (webhooks de l'ERP, commandes de restauration, signature AWS).
+pub fn hmac_sha256(cle: &[u8], message: &[u8]) -> Vec<u8> {
+    use hmac::{KeyInit, Mac};
+    let mut m = hmac::Hmac::<sha2::Sha256>::new_from_slice(cle).expect("HMAC accepte toute clé");
+    m.update(message);
+    m.finalize().into_bytes().to_vec()
 }
 
 /// Base64 « URL » sans remplissage (RFC 4648 § 5), pour PKCE et l'en-tête d'identité.

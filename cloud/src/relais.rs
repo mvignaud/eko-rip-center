@@ -63,6 +63,8 @@ pub struct Relais {
     /// Proposer `eko-tunnel/2` aux serveurs RIP qui le connaissent (frontal qui retient le
     /// sens montant des WebSocket : hébergement mutualisé).
     montant_post: std::sync::atomic::AtomicBool,
+    /// Sites dont l'accès à distance est suspendu (offre dépassée), tenus par `abonnements`.
+    suspendus: Mutex<std::collections::HashSet<String>>,
 }
 
 pub type Partage = Arc<Relais>;
@@ -73,7 +75,8 @@ pub fn nouveau(config: Config) -> Partage {
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
     // Clés VAPID du Web Push : créées au premier démarrage.
     crate::notifications::cle_vapid(&base).expect("clés VAPID");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")) })
+    let suspendus = base.prepare("SELECT site FROM sites_suspendus").and_then(|mut q| q.query_map([], |l| l.get::<_, String>(0))?.collect::<rusqlite::Result<_>>()).unwrap_or_default();
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")), suspendus: Mutex::new(suspendus) })
 }
 
 impl Relais {
@@ -95,6 +98,15 @@ impl Relais {
         let (jeton, depot) = (v("github_jeton")?, v("github_depot")?);
         let api = std::env::var("EKO_CLOUD_GITHUB_API").ok().filter(|v| !v.is_empty()).unwrap_or_else(|| "https://api.github.com".into());
         Some(crate::rapports::Github { jeton, depot, api })
+    }
+
+    /// Remplace l'ensemble des sites suspendus (offre dépassée au-delà du délai de grâce).
+    pub fn regler_suspendus(&self, sites: std::collections::HashSet<String>) {
+        *self.suspendus.lock().unwrap_or_else(|p| p.into_inner()) = sites;
+    }
+
+    pub fn est_suspendu(&self, site: &str) -> bool {
+        self.suspendus.lock().unwrap_or_else(|p| p.into_inner()).contains(site)
     }
 
     pub fn connectes(&self) -> Vec<String> {
@@ -174,6 +186,34 @@ pub fn routes(relais: Partage) -> Router {
         .route("/admin/courriels", post(portail::regler_courriels))
         .route("/admin/courriels/essai", post(portail::essai_courriel))
         .route("/admin/rapports/{reference}", get(portail::voir_rapport))
+        .route("/admin/facturation", post(crate::abonnements::regler_facturation))
+        .route("/admin/facturation/essai", post(crate::abonnements::essai_facturation))
+        .route("/admin/stockage", post(crate::sauvegardes::regler_stockage))
+        .route("/admin/stockage/essai", post(crate::sauvegardes::essai_stockage))
+        .route("/abonnement", get(crate::abonnements::page_abonnement))
+        .route("/abonnement/offres", get(crate::abonnements::page_offres))
+        .route("/abonnement/souscrire", get(crate::abonnements::souscription).post(crate::abonnements::souscrire))
+        .route("/abonnement/entreprise", get(crate::abonnements::chercher_entreprise))
+        .route("/abonnement/code", get(crate::abonnements::verifier_code_route))
+        .route("/abonnement/paiement", get(crate::abonnements::page_paiement))
+        .route("/abonnement/paiement/carte", post(crate::abonnements::carte))
+        .route("/abonnement/paiement/carte/{paiement}", get(crate::abonnements::suivi_carte))
+        .route("/abonnement/paiement/sepa", post(crate::abonnements::creer_mandat))
+        .route("/abonnement/paiement/sepa/code", post(crate::abonnements::envoyer_code_sms))
+        .route("/abonnement/paiement/sepa/signer", post(crate::abonnements::signer))
+        .route("/abonnement/paiement/sepa/annuler", post(crate::abonnements::annuler_mandat))
+        .route("/abonnement/3ds-retour", get(crate::abonnements::retour_3ds))
+        .route("/abonnement/mandat.pdf", get(crate::abonnements::mandat_pdf))
+        .route("/abonnement/factures/{fichier}", get(crate::abonnements::facture_pdf))
+        .route("/abonnement/changer", post(crate::abonnements::changer))
+        .route("/abonnement/resilier", post(crate::abonnements::resilier))
+        .route("/api/erp/webhooks", post(crate::abonnements::webhook).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
+        .route("/sites/{site}/sauvegardes", get(crate::sauvegardes::page_site))
+        .route("/sites/{site}/sauvegardes/{id}", get(crate::sauvegardes::telecharger))
+        .route("/sites/{site}/sauvegardes/{id}/restaurer", post(crate::sauvegardes::restaurer))
+        .route("/api/site/inventaire", post(crate::sauvegardes::recevoir_inventaire).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
+        .route("/api/site/sauvegardes", post(crate::sauvegardes::recevoir_sauvegarde).get(crate::sauvegardes::lister_pour_site).layer(axum::extract::DefaultBodyLimit::max(crate::sauvegardes::MAX_ARCHIVE)))
+        .route("/api/site/sauvegardes/{id}", get(crate::sauvegardes::lire_pour_site))
         .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
         .route("/auth/{fournisseur}", get(portail::partir_oauth))
         .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
@@ -266,6 +306,8 @@ pub async fn entretenir(relais: Partage) {
         appairage::purger_validations(&relais.config.donnees);
         enregistrer_installations(&relais).await;
         crate::evenements::entretenir(&relais).await;
+        crate::abonnements::entretenir(&relais).await;
+        crate::sauvegardes::entretenir(&relais).await;
         let d = relais.config.donnees.clone();
         let _ = tokio::task::spawn_blocking(move || crate::rapports::purger(&d, crate::maintenant())).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {
@@ -626,6 +668,9 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
     let envoi = relais.tunnels.lock().unwrap().get(&site).map(|t| t.envoi.clone());
     // Site inconnu ou hors ligne : même réponse (on ne dit pas quels sites existent).
     let Some(mut envoi) = envoi else { return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne") };
+    if relais.est_suspendu(&site) {
+        return acces_suspendu(requete.headers());
+    }
     let max = relais.config.max_octets;
     let longueur = requete.headers().get(header::CONTENT_LENGTH).and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
     if longueur.is_some_and(|l| l > max) {
@@ -719,6 +764,42 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
         return Response::from_parts(p, Body::empty());
     }
     Response::from_parts(p, Body::new(corps))
+}
+
+/// Réponse 402 d'un site dont l'accès à distance est suspendu (offre dépassée) : page lisible
+/// pour un navigateur, JSON pour les apps.
+fn acces_suspendu(entetes: &HeaderMap) -> Response {
+    const MESSAGE: &str = "Accès à distance suspendu — offre dépassée. L'usage dans l'atelier n'est pas touché : le propriétaire du site doit changer d'offre ou retirer des machines sur platform.e-ko.rip.";
+    let html = entetes.get(header::ACCEPT).and_then(|v| v.to_str().ok()).is_some_and(|a| a.contains("text/html"));
+    let mut rep = if html {
+        (StatusCode::PAYMENT_REQUIRED, axum::response::Html(r#"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Accès à distance suspendu</title></head><body style="font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 34rem; margin: 4rem auto; padding: 0 1rem; color: #1d1d1f"><h1 style="font-size: 22px">Accès à distance suspendu — offre dépassée</h1><p>Ce site E-KO RIP dépasse ce que comprend l'offre E-KO RIP Cloud de son propriétaire, et le délai de grâce de 14 jours est écoulé.</p><p>L'usage dans l'atelier n'est pas touché. Pour rétablir l'accès à distance, le propriétaire du site choisit une offre adaptée ou retire des machines : <a href="https://platform.e-ko.rip/abonnement">platform.e-ko.rip/abonnement</a>.</p></body></html>"#)).into_response()
+    } else {
+        (StatusCode::PAYMENT_REQUIRED, Json(serde_json::json!({ "code": "offre_depassee", "message": MESSAGE }))).into_response()
+    };
+    rep.headers_mut().insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"));
+    rep.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    rep
+}
+
+/// Requête interne de la plate-forme vers un serveur RIP, dans son tunnel (restauration
+/// d'une sauvegarde…). Rend le statut et le corps de la réponse (1 Mo au plus).
+pub async fn appeler_site(relais: &Partage, site: &str, methode: Method, chemin: &str, entetes: Vec<(HeaderName, HeaderValue)>, corps: Bytes) -> Result<(u16, Bytes), String> {
+    use http_body_util::BodyExt;
+    let envoi = relais.tunnels.lock().unwrap().get(site).map(|t| t.envoi.clone());
+    let Some(mut envoi) = envoi else { return Err("site hors ligne".into()) };
+    let uri: Uri = format!("http://rip{chemin}").parse().map_err(|_| "adresse invalide".to_string())?;
+    let mut q = axum::http::Request::builder().method(methode).uri(uri);
+    for (n, v) in entetes {
+        q = q.header(n, v);
+    }
+    let q = q.body(Body::from(corps)).map_err(|e| e.to_string())?;
+    if !matches!(tokio::time::timeout(Duration::from_secs(10), envoi.ready()).await, Ok(Ok(()))) {
+        return Err("site hors ligne".into());
+    }
+    let rep = tokio::time::timeout(Duration::from_secs(60), envoi.send_request(q)).await.map_err(|_| "site muet".to_string())?.map_err(|e| e.to_string())?;
+    let statut = rep.status().as_u16();
+    let corps = tokio::time::timeout(Duration::from_secs(60), http_body_util::Limited::new(rep.into_body(), 1024 * 1024).collect()).await.map_err(|_| "site muet".to_string())?.map_err(|e| e.to_string())?.to_bytes();
+    Ok((statut, corps))
 }
 
 #[cfg(test)]

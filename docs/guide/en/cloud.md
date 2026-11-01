@@ -1,4 +1,4 @@
-**E-KO RIP Cloud** gives access to the shop's RIP server from outside: from home, at a customer's site, on the road. It works with no VPN and without changing anything on the Internet router. The service is free for any E-KO RIP Center server.
+**E-KO RIP Cloud** gives access to the shop's RIP server from outside: from home, at a customer's site, on the road. It works with no VPN and without changing anything on the Internet router. The service is free for a small shop; [paid plans](#plans-and-subscription) cover larger shops.
 
 ![Cloud diagram: shop, outgoing connection, platform, remote workstations and phones](../images/schema-cloud.en.svg "The shop's server connects to the platform; remote workstations and phones go through it")
 
@@ -226,6 +226,81 @@ Remote access stops immediately. To restore it, link the server again with a new
 
 Only the owner can remove a site.
 
+## Plans and subscription
+
+The Cloud stays **free for a small shop** (1 site, 1 printer and 1 cutter). Paid plans are available for shops with more machines or several sites. Prices are **excluding VAT**, and the number of users is **unlimited** on every plan. Paid plans are for businesses.
+
+| Plan | Price (excl. VAT) | Sites | Machines | Online backups | Storage |
+|---|---|---|---|---|---|
+| Free | €0, no time limit | 1 | 1 printer + 1 cutter | latest version | 1 GB |
+| Per machine | €6 / month per machine beyond the free ones | 1 | as needed | 30 versions | 5 GB per machine |
+| Atelier | €19 / month | 1 | up to 5 (+€4 / month per extra machine) | 90 days | 25 GB |
+| Pro | €49 / month | 3 | up to 15 (+€4 / month per extra machine) | 1 year, restore to another site | 100 GB |
+| Enterprise | on quote | | | | |
+
+- **Annual subscription**: 10 months paid for 12 months of service.
+- **Trial**: the first subscription to a paid plan may include a 30-day trial of the Atelier plan, where offered; it is shown when you subscribe.
+- **Machines counted**: those your RIP server declares to the platform itself. There is nothing to type in; the **Subscription** page lists them site by site.
+- **Enterprise**: for larger needs, write to contact@e-ko.rip.
+- Full terms are in the [terms of sale](https://platform.e-ko.rip/cgv) (in French).
+
+### Subscribing to a plan
+
+1. Open **Subscription**, then **See the plans**.
+2. Choose the plan and the billing period (monthly or annual).
+3. Fill in the company. Entering the SIREN or SIRET fills in the company name and address automatically. Add the contact, the billing e-mail address and, if needed, a purchase order number.
+4. If you have a code, enter it in the single **Promo or partner code** field. It is checked straight away and its conditions are shown.
+5. Tick the acceptance of the terms of sale, then choose the payment method. Everything happens on the page, without leaving it:
+   - **Bank card**: enter the card in the secure field. If the bank asks for confirmation (3-D Secure), it appears on the page.
+   - **SEPA direct debit**: enter the IBAN. The mandate is shown on the page; a code is sent by SMS to the mobile number given, and you sign the mandate electronically by entering that code.
+
+An e-mail confirms the subscription, then each invoice. Invoices are issued by **GOLDEN PRINT**; all e-mails come from **E-KO RIP**.
+
+### Managing your subscription
+
+The **Subscription** page lets you:
+
+- see your **usage**: machines and sites counted, backup space used;
+- download **invoices** as PDF;
+- **change plan** or billing period: the change is immediate and a new period starts at the price of the new plan;
+- change the **payment method** (new card or new mandate);
+- **cancel**: cancellation takes effect at the end of the current period, which is not refunded, then the account returns to the Free plan.
+
+If a payment fails, an e-mail says so and further attempts are made, with reminders. If it is not settled, the subscription is cancelled and the account returns to the Free plan.
+
+### When the fleet exceeds the plan
+
+When there are more sites or machines than the plan includes:
+
+1. An **e-mail** warns the owner and the site administrators.
+2. A **14-day grace period** lets you subscribe to a suitable plan or remove the extra machines or sites.
+3. After that, **remote access** to the sites concerned is **suspended** until the situation is put right.
+
+> [!NOTE]
+> Work in the shop is never affected: the RIP server keeps printing and cutting normally. Only remote access is suspended.
+
+## Online backups
+
+The RIP server can send the platform a backup of its **configuration**: it is the same archive as **System › Backup** (machines, settings, ICC profiles...). It contains **neither jobs nor accounts**. Backups are encrypted and hosted in France.
+
+- **When**: every night (if the configuration changed), about 2 minutes after a change, and on demand by an administrator.
+- **How long**: depending on the plan, the latest version (Free), 30 versions (Per machine), 90 days (Atelier) or 1 year (Pro). The most recent one is always kept.
+- **Space alerts**: the owner is warned when the quota reaches 80%, then 100%. At 100%, new backups are refused until space is freed or the plan changes.
+- **Failure alert**: if no nightly backup arrives for two nights, an e-mail warns the owner and the site administrators.
+
+### Restoring a backup
+
+The site owner and administrators can restore from the portal.
+
+1. Open **My sites**, then the site's **Backups**.
+2. Find the version you want (date, reason, size). It can also be downloaded.
+3. Click **Restore** and confirm. The RIP server's configuration is replaced by that of the backup.
+
+With the **Pro** plan, a backup can also be restored to **another site** of the same owner.
+
+> [!WARNING]
+> A restore replaces the server's current configuration. If in doubt, download a backup of the current state first.
+
 ## What never goes through the Cloud
 
 Some functions stay reserved for the shop, even with the Cloud:
@@ -266,6 +341,14 @@ Create an account on the server (see [Run the server](administration.md#accounts
 ### I forgot my password
 
 Use **Forgot your password?** on the sign-in page (see above). For a RIP server account, see [Run the server](administration.md#accounts).
+
+### My remote access is suspended
+
+The plan has been exceeded for more than 14 days (too many machines or sites). Open **Subscription**: subscribing to a suitable plan or removing the extra machines restores access. Work in the shop was not interrupted.
+
+### I cannot find my online backups
+
+They are in **My sites › Backups**. If the latest one is old, check that the site is online and that the plan's quota is not full.
 
 ### I do not receive the e-mails
 

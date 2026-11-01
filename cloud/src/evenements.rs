@@ -65,6 +65,13 @@ pub fn destinataires(c: &Connection, site: &str) -> rusqlite::Result<Vec<(i64, S
     q.query_map([site], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()
 }
 
+/// Propriétaires et administrateurs du site non suspendus, quelle que soit la case « alertes »
+/// (sauvegarde en échec, restauration).
+pub fn destinataires_tous(c: &Connection, site: &str) -> rusqlite::Result<Vec<(i64, String, String)>> {
+    let mut q = c.prepare("SELECT c.id, c.email, c.nom FROM droits d JOIN comptes c ON c.id = d.compte WHERE d.site = ?1 AND d.role IN ('proprietaire', 'admin') AND c.suspendu = 0 ORDER BY c.id")?;
+    q.query_map([site], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()
+}
+
 pub fn purger(c: &Connection, t: u64) -> rusqlite::Result<()> {
     c.execute("DELETE FROM evenements_sites WHERE debut < ?1", [t.saturating_sub(CONSERVATION) as i64])?;
     Ok(())
@@ -80,6 +87,9 @@ pub struct ResumeSite {
     pub hors_ligne: u64,
     pub plus_longue: u64,
     pub alertes: usize,
+    /// Sauvegardes en ligne : (dernière réussie, octets du site, quota du propriétaire) ;
+    /// `None` pour un site qui n'en a jamais envoyé.
+    pub sauvegardes: Option<(Option<u64>, u64, u64)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -114,7 +124,7 @@ fn resume_site(c: &Connection, site: &str, nom: &str, debut: u64, fin: u64) -> r
     let coupures: Vec<(u64, Option<u64>)> = q.query_map(params![site, debut as i64, fin as i64], |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, Option<i64>>(1)?.map(|f| f as u64))))?.collect::<rusqlite::Result<_>>()?;
     let (n, total, longue) = agreger_coupures(&coupures, debut, fin);
     let alertes: i64 = c.query_row("SELECT COUNT(*) FROM evenements_sites WHERE site = ?1 AND type = 'alerte' AND detail = 'envoyee' AND debut >= ?2 AND debut < ?3", params![site, debut as i64, fin as i64], |r| r.get(0))?;
-    Ok(ResumeSite { nom: nom.into(), coupures: n, hors_ligne: total, plus_longue: longue, alertes: alertes as usize })
+    Ok(ResumeSite { nom: nom.into(), coupures: n, hors_ligne: total, plus_longue: longue, alertes: alertes as usize, sauvegardes: crate::sauvegardes::ligne_resume(c, site)? })
 }
 
 /// Un résumé par compte propriétaire/administrateur (non suspendu, qui l'a activé) ayant au
@@ -360,7 +370,7 @@ mod tests {
         let v = resumes(&c, &sites, debut, lundi).unwrap();
         assert_eq!(v.len(), 1, "seuls les propriétaires et administrateurs reçoivent un résumé");
         assert_eq!(v[0].email, "chef@x.fr");
-        assert_eq!(v[0].sites, vec![ResumeSite { nom: "Atelier <1>".into(), coupures: 1, hors_ligne: 5400, plus_longue: 5400, alertes: 1 }, ResumeSite { nom: "Atelier 2".into(), coupures: 0, hors_ligne: 0, plus_longue: 0, alertes: 0 }]);
+        assert_eq!(v[0].sites, vec![ResumeSite { nom: "Atelier <1>".into(), coupures: 1, hors_ligne: 5400, plus_longue: 5400, alertes: 1, sauvegardes: None }, ResumeSite { nom: "Atelier 2".into(), coupures: 0, hors_ligne: 0, plus_longue: 0, alertes: 0, sauvegardes: None }]);
         assert_eq!(v[0].applis, vec![("Mac de Claire".to_string(), debut + 100)]);
         // Contenu de l'e-mail : chiffres, échappement, désactivation par la case.
         let m = courriels::resume_hebdomadaire("https://platform.e-ko.rip", &v[0], debut, lundi);

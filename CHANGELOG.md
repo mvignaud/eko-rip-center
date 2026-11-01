@@ -15,6 +15,18 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Cloud E-KO RIP : offres payantes.** Gratuit à vie (1 site, 1 imprimante, 1 découpeur), puis
+  À la machine, Atelier et Pro, facturés par GOLDEN PRINT. Page « Abonnement » du portail,
+  souscription avec SIREN et code promo ou partenaire, paiement par carte sur la page (3-D Secure
+  intégré) ou prélèvement SEPA avec mandat signé par code SMS, factures en PDF, résiliation à
+  l'échéance. Tous les e-mails (facture, relances, retour au Gratuit, fin d'essai…) partent de la
+  plate-forme. Dépassement d'offre : 14 jours de grâce puis accès à distance du site suspendu.
+- **Sauvegardes en ligne de la configuration.** Le serveur RIP déclare ses machines et envoie sa
+  sauvegarde chaque nuit, après chaque changement et à la demande ; conservation selon l'offre,
+  alertes de quota et d'échec, restauration depuis le portail.
+- **CGV** de la plate-forme, CGU et politique de confidentialité mises à jour.
+
 ## [0.33.0] — 2026-11-01
 
 ### Ajouté

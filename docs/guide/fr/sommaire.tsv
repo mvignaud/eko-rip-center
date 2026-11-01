@@ -9,7 +9,7 @@ demarrage	guide/fr/demarrage.md	Prise en main	Comprendre comment s'articulent le
 serveur	guide/fr/serveur.md	Installer le serveur	Choisir le poste, installer le serveur RIP sous Ubuntu par le dépôt APT, créer les comptes et brancher les machines.
 clients	guide/fr/clients.md	Installer les clients	Installer et connecter le client E-KO RIP Center sur Mac, Linux et Windows.
 application-mobile	guide/fr/application-mobile.md	Application mobile	Suivre la production depuis un téléphone iOS ou Android et recevoir les alertes des machines.
-cloud	guide/fr/cloud.md	Cloud E-KO RIP	Accéder au serveur RIP de l'atelier depuis l'extérieur, sans VPN ni port ouvert, avec la plate-forme gratuite platform.e-ko.rip.
+cloud	guide/fr/cloud.md	Cloud E-KO RIP	Accéder au serveur RIP de l'atelier depuis l'extérieur, sans VPN ni port ouvert, avec la plate-forme platform.e-ko.rip, gratuite pour un petit atelier, avec des offres payantes pour les plus grands.
 == Utiliser
 utilisation	fr/utilisation.md	Guide d'utilisation	Envoyer un travail, suivre la file, imprimer, découper, BAT, épreuves, planches, couleur et supports : toutes les fonctions du RIP.
 == Machines
