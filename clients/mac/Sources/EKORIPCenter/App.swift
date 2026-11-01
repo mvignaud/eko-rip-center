@@ -2,6 +2,12 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
+/// Adresses du menu Aide.
+enum AdressesAide {
+    static let documentation = URL(string: "https://e-ko.rip/documentation/clients/#client-mac")!
+    static let guide = URL(string: "https://e-ko.rip/documentation/utilisation/")!
+}
+
 @main
 @MainActor
 struct EKORIPCenterApp: App {
@@ -24,6 +30,9 @@ struct EKORIPCenterApp: App {
                     .disabled(etat.phase != .connecte)
             }
             CommandGroup(replacing: .help) {
+                Button("Documentation E-KO RIP Center") { NSWorkspace.shared.open(AdressesAide.documentation) }
+                Button("Guide d'utilisation") { NSWorkspace.shared.open(AdressesAide.guide) }
+                Divider()
                 Button("Signaler un problème…") { etat.signalementOuvert = true }
                     .disabled(etat.phase != .connecte)
             }

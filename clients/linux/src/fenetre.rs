@@ -46,6 +46,10 @@ struct EtatCloud {
     jeton: String,
 }
 
+/// Adresses de l'aide (menu principal, section Aide).
+const URL_DOCUMENTATION: &str = "https://e-ko.rip/documentation/clients/#client-linux";
+const URL_GUIDE: &str = "https://e-ko.rip/documentation/utilisation/";
+
 const CLE_CURSEUR: &str = "notifications_cloud_dernier";
 const CLE_REGLAGE: &str = "notifications_cloud";
 const CLE_ANNONCE: &str = "notifications_cloud_annoncees";
@@ -185,9 +189,13 @@ impl Fenetre {
         menu.append(Some("Changer de serveur…"), Some("win.changer-serveur"));
         menu.append(Some("Notifications du cloud"), Some("win.notifications-cloud"));
         menu.append(Some("Se déconnecter"), Some("win.deconnecter"));
+        let menu_aide = gio::Menu::new();
+        menu_aide.append(Some("Documentation"), Some("win.documentation"));
+        menu_aide.append(Some("Guide d'utilisation"), Some("win.guide"));
         let menu_bas = gio::Menu::new();
         menu_bas.append(Some("À propos d'E-KO RIP Center"), Some("win.apropos"));
         menu_bas.append(Some("Quitter"), Some("app.quitter"));
+        menu.append_section(Some("Aide"), &menu_aide);
         menu.append_section(None, &menu_bas);
         let bouton_menu = gtk::MenuButton::builder().icon_name("open-menu-symbolic").menu_model(&menu).primary(true).tooltip_text("Menu principal").build();
         let bascule_inspecteur = gtk::ToggleButton::builder().icon_name("sidebar-show-right-symbolic").active(true).tooltip_text("Afficher l'inspecteur").build();
@@ -397,6 +405,8 @@ impl Fenetre {
             f.recherche.grab_focus();
         });
         ajouter("apropos", |f| f.a_propos());
+        ajouter("documentation", |f| f.ouvrir_adresse(URL_DOCUMENTATION));
+        ajouter("guide", |f| f.ouvrir_adresse(URL_GUIDE));
         ajouter("administration", |f| f.administration());
         // « Notifications du cloud » : case à cocher du menu, activée par défaut.
         let bascule = gio::SimpleAction::new_stateful("notifications-cloud", None, &notifications_cloud_actives().to_variant());
@@ -1373,6 +1383,10 @@ impl Fenetre {
             });
         });
         fenetre.present();
+    }
+
+    fn ouvrir_adresse(&self, url: &str) {
+        gtk::UriLauncher::new(url).launch(Some(&self.fen), gio::Cancellable::NONE, |_| {});
     }
 
     fn a_propos(&self) {
