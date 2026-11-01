@@ -203,14 +203,16 @@ pub async fn jeton(State(r): State<Partage>, h: HeaderMap, Form(f): Form<HashMap
         let b = r2.base();
         // Compte supprimé ou suspendu entre-temps : pas de jeton.
         match base::compte_par_id(&b, code.compte) {
-            Ok(Some(c)) if !c.suspendu => base::creer_jeton_appli(&b, code.compte, &code.appareil).ok(),
+            Ok(Some(c)) if !c.suspendu => base::creer_jeton_appli(&b, code.compte, &code.appareil).ok().map(|j| (j, c, code.appareil)),
             _ => None,
         }
     })
     .await
     .ok()
     .flatten();
-    let Some(jeton) = cree else { return erreur_oauth(StatusCode::BAD_REQUEST, "invalid_grant") };
+    let Some((jeton, titulaire, appareil)) = cree else { return erreur_oauth(StatusCode::BAD_REQUEST, "invalid_grant") };
+    // Notification de sécurité au titulaire (hors de la réponse, jamais bloquante).
+    r.envoyer(crate::courriels::nouvelle_app(&r.config.url_publique, &titulaire.email, &titulaire.nom, &appareil, crate::maintenant()));
     let mut rep = Json(serde_json::json!({ "access_token": jeton, "token_type": "Bearer", "expires_in": base::DUREE_JETON_APPLI })).into_response();
     rep.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     rep
@@ -297,7 +299,7 @@ mod tests {
 
     #[test]
     fn identite_aller_retour() {
-        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false };
+        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false, email_verifie: true, alertes: true, resume: true };
         let v = entete_identite(&c, "proprietaire");
         let i = lire_identite(v.to_str().unwrap()).unwrap();
         assert_eq!(i, IdentiteCloud { compte: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), role: "admin".into() });

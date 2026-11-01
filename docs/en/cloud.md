@@ -21,6 +21,12 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   workshop (no `Authorization`, no portal cookies); each site has its own origin, cookie
   `Domain` attributes are stripped and portal cookies use the `__Host-` prefix. The legacy
   `/s/<site>/` form still works for API calls, with path-scoped cookies and a `sandbox` CSP.
+- **E-mails**: sent as "E-KO RIP Cloud" `<no-reply@e-ko.fr>` over SMTP (STARTTLS or direct TLS,
+  settings in Administration › E-mails or `EKO_CLOUD_SMTP_*`): forgotten password (1-hour
+  single-use link), address confirmation at sign-up (required to link a server), "site offline for
+  15 minutes" / "back online" alerts (at most one per site per hour), new connected app, and a
+  Monday 8 a.m. (Paris) weekly summary; alerts and summary can be switched off in My account.
+  Details in the French page.
 - **Tunnel**: a plain WebSocket (`Sec-WebSocket-Protocol: eko-tunnel/1`) carrying HTTP/2, so it
   goes through shared-hosting front ends (LiteSpeed, Passenger); the bare `Upgrade: eko-tunnel/1`
   of RIP 0.30 servers is still accepted.

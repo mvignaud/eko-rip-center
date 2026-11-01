@@ -53,6 +53,8 @@ pub struct Relais {
     limites: Mutex<HashMap<String, (u32, std::time::Instant)>>,
     /// Codes d'autorisation des apps en attente d'échange.
     codes_applis: Mutex<crate::applis::Codes>,
+    /// Où partent les e-mails (SMTP, ou mémoire dans les tests).
+    pub(crate) courriels: Mutex<crate::courriels::Expediteur>,
 }
 
 pub type Partage = Arc<Relais>;
@@ -61,7 +63,7 @@ pub type Partage = Arc<Relais>;
 pub fn nouveau(config: Config) -> Partage {
     let registre = installations::lire(&config.donnees).expect("installations.json");
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default() })
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp) })
 }
 
 impl Relais {
@@ -133,6 +135,11 @@ pub fn routes(relais: Partage) -> Router {
         .route("/appairer", get(portail::appairer))
         .route("/compte", get(portail::mon_compte))
         .route("/compte/applis/deconnecter", post(portail::deconnecter_applis))
+        .route("/compte/preferences", post(portail::regler_preferences))
+        .route("/mot-de-passe/oublie", get(portail::oubli).post(portail::oublier))
+        .route("/mot-de-passe/nouveau", get(portail::nouveau_mot_de_passe).post(portail::reinitialiser))
+        .route("/email/confirmer", get(portail::confirmation).post(portail::confirmer))
+        .route("/email/renvoyer", post(portail::renvoyer_confirmation))
         .route("/oauth/autoriser", get(crate::applis::autoriser).post(crate::applis::decider))
         .route("/oauth/jeton", post(crate::applis::jeton))
         .route("/api/moi", get(crate::applis::moi))
@@ -141,6 +148,8 @@ pub fn routes(relais: Partage) -> Router {
         .route("/admin", get(portail::admin))
         .route("/admin/oauth", post(portail::regler_oauth))
         .route("/admin/github", post(portail::regler_github))
+        .route("/admin/courriels", post(portail::regler_courriels))
+        .route("/admin/courriels/essai", post(portail::essai_courriel))
         .route("/admin/rapports/{reference}", get(portail::voir_rapport))
         .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
         .route("/auth/{fournisseur}", get(portail::partir_oauth))
@@ -231,6 +240,7 @@ pub async fn entretenir(relais: Partage) {
         relais.appairages.lock().unwrap().purger();
         appairage::purger_validations(&relais.config.donnees);
         enregistrer_installations(&relais).await;
+        crate::evenements::entretenir(&relais).await;
         let d = relais.config.donnees.clone();
         let _ = tokio::task::spawn_blocking(move || crate::rapports::purger(&d, crate::maintenant())).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {
@@ -398,16 +408,24 @@ where
         ancien.tache.abort();
     }
     eprintln!("tunnel ouvert : site {id}");
+    crate::evenements::site_en_ligne(&r, &id);
     let _ = tokio::task::spawn_blocking({
         let (donnees, id) = (donnees.clone(), id.clone());
         move || sites::noter_connexion(&donnees, &id)
     })
     .await;
     let _ = fin_rx.await;
-    let mut t = r.tunnels.lock().unwrap();
-    if t.get(&id).is_some_and(|x| x.generation == generation) {
-        t.remove(&id);
+    let ferme = {
+        let mut t = r.tunnels.lock().unwrap();
+        let ferme = t.get(&id).is_some_and(|x| x.generation == generation);
+        if ferme {
+            t.remove(&id);
+        }
+        ferme
+    };
+    if ferme {
         eprintln!("tunnel fermé : site {id}");
+        crate::evenements::site_hors_ligne(&r, &id);
     }
 }
 

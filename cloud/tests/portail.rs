@@ -20,6 +20,25 @@ async fn plateforme() -> Plateforme {
     Plateforme { base, donnees }
 }
 
+type Boite = std::sync::Arc<std::sync::Mutex<Vec<eko_rip_cloud::courriels::Courriel>>>;
+
+/// Plate-forme dont les e-mails restent en mémoire (pas de SMTP).
+async fn plateforme_courriels() -> (Plateforme, Boite) {
+    let donnees = std::env::temp_dir().join(format!("eko-cloud-portail-{}", eko_rip_cloud::aleatoire_hex(6)));
+    let r = relais::nouveau(relais::Config { donnees: donnees.clone(), url_publique: URL.into(), max_octets: 1 << 20, jeton_stats: String::new() });
+    let boite = r.utiliser_memoire();
+    let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", ecoute.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(ecoute, relais::routes(r)).await.unwrap() });
+    (Plateforme { base, donnees }, boite)
+}
+
+/// Chemin (`/mot-de-passe/nouveau?jeton=…`) du premier lien de la version texte portant `chemin`.
+fn lien_du_courriel(c: &eko_rip_cloud::courriels::Courriel, chemin: &str) -> String {
+    let i = c.texte.find(&format!("{URL}{chemin}")).unwrap_or_else(|| panic!("lien {chemin} absent de {}", c.texte)) + URL.len();
+    c.texte[i..].split_whitespace().next().unwrap().to_string()
+}
+
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder().http_status_as_error(false).max_redirects(0).timeout_global(Some(Duration::from_secs(20))).build().into()
 }
@@ -229,13 +248,21 @@ fn parametre(texte: &str, nom: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn connexion_des_apps() {
-    let p = std::sync::Arc::new(plateforme().await);
+    let (p, boite) = plateforme_courriels().await;
+    let p = std::sync::Arc::new(p);
     let inscrire = |email: &'static str| {
         let q = p.clone();
         async move { session(&b(move || post(&q, "/inscription", None, &[("email", email), ("nom", "Chef d'atelier"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await) }
     };
     let chef = inscrire("chef@atelier.fr").await;
     let autre = inscrire("autre@atelier.fr").await;
+    {
+        // Adresses confirmées (sinon, avec des e-mails actifs, rattacher un serveur est refusé).
+        let c = base::ouvrir(&p.donnees).unwrap();
+        for e in ["chef@atelier.fr", "autre@atelier.fr"] {
+            base::marquer_email_verifie(&c, base::compte_par_email(&c, e).unwrap().unwrap().id).unwrap();
+        }
+    }
 
     // Un site rattaché au chef, tunnel ouvert.
     let q = p.clone();
@@ -364,5 +391,244 @@ async fn connexion_des_apps() {
     .await;
     let (statut, _) = appel("/api/moi".into(), None, jeton).await;
     assert_eq!(statut, 401);
+    // Une app connectée : e-mail de sécurité au titulaire (appareil, lien vers /compte).
+    {
+        let boite = boite.lock().unwrap();
+        let m = boite.iter().find(|m| m.sujet.contains("Nouvelle app connectée")).expect("e-mail de nouvelle app");
+        assert_eq!(m.a, "chef@atelier.fr");
+        assert!(m.html.contains("Mac de test") && m.texte.contains(&format!("{URL}/compte")));
+    }
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn mot_de_passe_oublie_et_confirmation_de_l_adresse() {
+    let (p, boite) = plateforme_courriels().await;
+    let p = std::sync::Arc::new(p);
+    let q = p.clone();
+    let (oubli, formulaire) = b(move || (get(&q, "/mot-de-passe/oublie", None), get(&q, "/connexion", None))).await;
+    assert_eq!(oubli.statut, 200);
+    assert!(formulaire.corps.contains("/mot-de-passe/oublie") && formulaire.corps.contains("Mot de passe oublié ?"));
+
+    // Inscription : e-mail de confirmation, bandeau, rattachement refusé.
+    let q = p.clone();
+    let r = b(move || post(&q, "/inscription", None, &[("email", "chef@atelier.fr"), ("nom", "Chef <b>"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await;
+    let chef = session(&r);
+    let confirmation = {
+        let m = boite.lock().unwrap();
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].a, "chef@atelier.fr");
+        assert!(m[0].html.contains("Chef &lt;b&gt;") && !m[0].html.contains("Chef <b>"));
+        lien_du_courriel(&m[0], "/email/confirmer?jeton=")
+    };
+    let q = p.clone();
+    let c = chef.clone();
+    let sites = b(move || get(&q, "/sites", Some(&c))).await;
+    assert!(sites.corps.contains("Confirmez votre adresse") && sites.corps.contains("Renvoyer l&#39;e-mail") || sites.corps.contains("Renvoyer l'e-mail"));
+    let jeton = csrf(&sites.corps);
+    let q = p.clone();
+    let c = chef.clone();
+    let compte = b(move || get(&q, "/compte", Some(&c))).await;
+    assert!(compte.corps.contains("Confirmez votre adresse") && compte.corps.contains("Recevoir le résumé hebdomadaire") && compte.corps.contains("name=\"alertes\" value=\"1\" checked"));
+    let q = p.clone();
+    let (c, j) = (chef.clone(), jeton.clone());
+    let r = b(move || post(&q, "/sites/rattacher", Some(&c), &[("csrf", &j), ("code", "ABCD-1234")], true)).await;
+    assert!(r.statut == 400 && r.corps.contains("Confirmez d&#39;abord votre adresse"), "{}", r.corps);
+
+    // Renvoyer l'e-mail : limité à 3 par heure.
+    for n in 0..3 {
+        let q = p.clone();
+        let (c, j) = (chef.clone(), jeton.clone());
+        let r = b(move || post(&q, "/email/renvoyer", Some(&c), &[("csrf", &j), ("retour", "/compte")], true)).await;
+        assert_eq!((r.statut, r.lieu.as_str()), (if n < 3 { 303 } else { 400 }, "/compte?ok=confirmation"), "essai {n}");
+    }
+    let q = p.clone();
+    let (c, j) = (chef.clone(), jeton.clone());
+    assert_eq!(b(move || post(&q, "/email/renvoyer", Some(&c), &[("csrf", &j)], true)).await.statut, 400, "limite atteinte");
+    assert_eq!(boite.lock().unwrap().len(), 4);
+
+    // Le lien : l'ouvrir ne consomme rien, le bouton oui ; un seul usage. Le premier lien a été remplacé par les suivants.
+    let dernier = lien_du_courriel(boite.lock().unwrap().last().unwrap(), "/email/confirmer?jeton=");
+    let q = p.clone();
+    let (ancien, d1) = (confirmation.clone(), dernier.clone());
+    let (vieux, ouvert, encore) = b(move || (get(&q, &ancien, None), get(&q, &d1, None), get(&q, &d1, None))).await;
+    assert_eq!(vieux.statut, 400, "un nouveau lien remplace l'ancien");
+    assert!(ouvert.statut == 200 && encore.statut == 200 && ouvert.corps.contains("Confirmer mon adresse"));
+    let jeton_lien = dernier.split("jeton=").nth(1).unwrap().to_string();
+    let q = p.clone();
+    let jl = jeton_lien.clone();
+    let r = b(move || post(&q, "/email/confirmer", None, &[("jeton", &jl)], false)).await;
+    assert_eq!(r.statut, 403, "origine exigée");
+    let (q, jl) = (p.clone(), jeton_lien.clone());
+    let r = b(move || post(&q, "/email/confirmer", None, &[("jeton", &jl)], true)).await;
+    assert!(r.statut == 200 && r.corps.contains("Adresse confirmée"), "{}", r.corps);
+    let (q, jl) = (p.clone(), jeton_lien.clone());
+    assert_eq!(b(move || post(&q, "/email/confirmer", None, &[("jeton", &jl)], true)).await.statut, 400, "usage unique");
+    let q = p.clone();
+    let (c, j) = (chef.clone(), jeton.clone());
+    let r = b(move || post(&q, "/sites/rattacher", Some(&c), &[("csrf", &j), ("code", "ABCD-1234")], true)).await;
+    assert!(r.corps.contains("inconnu") && !r.corps.contains("Confirmez d&#39;abord"), "adresse confirmée : le rattachement suit son cours");
+    let q = p.clone();
+    let c = chef.clone();
+    assert!(!b(move || get(&q, "/sites", Some(&c))).await.corps.contains("Confirmez votre adresse"));
+
+    // Mot de passe oublié : réponse identique (compte connu, inconnu, e-mail invalide), un seul e-mail.
+    boite.lock().unwrap().clear();
+    let q = p.clone();
+    let (connu, inconnu, invalide) = b(move || {
+        (
+            post(&q, "/mot-de-passe/oublie", None, &[("email", "CHEF@atelier.fr")], true),
+            post(&q, "/mot-de-passe/oublie", None, &[("email", "personne@atelier.fr")], true),
+            post(&q, "/mot-de-passe/oublie", None, &[("email", "pas un e-mail")], true),
+        )
+    })
+    .await;
+    assert_eq!((connu.statut, inconnu.statut, invalide.statut), (200, 200, 200));
+    assert_eq!(connu.corps, inconnu.corps, "pas d'énumération des comptes");
+    assert_eq!(connu.corps, invalide.corps);
+    let q = p.clone();
+    assert_eq!(b(move || post(&q, "/mot-de-passe/oublie", None, &[("email", "chef@atelier.fr")], false)).await.statut, 403);
+    let lien = {
+        let m = boite.lock().unwrap();
+        assert_eq!(m.len(), 1, "un seul e-mail, pour le compte existant");
+        assert_eq!(m[0].a, "chef@atelier.fr");
+        assert!(m[0].sujet.contains("mot de passe"));
+        lien_du_courriel(&m[0], "/mot-de-passe/nouveau?jeton=")
+    };
+    let jeton_reinit = lien.split("jeton=").nth(1).unwrap().to_string();
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        let n: i64 = c.query_row("SELECT COUNT(*) FROM jetons_courriel WHERE empreinte = ?1", [eko_rip_cloud::sha256_hex(&jeton_reinit)], |r| r.get(0)).unwrap();
+        assert_eq!(n, 1, "seule l'empreinte est en base");
+        let n: i64 = c.query_row("SELECT COUNT(*) FROM jetons_courriel WHERE empreinte = ?1", [&jeton_reinit], |r| r.get(0)).unwrap();
+        assert_eq!(n, 0);
+    }
+
+    // Réinitialisation : formulaire, refus d'un mot de passe court ou différent, puis succès.
+    let q = p.clone();
+    let l = lien.clone();
+    let form = b(move || get(&q, &l, None)).await;
+    assert!(form.statut == 200 && form.corps.contains("Nouveau mot de passe"));
+    let q = p.clone();
+    assert_eq!(b(move || get(&q, "/mot-de-passe/nouveau?jeton=invente", None)).await.statut, 400);
+    let champs = |m: &'static str, conf: &'static str| (jeton_reinit.clone(), m, conf);
+    for (m, conf) in [("court", "court"), ("nouvelle-phrase-2", "autre-phrase-22")] {
+        let q = p.clone();
+        let (j, m, conf) = champs(m, conf);
+        let r = b(move || post(&q, "/mot-de-passe/nouveau", None, &[("jeton", &j), ("mot_de_passe", m), ("confirmation", conf)], true)).await;
+        assert_eq!(r.statut, 400);
+    }
+    let (q, j) = (p.clone(), jeton_reinit.clone());
+    let r = b(move || post(&q, "/mot-de-passe/nouveau", None, &[("jeton", &j), ("mot_de_passe", "nouvelle-phrase-2"), ("confirmation", "nouvelle-phrase-2")], false)).await;
+    assert_eq!(r.statut, 403, "origine exigée");
+    let (q, j) = (p.clone(), jeton_reinit.clone());
+    let r = b(move || post(&q, "/mot-de-passe/nouveau", None, &[("jeton", &j), ("mot_de_passe", "nouvelle-phrase-2"), ("confirmation", "nouvelle-phrase-2")], true)).await;
+    assert_eq!((r.statut, r.lieu.as_str()), (303, "/connexion?ok=reinit"));
+    let (q, j) = (p.clone(), jeton_reinit.clone());
+    let r = b(move || post(&q, "/mot-de-passe/nouveau", None, &[("jeton", &j), ("mot_de_passe", "troisieme-phrase-3"), ("confirmation", "troisieme-phrase-3")], true)).await;
+    assert_eq!(r.statut, 400, "usage unique");
+    // Les sessions ouvertes sont fermées ; seul le nouveau mot de passe ouvre.
+    let q = p.clone();
+    let c = chef.clone();
+    assert_eq!(b(move || get(&q, "/sites", Some(&c))).await.statut, 303, "session fermée");
+    let q = p.clone();
+    let (vieux, neuf) = b(move || (post(&q, "/connexion", None, &[("email", "chef@atelier.fr"), ("mot_de_passe", "phrase-longue-1")], true), post(&q, "/connexion", None, &[("email", "chef@atelier.fr"), ("mot_de_passe", "nouvelle-phrase-2")], true))).await;
+    assert_eq!(vieux.statut, 401);
+    assert_eq!(neuf.statut, 303);
+
+    // Jeton posé en base : valable, puis expiré.
+    let (id, posé) = {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        let id = base::compte_par_email(&c, "chef@atelier.fr").unwrap().unwrap().id;
+        (id, base::creer_jeton_courriel(&c, id, base::OBJET_REINIT, base::DUREE_JETON_REINIT).unwrap())
+    };
+    let (q, j) = (p.clone(), posé.clone());
+    assert_eq!(b(move || get(&q, &format!("/mot-de-passe/nouveau?jeton={j}"), None)).await.statut, 200);
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        c.execute("UPDATE jetons_courriel SET expire = 1 WHERE compte = ?1", [id]).unwrap();
+    }
+    let (q, j) = (p.clone(), posé);
+    let r = b(move || post(&q, "/mot-de-passe/nouveau", None, &[("jeton", &j), ("mot_de_passe", "quatrieme-phrase-4"), ("confirmation", "quatrieme-phrase-4")], true)).await;
+    assert_eq!(r.statut, 400, "jeton expiré");
+
+    // Compte suspendu : aucun e-mail.
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        base::suspendre(&c, id, true).unwrap();
+    }
+    boite.lock().unwrap().clear();
+    let q = p.clone();
+    let r = b(move || post(&q, "/mot-de-passe/oublie", None, &[("email", "chef@atelier.fr")], true)).await;
+    assert_eq!(r.statut, 200);
+    assert!(boite.lock().unwrap().is_empty());
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn preferences_et_reglages_des_courriels() {
+    let (p, boite) = plateforme_courriels().await;
+    let p = std::sync::Arc::new(p);
+    let q = p.clone();
+    let r = b(move || post(&q, "/inscription", None, &[("email", "admin@atelier.fr"), ("nom", "Admin"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await;
+    let admin = session(&r);
+    let q = p.clone();
+    let c = admin.clone();
+    let compte = b(move || get(&q, "/compte", Some(&c))).await;
+    let j = csrf(&compte.corps);
+    // Cases décochées : enregistrées.
+    let (q, c, j2) = (p.clone(), admin.clone(), j.clone());
+    let r = b(move || post(&q, "/compte/preferences", Some(&c), &[("csrf", &j2)], true)).await;
+    assert_eq!(r.lieu, "/compte?ok=preferences");
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        let cp = base::compte_par_email(&c, "admin@atelier.fr").unwrap().unwrap();
+        assert!(!cp.alertes && !cp.resume);
+        base::nommer_super_admin(&c, "admin@atelier.fr").unwrap();
+    }
+    let (q, c, j2) = (p.clone(), admin.clone(), j.clone());
+    let r = b(move || post(&q, "/compte/preferences", Some(&c), &[("csrf", &j2), ("alertes", "1"), ("resume", "1")], true)).await;
+    assert_eq!(r.lieu, "/compte?ok=preferences");
+    // Administration : carte E-mails, secret jamais réaffiché, e-mail d'essai.
+    let q = p.clone();
+    let c = admin.clone();
+    let adm = b(move || get(&q, "/admin", Some(&c))).await;
+    assert!(adm.corps.contains("Envoyer un e-mail d'essai") && adm.corps.contains("smtp_mot_de_passe") && adm.corps.contains("no-reply@e-ko.fr"));
+    let (q, c, j2) = (p.clone(), admin.clone(), csrf(&adm.corps));
+    let r = b(move || post(&q, "/admin/courriels", Some(&c), &[("csrf", &j2), ("smtp_hote", "smtp.exemple.fr"), ("smtp_port", "465"), ("smtp_securite", "tls"), ("smtp_identifiant", "robot"), ("smtp_mot_de_passe", "secret-smtp-de-test"), ("smtp_expediteur", "")], true)).await;
+    assert_eq!(r.lieu, "/admin?ok=courriels");
+    let (q, c, j2) = (p.clone(), admin.clone(), csrf(&adm.corps));
+    let r = b(move || post(&q, "/admin/courriels", Some(&c), &[("csrf", &j2), ("smtp_hote", "smtp exemple"), ("smtp_port", "465")], true)).await;
+    assert_eq!(r.statut, 400, "hôte invalide");
+    let q = p.clone();
+    let c = admin.clone();
+    let adm = b(move || get(&q, "/admin", Some(&c))).await;
+    assert!(adm.corps.contains("smtp.exemple.fr") && adm.corps.contains("robot") && !adm.corps.contains("secret-smtp-de-test"), "secret jamais réaffiché");
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        assert_eq!(base::reglage(&c, "smtp_mot_de_passe").unwrap().as_deref(), Some("secret-smtp-de-test"));
+    }
+    // Mot de passe vide : inchangé.
+    let (q, c, j2) = (p.clone(), admin.clone(), csrf(&adm.corps));
+    b(move || post(&q, "/admin/courriels", Some(&c), &[("csrf", &j2), ("smtp_hote", "smtp.exemple.fr"), ("smtp_mot_de_passe", "")], true)).await;
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        assert!(base::reglage(&c, "smtp_mot_de_passe").unwrap().is_some());
+    }
+    boite.lock().unwrap().clear();
+    let (q, c, j2) = (p.clone(), admin.clone(), csrf(&adm.corps));
+    let r = b(move || post(&q, "/admin/courriels/essai", Some(&c), &[("csrf", &j2)], true)).await;
+    assert_eq!(r.lieu, "/admin?ok=essai");
+    {
+        let m = boite.lock().unwrap();
+        assert_eq!((m.len(), m[0].a.as_str()), (1, "admin@atelier.fr"));
+        assert!(m[0].sujet.contains("essai"));
+    }
+    // Réservé aux administrateurs.
+    let q = p.clone();
+    let r = b(move || post(&q, "/inscription", None, &[("email", "simple@atelier.fr"), ("nom", "Simple"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await;
+    let simple = session(&r);
+    let (q, c, j2) = (p.clone(), simple, j);
+    assert_eq!(b(move || post(&q, "/admin/courriels/essai", Some(&c), &[("csrf", &j2)], true)).await.statut, 403);
     let _ = std::fs::remove_dir_all(&p.donnees);
 }
