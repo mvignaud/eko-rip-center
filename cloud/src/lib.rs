@@ -13,11 +13,14 @@ pub mod appairage;
 pub mod applis;
 pub mod base;
 pub mod client;
+pub mod courriels;
+pub mod evenements;
 pub mod installations;
 pub mod portail;
 pub mod rapports;
 pub mod relais;
 pub mod sites;
+pub mod temps;
 pub mod ws;
 
 /// Sous-protocole WebSocket du tunnel (et ancienne valeur de l'en-tête `Upgrade`).

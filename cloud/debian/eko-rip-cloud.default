@@ -9,3 +9,12 @@
 # Jeton des statistiques anonymes d'installations (GET /api/installations, en Bearer) ;
 # vide : route fermée. `eko-rip-cloud installations` les donne aussi sur le VPS.
 #EKO_CLOUD_JETON_STATS=
+# E-mails (mot de passe oublié, alertes, résumé) : serveur SMTP, expéditeur no-reply@e-ko.fr.
+# Ils se saisissent aussi dans Administration › E-mails ; ces variables priment si présentes.
+#EKO_CLOUD_SMTP_HOTE=
+#EKO_CLOUD_SMTP_PORT=587
+# starttls (587) ou tls (465)
+#EKO_CLOUD_SMTP_SECURITE=starttls
+#EKO_CLOUD_SMTP_IDENTIFIANT=
+#EKO_CLOUD_SMTP_MOT_DE_PASSE=
+#EKO_CLOUD_SMTP_EXPEDITEUR=no-reply@e-ko.fr

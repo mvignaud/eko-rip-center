@@ -54,6 +54,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
+- **E-mails** : voir la section « E-mails de la plate-forme » ci-dessous.
 - **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
   RCS Auch 939 018 024, contact contact@e-ko.rip, pas de téléphone).
 - Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
@@ -101,6 +102,51 @@ Protocole (OAuth 2, code d'autorisation + PKCE, clients publics, RFC 6749, 7636,
    `{ "utilisateur": <e-mail>, "role", "cloud": { "email", "nom", "lecture_seule" } }`.
 6. `POST /api/moi/deconnexion` (Bearer) révoque le jeton. Dans le portail, **Mon compte ›
    Apps connectées** liste les apps et les déconnecte toutes.
+
+## E-mails de la plate-forme
+
+Expéditeur : « E-KO RIP Cloud » `<no-reply@e-ko.fr>`. Envoi par SMTP (chiffré : STARTTLS ou TLS
+direct, jamais en clair) avec les identifiants du serveur SMTP de l'ERP.
+
+**Réglages** : Administration › carte **E-mails** : hôte, port (587 en STARTTLS, 465 en TLS
+direct), sécurité, identifiant, mot de passe (jamais réaffiché ; vide = inchangé), adresse de
+l'expéditeur (`no-reply@e-ko.fr` par défaut) et bouton **Envoyer un e-mail d'essai** (à
+l'administrateur connecté, avec le résultat de l'envoi). Variables d'environnement facultatives
+(dans `/etc/default/eko-rip-cloud`), qui priment sur les réglages : `EKO_CLOUD_SMTP_HOTE`,
+`EKO_CLOUD_SMTP_PORT`, `EKO_CLOUD_SMTP_SECURITE` (`starttls` ou `tls`),
+`EKO_CLOUD_SMTP_IDENTIFIANT`, `EKO_CLOUD_SMTP_MOT_DE_PASSE`, `EKO_CLOUD_SMTP_EXPEDITEUR`.
+Sans hôte SMTP, les envois sont ignorés (une ligne au journal) et rien ne bloque : « Mot de
+passe oublié » affiche sa réponse habituelle, et rattacher un serveur n'exige pas la
+confirmation de l'adresse.
+
+**Les envois** (hors de la requête : une page n'attend jamais le serveur SMTP ; un échec
+s'écrit au journal, sans secret) :
+- **Mot de passe oublié** (`/mot-de-passe/oublie`) : lien `/mot-de-passe/nouveau?jeton=…`
+  valable 1 heure, à usage unique ; la réponse est la même que le compte existe ou non (3 e-mails
+  par heure et par adresse ; compte suspendu : rien n'est envoyé). Le nouveau mot de passe ferme
+  toutes les sessions du compte et déconnecte ses apps.
+- **Confirmation de l'adresse** à l'inscription par mot de passe : lien `/email/confirmer?jeton=…`
+  (24 heures, usage unique ; le clic sur la page confirme, la simple ouverture ne consomme rien).
+  Tant qu'elle n'est pas confirmée, un bandeau sur « Mes sites » et « Mon compte » propose de
+  renvoyer l'e-mail (3 par heure) et rattacher un serveur est refusé ; le reste fonctionne.
+  Les comptes existants et ceux créés par Google (e-mail vérifié) sont confirmés d'office.
+- **Site hors ligne** : le tunnel est fermé depuis 15 minutes → e-mail aux propriétaires et
+  administrateurs du site, puis « de retour en ligne » (seulement si l'alerte est partie). Au plus
+  une alerte par site et par heure.
+- **Nouvelle app connectée** : à chaque connexion d'une app (« Se connecter au cloud »),
+  e-mail de sécurité au titulaire (appareil, date, lien vers « Mon compte »). Toujours envoyé.
+- **Résumé hebdomadaire** : chaque lundi vers 8 h (heure de Paris, heure d'été comprise), un
+  e-mail par propriétaire ou administrateur : pour chacun de ses sites, nombre de coupures (d'une
+  minute au moins), durée hors ligne, plus longue coupure, alertes envoyées, et les apps connectées
+  dans la semaine. Un seul envoi par semaine (mémorisé, y compris après un redémarrage) ; le
+  premier démarrage mémorise la semaine sans rien envoyer.
+
+Dans « Mon compte », les cases **Recevoir les alertes** et **Recevoir le résumé hebdomadaire**
+(activées par défaut) règlent les deux derniers envois. Journal des coupures : table
+`evenements_sites` de `portail.sqlite`, purgée au-delà de 90 jours.
+
+**Aperçu des e-mails** : `eko-rip-cloud apercu-courriels <dossier>` écrit chaque message avec des
+données d'exemple (`.html` autonome et `.txt`).
 
 ## Ce qui ne passe jamais par le cloud
 
@@ -162,7 +208,7 @@ sinon, ce qui empêche d'obtenir des certificats pour des noms inventés. Let's 
 
 Commandes : `eko-rip-cloud admin <e-mail>` (super-administrateur), `eko-rip-cloud sites` (liste), `eko-rip-cloud valider <code> [propriétaire]`,
 `eko-rip-cloud supprimer <site>` (son tunnel est coupé dans la minute). Réglages dans
-`/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO`.
+`/etc/default/eko-rip-cloud` : `EKO_CLOUD_ADDR`, `EKO_CLOUD_URL`, `EKO_CLOUD_MAX_MO` (et `EKO_CLOUD_SMTP_*`, voir « E-mails de la plate-forme »).
 
 ## Installer la plate-forme (hébergement mutualisé o2switch)
 

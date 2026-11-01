@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : e-mails de la plate-forme.** Mot de passe oublié (lien d'une heure),
+  confirmation de l'adresse à l'inscription (rattacher un serveur l'exige), alerte « site hors
+  ligne depuis 15 minutes » puis « de retour en ligne », e-mail de sécurité à chaque nouvelle app
+  connectée, résumé hebdomadaire par site le lundi 8 h (heure de Paris), en HTML sobre avec
+  version texte. Envoi par SMTP (réglages dans Administration › E-mails ou `EKO_CLOUD_SMTP_*`),
+  expéditeur `no-reply@e-ko.fr` ; cases d'abonnement dans « Mon compte ». Voir
+  `docs/fr/cloud.md`.
+  *Platform e-mails: password reset, address confirmation, offline/back-online alerts, new-app
+  notice, weekly per-site summary; SMTP configured in Administration.*
 - **Cloud E-KO RIP : « Se connecter au cloud » depuis les apps.** Connexion au compte de la
   plate-forme par le navigateur (OAuth 2 + PKCE), liste des sites du compte, ouverture d'un
   serveur RIP sans second mot de passe : le rôle sur le site (portail) donne les droits sur le

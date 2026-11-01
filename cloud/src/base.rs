@@ -19,7 +19,10 @@ CREATE TABLE IF NOT EXISTS comptes (
     suspendu INTEGER NOT NULL DEFAULT 0,
     cree_le INTEGER NOT NULL,
     echecs INTEGER NOT NULL DEFAULT 0,
-    bloque_jusqua INTEGER NOT NULL DEFAULT 0
+    bloque_jusqua INTEGER NOT NULL DEFAULT 0,
+    email_verifie INTEGER NOT NULL DEFAULT 0,
+    alertes INTEGER NOT NULL DEFAULT 1,
+    resume INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS sessions (
     jeton TEXT PRIMARY KEY,
@@ -42,6 +45,26 @@ CREATE TABLE IF NOT EXISTS jetons_applis (
     expire INTEGER NOT NULL,
     vu_le INTEGER NOT NULL
 );
+-- Jetons à usage unique envoyés par e-mail (mot de passe oublié, confirmation de l'adresse) :
+-- seule l'empreinte SHA-256 est gardée.
+CREATE TABLE IF NOT EXISTS jetons_courriel (
+    empreinte TEXT PRIMARY KEY,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    objet TEXT NOT NULL,
+    cree_le INTEGER NOT NULL,
+    expire INTEGER NOT NULL
+);
+-- Journal par site : `coupure` (debut, fin vide tant que le tunnel est fermé) et `alerte`
+-- (debut = envoi, detail = `envoyee` ou `ignoree`). Purgé au-delà de 90 jours.
+CREATE TABLE IF NOT EXISTS evenements_sites (
+    id INTEGER PRIMARY KEY,
+    site TEXT NOT NULL,
+    type TEXT NOT NULL,
+    debut INTEGER NOT NULL,
+    fin INTEGER,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS evenements_sites_site ON evenements_sites (site, debut);
 ";
 
 /// Durée d'un jeton d'app (clients Mac, Linux, Windows, mobile).
@@ -67,7 +90,25 @@ pub fn ouvrir(donnees: &Path) -> rusqlite::Result<Connection> {
     let _ = neuf;
     c.busy_timeout(std::time::Duration::from_secs(5))?;
     c.execute_batch(SCHEMA)?;
+    migrer(&c)?;
     Ok(c)
+}
+
+/// Migration douce d'une base créée avant les e-mails : colonnes ajoutées si absentes.
+/// Les comptes existants comptent pour vérifiés (ils ne peuvent pas être bloqués après coup).
+fn migrer(c: &Connection) -> rusqlite::Result<()> {
+    let colonnes: Vec<String> = c.prepare("PRAGMA table_info(comptes)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<rusqlite::Result<_>>()?;
+    let a = |nom: &str| colonnes.iter().any(|x| x == nom);
+    if !a("email_verifie") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN email_verifie INTEGER NOT NULL DEFAULT 0; UPDATE comptes SET email_verifie = 1;")?;
+    }
+    if !a("alertes") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN alertes INTEGER NOT NULL DEFAULT 1;")?;
+    }
+    if !a("resume") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN resume INTEGER NOT NULL DEFAULT 1;")?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -81,12 +122,18 @@ pub struct Compte {
     pub a_mot_de_passe: bool,
     pub google: bool,
     pub facebook: bool,
+    /// Adresse confirmée (lien reçu par e-mail, ou e-mail vérifié par Google).
+    pub email_verifie: bool,
+    /// Reçoit les alertes « site hors ligne ».
+    pub alertes: bool,
+    /// Reçoit le résumé hebdomadaire.
+    pub resume: bool,
 }
 
-const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL";
+const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL, email_verifie, alertes, resume";
 
 fn compte(r: &rusqlite::Row) -> rusqlite::Result<Compte> {
-    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)? })
+    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)?, email_verifie: r.get(9)?, alertes: r.get(10)?, resume: r.get(11)? })
 }
 
 pub fn hacher(mot_de_passe: &str) -> String {
@@ -101,7 +148,7 @@ fn verifier(mot_de_passe: &str, hachage: &str) -> bool {
     argon2::Argon2::default().verify_password(mot_de_passe.as_bytes(), hachage).is_ok()
 }
 
-/// E-mail plausible (la vérification par lien viendra avec l'envoi d'e-mails).
+/// E-mail plausible (la propriété de l'adresse se prouve par le lien de confirmation).
 pub fn email_valide(e: &str) -> bool {
     let e = e.trim();
     (3..=254).contains(&e.len()) && !e.chars().any(|c| c.is_whitespace() || c.is_control()) && e.split_once('@').is_some_and(|(a, d)| !a.is_empty() && d.contains('.') && !d.starts_with('.') && !d.ends_with('.'))
@@ -157,8 +204,9 @@ pub fn lier_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &
 pub fn reprendre_par_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &str) -> rusqlite::Result<bool> {
     let col = colonne_fournisseur(fournisseur);
     let t = c.unchecked_transaction()?;
-    t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, echecs = 0, bloque_jusqua = 0 WHERE id = ?1", [compte])?;
+    t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, echecs = 0, bloque_jusqua = 0, email_verifie = 1 WHERE id = ?1", [compte])?;
     t.execute("DELETE FROM sessions WHERE compte = ?1", [compte])?;
+    t.execute("DELETE FROM jetons_courriel WHERE compte = ?1", [compte])?;
     let lie = t.execute(&format!("UPDATE OR IGNORE comptes SET {col} = ?1 WHERE id = ?2"), params![ident, compte])? == 1;
     if lie {
         t.commit()?;
@@ -232,7 +280,7 @@ pub fn regler(c: &Connection, cle: &str, valeur: &str) -> rusqlite::Result<()> {
 
 pub fn lister_comptes(c: &Connection) -> rusqlite::Result<Vec<(Compte, i64)>> {
     let mut q = c.prepare(&format!("SELECT {COLONNES}, (SELECT COUNT(*) FROM droits d WHERE d.compte = comptes.id AND d.role = 'proprietaire') FROM comptes ORDER BY id"))?;
-    q.query_map([], |r| Ok((compte(r)?, r.get(9)?)))?.collect()
+    q.query_map([], |r| Ok((compte(r)?, r.get(12)?)))?.collect()
 }
 
 pub fn suspendre(c: &Connection, compte: i64, suspendu: bool) -> rusqlite::Result<()> {
@@ -278,6 +326,85 @@ pub fn nombre_de_sites(c: &Connection, compte: i64) -> rusqlite::Result<i64> {
 
 pub fn oublier_site(c: &Connection, site: &str) -> rusqlite::Result<()> {
     c.execute("DELETE FROM droits WHERE site = ?1", [site])?;
+    c.execute("DELETE FROM evenements_sites WHERE site = ?1", [site])?;
+    Ok(())
+}
+
+// ————— Jetons envoyés par e-mail —————
+
+pub const OBJET_REINIT: &str = "reinit";
+pub const OBJET_CONFIRMATION: &str = "confirmation";
+/// Lien « mot de passe oublié » : 1 heure.
+pub const DUREE_JETON_REINIT: u64 = 3600;
+/// Lien de confirmation de l'adresse : 24 heures.
+pub const DUREE_JETON_CONFIRMATION: u64 = 24 * 3600;
+
+/// Crée un jeton à usage unique pour `compte` (un seul jeton vivant par compte et par objet) ;
+/// seule son empreinte est gardée. Rend le jeton à mettre dans le lien de l'e-mail.
+pub fn creer_jeton_courriel(c: &Connection, compte: i64, objet: &str, duree: u64) -> rusqlite::Result<String> {
+    let mut alea = [0u8; 32];
+    getrandom::fill(&mut alea).expect("générateur aléatoire");
+    let jeton = crate::base64url(&alea);
+    let t = crate::maintenant() as i64;
+    c.execute("DELETE FROM jetons_courriel WHERE expire < ?1 OR (compte = ?2 AND objet = ?3)", params![t, compte, objet])?;
+    c.execute("INSERT INTO jetons_courriel (empreinte, compte, objet, cree_le, expire) VALUES (?1, ?2, ?3, ?4, ?5)", params![crate::sha256_hex(&jeton), compte, objet, t, t + duree as i64])?;
+    Ok(jeton)
+}
+
+/// Compte d'un jeton encore valable, sans le consommer (pour afficher le formulaire).
+pub fn jeton_courriel_valide(c: &Connection, jeton: &str, objet: &str) -> rusqlite::Result<Option<i64>> {
+    c.query_row("SELECT compte FROM jetons_courriel WHERE empreinte = ?1 AND objet = ?2 AND expire >= ?3", params![crate::sha256_hex(jeton), objet, crate::maintenant() as i64], |r| r.get(0)).optional()
+}
+
+/// Consomme un jeton (usage unique) : rend son compte s'il était valable. Dans la transaction `t`.
+fn prendre_jeton_courriel(t: &Connection, jeton: &str, objet: &str) -> rusqlite::Result<Option<i64>> {
+    let empreinte = crate::sha256_hex(jeton);
+    let ligne: Option<(i64, i64)> = t.query_row("SELECT compte, expire FROM jetons_courriel WHERE empreinte = ?1 AND objet = ?2", params![empreinte, objet], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+    let Some((compte, expire)) = ligne else { return Ok(None) };
+    t.execute("DELETE FROM jetons_courriel WHERE empreinte = ?1", [empreinte])?;
+    Ok((expire >= crate::maintenant() as i64).then_some(compte))
+}
+
+/// Nouveau mot de passe par le lien reçu : consomme le jeton, remplace le mot de passe, ferme
+/// toutes les sessions du compte, révoque ses jetons d'apps et ses autres liens. Écrire le
+/// mot de passe prouve aussi l'adresse. Compte suspendu ou jeton inutilisable : `None`.
+pub fn reinitialiser_mot_de_passe(c: &Connection, jeton: &str, hachage: &str) -> rusqlite::Result<Option<i64>> {
+    let t = c.unchecked_transaction()?;
+    let Some(compte) = prendre_jeton_courriel(&t, jeton, OBJET_REINIT)? else {
+        t.commit()?;
+        return Ok(None);
+    };
+    if t.execute("UPDATE comptes SET hachage = ?1, echecs = 0, bloque_jusqua = 0, email_verifie = 1 WHERE id = ?2 AND suspendu = 0", params![hachage, compte])? != 1 {
+        t.commit()?;
+        return Ok(None);
+    }
+    t.execute("DELETE FROM sessions WHERE compte = ?1", [compte])?;
+    t.execute("DELETE FROM jetons_courriel WHERE compte = ?1", [compte])?;
+    revoquer_jetons_du_compte(&t, compte)?;
+    t.commit()?;
+    Ok(Some(compte))
+}
+
+/// Confirmation de l'adresse par le lien reçu (usage unique).
+pub fn confirmer_email(c: &Connection, jeton: &str) -> rusqlite::Result<Option<i64>> {
+    let t = c.unchecked_transaction()?;
+    let compte = prendre_jeton_courriel(&t, jeton, OBJET_CONFIRMATION)?;
+    if let Some(id) = compte {
+        t.execute("UPDATE comptes SET email_verifie = 1 WHERE id = ?1", [id])?;
+    }
+    t.commit()?;
+    Ok(compte)
+}
+
+/// Adresse prouvée par un fournisseur (Google) ou à la création.
+pub fn marquer_email_verifie(c: &Connection, compte: i64) -> rusqlite::Result<()> {
+    c.execute("UPDATE comptes SET email_verifie = 1 WHERE id = ?1", [compte])?;
+    Ok(())
+}
+
+/// Cases « Recevoir les alertes » et « Recevoir le résumé hebdomadaire ».
+pub fn regler_preferences(c: &Connection, compte: i64, alertes: bool, resume: bool) -> rusqlite::Result<()> {
+    c.execute("UPDATE comptes SET alertes = ?1, resume = ?2 WHERE id = ?3", params![alertes, resume, compte])?;
     Ok(())
 }
 
@@ -362,6 +489,71 @@ mod tests {
         assert!(session(&c, &jeton).unwrap().is_none(), "sessions du tiers fermées");
         assert!(compte_par_fournisseur(&c, "facebook", "fb-tiers").unwrap().is_none(), "autre fournisseur retiré");
         assert_eq!(compte_par_fournisseur(&c, "google", "g-titulaire").unwrap().unwrap().id, id);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn jetons_courriel_usage_unique_et_expiration() {
+        let d = std::env::temp_dir().join(format!("eko-cloud-base-{}", crate::aleatoire_hex(6)));
+        let c = ouvrir(&d).unwrap();
+        let id = creer_compte(&c, "a@exemple.fr", "Atelier", Some(&hacher("ancien-mot-de-passe"))).unwrap().unwrap();
+        let (session_ouverte, _) = ouvrir_session(&c, id).unwrap();
+        let app = creer_jeton_appli(&c, id, "Mac").unwrap();
+        let jeton = creer_jeton_courriel(&c, id, OBJET_REINIT, DUREE_JETON_REINIT).unwrap();
+        assert_eq!(jeton.len(), 43, "32 octets en base64url");
+        let stocke: String = c.query_row("SELECT empreinte FROM jetons_courriel", [], |r| r.get(0)).unwrap();
+        assert_eq!(stocke, crate::sha256_hex(&jeton));
+        assert_ne!(stocke, jeton, "seule l'empreinte est gardée");
+        // Un jeton de confirmation ne sert pas à réinitialiser.
+        let confirmation = creer_jeton_courriel(&c, id, OBJET_CONFIRMATION, DUREE_JETON_CONFIRMATION).unwrap();
+        assert!(reinitialiser_mot_de_passe(&c, &confirmation, &hacher("nouveau-mot-de-passe")).unwrap().is_none());
+        assert_eq!(jeton_courriel_valide(&c, &jeton, OBJET_REINIT).unwrap(), Some(id));
+        // Un nouveau jeton remplace le précédent.
+        let autre = creer_jeton_courriel(&c, id, OBJET_REINIT, DUREE_JETON_REINIT).unwrap();
+        assert_eq!(jeton_courriel_valide(&c, &jeton, OBJET_REINIT).unwrap(), None);
+        // Réinitialisation : mot de passe changé, sessions et apps fermées, usage unique.
+        assert_eq!(reinitialiser_mot_de_passe(&c, &autre, &hacher("nouveau-mot-de-passe")).unwrap(), Some(id));
+        assert!(reinitialiser_mot_de_passe(&c, &autre, &hacher("encore-un-autre-mdp")).unwrap().is_none(), "usage unique");
+        assert!(session(&c, &session_ouverte).unwrap().is_none());
+        assert!(compte_du_jeton(&c, &app).unwrap().is_none());
+        assert!(matches!(connecter(&c, "a@exemple.fr", "nouveau-mot-de-passe").unwrap(), Connexion::Ok(i) if i == id));
+        assert!(matches!(connecter(&c, "a@exemple.fr", "ancien-mot-de-passe").unwrap(), Connexion::Refusee));
+        // Expiration.
+        let vieux = creer_jeton_courriel(&c, id, OBJET_REINIT, DUREE_JETON_REINIT).unwrap();
+        c.execute("UPDATE jetons_courriel SET expire = 1", []).unwrap();
+        assert_eq!(jeton_courriel_valide(&c, &vieux, OBJET_REINIT).unwrap(), None);
+        assert!(reinitialiser_mot_de_passe(&c, &vieux, &hacher("troisieme-mot-de-passe")).unwrap().is_none());
+        // Compte suspendu : pas de réinitialisation.
+        let j = creer_jeton_courriel(&c, id, OBJET_REINIT, DUREE_JETON_REINIT).unwrap();
+        suspendre(&c, id, true).unwrap();
+        assert!(reinitialiser_mot_de_passe(&c, &j, &hacher("quatrieme-mot-de-passe")).unwrap().is_none());
+        // Confirmation de l'adresse.
+        suspendre(&c, id, false).unwrap();
+        let conf = creer_jeton_courriel(&c, id, OBJET_CONFIRMATION, 3600).unwrap();
+        assert!(confirmer_email(&c, "n'importe quoi").unwrap().is_none());
+        assert_eq!(confirmer_email(&c, &conf).unwrap(), Some(id));
+        assert!(confirmer_email(&c, &conf).unwrap().is_none(), "usage unique");
+        assert!(compte_par_id(&c, id).unwrap().unwrap().email_verifie);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn migration_douce_des_comptes_existants() {
+        let d = std::env::temp_dir().join(format!("eko-cloud-base-{}", crate::aleatoire_hex(6)));
+        std::fs::create_dir_all(&d).unwrap();
+        {
+            // Base d'avant les e-mails.
+            let c = Connection::open(d.join("portail.sqlite")).unwrap();
+            c.execute_batch("CREATE TABLE comptes (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE COLLATE NOCASE, nom TEXT NOT NULL, hachage TEXT, google TEXT UNIQUE, facebook TEXT UNIQUE, super_admin INTEGER NOT NULL DEFAULT 0, suspendu INTEGER NOT NULL DEFAULT 0, cree_le INTEGER NOT NULL, echecs INTEGER NOT NULL DEFAULT 0, bloque_jusqua INTEGER NOT NULL DEFAULT 0); INSERT INTO comptes (email, nom, cree_le) VALUES ('ancien@exemple.fr', 'Ancien', 1);").unwrap();
+        }
+        let c = ouvrir(&d).unwrap();
+        let ancien = compte_par_email(&c, "ancien@exemple.fr").unwrap().unwrap();
+        assert!(ancien.email_verifie && ancien.alertes && ancien.resume, "comptes existants : vérifiés, alertes et résumé activés");
+        let nouveau = creer_compte(&c, "neuf@exemple.fr", "Neuf", None).unwrap().unwrap();
+        assert!(!compte_par_id(&c, nouveau).unwrap().unwrap().email_verifie, "nouveau compte : à confirmer");
+        drop(c);
+        let c = ouvrir(&d).unwrap();
+        assert!(!compte_par_email(&c, "neuf@exemple.fr").unwrap().unwrap().email_verifie, "la migration ne rejoue pas");
         let _ = std::fs::remove_dir_all(&d);
     }
 }
