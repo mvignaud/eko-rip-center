@@ -23,7 +23,7 @@ pub const NEST_TRIM_BOX: &str = "NestTrimBox";
 pub const PREFIXES_DEFAUT: [&str; 8] = ["CutContour", "Thrucut", "Kisscut", "InsideCut", "Perforation", "Creasing", "Score", "VCut"];
 
 /// Réglages de découpe du serveur (`<données>/decoupe.json`). Globaux et non par machine :
-/// le préfixe est une convention de préparation des fichiers (comme le Quick Set d'ONYX),
+/// le préfixe est une convention de préparation des fichiers (usage courant des RIP),
 /// lue au rendu, avant qu'une découpeuse ne soit choisie ; il vaut pour toutes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reglages {

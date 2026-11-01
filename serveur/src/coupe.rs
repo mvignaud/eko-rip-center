@@ -78,7 +78,7 @@ pub struct Cintrage {
 }
 
 /// Longueur sur laquelle le cintrage s'installe après son début, en mm.
-// ponytail: transition linéaire fixe (l'aide d'ONYX ne dit rien du passage) ; à éprouver à
+// ponytail: transition linéaire fixe (aucune documentation sur le passage) ; à éprouver à
 // l'atelier, un réglage si l'essai le demande.
 pub const RAMPE_MM: f64 = 50.0;
 

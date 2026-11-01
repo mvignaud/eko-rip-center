@@ -4127,8 +4127,8 @@ async fn alertes_decoupe(rep: &std::path::Path, t: &Travail, traces: usize) -> V
         let tons = pdf.map(|p| decoupe::tons_du_pdf(&p)).unwrap_or_default();
         alertes.push(controle::Alerte { code: "decoupe_sans_prefixe".into(), page: None, detail: if tons.is_empty() { "—".into() } else { tons.join(", ") } });
     }
-    // Repères de découpeuse imprimés sans rien à découper (roadmap 5.5, comme l'alerte
-    // « pas de données de découpe » d'ONYX) : de l'encre et du support pour rien.
+    // Repères de découpeuse imprimés sans rien à découper (alerte « pas de données de
+    // découpe ») : de l'encre et du support pour rien.
     if traces == 0 && t.demande.mode == Mode::Imprimer && t.demande.reperage != reperage::Reperage::Aucun {
         alertes.push(controle::Alerte { code: "decoupe_reperes_sans_trace".into(), page: None, detail: String::new() });
     }
@@ -4572,7 +4572,7 @@ fn raison_attente(donnees: &std::path::Path, s: &file::Sortie, m: Option<&machin
     {
         return Some("attente_support");
     }
-    // Pré-contrôle de la découpe (roadmap 4.16, Caldera C1) : pas d'encre sur un travail que
+    // Pré-contrôle de la découpe : pas d'encre sur un travail que
     // sa découpeuse ne pourra pas couper (absente, hors ligne, connexion ou réglage manquant).
     if impression
         && a_couper(&t, &p)

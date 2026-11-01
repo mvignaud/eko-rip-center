@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+# Retire l'ouverture des travaux du RIP au profil AppArmor de Ghostscript (voir postinst).
+if [ "$1" = "purge" ] && [ -f /etc/apparmor.d/local/gs ]; then
+    sed -i -e '/^# E-KO RIP Center : Ghostscript lit et écrit les travaux du RIP\.$/d' -e '\|^owner /var/lib/eko-rip/\*\* rwk,$|d' -e '\|^owner /var/lib/eko-rip/\.cache/fontconfig/\*\* l,$|d' /etc/apparmor.d/local/gs
+    if [ -f /etc/apparmor.d/gs ] && command -v apparmor_parser >/dev/null 2>&1 && [ -d /sys/kernel/security/apparmor ]; then
+        apparmor_parser -r /etc/apparmor.d/gs || true
+    fi
+fi
+#DEBHELPER#

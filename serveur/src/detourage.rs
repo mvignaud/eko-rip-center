@@ -1,6 +1,6 @@
 //! Détourage automatique (roadmap 4.14), comme « Make Path » : l'image rendue est seuillée
 //! sur le blanc, les petites taches et (au choix) les contours intérieurs sont ôtés, la forme
-//! est écartée vers l'extérieur (offset, que l'aide d'ONYX ne documente pas), puis son bord
+//! est écartée vers l'extérieur (offset), puis son bord
 //! est suivi, simplifié et lissé. Le résultat est montré en aperçu, puis accepté ou non.
 //!
 //! L'import d'images (TIFF, JPEG, PNG : roadmap 9.2) n'existe pas encore : le détourage se fait

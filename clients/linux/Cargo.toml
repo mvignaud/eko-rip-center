@@ -1,8 +1,8 @@
 [package]
 name = "e-ko-rip-center"
-version = "0.30.0"
+version = "0.31.0"
 edition = "2024"
-license = "LicenseRef-proprietaire"
+license = "AGPL-3.0-or-later"
 publish = false
 description = "Client Linux natif d'E-KO RIP Center (GTK 4 et libadwaita)"
 
@@ -28,7 +28,7 @@ strip = true
 # Même nom que l'ancien client Tauri : il le remplace par une simple mise à jour.
 [package.metadata.deb]
 name = "e-ko-rip-center"
-maintainer = "2M Numérique <mathieu.vignaud2@gmail.com>"
+maintainer = "2M Numérique <contact@e-ko.rip>"
 copyright = "2026, 2M Numérique"
 extended-description = "Client Linux natif du RIP E-KO RIP Center (GTK 4 et libadwaita) : envoi des fichiers, suivi des travaux, des files d'attente et des machines du serveur."
 depends = "$auto, libgtk-4-1, libadwaita-1-0 (>= 1.4)"

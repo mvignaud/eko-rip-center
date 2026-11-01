@@ -446,7 +446,7 @@ pub fn changer_de_pas(hpgl: &str, pas_mm: f64, decalage_mm: [f64; 2]) -> String 
 /// milieu des traits (x1, y1, x2, y2) dans les mêmes unités.
 ///
 /// Axes du Kona (essais au point 0) : X suit la longueur de la feuille, Y+ vers la gauche,
-/// repère direct ; d'où X = y de la page, Y = −x (comme ONYX). `retourne` : 180° de plus.
+/// repère direct ; d'où X = y de la page, Y = −x. `retourne` : 180° de plus.
 pub fn pour_kona(parties: &[(String, Option<&ParametreDecoupe>)], cadre: Option<[i64; 4]>, retourne: bool) -> String {
     let s = if retourne { -1 } else { 1 };
     let axes = |x: i64, y: i64| (s * y, -s * x);
