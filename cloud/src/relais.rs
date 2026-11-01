@@ -367,7 +367,7 @@ async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> R
             brancher(r, id, donnees, flux).await;
         }
     });
-    let reponse = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "upgrade");
+    let reponse = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "Upgrade");
     match forme {
         Poignee::Directe => reponse.header(header::UPGRADE, PROTOCOLE),
         Poignee::WebSocket(acceptation) => {

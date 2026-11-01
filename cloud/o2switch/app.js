@@ -216,8 +216,16 @@ serveur.on('upgrade', (req, client, tete) => {
       }
       amont.write(lignes.join('\r\n') + '\r\n\r\n');
       if (tete && tete.length) amont.write(tete);
-      amont.pipe(client);
-      client.pipe(amont);
+      // La réponse du relais est réécrite en tête canonique avant d'être soudée : le frontal
+      // (LiteSpeed) ne reconnaît la montée WebSocket que sur « Connection: Upgrade » et
+      // « Upgrade: websocket » écrits ainsi ; sinon il traite la suite comme un corps de
+      // réponse ordinaire (découpé en blocs) et les trames arrivent abîmées.
+      lire_tete(amont, (entete, reste) => {
+        client.write(entete);
+        if (reste.length) client.write(reste);
+        amont.pipe(client);
+        client.pipe(amont);
+      });
     });
     amont.setNoDelay(true);
     const fermer = () => {
@@ -229,6 +237,48 @@ serveur.on('upgrade', (req, client, tete) => {
     client.on('close', fermer);
   });
 });
+
+// Lit la tête de réponse HTTP du relais (jusqu'à la ligne vide) et la rend sous forme
+// canonique : ligne d'état, puis noms d'en-têtes en Casse-Habituelle, et « Upgrade » comme
+// valeur de Connection pour une réponse 101. `suite(tete, reste)` reçoit aussi les octets
+// déjà lus après la tête (début du flux WebSocket).
+const NOMS = {
+  connection: 'Connection',
+  upgrade: 'Upgrade',
+  'sec-websocket-accept': 'Sec-WebSocket-Accept',
+  'sec-websocket-protocol': 'Sec-WebSocket-Protocol',
+  'content-type': 'Content-Type',
+  'content-length': 'Content-Length',
+};
+function lire_tete(amont, suite) {
+  let tampon = Buffer.alloc(0);
+  const lire = (morceau) => {
+    tampon = Buffer.concat([tampon, morceau]);
+    const fin = tampon.indexOf('\r\n\r\n');
+    if (fin < 0) {
+      if (tampon.length > 16384) amont.destroy();
+      return;
+    }
+    amont.removeListener('data', lire);
+    amont.pause();
+    const lignes = tampon.subarray(0, fin).toString('latin1').split('\r\n');
+    const etat = lignes.shift();
+    const montee = / 101 /.test(`${etat} `);
+    const sortie = [montee ? 'HTTP/1.1 101 Switching Protocols' : etat];
+    for (const ligne of lignes) {
+      const i = ligne.indexOf(':');
+      if (i <= 0) continue;
+      const nom = ligne.slice(0, i).trim().toLowerCase();
+      let valeur = ligne.slice(i + 1).trim();
+      if (montee && nom === 'connection') valeur = 'Upgrade';
+      if (montee && nom === 'upgrade' && valeur.toLowerCase() === 'websocket') valeur = 'websocket';
+      if (montee && (nom === 'content-length' || nom === 'transfer-encoding' || nom === 'date')) continue;
+      sortie.push(`${NOMS[nom] || nom}: ${valeur}`);
+    }
+    suite(Buffer.from(sortie.join('\r\n') + '\r\n\r\n', 'latin1'), tampon.subarray(fin + 4));
+  };
+  amont.on('data', lire);
+}
 
 // Pas de délai d'inactivité côté Node : le tunnel reste ouvert des heures.
 serveur.requestTimeout = 0;
