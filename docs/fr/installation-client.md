@@ -44,11 +44,8 @@ réseau local au premier lancement. Le serveur s'annonce sous le nom de la machi
 
 ## Avertissement au premier lancement
 
-Les paquets ne sont pas encore signés (choix assumé pour l'instant : la signature Apple et
-Microsoft viendra avec les versions abouties). Une autorisation suffit, une fois par poste :
-- **macOS 15 et plus** : au refus, ouvrir **Réglages Système → Confidentialité et
-  sécurité**, descendre jusqu'au message sur E-KO RIP Center → **Ouvrir quand même**, puis
-  confirmer avec le mot de passe du Mac. Sur macOS plus ancien : clic droit sur
-  l'application → **Ouvrir**, puis confirmer.
+Le client Mac publié dans les releases est signé (Developer ID) et notarisé par Apple : il
+s'ouvre sans avertissement. Le client Windows n'est pas encore signé ; une autorisation
+suffit, une fois par poste :
 - **Windows** : « Windows a protégé votre ordinateur » → **Informations
   complémentaires** → **Exécuter quand même**.
