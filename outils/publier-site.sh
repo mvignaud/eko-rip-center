@@ -24,9 +24,11 @@ rsync -a --exclude README.md --exclude 'changelog.*.json' "$RACINE/site/" "$TMP/
 
 # Les pages ne sont jamais mises en cache, mais le CSS et le JS le sont une heure (.htaccess) :
 # sans version dans l'URL, un téléphone garde l'ancien style.css sous une page neuve. Chaque
-# publication suffixe donc ces liens d'une empreinte de leur contenu (?v=…).
-for f in assets/style.css assets/site.js assets/journal.js; do
-  v=$(cksum < "$TMP/$f" | cut -d' ' -f1)
+# publication suffixe donc les liens vers chaque .css et .js d'assets/ d'une empreinte de leur contenu (?v=…).
+for chemin in "$TMP"/assets/*.css "$TMP"/assets/*.js; do
+  [ -f "$chemin" ] || continue  # motif sans correspondance
+  f=${chemin#"$TMP/"}
+  v=$(cksum "$chemin" | cut -d' ' -f1)
   find "$TMP" -name '*.html' -exec perl -pi -e "s#\"/\Q$f\E\"#\"/$f?v=$v\"#g" {} +
 done
 
