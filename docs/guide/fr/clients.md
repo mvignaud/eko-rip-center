@@ -11,18 +11,18 @@ La fenêtre a trois volets :
 - à droite, l'**inspecteur** du travail choisi : aperçu, fiche, plaques d'encre, alertes et
   actions **Imprimer**, **Relancer**, **Épreuve TIFF**, **Supprimer**.
 
+![Fenêtre du client : la liste des travaux et l'inspecteur](../images/client-linux.png "La fenêtre du client (ici sous Linux) : barre latérale, tableau des travaux, inspecteur du travail choisi")
+
 On envoie un fichier en le **glissant sur la fenêtre** (ou sur l'icône du Dock sur Mac), ou
-avec le bouton **+** : le client demande le réglage à appliquer et, en option, le client, la
+avec le bouton **+ Envoyer** : le client demande le réglage à appliquer et, en option, le client, la
 commande et la quantité. Formats acceptés : PDF, AI compatible PDF, SVG, TIFF, PNG et JPEG.
 Une notification prévient quand le rendu est prêt.
 
-![Fenêtre d'envoi d'un travail](../images/interface-import.png "L'envoi d'un travail dans l'interface d'administration : réglage, mode, résolution, support")
+![Fenêtre d'envoi d'un travail](../images/client-linux-envoi.png "Envoyer au RIP : le fichier, le réglage à appliquer et la fiche travail facultative")
 
 Les écrans de réglage complets (machines, supports, couleur, découpe, comptes, sauvegarde,
 Cloud) s'ouvrent par le menu **Administration…**. Leur mode d'emploi est dans le
 [guide d'utilisation](../../fr/utilisation.md).
-
-![Interface d'administration : la liste des travaux](../images/interface-travaux.png "Administration… : la liste des travaux, l'inspecteur et la barre d'outils")
 
 ## Client Mac
 
@@ -47,7 +47,7 @@ de fonctionner.
 
 ## Client Linux
 
-![Fenêtre du client Linux](../images/client-linux.png "Le client Linux (GTK 4) : même organisation que sur Mac")
+![Vue Machines du client Linux](../images/client-linux-machines.png "Le client Linux (GTK 4), vue Machines : la file de chaque imprimante et découpeuse")
 
 **Pré-requis** : Ubuntu 24.04 ou plus récent, ou Debian 13 (bureau GNOME conseillé), PC 64 bits.
 

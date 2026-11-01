@@ -47,7 +47,7 @@ network** (*Serveurs trouvés sur le réseau*) list. Details: [install the clien
 
 In the client, open **Administration…**, then **System › Machines**: add each printer and each
 cutter, its connection (network, USB, folder) and its media. Every model has its own page in the
-[machine guide](../../en/machines.md).
+[Machines](../../en/machines.md) section.
 
 > [!TIP]
 > Before the first real production run, send a small test PDF, check its preview and its plates

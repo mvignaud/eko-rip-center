@@ -116,3 +116,5 @@ Détail : [Cloud E-KO RIP](cloud.md).
 Utiliser **Signaler un problème…** dans le client : le rapport part avec le journal du serveur
 (masqué) et une référence est affichée. Ou écrire à [contact@e-ko.rip](mailto:contact@e-ko.rip)
 en indiquant la version du serveur (vue **Système**) et le message exact.
+
+![Vue Système du client](../images/client-linux-systeme.png "La vue Système : versions du serveur et du client, place libre sur le disque, rendus en cours")

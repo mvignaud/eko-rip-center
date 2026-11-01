@@ -15,7 +15,7 @@ follows production; **E-KO RIP Cloud** gives access to the shop from outside.
 | Follow production on my phone | [Mobile app](mobile-app.md) |
 | Reach the shop from home or from a customer's site | [E-KO RIP Cloud](cloud.md) |
 | Send a file, print, cut, make a proof | [User guide](../../en/usage.md) |
-| Connect and set up a machine | [Machine guide](../../en/machines.md) |
+| Connect and set up a machine | [Machines](../../en/machines.md): printers, cutting plotters, cutting tables |
 | Manage accounts, back up, update | [Run the server](administration.md) |
 | Understand an error message | [Troubleshooting](troubleshooting.md) |
 
