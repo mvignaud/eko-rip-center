@@ -128,8 +128,8 @@ Le serveur parle aux machines par le réseau, en USB ou par un dossier :
   E-KO RIP.
 
 Les machines se déclarent ensuite dans le client, **Administration… › Système › Machines**.
-Chaque modèle a sa fiche (réglages sur la machine et dans le RIP, vérifications) :
-[aide par machine](../../fr/machines.md).
+Chaque modèle a sa page (réglages sur la machine et dans le RIP, vérifications) dans la
+rubrique [Machines](../../fr/machines.md).
 
 ![Liste des machines dans Système](../images/interface-systeme-machines.png "Système › Machines : le catalogue des machines du serveur")
 

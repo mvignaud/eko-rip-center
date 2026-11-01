@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mutoh Kona 1650 · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Brancher le Kona en USB, régler la découpe et le repérage par cadre et code-barres.">
+<link rel="canonical" href="https://e-ko.rip/documentation/machines/mutoh-kona/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/machines/mutoh-kona/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/machines/mutoh-kona/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/fr/machines/mutoh-kona.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/documentation/en/machines/mutoh-kona/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/" aria-current="page">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Machines › Plotters de découpe</p>
+    <h1>Mutoh Kona 1650</h1>
+    <p class="doc-chapo">Brancher le Kona en USB, régler la découpe et le repérage par cadre et code-barres.</p>
+<h2 id="ce-que-fait-le-rip"><a class="ancre" href="#ce-que-fait-le-rip" aria-hidden="true">#</a>Ce que fait le RIP</h2>
+<p>Il envoie la découpe comme Mutoh CutServer (HP-GL au pas de 0,01 mm), avec lecture du cadre et du code-barres pour le repérage.</p>
+<h2 id="brancher"><a class="ancre" href="#brancher" aria-hidden="true">#</a>Brancher</h2>
+<p>USB (adaptateur série FTDI). La règle udev du paquet crée <code>/dev/kona</code> pour le groupe <code>dialout</code>. Connexion <strong>Série / USB-série</strong>, port <code>/dev/kona</code>, réglages <code>9600 cs8 -cstopb -parenb crtscts raw -echo</code> (9600 bauds, 8N1, RTS/CTS).</p>
+<h2 id="sur-le-kona"><a class="ancre" href="#sur-le-kona" aria-hidden="true">#</a>Sur le Kona</h2>
+<p>Résolution <strong>0,010 mm</strong>.</p>
+<h2 id="dans-le-rip"><a class="ancre" href="#dans-le-rip" aria-hidden="true">#</a>Dans le RIP</h2>
+<p>Pas de découpe <strong>0,01 mm</strong> ; <strong>réglages de coupe</strong> (vitesse, force, accélération, outil, motif), le premier servant par défaut ; <strong>Décalage X / Y</strong> mesuré sur une coupe d'essai ; <strong>Découpe retournée</strong> si la coupe sort tournée de 180°.</p>
+<h2 id="repérage"><a class="ancre" href="#repérage" aria-hidden="true">#</a>Repérage</h2>
+<p>À l'envoi, <strong>Repérage Kona</strong> ; le <strong>cadre + code-barres (type 2)</strong> est celui éprouvé à l'atelier. Engager dans le Kona le bord que montre la flèche ▲ du cadre.</p>
+<h2 id="vérifier"><a class="ancre" href="#vérifier" aria-hidden="true">#</a>Vérifier</h2>
+<p><code>ls -l /dev/kona</code> après l'avoir branché.</p>
+<h2 id="ennuis-courants"><a class="ancre" href="#ennuis-courants" aria-hidden="true">#</a>Ennuis courants</h2>
+<ul><li>*<code>/dev/kona</code> absent* : débrancher, rebrancher, puis <code>journalctl -k | tail</code>.</li><li><em>Arrêt sur « EPOS 6213 »</em> : cadre type 1 sans code-barres envoyé en direct ; le Kona ne le lit pas seul. Prendre le type 2.</li><li><em>Découpe décalée</em> : coupe d'essai, mesurer, saisir le <strong>Décalage X / Y</strong>.</li></ul>
+<p>Voir : <a href="/documentation/utilisation/#repérage-pour-le-kona">repérage pour le Kona</a>, <a href="/documentation/utilisation/#découpe">découpe</a>, <a href="/documentation/utilisation/#variantes-de-machine">variantes</a>.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/machines/roland-versacamm/"><span>Précédent</span>Roland VersaCAMM VP-300 / VP-540</a><a class="doc-suiv" href="/documentation/machines/graphtec-fc7000/"><span>Suivant</span>Graphtec FC7000</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/fr/machines/mutoh-kona.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#ce-que-fait-le-rip">Ce que fait le RIP</a></li><li class="niveau-2"><a href="#brancher">Brancher</a></li><li class="niveau-2"><a href="#sur-le-kona">Sur le Kona</a></li><li class="niveau-2"><a href="#dans-le-rip">Dans le RIP</a></li><li class="niveau-2"><a href="#repérage">Repérage</a></li><li class="niveau-2"><a href="#vérifier">Vérifier</a></li><li class="niveau-2"><a href="#ennuis-courants">Ennuis courants</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

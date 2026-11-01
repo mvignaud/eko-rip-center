@@ -42,6 +42,10 @@ La documentation utilisateur est publiée sur `https://e-ko.rip/documentation/` 
   `outils/publier-site.sh`) échoue si la doc générée est en retard.
 - Une release n'est finie que quand le site est republié (`outils/publier-site.sh` depuis le
   Mac) : c'est lui qui met la doc en ligne.
+- Rubrique Machines : un modèle ajouté au RIP (enum `Modele` de `serveur/src/machines.rs`) a
+  sa page `docs/fr|en/machines/<modele>.md`, rangée sous sa famille dans les deux
+  `sommaire.tsv` (Imprimantes, Plotters de découpe, Tables de découpe) ; le générateur échoue
+  sinon. Détail dans `docs/guide/README.md`.
 - Liens « Aide » câblés dans les logiciels : tableau de `docs/guide/README.md`. Ne pas
   renommer une page ou un titre cité sans les mettre à jour.
 - Jamais de nom de RIP concurrent ni de détail d'hébergement interne dans la doc.

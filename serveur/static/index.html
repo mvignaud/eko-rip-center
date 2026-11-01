@@ -585,7 +585,7 @@ const textes = {
     rendus_etat: (n, max, att) => `${n} en cours sur ${max}` + (att ? ` · ${att} en attente` : ""), jours: (j) => (j ? `${j} jours` : "illimitée"),
     libre_sur: (libre, total) => `${libre} sur ${total}`,
     connexion: "Connexion à E-KO RIP Center", nom_utilisateur: "Utilisateur", mot_de_passe: "Mot de passe", se_connecter: "Se connecter",
-    aide: "Aide", aide_titre: "Documentation d'E-KO RIP Center (e-ko.rip, nouvel onglet)",
+    aide: "Aide", aide_titre: "Documentation d'E-KO RIP Center (e-ko.rip, nouvel onglet)", aide_modele: "Page de ce modèle dans la documentation (e-ko.rip, nouvel onglet)",
     deconnexion: "Se déconnecter", connecte: (n) => `Connecté : ${n}`,
     acces_libre: "Accès libre : aucun utilisateur n'est déclaré sur ce serveur. Créer un compte sur le serveur : eko-rip-serveur utilisateur ajouter <nom>",
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer…", supprimer_reglage: "Supprimer",
@@ -921,7 +921,7 @@ const textes = {
     rendus_etat: (n, max, att) => `${n} running of ${max}` + (att ? ` · ${att} waiting` : ""), jours: (j) => (j ? `${j} days` : "unlimited"),
     libre_sur: (libre, total) => `${libre} of ${total}`,
     connexion: "Sign in to E-KO RIP Center", nom_utilisateur: "User", mot_de_passe: "Password", se_connecter: "Sign in",
-    aide: "Help", aide_titre: "E-KO RIP Center documentation (e-ko.rip, new tab)",
+    aide: "Help", aide_titre: "E-KO RIP Center documentation (e-ko.rip, new tab)", aide_modele: "This model's page in the documentation (e-ko.rip, new tab)",
     deconnexion: "Sign out", connecte: (n) => `Signed in: ${n}`,
     acces_libre: "Open access: no user is declared on this server. Create an account on the server: eko-rip-serveur utilisateur ajouter <name>",
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save…", supprimer_reglage: "Delete",
@@ -1242,6 +1242,8 @@ const form = $("envoi"), msg = $("message"), liste = $("travaux"), boutonLangue 
 const locale = () => (langue === "fr" ? "fr-FR" : "en-GB");
 const date = (s) => new Date(s * 1000).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" });
 
+/** Adresse de la documentation publique, dans la langue de l'interface. */
+const docEkoRip = () => (langue === "en" ? "https://e-ko.rip/documentation/en/" : "https://e-ko.rip/documentation/");
 function el(tag, attrs = {}, ...enfants) {
   const n = document.createElement(tag);
   Object.assign(n, attrs);
@@ -2087,7 +2089,7 @@ function appliquerLangue() {
   // Outils de la barre : leur libellé en bulle (il est masqué sur un écran moyen).
   document.querySelectorAll(".barre .outil [data-t]").forEach((n) => { n.closest(".outil").title = n.textContent; });
   boutonLangue.textContent = T().autre;
-  $("aide").href = langue === "en" ? "https://e-ko.rip/documentation/en/" : "https://e-ko.rip/documentation/";
+  $("aide").href = docEkoRip();
   remplirProfils();
   remplirReglages();
   champsEdition($("edition-envoi"), lireEdition($("edition-envoi")));
@@ -4055,11 +4057,16 @@ function afficherEditeurMachines() {
     const typeConnexion = choix("type", CONNEXIONS, c.type, T().connexions);
     typeConnexion.addEventListener("change", () => majConnexion(typeConnexion.value));
     majConnexion(c.type);
+    // Lien « Aide » vers la page du modèle (e-ko.rip/documentation/machines/<modèle>/), qui suit le choix.
+    const modele = choix("modele", MODELES, m.modele, T().modeles);
+    const aideModele = el("a", { className: "discret", target: "_blank", rel: "noopener", title: T().aide_modele }, T().aide);
+    const majAide = () => { aideModele.href = `${docEkoRip()}machines/${modele.value.replaceAll("_", "-")}/`; };
+    modele.addEventListener("change", majAide); majAide();
     const bloc = el("div", { className: "page ligne-machine" },
       el("div", { className: "ligne bas" },
         el("label", {}, T().identifiant, champ("id", m.id, { placeholder: "fc7000", style: "width: 9em" })),
         el("label", { style: "flex: 2" }, T().nom_machine, champ("nom", m.nom)),
-        el("label", {}, T().modele, choix("modele", MODELES, m.modele, T().modeles)),
+        el("label", {}, el("span", {}, T().modele, " · ", aideModele), modele),
         el("label", {}, T().laize, champ("laize", m.laize_mm, { type: "number", min: 100, max: 5000, style: "width: 7em" }))),
       el("div", { className: "ligne bas" },
         el("label", {}, T().connexion_machine, typeConnexion), details,

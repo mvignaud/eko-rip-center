@@ -1,6 +1,7 @@
 # Contents of the public documentation in English (https://e-ko.rip/documentation/en/).
 # One line per page: id[:address]<TAB>file in docs/<TAB>title<TAB>description (one sentence).
 # The id links a page to its French version (docs/guide/fr/sommaire.tsv). « == Section » opens a section.
+# « === Group » opens a group inside a section (Machines › Printers); every model in serveur/src/machines.rs needs its page.
 # After any change: python3 outils/generer-documentation.py
 == Getting started
 index	guide/en/index.md	Documentation	Everything to install, use and run E-KO RIP Center: server, Mac, Linux and Windows clients, mobile app and Cloud.
@@ -12,7 +13,16 @@ application-mobile:mobile-app	guide/en/mobile-app.md	Mobile app	Follow productio
 cloud	guide/en/cloud.md	E-KO RIP Cloud	Reach the print shop's RIP server from outside, with no VPN and no open port, through the free platform.e-ko.rip.
 == Use
 utilisation:usage	en/usage.md	User guide	Sending a job, the queue, printing, cutting, proofs, sheets, colour and media: every feature of the RIP.
-machines	en/machines.md	Machine guide	Settings and connections for each supported printer and cutter.
+== Machines
+machines	en/machines.md	All machines	The supported printers, cutting plotters and cutting tables, how to add them and connect them.
+=== Printers
+epson-sc-s80600:machines/epson-sc-s80600	en/machines/epson-sc-s80600.md	Epson SureColor SC-S80600	Connect and set up the Epson SC-S80600: direct driver, media, loaded media, common trouble.
+roland-versacamm:machines/roland-versacamm	en/machines/roland-versacamm.md	Roland VersaCAMM VP-300 / VP-540	Connect the Roland VersaCAMM and send it the cut over the network.
+=== Cutting plotters
+mutoh-kona:machines/mutoh-kona	en/machines/mutoh-kona.md	Mutoh Kona 1650	Connect the Kona over USB, set up cutting and registration with frame and barcode.
+graphtec-fc7000:machines/graphtec-fc7000	en/machines/graphtec-fc7000.md	Graphtec FC7000	Connect the Graphtec FC7000 and send it the cut in HP-GL.
+=== Cutting tables
+tables-de-decoupe:machines/cutting-tables	en/machines/cutting-tables.md	Cutting tables	Cutting tables and preparing the sheets meant for them.
 == Administer
 administration	guide/en/administration.md	Run the server	Accounts, backups, updates, shared folders, advanced settings and server data.
 depannage:troubleshooting	guide/en/troubleshooting.md	Troubleshooting	Common messages, their cause and what to do.

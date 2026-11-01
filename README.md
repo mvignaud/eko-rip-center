@@ -22,7 +22,7 @@ Dernière image : 0.16.0.
 
 Documentation utilisateur en ligne : [e-ko.rip/documentation](https://e-ko.rip/documentation/)
 ([English](https://e-ko.rip/documentation/en/)), source dans [docs/guide/](docs/guide/).
-Références : [français](docs/fr/) · [English](docs/en/) · aide par machine
+Références : [français](docs/fr/) · [English](docs/en/) · machines
 ([fr](docs/fr/machines.md), [en](docs/en/machines.md)) · glossaire ([fr](docs/fr/glossaire.md),
 [en](docs/en/glossary.md)) ·
 [changelog](CHANGELOG.md). Administration et questions fréquentes :

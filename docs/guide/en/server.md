@@ -126,7 +126,7 @@ The server talks to the machines over the network, by USB or through a folder:
   server.
 
 The machines are then declared in the client, **Administration… › System › Machines**. Every
-model has its own page (settings on the machine and in the RIP, checks): [machine guide](../../en/machines.md).
+model has its own page (settings on the machine and in the RIP, checks) in the [Machines](../../en/machines.md) section.
 
 ![Machine list in System](../images/interface-systeme-machines.png "System › Machines: the catalogue of the server's machines")
 

@@ -13,6 +13,8 @@
 .doc-menu li a:hover { background: var(--fond-3); color: var(--texte); text-decoration: none; }
 .doc-menu li a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
 .doc-rubrique { margin: 0 0 6px; padding: 0 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--texte-3); }
+.doc-menu li.doc-groupe { margin: 10px 0 2px; padding: 0 10px; font-size: 13px; font-weight: 600; color: var(--texte-3); }
+.doc-menu li.doc-groupe ~ li:not(.doc-groupe) a { padding-left: 22px; }
 .doc-filtre input { width: 100%; box-sizing: border-box; margin-bottom: 18px; padding: 9px 12px; font: inherit; color: var(--texte); background: var(--fond-2); border: 1px solid var(--trait); border-radius: 10px; }
 .doc-resultats { list-style: none; margin: 0; padding: 0; }
 .doc-resultats li a { display: block; padding: 8px 10px; border-radius: 8px; color: var(--texte); }

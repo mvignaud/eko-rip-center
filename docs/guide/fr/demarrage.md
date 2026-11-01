@@ -49,7 +49,7 @@ sur le réseau**. Détail : [installer les clients](clients.md).
 
 Dans le client, menu **Administration…**, vue **Système › Machines** : ajouter chaque
 imprimante et chaque découpeuse, sa connexion (réseau, USB, dossier) et ses supports. Chaque
-modèle a sa fiche dans l'[aide par machine](../../fr/machines.md).
+modèle a sa page dans la rubrique [Machines](../../fr/machines.md).
 
 > [!TIP]
 > Avant la première vraie production, envoyer un petit PDF d'essai, vérifier son aperçu et ses

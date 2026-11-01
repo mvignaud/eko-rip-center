@@ -61,10 +61,12 @@ def lire_sommaire(langue):
 
     Première colonne : identifiant de la page, commun aux deux langues (il relie une page à sa
     traduction), suivi au besoin de « :adresse » quand l'adresse diffère (« serveur:server »).
+    « == Rubrique » ouvre une rubrique ; « === Groupe » ouvre un groupe dans la rubrique
+    (Machines › Imprimantes…), refermé par la rubrique suivante.
     """
     SOMMAIRE = DOCS / "guide" / langue / "sommaire.tsv"
     base = LANGUES[langue]["url"]
-    pages, renvois, rubrique = [], {}, None
+    pages, renvois, rubrique, groupe = [], {}, None, None
     for n, ligne in enumerate(SOMMAIRE.read_text(encoding="utf-8").splitlines(), 1):
         if not ligne.strip() or ligne.startswith("#"):
             continue
@@ -75,8 +77,11 @@ def lire_sommaire(langue):
                 sys.exit(f"{SOMMAIRE}:{n} : renvoi « -> fichier<TAB>page » invalide")
             renvois[source] = page.strip()
             continue
+        if ligne.startswith("=== "):
+            groupe = ligne[4:].strip()
+            continue
         if ligne.startswith("== "):
-            rubrique = ligne[3:].strip()
+            rubrique, groupe = ligne[3:].strip(), None
             continue
         champs = [c.strip() for c in ligne.split("\t") if c.strip()]
         if len(champs) != 4:
@@ -89,7 +94,7 @@ def lire_sommaire(langue):
         adresse = adresse or ident
         url = base if adresse == "index" else f"{base}{adresse}/"
         pages.append({"id": ident, "page": adresse, "url": url, "source": source, "titre": titre,
-                      "description": description, "rubrique": rubrique, "langue": langue})
+                      "description": description, "rubrique": rubrique, "groupe": groupe, "langue": langue})
     par_id = {p["id"]: p["url"] for p in pages}
     for source, page in list(renvois.items()):
         if page not in par_id:
@@ -365,13 +370,16 @@ class Convertisseur:
 def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
     L = LANGUES[p["langue"]]
     t = L["t"]
-    nav, rubrique = [], None
+    nav, rubrique, groupe = [], None, None
     for q in pages:
         if q["rubrique"] != rubrique:
             if rubrique is not None:
                 nav.append("</ul>")
-            rubrique = q["rubrique"]
+            rubrique, groupe = q["rubrique"], None
             nav.append(f'<p class="doc-rubrique">{html.escape(rubrique or "")}</p><ul>')
+        if q["groupe"] != groupe:
+            groupe = q["groupe"]
+            nav.append(f'<li class="doc-groupe">{html.escape(groupe)}</li>')
         actuelle = ' aria-current="page"' if q is p else ""
         nav.append(f'<li><a href="{q["url"]}"{actuelle}>{html.escape(q["titre"])}</a></li>')
     nav.append("</ul>")
@@ -392,7 +400,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
     courant = ' aria-current="page"'
     nav_site = "\n      ".join(f'<a href="{u}"{courant if u == L["url"] else ""}>{html.escape(n)}</a>' for u, n in t["nav"])
     pied = "\n      ".join(f'<a href="{u}">{html.escape(n)}</a>' for u, n in t["pied"])
-    fil = "" if p["page"] == "index" else " › " + html.escape(p["rubrique"] or "")
+    fil = "" if p["page"] == "index" else " › " + " › ".join(html.escape(x) for x in (p["rubrique"], p["groupe"]) if x)
     return f"""<!doctype html>
 <html lang="{p["langue"]}">
 <head>
@@ -467,9 +475,27 @@ def texte_brut(fragment):
     return re.sub(r"\s+", " ", html.unescape(x)).strip()
 
 
+def verifier_machines(sommaires):
+    """Chaque modèle du catalogue (enum Modele de serveur/src/machines.rs) a sa page, dans les
+    deux langues : identifiant « epson-sc-s80600 » pour la variante EpsonScS80600."""
+    source = (RACINE / "serveur" / "src" / "machines.rs").read_text(encoding="utf-8")
+    corps = re.search(r"pub enum Modele \{(.*?)\n\}", source, flags=re.S)
+    if not corps:
+        sys.exit("serveur/src/machines.rs : enum Modele introuvable")
+    variantes = re.findall(r"^\s*([A-Z]\w*)\s*,", corps[1], flags=re.M)
+    attendus = [re.sub(r"(?<!^)(?=[A-Z])", "-", v).lower() for v in variantes]
+    for langue, (pages, _) in sommaires.items():
+        ids = {p["id"] for p in pages}
+        manquants = [a for a in attendus if a not in ids]
+        if manquants:
+            sys.exit(f"docs/guide/{langue}/sommaire.tsv : pas de page pour le modèle "
+                     + ", ".join(manquants) + " (une page par machine du catalogue, voir docs/guide/README.md)")
+
+
 def generer(dossier):
     """Écrit les deux langues dans dossier (= site/documentation/) ; rend le nombre de pages."""
     sommaires = {langue: lire_sommaire(langue) for langue in LANGUES}
+    verifier_machines(sommaires)
     par_id = {langue: {p["id"]: p for p in pages} for langue, (pages, _) in sommaires.items()}
     images, total = set(), 0
     for langue, (pages, renvois) in sommaires.items():

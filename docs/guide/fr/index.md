@@ -16,7 +16,7 @@ depuis l'extérieur.
 | Suivre la production sur mon téléphone | [Application mobile](application-mobile.md) |
 | Accéder à l'atelier depuis chez moi ou un client | [Cloud E-KO RIP](cloud.md) |
 | Envoyer un fichier, imprimer, découper, faire un BAT | [Guide d'utilisation](../../fr/utilisation.md) |
-| Brancher et régler une machine | [Aide par machine](../../fr/machines.md) |
+| Brancher et régler une machine | [Machines](../../fr/machines.md) : imprimantes, plotters, tables de découpe |
 | Gérer les comptes, sauvegarder, mettre à jour | [Administrer le serveur](administration.md) |
 | Comprendre un message d'erreur | [Dépannage](depannage.md) |
 
