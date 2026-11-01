@@ -516,7 +516,7 @@ async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
 async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Request, mode: Mode) -> Response {
     let envoi = relais.tunnels.lock().unwrap().get(&site).map(|t| t.envoi.clone());
     // Site inconnu ou hors ligne : même réponse (on ne dit pas quels sites existent).
-    let Some(mut envoi) = envoi else { return refus(StatusCode::BAD_GATEWAY, "site_hors_ligne") };
+    let Some(mut envoi) = envoi else { return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne") };
     let max = relais.config.max_octets;
     let longueur = requete.headers().get(header::CONTENT_LENGTH).and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
     if longueur.is_some_and(|l| l > max) {
@@ -540,14 +540,14 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
     let corps = Body::new(http_body_util::Limited::new(corps, max as usize));
     let Ok(sortante) = sortante.body(corps) else { return refus(StatusCode::BAD_REQUEST, "requete_invalide") };
     if envoi.ready().await.is_err() {
-        return refus(StatusCode::BAD_GATEWAY, "site_hors_ligne");
+        return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne");
     }
     let reponse = match envoi.send_request(sortante).await {
         Ok(r) => r,
         Err(e) => {
             // Corps trop gros découvert en route (sans Content-Length).
             let trop_gros = std::error::Error::source(&e).is_some_and(|s| s.to_string().contains("length limit"));
-            return if trop_gros || e.to_string().contains("length limit") { refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros") } else { refus(StatusCode::BAD_GATEWAY, "site_hors_ligne") };
+            return if trop_gros || e.to_string().contains("length limit") { refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros") } else { refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne") };
         }
     };
     let (mut p, corps) = reponse.into_parts();

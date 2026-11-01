@@ -144,7 +144,7 @@ function entetes(req) {
 
 function indisponible(res) {
   if (!res.headersSent) {
-    res.writeHead(502, { 'content-type': 'application/json' });
+    res.writeHead(503, { 'content-type': 'application/json' });
     res.end('{"code":"indisponible"}');
   } else {
     res.destroy();

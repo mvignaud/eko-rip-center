@@ -79,7 +79,7 @@ async fn tunnel_appairage_et_isolement() {
 
     // Site pas encore connecté : hors ligne.
     let (b, s) = (base.clone(), site.clone());
-    assert_eq!(bloquant(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()).await, 502);
+    assert_eq!(bloquant(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()).await, 503);
 
     // Mauvaise clé : refusée avec son code.
     let r = client::servir(&base, &site, "mauvaise", "essai", rip(), || {}).await;
@@ -155,7 +155,7 @@ async fn tunnel_appairage_et_isolement() {
     let (b, s) = (base.clone(), site.clone());
     assert_eq!(bloquant(move || agent().get(format!("{b}/connexion")).header("Host", format!("{s}.platform.test")).call().unwrap().status().as_u16()).await, 404, "le portail n'existe pas sur l'origine d'un site");
     let b = base.clone();
-    assert_eq!(bloquant(move || agent().get(format!("{b}/api/echo")).header("Host", "autresite.platform.test").call().unwrap().status().as_u16()).await, 502);
+    assert_eq!(bloquant(move || agent().get(format!("{b}/api/echo")).header("Host", "autresite.platform.test").call().unwrap().status().as_u16()).await, 503);
     let b = base.clone();
     assert_eq!(bloquant(move || agent().get(format!("{b}/connexion")).header("Host", "platform.test").call().unwrap().status().as_u16()).await, 200, "l'hôte de la plate-forme reste le portail");
 
@@ -180,13 +180,13 @@ async fn tunnel_appairage_et_isolement() {
 
     // Un autre site n'atteint pas celui-ci.
     let b = base.clone();
-    assert_eq!(bloquant(move || agent().get(format!("{b}/s/autresite/api/echo")).call().unwrap().status().as_u16()).await, 502);
+    assert_eq!(bloquant(move || agent().get(format!("{b}/s/autresite/api/echo")).call().unwrap().status().as_u16()).await, 503);
 
     // Fin du tunnel côté RIP : le site repasse hors ligne.
     tunnel.abort();
     tokio::time::sleep(Duration::from_millis(300)).await;
     let (b, s) = (base.clone(), site.clone());
-    assert_eq!(bloquant(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()).await, 502);
+    assert_eq!(bloquant(move || agent().get(format!("{b}/s/{s}/api/echo")).call().unwrap().status().as_u16()).await, 503);
     let _ = std::fs::remove_dir_all(&d);
 }
 

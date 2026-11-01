@@ -96,7 +96,7 @@ Sans compte déclaré, toute requête venue par le cloud est refusée (`cloud_sa
 - Sous l'ancienne forme `/s/<site>/`, le cookie d'un site est limité à ce chemin et toute
   réponse porte `Content-Security-Policy: sandbox` (pas de script, origine opaque).
 - Requête de plus de 2 Go (`EKO_CLOUD_MAX_MO`) : refusée (`envoi_trop_gros`). Site hors ligne
-  ou inconnu : même réponse (`site_hors_ligne`).
+  ou inconnu : même réponse (`503 site_hors_ligne`).
 
 ## Installer la plate-forme (VPS)
 
@@ -165,6 +165,10 @@ Une adresse par site (`<site>.platform.e-ko.rip`) : ajouter aussi le sous-domain
 le serveur o2switch, et un certificat qui couvre le joker. Sans lui, les clients joignent les
 sites à `https://platform.e-ko.rip/s/<site>/` (l'interface web dans un navigateur, elle,
 demande l'adresse propre au site).
+
+Le frontal d'o2switch remplace toute réponse 502 de l'application par une page « 421
+Misdirected Request » : le relais et le lanceur répondent donc 503 quand un site ou le relais
+est indisponible. Le journal du relais est `~/eko-rip-cloud/relais.log`.
 
 Mise à jour : remplacer le binaire, puis « Restart » dans « Setup Node.js App ».
 

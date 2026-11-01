@@ -207,6 +207,6 @@ async fn inscription_rattachement_administration() {
     assert!(fin.is_ok() || fin.is_err());
     let q = p.clone();
     let s10 = site.clone();
-    assert_eq!(b(move || get(&q, &format!("/s/{s10}/api/x"), None)).await.statut, 502);
+    assert_eq!(b(move || get(&q, &format!("/s/{s10}/api/x"), None)).await.statut, 503);
     let _ = std::fs::remove_dir_all(&p.donnees);
 }

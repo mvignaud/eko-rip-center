@@ -5850,7 +5850,7 @@ mod tests {
             })
             .await
             .unwrap();
-            assert_eq!(apres, 502);
+            assert_eq!(apres, 503);
             assert_eq!(cloud::etat_public(&e.config.donnees)["etat"], "inactif");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
