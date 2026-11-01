@@ -114,7 +114,25 @@ async fn main() {
     tokio::spawn(relais::entretenir(r.clone()));
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
     println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
-    axum::serve(ecoute, relais::routes(r.clone())).with_graceful_shutdown(arret()).await.expect("service");
+    // À l'arrêt : plus de nouvelles connexions, au plus 5 s pour les requêtes en cours (les
+    // tunnels, eux, ne finissent jamais d'eux-mêmes), puis on sort.
+    let (signal, attente) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        arret().await;
+        let _ = signal.send(true);
+    });
+    let mut fin = attente.clone();
+    let service = axum::serve(ecoute, relais::routes(r.clone())).with_graceful_shutdown(async move {
+        let mut a = attente;
+        let _ = a.wait_for(|v| *v).await;
+    });
+    tokio::select! {
+        resultat = service => resultat.expect("service"),
+        _ = async {
+            let _ = fin.wait_for(|v| *v).await;
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        } => eprintln!("arrêt : connexions encore ouvertes après 5 s, fermées"),
+    }
     relais::enregistrer_installations(&r).await;
 }
 
