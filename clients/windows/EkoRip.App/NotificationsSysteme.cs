@@ -16,7 +16,18 @@ internal static class NotificationsSysteme
             // Un clic sur la notification ramène la fenêtre au premier plan.
             AppNotificationManager.Default.NotificationInvoked += (sender, args) =>
                 fenetre.DispatcherQueue.TryEnqueue(() => fenetre.Activate());
-            AppNotificationManager.Default.Register();
+            // Application non empaquetée : sans nom ni icône, Windows titre la notification avec le
+            // nom de l'exécutable (« EkoRipCenter »).
+            var icone = Path.Combine(AppContext.BaseDirectory, "Assets", "icone-256.png");
+            try
+            {
+                AppNotificationManager.Default.Register("E-KO RIP Center", new Uri(icone));
+            }
+            catch (Exception e)
+            {
+                Journal.Ecrire(e);
+                AppNotificationManager.Default.Register();
+            }
             _disponible = true;
         }
         catch (Exception e)

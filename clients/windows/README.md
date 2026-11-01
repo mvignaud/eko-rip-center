@@ -32,10 +32,25 @@ dotnet publish EkoRip.App -c Release -p:Platform=x64  # dossier autonome
 .\EkoRip.App\bin\x64\Debug\net8.0-windows10.0.19041.0\win-x64\EkoRipCenter.exe
 .\EkoRip.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish\EkoRipCenter.exe
 
-# Version livrable : tests, publish autonome à la version du Cargo.toml, puis
-# dist\E-KO-RIP-Center-windows-x64-<version>.zip (environ 60 Mo, dossier « E-KO RIP Center »)
-.\construire.ps1                         # -Architecture arm64|x86, -Sortie <dossier>
+# Version livrable : tests, publish autonome à la version du Cargo.toml, puis dans dist\ :
+#   E-KO-RIP-Center_<version>_x64-setup.exe   installateur (environ 45 Mo)
+#   E-KO-RIP-Center-windows-x64-<version>.zip  même contenu à décompresser (environ 60 Mo)
+.\construire.ps1                         # -Architecture arm64|x86, -Sortie <dossier>, -SansInstallateur
 ```
+
+L'installateur demande Inno Setup 6 sur le poste qui construit (`winget install JRSoftware.InnoSetup`) ;
+le script est `installeur.iss`. C'est le fichier `…_x64-setup.exe` qu'on joint à la release GitHub :
+le bouton « Télécharger pour Windows » du site le prend dans la dernière release.
+
+- Installation par utilisateur, **sans droits administrateur**, dans
+  `%LOCALAPPDATA%\Programs\E-KO RIP Center` ; raccourci dans le menu Démarrer, et sur le Bureau
+  si on coche la case. Assistant en français.
+- Une nouvelle version s'installe par-dessus (même `AppId`) : le client ouvert est fermé, le
+  dossier est remplacé.
+- Désinstallation : Paramètres › Applications, ou `unins000.exe` dans le dossier d'installation.
+  Elle retire le programme et les raccourcis, et garde les réglages de l'utilisateur
+  (`%LOCALAPPDATA%\E-KO RIP Center`).
+- Installation silencieuse : `E-KO-RIP-Center_<version>_x64-setup.exe /VERYSILENT [/TASKS=bureau]`.
 
 Le zip se décompresse n'importe où et `EkoRipCenter.exe` se lance tel quel : runtime .NET et
 Windows App SDK sont dedans, rien à installer.
@@ -62,6 +77,6 @@ avec Pillow ; `icone-256.png` sert à l'écran de connexion.
 
 - Glisser-déposer : un exécutable lancé « en administrateur » ne reçoit pas les fichiers glissés
   depuis l'Explorateur (règle Windows) ; le lancer normalement.
-- Pas de MSIX pour l'instant : les notifications passent par l'enregistrement COM de Windows App SDK
-  pour applications non empaquetées, sans icône ni nom propres tant que l'application n'est pas
-  installée par un paquet.
+- Pas de MSIX : les notifications passent par l'enregistrement COM de Windows App SDK pour
+  applications non empaquetées, avec le nom « E-KO RIP Center » et l'icône Rosace passés à
+  l'enregistrement (sans eux, Windows affiche le nom de l'exécutable).

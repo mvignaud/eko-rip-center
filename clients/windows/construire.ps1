@@ -1,10 +1,12 @@
-﻿# Construit le client Windows autonome puis le zip « E-KO-RIP-Center-windows-<arch>-<version>.zip ».
-# À lancer sur un PC Windows avec le SDK .NET 8 (Visual Studio inutile). Sortie dans
-# clients/windows/dist/ (ou le dossier donné par -Sortie).
+﻿# Construit le client Windows autonome, le zip « E-KO-RIP-Center-windows-<arch>-<version>.zip »
+# puis l'installateur « E-KO-RIP-Center_<version>_<arch>-setup.exe » (Inno Setup, installeur.iss).
+# À lancer sur un PC Windows avec le SDK .NET 8 (Visual Studio inutile) et Inno Setup 6
+# (winget install JRSoftware.InnoSetup). Sortie dans clients/windows/dist/ (ou -Sortie).
 #
 #   .\construire.ps1                       # x64
 #   .\construire.ps1 -Architecture arm64   # ou x86
 #   .\construire.ps1 -Sortie D:\livraison
+#   .\construire.ps1 -SansInstallateur     # zip seul
 #
 # La version est lue dans le Cargo.toml racine ([workspace.package] version), comme pour le .dmg
 # Mac ; elle est passée à dotnet publish, donc l'écran Système affiche la même.
@@ -12,7 +14,8 @@
 param(
     [ValidateSet('x64', 'arm64', 'x86')]
     [string]$Architecture = 'x64',
-    [string]$Sortie
+    [string]$Sortie,
+    [switch]$SansInstallateur
 )
 $ErrorActionPreference = 'Stop'
 
@@ -54,11 +57,25 @@ try {
     if (Test-Path $zip) { Remove-Item $zip -Force }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::CreateFromDirectory($dossier, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+    Write-Host "==> $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) Mo)"
+
+    # 4. Installateur Inno Setup, à partir du même dossier publié.
+    if (-not $SansInstallateur) {
+        $iscc = @(
+            (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source,
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+            (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+        ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+        if (-not $iscc) { throw 'construire.ps1 : Inno Setup 6 introuvable (winget install JRSoftware.InnoSetup), ou -SansInstallateur.' }
+        $sortieAbsolue = (Resolve-Path $Sortie).Path
+        & $iscc /Q "/DVersion=$version" "/DSource=$dossier" "/DSortie=$sortieAbsolue" "/DArchitecture=$Architecture" (Join-Path $ici 'installeur.iss')
+        if ($LASTEXITCODE -ne 0) { throw 'construire.ps1 : échec de la compilation de l''installateur.' }
+        $setup = Join-Path $sortieAbsolue "E-KO-RIP-Center_${version}_$Architecture-setup.exe"
+        Write-Host "==> $setup ($([math]::Round((Get-Item $setup).Length / 1MB, 1)) Mo)"
+    }
 }
 finally {
     if (Test-Path $publication) { Remove-Item $publication -Recurse -Force }
     if ($atelier -and (Test-Path $atelier)) { Remove-Item $atelier -Recurse -Force }
 }
-
-$taille = [math]::Round((Get-Item $zip).Length / 1MB, 1)
-Write-Host "==> $zip ($taille Mo)"
