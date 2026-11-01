@@ -212,13 +212,15 @@ pub async fn jeton(State(r): State<Partage>, h: HeaderMap, Form(f): Form<HashMap
     .flatten();
     let Some((jeton, titulaire, appareil)) = cree else { return erreur_oauth(StatusCode::BAD_REQUEST, "invalid_grant") };
     // Notification de sécurité au titulaire (hors de la réponse, jamais bloquante).
-    r.envoyer(crate::courriels::nouvelle_app(&r.config.url_publique, &titulaire.email, &titulaire.nom, &appareil, crate::maintenant()));
+    // Toujours envoyée (sécurité), quelle que soit la case « Recevoir les alertes ».
+    let courriel = crate::courriels::nouvelle_app(&r.config.url_publique, &titulaire.email, &titulaire.nom, &appareil, crate::maintenant());
+    crate::notifications::notifier(&r, titulaire.id, Some(courriel), crate::notifications::Notification::nouvelle_app(&r.config.url_publique, &appareil));
     let mut rep = Json(serde_json::json!({ "access_token": jeton, "token_type": "Bearer", "expires_in": base::DUREE_JETON_APPLI })).into_response();
     rep.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     rep
 }
 
-fn bearer(h: &HeaderMap) -> Option<&str> {
+pub(crate) fn bearer(h: &HeaderMap) -> Option<&str> {
     h.get(header::AUTHORIZATION)?.to_str().ok()?.strip_prefix("Bearer ").map(str::trim)
 }
 
@@ -299,7 +301,7 @@ mod tests {
 
     #[test]
     fn identite_aller_retour() {
-        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false, email_verifie: true, alertes: true, resume: true };
+        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false, email_verifie: true, alertes: true, resume: true, notifications_proposees: false };
         let v = entete_identite(&c, "proprietaire");
         let i = lire_identite(v.to_str().unwrap()).unwrap();
         assert_eq!(i, IdentiteCloud { compte: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), role: "admin".into() });

@@ -16,6 +16,15 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : notifications.** Les événements des e-mails d'alerte (site hors ligne après
+  15 minutes, de retour en ligne, nouvelle app connectée) arrivent aussi par un journal par compte
+  que les apps de bureau interrogent chaque minute (`GET /api/moi/notifications`), par push
+  mobile Expo (`POST /api/moi/push`) et par Web Push dans le navigateur (VAPID, chiffrement
+  `aes128gcm` en Rust pur, service worker `/sw.js`, carte « Notifications sur cet appareil » dans
+  « Mon compte »). Le portail propose les notifications après la première connexion, et les apps
+  demandent l'autorisation juste après la première connexion au cloud. Voir `docs/fr/cloud.md`.
+  *Platform notifications: per-account journal for desktop apps, Expo mobile push and browser Web
+  Push (VAPID, pure Rust), offered at first sign-in.*
 - **Cloud E-KO RIP : e-mails de la plate-forme.** Mot de passe oublié (lien d'une heure),
   confirmation de l'adresse à l'inscription (rattacher un serveur l'exige), alerte « site hors
   ligne depuis 15 minutes » puis « de retour en ligne », e-mail de sécurité à chaque nouvelle app

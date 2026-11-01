@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS comptes (
     bloque_jusqua INTEGER NOT NULL DEFAULT 0,
     email_verifie INTEGER NOT NULL DEFAULT 0,
     alertes INTEGER NOT NULL DEFAULT 1,
-    resume INTEGER NOT NULL DEFAULT 1
+    resume INTEGER NOT NULL DEFAULT 1,
+    notifications_proposees INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions (
     jeton TEXT PRIMARY KEY,
@@ -43,7 +44,9 @@ CREATE TABLE IF NOT EXISTS jetons_applis (
     appareil TEXT NOT NULL,
     cree_le INTEGER NOT NULL,
     expire INTEGER NOT NULL,
-    vu_le INTEGER NOT NULL
+    vu_le INTEGER NOT NULL,
+    jeton_expo TEXT,
+    plateforme_expo TEXT
 );
 -- Jetons à usage unique envoyés par e-mail (mot de passe oublié, confirmation de l'adresse) :
 -- seule l'empreinte SHA-256 est gardée.
@@ -65,6 +68,29 @@ CREATE TABLE IF NOT EXISTS evenements_sites (
     detail TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS evenements_sites_site ON evenements_sites (site, debut);
+-- Journal des notifications par compte (interrogé par les apps de bureau), gardé 30 jours.
+-- AUTOINCREMENT : un identifiant n'est jamais réutilisé, même après la purge.
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    site TEXT,
+    titre TEXT NOT NULL,
+    corps TEXT NOT NULL,
+    lien TEXT NOT NULL,
+    cree_le INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS notifications_compte ON notifications (compte, id);
+-- Navigateurs inscrits au Web Push (portail).
+CREATE TABLE IF NOT EXISTS abonnements_web (
+    id INTEGER PRIMARY KEY,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth TEXT NOT NULL,
+    appareil TEXT NOT NULL DEFAULT '',
+    cree_le INTEGER NOT NULL
+);
 ";
 
 /// Durée d'un jeton d'app (clients Mac, Linux, Windows, mobile).
@@ -108,6 +134,13 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !a("resume") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN resume INTEGER NOT NULL DEFAULT 1;")?;
     }
+    if !a("notifications_proposees") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN notifications_proposees INTEGER NOT NULL DEFAULT 0;")?;
+    }
+    let jetons: Vec<String> = c.prepare("PRAGMA table_info(jetons_applis)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<rusqlite::Result<_>>()?;
+    if !jetons.iter().any(|x| x == "jeton_expo") {
+        c.execute_batch("ALTER TABLE jetons_applis ADD COLUMN jeton_expo TEXT; ALTER TABLE jetons_applis ADD COLUMN plateforme_expo TEXT;")?;
+    }
     Ok(())
 }
 
@@ -128,12 +161,14 @@ pub struct Compte {
     pub alertes: bool,
     /// Reçoit le résumé hebdomadaire.
     pub resume: bool,
+    /// La proposition « Recevoir les alertes sur cet ordinateur ? » a été vue (acceptée ou reportée).
+    pub notifications_proposees: bool,
 }
 
-const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL, email_verifie, alertes, resume";
+const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL, email_verifie, alertes, resume, notifications_proposees";
 
 fn compte(r: &rusqlite::Row) -> rusqlite::Result<Compte> {
-    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)?, email_verifie: r.get(9)?, alertes: r.get(10)?, resume: r.get(11)? })
+    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)?, email_verifie: r.get(9)?, alertes: r.get(10)?, resume: r.get(11)?, notifications_proposees: r.get(12)? })
 }
 
 pub fn hacher(mot_de_passe: &str) -> String {
@@ -280,7 +315,7 @@ pub fn regler(c: &Connection, cle: &str, valeur: &str) -> rusqlite::Result<()> {
 
 pub fn lister_comptes(c: &Connection) -> rusqlite::Result<Vec<(Compte, i64)>> {
     let mut q = c.prepare(&format!("SELECT {COLONNES}, (SELECT COUNT(*) FROM droits d WHERE d.compte = comptes.id AND d.role = 'proprietaire') FROM comptes ORDER BY id"))?;
-    q.query_map([], |r| Ok((compte(r)?, r.get(12)?)))?.collect()
+    q.query_map([], |r| Ok((compte(r)?, r.get(13)?)))?.collect()
 }
 
 pub fn suspendre(c: &Connection, compte: i64, suspendu: bool) -> rusqlite::Result<()> {
@@ -405,6 +440,12 @@ pub fn marquer_email_verifie(c: &Connection, compte: i64) -> rusqlite::Result<()
 /// Cases « Recevoir les alertes » et « Recevoir le résumé hebdomadaire ».
 pub fn regler_preferences(c: &Connection, compte: i64, alertes: bool, resume: bool) -> rusqlite::Result<()> {
     c.execute("UPDATE comptes SET alertes = ?1, resume = ?2 WHERE id = ?3", params![alertes, resume, compte])?;
+    Ok(())
+}
+
+/// La proposition de notifications du navigateur a été présentée : on ne la refait pas.
+pub fn marquer_notifications_proposees(c: &Connection, compte: i64) -> rusqlite::Result<()> {
+    c.execute("UPDATE comptes SET notifications_proposees = 1 WHERE id = ?1", [compte])?;
     Ok(())
 }
 

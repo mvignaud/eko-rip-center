@@ -148,6 +148,75 @@ Dans « Mon compte », les cases **Recevoir les alertes** et **Recevoir le résu
 **Aperçu des e-mails** : `eko-rip-cloud apercu-courriels <dossier>` écrit chaque message avec des
 données d'exemple (`.html` autonome et `.txt`).
 
+## Notifications
+
+En plus des e-mails, la plate-forme notifie les mêmes événements sur trois canaux : **site hors
+ligne** (après 15 minutes), **site de retour en ligne** (si l'alerte est partie) et **nouvelle app
+connectée**. Ils suivent la case **Recevoir les alertes** de « Mon compte » (propriétaires et
+administrateurs du site), sauf la nouvelle app, toujours notifiée (sécurité). Un seul point
+d'émission (`notifications::notifier`) fait l'e-mail, l'entrée du journal et les pushs. Les envois
+réseau partent hors de la requête ; échec = une ligne au journal, sans secret. Le journal et les
+pushs partent même sans SMTP réglé.
+
+**Première connexion** : sur chaque poste, les apps demandent l'autorisation d'afficher des
+notifications juste après la première connexion au cloud (Mac, Linux, Windows, mobile). Sur le
+portail, après la première connexion (mot de passe, Google ou Facebook, et juste après
+l'inscription), « Mes sites » propose **Recevoir les alertes sur cet ordinateur ?** avec
+**Activer** (le navigateur demande l'autorisation, puis s'inscrit) et **Plus tard**. Le bandeau
+n'apparaît que si le navigateur gère le Web Push et que l'autorisation n'a pas encore été
+décidée ; une fois « Activer » ou « Plus tard » cliqué, il ne revient plus (drapeau
+`notifications_proposees` du compte). La carte « Mon compte » reste pour changer plus tard.
+
+### Pour les apps (Bearer `ekoa_…`)
+
+- **Journal, pour Mac, Linux et Windows** : `GET /api/moi/notifications?apres=<id>` (interrogé
+  chaque minute). Réponse `200` :
+  `{ "notifications": [ { "id", "type", "site", "titre", "corps", "lien", "cree_le" } ], "dernier": <id> }`.
+  `type` : `site_hors_ligne`, `site_en_ligne` ou `nouvelle_app` ; `site` : identifiant du site ou
+  `null` ; `lien` : adresse absolue de la page à ouvrir ; `cree_le` : secondes Unix. Au plus 50
+  notifications d'identifiant > `apres`, dans l'ordre croissant (si `dernier` dépasse le dernier
+  `id` rendu, redemander avec `apres` = ce dernier `id`). `dernier` est le plus grand identifiant
+  du compte (0 si le journal est vide), jamais réutilisé. **Sans `apres`**, la liste est vide et
+  seul `dernier` est rendu : pas de rattrapage au premier lancement, l'app garde `dernier` puis
+  interroge avec `apres=<dernier>`. `apres` non numérique : `400 {"code":"apres_invalide"}` ;
+  jeton invalide : `401`. Le journal est gardé 30 jours (table `notifications`).
+- **Push mobile (Expo)** : `POST /api/moi/push` avec
+  `{ "jeton_expo": "ExponentPushToken[…]", "plateforme": "ios" | "android" }` → `204`
+  (`400` avec `code` = `jeton_expo_invalide` ou `plateforme_invalide`, `401` sans jeton valide).
+  Le jeton Expo est rattaché au jeton d'app : il disparaît avec lui (déconnexion de l'app,
+  révocation dans Mon compte, compte supprimé), et un même appareil reconnecté avec un autre
+  jeton d'app ne notifie qu'une fois. À rappeler à chaque lancement (le jeton Expo peut changer).
+  `DELETE /api/moi/push` → `204` : cette app n'est plus notifiée. Envoi vers
+  `https://exp.host/--/api/v2/push/send` :
+  `{ "to", "title", "body", "sound": "default", "channelId": "alertes", "data": { "evenement": { "id", "le", "genre", "gravite": "alerte" | "info", "titre", "texte", "site", "lien" } } }`
+  (`id` = identifiant du journal, `le` = secondes Unix, `genre` = `type` du journal ; gravité
+  `alerte` pour hors ligne et nouvelle app, `info` pour le retour en ligne). Si Expo répond
+  `DeviceNotRegistered`, le jeton est oublié. `EKO_CLOUD_EXPO_TOKEN` (facultatif, dans
+  `/etc/default/eko-rip-cloud`) est le jeton d'accès Expo, envoyé en `Authorization: Bearer`.
+
+### Web Push (navigateur)
+
+Standard Web Push (RFC 8030) : messages chiffrés `aes128gcm` (RFC 8291), plate-forme identifiée
+par VAPID (RFC 8292, JWT ES256, `sub` = `mailto:contact@e-ko.rip`, valable 12 h). Tout en Rust
+(RustCrypto : `p256`, `hkdf`, `aes-gcm`, `sha2`), sans OpenSSL : la construction musl reste
+possible. Les clés VAPID sont créées au premier démarrage et gardées dans `reglages` (la clé privée
+n'est jamais affichée ni renvoyée).
+
+- `GET /sw.js` : service worker à la racine (même origine), affiche titre, corps et icône
+  `/logo-courriel.png`, ouvre `lien` au clic (même origine seulement).
+- `GET /api/push/cle` : `{ "cle": <clé publique VAPID, base64url> }`.
+- **Mon compte › Notifications sur cet appareil** : bouton **Activer les notifications du
+  navigateur** et liste des navigateurs inscrits avec **Retirer** (10 au plus par compte).
+  `POST /compte/push` (session du portail, `Origin` de la plate-forme et en-tête `X-CSRF-Token` ;
+  corps JSON d'une `PushSubscription`) et `POST /compte/push/{id}/retirer` (formulaire à jeton
+  anti-falsification). Seules les adresses d'abonnement HTTPS vers un nom d'hôte public sont
+  acceptées. Réponse `404` ou `410` du service de notification : l'abonnement est supprimé.
+- La CSP du portail autorise `connect-src 'self'` et `worker-src 'self'` pour le script
+  d'inscription.
+
+Tables de `portail.sqlite` : `notifications` (journal), `abonnements_web`, et deux colonnes de
+`jetons_applis` (`jeton_expo`, `plateforme_expo`).
+
 ## Ce qui ne passe jamais par le cloud
 
 Une requête arrivée par le tunnel est marquée par le serveur lui-même (une requête du réseau

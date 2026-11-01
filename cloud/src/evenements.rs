@@ -7,6 +7,7 @@
 
 use crate::base;
 use crate::courriels;
+use crate::notifications::{self, Notification};
 use crate::relais::Partage;
 use crate::sites::{self, Site};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -59,9 +60,9 @@ pub fn noter_alerte(c: &Connection, site: &str, t: u64, envoyee: bool) -> rusqli
 }
 
 /// Comptes propriétaires ou administrateurs du site, non suspendus, qui reçoivent les alertes.
-pub fn destinataires(c: &Connection, site: &str) -> rusqlite::Result<Vec<(String, String)>> {
-    let mut q = c.prepare("SELECT c.email, c.nom FROM droits d JOIN comptes c ON c.id = d.compte WHERE d.site = ?1 AND d.role IN ('proprietaire', 'admin') AND c.suspendu = 0 AND c.alertes = 1 ORDER BY c.id")?;
-    q.query_map([site], |r| Ok((r.get(0)?, r.get(1)?)))?.collect()
+pub fn destinataires(c: &Connection, site: &str) -> rusqlite::Result<Vec<(i64, String, String)>> {
+    let mut q = c.prepare("SELECT c.id, c.email, c.nom FROM droits d JOIN comptes c ON c.id = d.compte WHERE d.site = ?1 AND d.role IN ('proprietaire', 'admin') AND c.suspendu = 0 AND c.alertes = 1 ORDER BY c.id")?;
+    q.query_map([site], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?.collect()
 }
 
 pub fn purger(c: &Connection, t: u64) -> rusqlite::Result<()> {
@@ -184,8 +185,9 @@ pub fn site_en_ligne(r: &Partage, site: &str) {
     };
     let Some(debut) = retour else { return };
     let nom = nom_du_site(r, site);
-    for (email, qui) in dest {
-        r.envoyer(courriels::site_en_ligne(&r.config.url_publique, &email, &qui, &nom, debut, t));
+    for (compte, email, qui) in dest {
+        let courriel = courriels::site_en_ligne(&r.config.url_publique, &email, &qui, &nom, debut, t);
+        notifications::notifier(r, compte, Some(courriel), Notification::site_en_ligne(&r.config.url_publique, site, &nom, debut, t));
     }
 }
 
@@ -200,6 +202,7 @@ fn alertes(r: &Partage, t: u64) {
     let candidats = {
         let b = r.base();
         let _ = purger(&b, t);
+        let _ = notifications::purger(&b, t);
         candidats_alerte(&b, t).unwrap_or_default()
     };
     if candidats.is_empty() {
@@ -207,7 +210,6 @@ fn alertes(r: &Partage, t: u64) {
     }
     let connus = sites::lire(&r.config.donnees).unwrap_or_default();
     let connectes = r.connectes();
-    let actif = r.courriels_actifs();
     for (site, debut) in candidats {
         let Some(s) = connus.iter().find(|s| s.id == site) else { continue };
         if connectes.contains(&site) {
@@ -217,17 +219,19 @@ fn alertes(r: &Partage, t: u64) {
             let b = r.base();
             (destinataires(&b, &site).unwrap_or_default(), alerte_permise(&b, &site, t).unwrap_or(false))
         };
-        let envoyee = actif && permise && !dest.is_empty();
+        // Le journal et les pushs partent même sans SMTP : seul l'e-mail dépend de ses réglages.
+        let envoyee = permise && !dest.is_empty();
         if let Err(e) = noter_alerte(&r.base(), &site, t, envoyee) {
             eprintln!("journal des sites : {e}");
             continue;
         }
         if envoyee {
-            for (email, qui) in dest {
-                r.envoyer(courriels::site_hors_ligne(&r.config.url_publique, &email, &qui, &s.nom, debut, t));
+            for (compte, email, qui) in dest {
+                let courriel = courriels::site_hors_ligne(&r.config.url_publique, &email, &qui, &s.nom, debut, t);
+                notifications::notifier(r, compte, Some(courriel), Notification::site_hors_ligne(&r.config.url_publique, &site, &s.nom, debut, t));
             }
         } else {
-            eprintln!("alerte hors ligne du site {site} non envoyée ({})", if !actif { "e-mails non réglés" } else if !permise { "déjà une alerte dans l'heure" } else { "aucun destinataire" });
+            eprintln!("alerte hors ligne du site {site} non envoyée ({})", if !permise { "déjà une alerte dans l'heure" } else { "aucun destinataire" });
         }
     }
 }
@@ -308,7 +312,7 @@ mod tests {
         }
         base::suspendre(&c, s, true).unwrap();
         base::regler_preferences(&c, a, false, true).unwrap();
-        assert_eq!(destinataires(&c, "site").unwrap().iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["p@x.fr"], "rôle, suspension et case « alertes »");
+        assert_eq!(destinataires(&c, "site").unwrap().iter().map(|x| x.1.as_str()).collect::<Vec<_>>(), ["p@x.fr"], "rôle, suspension et case « alertes »");
         base::regler_preferences(&c, a, true, true).unwrap();
         assert_eq!(destinataires(&c, "site").unwrap().len(), 2);
         // Purge à 90 jours.

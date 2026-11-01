@@ -2,14 +2,15 @@
 //! Google, Facebook), « Mes sites » (rattacher un serveur par son code, retirer), compte,
 //! espace super-administrateur (clés Google / Facebook, comptes, sites), pages légales.
 //!
-//! Pages rendues côté serveur, sans script. Toute requête POST doit venir de la plate-forme
+//! Pages rendues côté serveur, sans script (sauf l'inscription aux notifications du navigateur,
+//! qui a besoin de l'API Push). Toute requête POST doit venir de la plate-forme
 //! elle-même (`Origin`, ou à défaut `Referer`) et, une fois connecté, porter le jeton
 //! anti-falsification de la session.
 
 use crate::base::{self, Compte, Connexion};
 use crate::relais::Partage;
 use crate::{appairage, sites};
-use axum::Form;
+use axum::{Form, Json};
 use axum::extract::{Path as Chemin, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -612,6 +613,157 @@ pub async fn regler_preferences(State(r): State<Partage>, h: HeaderMap, Form(f):
     Redirect::to("/compte?ok=preferences").into_response()
 }
 
+// ————— Notifications du navigateur (Web Push) —————
+
+/// Script commun au bandeau de « Mes sites » et à la carte de « Mon compte » : il ne fait rien
+/// sans élément `[data-push]`. La demande d'autorisation part du clic (exigé par les navigateurs),
+/// avant tout autre appel.
+const SCRIPT_PUSH: &str = r##"<script>
+(function () {
+  var zones = document.querySelectorAll('[data-push]');
+  if (!zones.length) return;
+  var prise = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  function cleBinaire(b64) {
+    var t = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(t), out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function envoyer(url, csrf, corps) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: corps || '{}' });
+  }
+  function activer(csrf) {
+    return Promise.resolve(Notification.requestPermission()).then(function (p) {
+      if (p !== 'granted') throw new Error('refus');
+      return navigator.serviceWorker.register('/sw.js');
+    }).then(function () { return navigator.serviceWorker.ready; }).then(function (reg) {
+      return fetch('/api/push/cle').then(function (r) { return r.json(); }).then(function (k) {
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: cleBinaire(k.cle) });
+      });
+    }).then(function (sub) {
+      return envoyer('/compte/push', csrf, JSON.stringify(sub.toJSON()));
+    }).then(function (r) { if (!r.ok) throw new Error('serveur'); });
+  }
+  Array.prototype.forEach.call(zones, function (zone) {
+    var csrf = zone.getAttribute('data-csrf'), mode = zone.getAttribute('data-push');
+    var etat = zone.querySelector('[data-etat]'), bouton = zone.querySelector('[data-activer]'), plus = zone.querySelector('[data-plus-tard]');
+    function dire(t) { if (etat) etat.textContent = t; }
+    function proposee() { return envoyer('/compte/notifications/proposees', csrf).catch(function () {}); }
+    if (!prise) { if (mode === 'carte') dire('Ce navigateur ne gère pas les notifications.'); return; }
+    if (Notification.permission === 'denied') { if (mode === 'carte') dire('Les notifications sont bloquées pour ce site dans ce navigateur : les autoriser dans ses réglages, puis recharger la page.'); return; }
+    if (mode === 'bandeau' && Notification.permission !== 'default') return;
+    if (mode === 'bandeau') zone.style.display = '';
+    if (bouton) bouton.style.display = '';
+    if (bouton) bouton.addEventListener('click', function () {
+      bouton.disabled = true;
+      activer(csrf).then(function () { return proposee(); }).then(function () {
+        if (mode === 'bandeau') { zone.style.display = 'none'; } else { location.href = '/compte?ok=push'; }
+      }).catch(function () { bouton.disabled = false; dire('Activation impossible : autoriser les notifications quand le navigateur le demande.'); });
+    });
+    if (plus) plus.addEventListener('click', function () { proposee().then(function () { zone.style.display = 'none'; }); });
+  });
+})();
+</script>"##;
+
+fn bandeau_notifications(s: &Session) -> String {
+    if s.compte.notifications_proposees {
+        return String::new();
+    }
+    format!(
+        r#"<div class="carte" data-push="bandeau" data-csrf="{}" style="display:none"><h2>Recevoir les alertes sur cet ordinateur ?</h2><p>Soyez prévenu ici, même quand cette page est fermée, dès qu'un de vos sites est hors ligne ou revient en ligne.</p><p class="ligne"><button type="button" data-activer>Activer</button> <button type="button" class="discret" data-plus-tard>Plus tard</button></p><p class="meta" data-etat></p></div>{SCRIPT_PUSH}"#,
+        echapper(&s.csrf)
+    )
+}
+
+fn carte_navigateurs(r: &Partage, s: &Session) -> String {
+    let inscrits = crate::notifications::abonnements(&r.base(), s.compte.id).unwrap_or_default();
+    let liste = if inscrits.is_empty() {
+        r#"<p class="meta">Aucun navigateur inscrit.</p>"#.to_string()
+    } else {
+        let lignes: String = inscrits
+            .iter()
+            .map(|a| {
+                format!(
+                    r#"<li>{} <span class="meta">— inscrit le {}</span> <form method="post" action="/compte/push/{}/retirer" style="display:inline">{}<button class="discret" type="submit">Retirer</button></form></li>"#,
+                    echapper(if a.appareil.is_empty() { "Navigateur" } else { &a.appareil }),
+                    date(Some(a.cree_le)),
+                    a.id,
+                    hidden_csrf(s)
+                )
+            })
+            .collect();
+        format!("<ul>{lignes}</ul>")
+    };
+    format!(
+        r#"<div class="carte" data-push="carte" data-csrf="{}"><h2>Notifications sur cet appareil</h2><p>Recevez les alertes (site hors ligne, de retour en ligne, nouvelle app connectée) directement dans ce navigateur, même page fermée. Elles suivent la case « Recevoir les alertes » ci-dessus, sauf la nouvelle app connectée, toujours notifiée.</p><p><button type="button" data-activer style="display:none">Activer les notifications du navigateur</button></p><p class="meta" data-etat></p><h2>Navigateurs inscrits</h2>{liste}</div>{SCRIPT_PUSH}"#,
+        echapper(&s.csrf)
+    )
+}
+
+/// En-tête `X-CSRF-Token` des appels du script (le corps est du JSON, pas un formulaire).
+fn csrf_entete_ok(s: &Session, h: &HeaderMap) -> bool {
+    h.get("x-csrf-token").and_then(|v| v.to_str().ok()).is_some_and(|c| crate::egal_constant(c, &s.csrf))
+}
+
+fn reponse_json(statut: StatusCode, code: &str) -> Response {
+    (statut, Json(serde_json::json!({ "code": code }))).into_response()
+}
+
+/// `POST /compte/push` : inscrit ce navigateur (corps : la `PushSubscription` en JSON).
+pub async fn inscrire_navigateur(State(r): State<Partage>, h: HeaderMap, Json(corps): Json<serde_json::Value>) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let Some(s) = session(&r, &h) else { return reponse_json(StatusCode::UNAUTHORIZED, "session_requise") };
+    if !csrf_entete_ok(&s, &h) {
+        return refuse_origine();
+    }
+    let texte = |v: Option<&serde_json::Value>| v.and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let endpoint = texte(corps.get("endpoint"));
+    let (p256dh, auth) = (texte(corps.pointer("/keys/p256dh")), texte(corps.pointer("/keys/auth")));
+    let cle_ok = crate::webpush::decoder(&p256dh).is_some_and(|k| k.len() == 65 && p256::PublicKey::from_sec1_bytes(&k).is_ok());
+    let auth_ok = crate::webpush::decoder(&auth).is_some_and(|a| a.len() == 16);
+    if !crate::notifications::endpoint_valide(&endpoint) || !cle_ok || !auth_ok {
+        return reponse_json(StatusCode::BAD_REQUEST, "abonnement_invalide");
+    }
+    let appareil = crate::notifications::nom_navigateur(h.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).unwrap_or(""));
+    match crate::notifications::ajouter_abonnement(&r.base(), s.compte.id, &endpoint, &p256dh, &auth, &appareil, crate::maintenant()) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => reponse_json(StatusCode::CONFLICT, "trop_de_navigateurs"),
+        Err(_) => reponse_json(StatusCode::SERVICE_UNAVAILABLE, "indisponible"),
+    }
+}
+
+/// `POST /compte/push/{id}/retirer` (formulaire de « Mon compte »).
+pub async fn retirer_navigateur(State(r): State<Partage>, h: HeaderMap, Chemin(id): Chemin<i64>, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/compte") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let _ = crate::notifications::retirer_abonnement(&r.base(), s.compte.id, id);
+    Redirect::to("/compte?ok=push_retire").into_response()
+}
+
+/// `POST /compte/notifications/proposees` : la proposition de « Mes sites » a été vue (Activer
+/// ou Plus tard) ; on ne la refait pas.
+pub async fn notifications_proposees(State(r): State<Partage>, h: HeaderMap) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let Some(s) = session(&r, &h) else { return reponse_json(StatusCode::UNAUTHORIZED, "session_requise") };
+    if !csrf_entete_ok(&s, &h) {
+        return refuse_origine();
+    }
+    let _ = base::marquer_notifications_proposees(&r.base(), s.compte.id);
+    StatusCode::NO_CONTENT.into_response()
+}
+
 // ————— Mes sites —————
 
 fn exiger(r: &Partage, h: &HeaderMap, ici: &str) -> Result<Session, Box<Response>> {
@@ -691,7 +843,7 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         Some("confirmation") => MESSAGE_CONFIRMATION_ENVOYEE,
         _ => "",
     };
-    let bandeau = bandeau_confirmation(&r, &s, "/sites");
+    let bandeau = format!("{}{}", bandeau_confirmation(&r, &s, "/sites"), bandeau_notifications(&s));
     let code = q.get("code").map(|c| echapper(c)).unwrap_or_default();
     let corps = format!(
         r#"<h1>Mes sites</h1>{message}{bandeau}<div class="carte">{liste}</div><div class="carte"><h2>Rattacher un serveur RIP</h2><p class="meta">Sur le serveur : Système › Cloud E-KO RIP › « Connecter à la plate-forme ». Saisissez ici le code affiché (valable 10 minutes).</p><form method="post" action="/sites/rattacher" class="ligne">{}<input type="text" name="code" placeholder="ABCD-1234" required maxlength="12" value="{code}" style="max-width: 12rem; text-transform: uppercase" autocomplete="off"><button type="submit">Rattacher</button></form></div>"#,
@@ -771,6 +923,8 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
     let message = match q.get("ok").map(String::as_str) {
         Some("lie") => r#"<p class="ok">Connexion liée à votre compte.</p>"#,
         Some("preferences") => r#"<p class="ok">Préférences d'e-mail enregistrées.</p>"#,
+        Some("push_retire") => r#"<p class="ok">Navigateur retiré : il ne reçoit plus de notifications.</p>"#,
+        Some("push") => r#"<p class="ok">Notifications activées dans ce navigateur.</p>"#,
         Some("confirmation") => MESSAGE_CONFIRMATION_ENVOYEE,
         _ => "",
     };
@@ -783,7 +937,7 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
     };
     let message = if q.get("ok").map(String::as_str) == Some("applis") { r#"<p class="ok">Toutes les apps ont été déconnectées.</p>"# } else { message };
     let corps = format!(
-        r#"<h1>Mon compte</h1>{message}{bandeau}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div>{carte_emails}{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
+        r#"<h1>Mon compte</h1>{message}{bandeau}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div>{carte_emails}{carte_navigateurs}{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
         echapper(&c.nom),
         echapper(&c.email),
         date(Some(c.cree_le)),
@@ -793,6 +947,7 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
         hidden_csrf(&s),
         bandeau = bandeau_confirmation(&r, &s, "/compte"),
         carte_emails = carte_emails(&s),
+        carte_navigateurs = carte_navigateurs(&r, &s),
     );
     page("Mon compte", Some(&s), &corps).into_response()
 }

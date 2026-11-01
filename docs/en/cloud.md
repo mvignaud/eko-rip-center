@@ -27,6 +27,12 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   15 minutes" / "back online" alerts (at most one per site per hour), new connected app, and a
   Monday 8 a.m. (Paris) weekly summary; alerts and summary can be switched off in My account.
   Details in the French page.
+- **Notifications**: the same events (offline, back online, new app) also go to a per-account
+  journal polled by the desktop apps (`GET /api/moi/notifications?apres=<id>`, Bearer app token),
+  to mobile apps through Expo push (`POST /api/moi/push`) and to browsers through Web Push
+  (VAPID, `aes128gcm`, pure Rust, no OpenSSL; service worker at `/sw.js`, My account card). The
+  apps ask for notification permission right after the first cloud sign-in. Details in the
+  French page.
 - **Tunnel**: a plain WebSocket (`Sec-WebSocket-Protocol: eko-tunnel/1`) carrying HTTP/2, so it
   goes through shared-hosting front ends (LiteSpeed, Passenger); the bare `Upgrade: eko-tunnel/1`
   of RIP 0.30 servers is still accepted.

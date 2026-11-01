@@ -41,6 +41,9 @@ ureq = { version = "~3.4.2", default-features = false, features = ["rustls", "js
 
 # E-mails de la plate-forme (SMTP) : rustls + ring + racines webpki, sans OpenSSL.
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
+p256 = { version = "0.14", features = ["ecdh", "ecdsa", "arithmetic"] }
+hkdf = "0.13"
+aes-gcm = "0.11"
 
 [package.metadata.deb]
 name = "eko-rip-cloud"

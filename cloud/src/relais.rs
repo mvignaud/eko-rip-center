@@ -55,6 +55,8 @@ pub struct Relais {
     codes_applis: Mutex<crate::applis::Codes>,
     /// Où partent les e-mails (SMTP, ou mémoire dans les tests).
     pub(crate) courriels: Mutex<crate::courriels::Expediteur>,
+    /// Où partent les pushs (réseau, ou mémoire dans les tests).
+    pub(crate) push: Mutex<crate::notifications::Transport>,
 }
 
 pub type Partage = Arc<Relais>;
@@ -63,7 +65,9 @@ pub type Partage = Arc<Relais>;
 pub fn nouveau(config: Config) -> Partage {
     let registre = installations::lire(&config.donnees).expect("installations.json");
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp) })
+    // Clés VAPID du Web Push : créées au premier démarrage.
+    crate::notifications::cle_vapid(&base).expect("clés VAPID");
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau) })
 }
 
 impl Relais {
@@ -136,6 +140,11 @@ pub fn routes(relais: Partage) -> Router {
         .route("/compte", get(portail::mon_compte))
         .route("/compte/applis/deconnecter", post(portail::deconnecter_applis))
         .route("/compte/preferences", post(portail::regler_preferences))
+        .route("/compte/push", post(portail::inscrire_navigateur))
+        .route("/compte/push/{id}/retirer", post(portail::retirer_navigateur))
+        .route("/compte/notifications/proposees", post(portail::notifications_proposees))
+        .route("/api/push/cle", get(crate::notifications::cle_route))
+        .route("/sw.js", get(crate::notifications::service_worker))
         .route("/mot-de-passe/oublie", get(portail::oubli).post(portail::oublier))
         .route("/mot-de-passe/nouveau", get(portail::nouveau_mot_de_passe).post(portail::reinitialiser))
         .route("/email/confirmer", get(portail::confirmation).post(portail::confirmer))
@@ -144,6 +153,8 @@ pub fn routes(relais: Partage) -> Router {
         .route("/oauth/jeton", post(crate::applis::jeton))
         .route("/api/moi", get(crate::applis::moi))
         .route("/api/moi/deconnexion", post(crate::applis::deconnecter))
+        .route("/api/moi/notifications", get(crate::notifications::liste))
+        .route("/api/moi/push", post(crate::notifications::inscrire_expo).delete(crate::notifications::retirer_expo_route))
         .route("/compte/supprimer", post(portail::supprimer_compte))
         .route("/admin", get(portail::admin))
         .route("/admin/oauth", post(portail::regler_oauth))
@@ -225,7 +236,7 @@ async fn aiguiller(State(relais): State<Partage>, requete: Request, suite: axum:
 async fn entetes_du_portail(mut rep: Response) -> Response {
     let h = rep.headers_mut();
     if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
-        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
         h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
         h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
         h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));

@@ -398,6 +398,14 @@ async fn connexion_des_apps() {
         assert_eq!(m.a, "chef@atelier.fr");
         assert!(m.html.contains("Mac de test") && m.texte.contains(&format!("{URL}/compte")));
     }
+    // Même événement dans le journal du titulaire (toujours, quelle que soit la case « alertes »).
+    {
+        let c = base::ouvrir(&p.donnees).unwrap();
+        let id = base::compte_par_email(&c, "chef@atelier.fr").unwrap().unwrap().id;
+        let l = eko_rip_cloud::notifications::depuis(&c, id, 0).unwrap();
+        assert_eq!((l.len(), l[0].genre.as_str(), l[0].site.clone()), (1, "nouvelle_app", None));
+        assert!(l[0].corps.contains("Mac de test") && l[0].lien.ends_with("/compte"));
+    }
     let _ = std::fs::remove_dir_all(&p.donnees);
 }
 
@@ -630,5 +638,259 @@ async fn preferences_et_reglages_des_courriels() {
     let simple = session(&r);
     let (q, c, j2) = (p.clone(), simple, j);
     assert_eq!(b(move || post(&q, "/admin/courriels/essai", Some(&c), &[("csrf", &j2)], true)).await.statut, 403);
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}
+
+// ————— Notifications : journal, push mobile (Expo), Web Push —————
+
+type BoitePush = std::sync::Arc<std::sync::Mutex<Vec<eko_rip_cloud::notifications::Envoi>>>;
+
+/// Plate-forme dont les e-mails et les pushs restent en mémoire (aucun appel réseau).
+async fn plateforme_notifs() -> (Plateforme, relais::Partage, BoitePush) {
+    let donnees = std::env::temp_dir().join(format!("eko-cloud-portail-{}", eko_rip_cloud::aleatoire_hex(6)));
+    let r = relais::nouveau(relais::Config { donnees: donnees.clone(), url_publique: URL.into(), max_octets: 1 << 20, jeton_stats: String::new() });
+    r.utiliser_memoire();
+    let pushs = r.utiliser_memoire_push();
+    let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", ecoute.local_addr().unwrap());
+    let r2 = r.clone();
+    tokio::spawn(async move { axum::serve(ecoute, relais::routes(r2)).await.unwrap() });
+    (Plateforme { base, donnees }, r, pushs)
+}
+
+/// Requête de l'API des apps (Bearer) ou du portail (cookie), avec ou sans corps JSON.
+fn requete(p: &Plateforme, methode: &str, chemin: &str, bearer: Option<&str>, entetes: &[(&str, &str)], corps: Option<serde_json::Value>) -> Rep {
+    let url = format!("{}{chemin}", p.base);
+    let ag = agent();
+    let mut q = match methode {
+        "POST" => ag.post(url),
+        "DELETE" => ag.delete(url).force_send_body(),
+        _ => ag.get(url).force_send_body(),
+    };
+    if let Some(t) = bearer {
+        q = q.header("Authorization", format!("Bearer {t}"));
+    }
+    for (n, v) in entetes {
+        q = q.header(*n, *v);
+    }
+    lire(match corps {
+        Some(c) => q.send_json(c),
+        None => q.send_empty(),
+    })
+}
+
+/// Crée un compte et un jeton d'app (comme après « Se connecter au cloud »).
+async fn compte_avec_jeton(p: &std::sync::Arc<Plateforme>, email: &'static str) -> (String, i64, String) {
+    let q = p.clone();
+    let r = b(move || post(&q, "/inscription", None, &[("email", email), ("nom", "Chef"), ("mot_de_passe", "phrase-longue-1"), ("cgu", "1")], true)).await;
+    let c = base::ouvrir(&p.donnees).unwrap();
+    let id = base::compte_par_email(&c, email).unwrap().unwrap().id;
+    (session(&r), id, base::creer_jeton_appli(&c, id, "Mac de test").unwrap())
+}
+
+fn alerte(titre: &str) -> eko_rip_cloud::notifications::Notification {
+    eko_rip_cloud::notifications::Notification::site_hors_ligne(URL, "site1", titre, 1000, 1900)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_des_notifications_avec_jeton_d_app() {
+    let (p, r, _) = plateforme_notifs().await;
+    let p = std::sync::Arc::new(p);
+    let (_, id, jeton) = compte_avec_jeton(&p, "chef@atelier.fr").await;
+    let (_, _, jeton_autre) = compte_avec_jeton(&p, "autre@atelier.fr").await;
+
+    let (q, j) = (p.clone(), jeton.clone());
+    let appel = move |chemin: &'static str, t: Option<String>| {
+        let q = q.clone();
+        b(move || requete(&q, "GET", chemin, t.as_deref(), &[], None))
+    };
+    assert_eq!(appel("/api/moi/notifications", None).await.statut, 401);
+    assert_eq!(appel("/api/moi/notifications", Some("ekoa_inconnu".into())).await.statut, 401);
+    // Premier lancement : seulement `dernier`, pas de rattrapage.
+    let v: serde_json::Value = serde_json::from_str(&appel("/api/moi/notifications", Some(j.clone())).await.corps).unwrap();
+    assert_eq!((v["notifications"].as_array().unwrap().len(), v["dernier"].as_i64()), (0, Some(0)));
+
+    let r2 = r.clone();
+    b(move || {
+        eko_rip_cloud::notifications::notifier(&r2, id, None, alerte("Atelier"));
+        eko_rip_cloud::notifications::notifier(&r2, id, None, eko_rip_cloud::notifications::Notification::site_en_ligne(URL, "site1", "Atelier", 1000, 1900));
+    })
+    .await;
+    // Sans `apres` : toujours une liste vide, mais `dernier` avance.
+    let v: serde_json::Value = serde_json::from_str(&appel("/api/moi/notifications", Some(j.clone())).await.corps).unwrap();
+    assert_eq!((v["notifications"].as_array().unwrap().len(), v["dernier"].as_i64()), (0, Some(2)));
+    let rep = appel("/api/moi/notifications?apres=0", Some(j.clone())).await;
+    assert_eq!(rep.statut, 200);
+    let v: serde_json::Value = serde_json::from_str(&rep.corps).unwrap();
+    let l = v["notifications"].as_array().unwrap();
+    assert_eq!((l.len(), v["dernier"].as_i64()), (2, Some(2)));
+    assert_eq!((l[0]["id"].as_i64(), l[0]["type"].as_str(), l[0]["site"].as_str()), (Some(1), Some("site_hors_ligne"), Some("site1")));
+    assert!(l[0]["titre"].as_str().unwrap().contains("Atelier") && l[0]["corps"].as_str().unwrap().contains("15 min") && l[0]["lien"].as_str().unwrap().ends_with("/sites") && l[0]["cree_le"].as_u64().unwrap() > 0);
+    assert_eq!(l[1]["type"], "site_en_ligne");
+    let v: serde_json::Value = serde_json::from_str(&appel("/api/moi/notifications?apres=1", Some(j.clone())).await.corps).unwrap();
+    assert_eq!((v["notifications"].as_array().unwrap().len(), v["notifications"][0]["id"].as_i64()), (1, Some(2)));
+    let v: serde_json::Value = serde_json::from_str(&appel("/api/moi/notifications?apres=2", Some(j.clone())).await.corps).unwrap();
+    assert_eq!((v["notifications"].as_array().unwrap().len(), v["dernier"].as_i64()), (0, Some(2)));
+    assert_eq!(appel("/api/moi/notifications?apres=abc", Some(j)).await.statut, 400);
+    // Le journal est propre à chaque compte.
+    let v: serde_json::Value = serde_json::from_str(&appel("/api/moi/notifications?apres=0", Some(jeton_autre)).await.corps).unwrap();
+    assert_eq!((v["notifications"].as_array().unwrap().len(), v["dernier"].as_i64()), (0, Some(0)));
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn push_expo_inscrit_puis_oublie() {
+    use eko_rip_cloud::notifications::Envoi;
+    let (p, r, pushs) = plateforme_notifs().await;
+    let p = std::sync::Arc::new(p);
+    let (session_chef, id, jeton) = compte_avec_jeton(&p, "chef@atelier.fr").await;
+    let expo = "ExponentPushToken[abcdefghijklmnopqrstuv]";
+    let appel = |methode: &'static str, t: Option<String>, corps: Option<serde_json::Value>| {
+        let q = p.clone();
+        b(move || requete(&q, methode, "/api/moi/push", t.as_deref(), &[], corps))
+    };
+    let valide = serde_json::json!({ "jeton_expo": expo, "plateforme": "ios" });
+    assert_eq!(appel("POST", None, Some(valide.clone())).await.statut, 401);
+    assert_eq!(appel("POST", Some(jeton.clone()), Some(serde_json::json!({ "jeton_expo": "pas-un-jeton", "plateforme": "ios" }))).await.statut, 400);
+    assert_eq!(appel("POST", Some(jeton.clone()), Some(serde_json::json!({ "jeton_expo": expo, "plateforme": "windows" }))).await.statut, 400);
+    assert_eq!(appel("POST", Some(jeton.clone()), Some(valide.clone())).await.statut, 204);
+
+    let notifier = |titre: &'static str| {
+        let r = r.clone();
+        b(move || eko_rip_cloud::notifications::notifier(&r, id, None, alerte(titre)))
+    };
+    notifier("Atelier").await;
+    {
+        let m = pushs.lock().unwrap();
+        assert_eq!(m.len(), 1);
+        let Envoi::Expo { jeton: j, corps } = &m[0] else { panic!("push Expo attendu") };
+        assert_eq!(j, expo);
+        assert_eq!((corps["to"].as_str(), corps["channelId"].as_str(), corps["sound"].as_str()), (Some(expo), Some("alertes"), Some("default")));
+        let e = &corps["data"]["evenement"];
+        assert_eq!((e["id"].as_i64(), e["genre"].as_str(), e["gravite"].as_str(), e["site"].as_str()), (Some(1), Some("site_hors_ligne"), Some("alerte"), Some("site1")));
+    }
+    // DELETE : cette app n'est plus notifiée.
+    assert_eq!(appel("DELETE", Some(jeton.clone()), None).await.statut, 204);
+    pushs.lock().unwrap().clear();
+    notifier("Atelier").await;
+    assert!(pushs.lock().unwrap().is_empty());
+
+    // Déconnexion de l'app : le jeton Expo disparaît avec le jeton d'app.
+    assert_eq!(appel("POST", Some(jeton.clone()), Some(valide.clone())).await.statut, 204);
+    let q = p.clone();
+    let j = jeton.clone();
+    assert_eq!(b(move || requete(&q, "POST", "/api/moi/deconnexion", Some(&j), &[], None)).await.statut, 204);
+    notifier("Atelier").await;
+    assert!(pushs.lock().unwrap().is_empty(), "app déconnectée");
+    assert_eq!(appel("POST", Some(jeton), Some(valide.clone())).await.statut, 401);
+
+    // Révocation depuis « Mon compte ».
+    let jeton2 = base::creer_jeton_appli(&base::ouvrir(&p.donnees).unwrap(), id, "Pixel").unwrap();
+    assert_eq!(appel("POST", Some(jeton2), Some(serde_json::json!({ "jeton_expo": expo, "plateforme": "android" }))).await.statut, 204);
+    let (q, c) = (p.clone(), session_chef);
+    b(move || {
+        let j = csrf(&get(&q, "/compte", Some(&c)).corps);
+        assert_eq!(post(&q, "/compte/applis/deconnecter", Some(&c), &[("csrf", &j)], true).lieu, "/compte?ok=applis");
+    })
+    .await;
+    notifier("Atelier").await;
+    assert!(pushs.lock().unwrap().is_empty(), "apps révoquées");
+
+    // Compte supprimé : plus rien.
+    let jeton3 = base::creer_jeton_appli(&base::ouvrir(&p.donnees).unwrap(), id, "iPad").unwrap();
+    assert_eq!(appel("POST", Some(jeton3), Some(valide)).await.statut, 204);
+    base::supprimer_compte(&base::ouvrir(&p.donnees).unwrap(), id).unwrap();
+    assert!(eko_rip_cloud::notifications::jetons_expo(&r.base(), id).unwrap().is_empty());
+    let _ = std::fs::remove_dir_all(&p.donnees);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn inscription_web_push_avec_session() {
+    use eko_rip_cloud::notifications::Envoi;
+    use eko_rip_cloud::webpush::{nouvelle_cle, public_sec1};
+    let (p, r, pushs) = plateforme_notifs().await;
+    let p = std::sync::Arc::new(p);
+    let (session_chef, id, _) = compte_avec_jeton(&p, "chef@atelier.fr").await;
+
+    // Clé publique VAPID : publique, 65 octets, stable.
+    let q = p.clone();
+    let cle: serde_json::Value = serde_json::from_str(&b(move || get(&q, "/api/push/cle", None)).await.corps).unwrap();
+    assert_eq!(eko_rip_cloud::webpush::decoder(cle["cle"].as_str().unwrap()).unwrap().len(), 65);
+    assert_eq!(cle["cle"].as_str().unwrap(), eko_rip_cloud::notifications::cle_publique(&r.base()).unwrap());
+    // Service worker à la racine, sur la même origine.
+    let q = p.clone();
+    let sw = b(move || get(&q, "/sw.js", None)).await;
+    assert!(sw.statut == 200 && sw.corps.contains("showNotification") && sw.corps.contains("/logo-courriel.png") && sw.corps.contains("notificationclick"));
+
+    // Bandeau de première connexion sur « Mes sites », CSP adaptée, jusqu'à « Plus tard ».
+    let (q, c) = (p.clone(), session_chef.clone());
+    let sites = b(move || get(&q, "/sites", Some(&c))).await;
+    assert!(sites.corps.contains("Recevoir les alertes sur cet ordinateur ?") && sites.corps.contains("data-plus-tard"));
+    let jeton_csrf = csrf(&sites.corps);
+    let (q, c) = (p.clone(), session_chef.clone());
+    let compte = b(move || get(&q, "/compte", Some(&c))).await;
+    assert!(compte.corps.contains("Notifications sur cet appareil") && compte.corps.contains("Activer les notifications du navigateur") && compte.corps.contains("Aucun navigateur inscrit"));
+
+    let abonnement = |endpoint: &str| {
+        let ua = nouvelle_cle();
+        serde_json::json!({ "endpoint": endpoint, "keys": { "p256dh": eko_rip_cloud::base64url(&public_sec1(&ua)), "auth": eko_rip_cloud::base64url(&[9u8; 16]) } })
+    };
+    let envoyer = |chemin: &'static str, cookie: Option<String>, origine: bool, j: String, corps: Option<serde_json::Value>| {
+        let q = p.clone();
+        b(move || {
+            let mut e: Vec<(&str, String)> = vec![("X-CSRF-Token", j)];
+            if origine {
+                e.push(("Origin", URL.into()));
+            }
+            if let Some(c) = cookie {
+                e.push(("Cookie", c));
+            }
+            let e: Vec<(&str, &str)> = e.iter().map(|(n, v)| (*n, v.as_str())).collect();
+            requete(&q, "POST", chemin, None, &e, corps)
+        })
+    };
+    let bon = abonnement("https://push.exemple.fr/wpush/abc");
+    let c = Some(session_chef.clone());
+    assert_eq!(envoyer("/compte/push", None, true, jeton_csrf.clone(), Some(bon.clone())).await.statut, 401, "session exigée");
+    assert_eq!(envoyer("/compte/push", c.clone(), false, jeton_csrf.clone(), Some(bon.clone())).await.statut, 403, "origine exigée");
+    assert_eq!(envoyer("/compte/push", c.clone(), true, "x".repeat(32), Some(bon.clone())).await.statut, 403, "jeton anti-falsification exigé");
+    assert_eq!(envoyer("/compte/push", c.clone(), true, jeton_csrf.clone(), Some(abonnement("http://push.exemple.fr/x"))).await.statut, 400);
+    assert_eq!(envoyer("/compte/push", c.clone(), true, jeton_csrf.clone(), Some(abonnement("https://127.0.0.1/x"))).await.statut, 400);
+    assert_eq!(envoyer("/compte/push", c.clone(), true, jeton_csrf.clone(), Some(serde_json::json!({ "endpoint": "https://push.exemple.fr/x", "keys": { "p256dh": "AAAA", "auth": "AAAA" } }))).await.statut, 400);
+    assert_eq!(envoyer("/compte/push", c.clone(), true, jeton_csrf.clone(), Some(bon)).await.statut, 204);
+
+    let (q, cc) = (p.clone(), session_chef.clone());
+    let compte = b(move || get(&q, "/compte", Some(&cc))).await;
+    assert!(compte.corps.contains("push.exemple.fr") || compte.corps.contains("Navigateur"), "{}", compte.corps);
+    assert!(compte.corps.contains("/retirer"), "bouton Retirer");
+    let abos = eko_rip_cloud::notifications::abonnements(&r.base(), id).unwrap();
+    assert_eq!(abos.len(), 1);
+
+    // Une notification part vers ce navigateur (charge en clair dans le transport de test).
+    let r2 = r.clone();
+    b(move || eko_rip_cloud::notifications::notifier(&r2, id, None, alerte("Atelier"))).await;
+    {
+        let m = pushs.lock().unwrap();
+        let Envoi::Web { endpoint, charge } = &m[0] else { panic!("Web Push attendu") };
+        assert_eq!(endpoint, "https://push.exemple.fr/wpush/abc");
+        assert!(charge["titre"].as_str().unwrap().contains("Atelier") && charge["lien"].as_str().unwrap().ends_with("/sites"));
+    }
+
+    // « Plus tard » : le bandeau ne revient pas.
+    assert_eq!(envoyer("/compte/notifications/proposees", c.clone(), true, jeton_csrf.clone(), None).await.statut, 204);
+    let (q, cc) = (p.clone(), session_chef.clone());
+    let sites = b(move || get(&q, "/sites", Some(&cc))).await;
+    assert!(!sites.corps.contains("Recevoir les alertes sur cet ordinateur ?"));
+
+    // Retirer : formulaire de « Mon compte » (CSRF), puis plus d'envoi.
+    let (q, cc, j) = (p.clone(), session_chef.clone(), jeton_csrf.clone());
+    let aid = abos[0].id;
+    let r3 = b(move || post(&q, &format!("/compte/push/{aid}/retirer"), Some(&cc), &[("csrf", &j)], true)).await;
+    assert_eq!(r3.lieu, "/compte?ok=push_retire");
+    assert!(eko_rip_cloud::notifications::abonnements(&r.base(), id).unwrap().is_empty());
+    pushs.lock().unwrap().clear();
+    let r2 = r.clone();
+    b(move || eko_rip_cloud::notifications::notifier(&r2, id, None, alerte("Atelier"))).await;
+    assert!(pushs.lock().unwrap().is_empty());
     let _ = std::fs::remove_dir_all(&p.donnees);
 }

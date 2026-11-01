@@ -16,11 +16,13 @@ pub mod client;
 pub mod courriels;
 pub mod evenements;
 pub mod installations;
+pub mod notifications;
 pub mod portail;
 pub mod rapports;
 pub mod relais;
 pub mod sites;
 pub mod temps;
+pub mod webpush;
 pub mod ws;
 
 /// Sous-protocole WebSocket du tunnel (et ancienne valeur de l'en-tête `Upgrade`).
