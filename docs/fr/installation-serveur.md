@@ -170,6 +170,7 @@ installer Ghostscript (`apt install ghostscript`), puis lancer `./eko-rip-serveu
 | `EKO_RIP_PLOTTER_STTY` | `9600 cs8 -cstopb -parenb crtscts raw -echo` | réglages du port du plotter |
 | `EKO_RIP_EPSON_SNMP` | (vide) | adresse IP de l'Epson : largeur du média chargé lue par SNMP |
 | `EKO_RIP_EPSON_COMMUNAUTE` | `public` | communauté SNMP de l'Epson |
+| `EKO_RIP_ANNONCE` | `1` | `0` : ne pas s'annoncer sur le réseau local (les clients trouvent le serveur seuls, sinon adresse à saisir) |
 | `EKO_RIP_ACCES_NAVIGATEUR` | `0` | `1` : interface complète aussi dans un navigateur (développement seulement) |
 
 ## Partager les dossiers surveillés (Samba)

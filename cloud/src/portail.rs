@@ -18,6 +18,12 @@ use std::time::Duration;
 
 pub const COOKIE_SESSION: &str = "plateforme_session";
 const COOKIE_OAUTH: &str = "plateforme_oauth";
+
+/// Noms des cookies du portail. En HTTPS, préfixe `__Host-` : un site servi sur
+/// `<site>.platform.e-ko.rip` ne peut ni les poser ni les écraser depuis son sous-domaine.
+fn nom_cookie(r: &Partage, nom: &'static str) -> String {
+    if https(r) { format!("__Host-{nom}") } else { nom.to_string() }
+}
 /// Sites qu'un compte peut posséder (service gratuit).
 pub const MAX_SITES: i64 = 10;
 
@@ -48,7 +54,7 @@ struct Session {
 }
 
 fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
-    let jeton = cookie(entetes, COOKIE_SESSION)?;
+    let jeton = cookie(entetes, &nom_cookie(r, COOKIE_SESSION))?;
     let (compte, csrf) = base::session(&r.base(), &jeton).ok().flatten()?;
     Some(Session { compte, csrf, jeton })
 }
@@ -72,7 +78,7 @@ fn https(r: &Partage) -> bool {
 
 fn cookie_session(r: &Partage, jeton: &str, duree: u64) -> HeaderValue {
     let secure = if https(r) { "; Secure" } else { "" };
-    HeaderValue::from_str(&format!("{COOKIE_SESSION}={jeton}; HttpOnly; SameSite=Lax; Path=/; Max-Age={duree}{secure}")).expect("cookie")
+    HeaderValue::from_str(&format!("{}={jeton}; HttpOnly; SameSite=Lax; Path=/; Max-Age={duree}{secure}", nom_cookie(r, COOKIE_SESSION))).expect("cookie")
 }
 
 /// Redirige en ouvrant une session pour `compte`.
@@ -417,11 +423,10 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         } else {
             String::new()
         };
+        let adresse = echapper(&crate::relais::adresse_du_site(&r.config.url_publique, id));
         lignes.push_str(&format!(
-            r#"<tr><td><strong>{}</strong><br><code>{}/s/{}</code></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
             echapper(&site.nom),
-            echapper(&r.config.url_publique),
-            echapper(id),
             if en_ligne { "ok" } else { "meta" },
             if en_ligne { "En ligne" } else { "Hors ligne" },
             libelle_role(role),
@@ -865,7 +870,7 @@ pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>)
     );
     let mut rep = Redirect::to(&url).into_response();
     let secure = if https(&r) { "; Secure" } else { "" };
-    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{COOKIE_OAUTH}={}:{etat}; HttpOnly; SameSite=Lax; Path=/auth/; Max-Age=600{secure}", f.nom)).expect("cookie"));
+    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom)).expect("cookie"));
     rep
 }
 
@@ -953,10 +958,10 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
 
 pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
-    let attendu = cookie(&h, COOKIE_OAUTH);
+    let attendu = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
     let recu = q.get("state").map(|s| format!("{}:{s}", f.nom));
     let etat_ok = matches!((&attendu, &recu), (Some(a), Some(b)) if crate::egal_constant(a, b));
-    let effacer = HeaderValue::from_static("plateforme_oauth=; HttpOnly; SameSite=Lax; Path=/auth/; Max-Age=0");
+    let effacer = HeaderValue::from_str(&format!("{}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0{}", nom_cookie(&r, COOKIE_OAUTH), if https(&r) { "; Secure" } else { "" })).expect("cookie");
     let avec_effacement = |mut rep: Response| {
         rep.headers_mut().append(header::SET_COOKIE, effacer.clone());
         rep

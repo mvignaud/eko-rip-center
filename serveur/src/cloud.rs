@@ -1,6 +1,6 @@
 //! Cloud E-KO RIP (lot 1) : le serveur se rattache à la plate-forme (`platform.e-ko.rip`)
 //! et lui ouvre un tunnel sortant ; les postes et l'app mobile y accèdent alors depuis
-//! l'extérieur, à `https://platform.e-ko.rip/s/<site>`, sans VPN ni port ouvert.
+//! l'extérieur, à `https://<site>.platform.e-ko.rip`, sans VPN ni port ouvert.
 //!
 //! - `cloud.json` (0600) : adresse de la plate-forme, site et clé, reçus à l'appairage.
 //! - Appairage : le serveur demande un code court, l'affiche (Système › Cloud), quelqu'un le
@@ -95,7 +95,7 @@ pub fn etat_public(donnees: &Path) -> serde_json::Value {
         "rattache": c.is_some(),
         "url": c.as_ref().map_or_else(url_plateforme, |c| c.url.clone()),
         "site": c.as_ref().map(|c| c.site.clone()),
-        "adresse": c.as_ref().map(|c| format!("{}/s/{}", c.url, c.site)),
+        "adresse": c.as_ref().map(|c| eko_rip_cloud::relais::adresse_du_site(&c.url, &c.site)),
         "etat": if c.is_some() { v.etat } else { "inactif" },
         "depuis": v.depuis,
         "erreur": v.erreur,

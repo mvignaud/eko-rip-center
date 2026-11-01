@@ -13,6 +13,7 @@ description = "Client Linux natif d'E-KO RIP Center (GTK 4 et libadwaita)"
 adw = { version = "0.9", package = "libadwaita", features = ["v1_4"] }
 async-channel = "2.5.0"
 gtk = { version = "0.11", package = "gtk4", features = ["v4_10"] }
+mdns-sd = "0.21.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "2", features = ["json"] }

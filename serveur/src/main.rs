@@ -2,6 +2,7 @@
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
 mod acces;
+mod annonce;
 mod bat;
 mod blanc;
 mod couleur;
@@ -449,6 +450,8 @@ async fn main() {
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
     println!("E-KO RIP Center à l'écoute sur http://{adresse}");
+    // Annonce sur le réseau local (les clients trouvent le serveur sans adresse) : sans bloquer ni échouer.
+    annonce::demarrer(&adresse);
     axum::serve(ecoute, app).await.unwrap();
 }
 
@@ -5814,7 +5817,7 @@ mod tests {
             }
             assert!(ouvert, "{}", cloud::etat_public(&e.config.donnees));
             let etat = cloud::etat_public(&e.config.donnees);
-            assert_eq!(etat["adresse"], format!("{base}/s/{}", site.id));
+            assert_eq!(etat["adresse"], eko_rip_cloud::relais::adresse_du_site(&base, &site.id));
             assert!(etat.get("cle").is_none() && !etat.to_string().contains("cle\""), "la clé ne sort jamais");
 
             let racine = format!("{base}/s/{}", site.id);

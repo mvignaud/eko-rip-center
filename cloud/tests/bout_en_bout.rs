@@ -66,10 +66,16 @@ async fn tunnel_appairage_et_isolement() {
     assert_eq!(valide["etat"], "valide");
     let site = valide["site"].as_str().unwrap().to_string();
     let cle = valide["cle"].as_str().unwrap().to_string();
-    assert_eq!(valide["adresse"], format!("https://platform.test/s/{site}"));
+    assert_eq!(valide["adresse"], format!("https://{site}.platform.test"));
     let (b, i) = (base.clone(), id.clone());
     assert_eq!(bloquant(move || agent().get(format!("{b}/api/appairage/{i}")).call().unwrap().status().as_u16()).await, 404);
     assert_eq!(sites::lire(&d).unwrap()[0].proprietaire.as_deref(), Some("essai"));
+
+    // Certificats à la demande (Caddy) : la plate-forme et les sites existants seulement.
+    for (nom, attendu) in [("platform.test".to_string(), 200u16), (format!("{site}.platform.test"), 200), ("inconnu.platform.test".into(), 404), ("ailleurs.test".into(), 404)] {
+        let b = base.clone();
+        assert_eq!(bloquant(move || agent().get(format!("{b}/api/certificat?domain={nom}")).call().unwrap().status().as_u16()).await, attendu);
+    }
 
     // Site pas encore connecté : hors ligne.
     let (b, s) = (base.clone(), site.clone());
@@ -110,6 +116,28 @@ async fn tunnel_appairage_et_isolement() {
     assert_eq!(json["eko"], "", "en-tête réservé au relais retiré");
     assert_eq!(json["agent"], "EKO-RIP-Client/1.0");
     assert_eq!(cookies, vec![format!("eko_rip_session=jeton; HttpOnly; SameSite=Strict; Max-Age=60; Path=/s/{site}/; Secure")]);
+
+    // Le même site sur sa propre origine (`<site>.platform.test`) : tout le chemin va au RIP,
+    // y compris ceux du portail ; pas de `sandbox` (son interface y tourne), cookie sans chemin imposé.
+    let (b, s) = (base.clone(), site.clone());
+    let (statut, csp, cookies, json): (u16, String, Vec<String>, serde_json::Value) = bloquant(move || {
+        let mut r = agent().get(format!("{b}/api/echo?x=1")).header("Host", format!("{s}.platform.test")).header("Cookie", "plateforme_session=secret; eko_rip_session=abc").call().unwrap();
+        let csp = r.headers()["content-security-policy"].to_str().unwrap().to_string();
+        let c = r.headers().get_all("set-cookie").iter().map(|v| v.to_str().unwrap().to_string()).collect();
+        (r.status().as_u16(), csp, c, r.body_mut().read_json().unwrap())
+    })
+    .await;
+    assert_eq!(statut, 200);
+    assert_eq!(csp, "frame-ancestors 'none'");
+    assert_eq!(json["uri"].as_str().unwrap().rsplit_once("rip").unwrap().1, "/api/echo?x=1");
+    assert_eq!(json["cookie"], "eko_rip_session=abc");
+    assert_eq!(cookies, vec!["eko_rip_session=jeton; HttpOnly; SameSite=Strict; Path=/; Max-Age=60; Secure".to_string()]);
+    let (b, s) = (base.clone(), site.clone());
+    assert_eq!(bloquant(move || agent().get(format!("{b}/connexion")).header("Host", format!("{s}.platform.test")).call().unwrap().status().as_u16()).await, 404, "le portail n'existe pas sur l'origine d'un site");
+    let b = base.clone();
+    assert_eq!(bloquant(move || agent().get(format!("{b}/api/echo")).header("Host", "autresite.platform.test").call().unwrap().status().as_u16()).await, 502);
+    let b = base.clone();
+    assert_eq!(bloquant(move || agent().get(format!("{b}/connexion")).header("Host", "platform.test").call().unwrap().status().as_u16()).await, 200, "l'hôte de la plate-forme reste le portail");
 
     // Envoi en flux : sous la limite, transmis ; au-dessus, refusé.
     let (b, s) = (base.clone(), site.clone());

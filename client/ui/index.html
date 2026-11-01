@@ -20,6 +20,11 @@
   button { background: var(--accent); color: #fff; border: 0; cursor: pointer; }
   button:disabled { opacity: .5; cursor: wait; }
   button.discret { justify-self: end; background: none; color: var(--accent); border: 1px solid var(--trait); padding: 4px 10px; }
+  #trouves { display: grid; gap: 6px; }
+  #trouves[hidden] { display: none; }
+  #trouves .titre { font-size: 13px; color: var(--doux); }
+  #trouves button.serveur { display: grid; gap: 2px; text-align: left; background: var(--fond); color: var(--texte); border: 1px solid var(--trait); }
+  #trouves button.serveur small { color: var(--doux); }
   #message { min-height: 1.4em; }
   .erreur { color: var(--echec); }
 </style>
@@ -29,7 +34,11 @@
   <button type="button" id="langue" class="discret"></button>
   <h1>E-KO RIP Center</h1>
   <p data-t="intro"></p>
-  <label><span data-t="adresse"></span>
+  <div id="trouves" hidden>
+    <span class="titre" id="titre-trouves"></span>
+    <div id="liste-trouves" style="display: grid; gap: 6px"></div>
+  </div>
+  <label><span data-t="saisir"></span>
     <input name="adresse" required placeholder="192.168.1.20:8640" autocomplete="url" spellcheck="false">
   </label>
   <button type="submit" data-t="connecter"></button>
@@ -37,9 +46,11 @@
 </form>
 <script>
 const textes = {
-  fr: { intro: "Adresse du serveur de l'atelier.", adresse: "Serveur", connecter: "Se connecter", autre: "English",
+  fr: { intro: "Adresse du serveur de l'atelier.", adresse: "Serveur", connecter: "Se connecter", autre: "English", saisir: "Saisir une adresse", recherche: "Recherche de serveurs sur le réseau…",
+        trouves: "Serveurs trouvés sur le réseau", aucun: "Aucun serveur trouvé sur le réseau : saisissez son adresse.",
         essai: "Connexion…", invalide: "Adresse invalide.", injoignable: (a) => `Serveur injoignable : ${a}` },
-  en: { intro: "Address of the workshop server.", adresse: "Server", connecter: "Connect", autre: "Français",
+  en: { intro: "Address of the workshop server.", adresse: "Server", connecter: "Connect", autre: "Français", saisir: "Enter an address", recherche: "Looking for servers on the network…",
+        trouves: "Servers found on the network", aucun: "No server found on the network: enter its address.",
         essai: "Connecting…", invalide: "Invalid address.", injoignable: (a) => `Server unreachable: ${a}` },
 };
 const lire = (cle) => { try { return localStorage.getItem(cle); } catch { return null; } };
@@ -54,7 +65,7 @@ function appliquerLangue() {
   document.getElementById("langue").textContent = T().autre;
 }
 document.getElementById("langue").addEventListener("click", () => {
-  langue = langue === "fr" ? "en" : "fr"; garder("langue", langue); msg.textContent = ""; appliquerLangue();
+  langue = langue === "fr" ? "en" : "fr"; garder("langue", langue); msg.textContent = ""; appliquerLangue(); if (!document.getElementById("trouves").hidden) afficherTrouves("fin");
 });
 
 /** « 192.168.1.20:8640 » → « http://192.168.1.20:8640 » ; null si l'adresse ne tient pas. */
@@ -94,6 +105,31 @@ form.addEventListener("submit", (e) => {
   connecter(adresse);
 });
 
+/** Serveurs annoncés sur le réseau local (commande Tauri) ; sans Tauri (navigateur), saisie manuelle seule. */
+let trouves = [];
+function afficherTrouves(etat) {
+  const boite = document.getElementById("trouves"), liste = document.getElementById("liste-trouves");
+  document.getElementById("titre-trouves").textContent = etat === "recherche" ? T().recherche : T().trouves;
+  liste.replaceChildren(...trouves.map((s) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "serveur";
+    const nom = document.createElement("strong"); nom.textContent = s.nom;
+    const detail = document.createElement("small"); detail.textContent = s.adresse.replace(/^http:\/\//, "") + (s.version ? ` · ${s.version}` : "");
+    b.append(nom, detail);
+    b.addEventListener("click", () => { champ.value = s.adresse; connecter(s.adresse); });
+    return b;
+  }));
+  boite.hidden = !(etat === "recherche" || trouves.length);
+  if (etat === "fin" && !trouves.length) { msg.className = ""; msg.textContent = T().aucun; }
+}
+async function chercherServeurs() {
+  const invoquer = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!invoquer) return;
+  afficherTrouves("recherche");
+  try { trouves = await invoquer("chercher_serveurs"); } catch { trouves = []; }
+  afficherTrouves("fin");
+}
+
 appliquerLangue();
 const connu = lire("serveur");
 if (connu) champ.value = connu;
@@ -101,6 +137,8 @@ if (connu && !new URLSearchParams(location.search).has("changer")) connecter(con
 // Premier lancement sur le PC qui fait aussi serveur (petit atelier) : le serveur local
 // est pris d'office s'il répond.
 else if (!connu) joignable("http://localhost:8640").then((ok) => { if (ok) connecter("http://localhost:8640"); });
+// Écran de choix affiché (rien de retenu, ou « Changer de serveur ») : proposer les serveurs du réseau.
+if (!connu || new URLSearchParams(location.search).has("changer")) chercherServeurs();
 </script>
 </body>
 </html>

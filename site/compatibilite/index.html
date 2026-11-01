@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compatibilité machines · E-KO RIP Center</title>
+<meta name="description" content="Imprimantes et découpeuses pilotées par E-KO RIP Center, types de branchement, et formulaire de demande de pilote pour une nouvelle machine.">
+<link rel="canonical" href="https://e-ko.rip/compatibilite/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/#fonctionnement">Fonctionnement</a>
+      <a href="/#captures">Captures</a>
+      <a href="/#open-source">Open source</a>
+      <a href="/compatibilite/" aria-current="page">Machines</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<main id="contenu">
+<section class="heros" style="padding-bottom:24px">
+  <div class="heros-fond" aria-hidden="true"><span class="c"></span><span class="m"></span><span class="j"></span></div>
+  <div class="conteneur">
+    <span class="surtitre apparait">Compatibilité machines</span>
+    <h1 class="apparait" style="font-size:clamp(36px,6vw,64px)">Les machines que le RIP pilote.</h1>
+    <p class="chapo apparait">Chaque pilote est écrit et éprouvé sur une vraie machine, à l'atelier. Il manque la vôtre ? Demandez-la : c'est ainsi que la liste s'allonge.</p>
+    <p class="apparait"><a class="bouton bouton-plein" href="#demande">Demander un pilote</a></p>
+  </div>
+</section>
+
+<section style="padding-top:24px">
+  <div class="conteneur">
+    <div class="legende-etats apparait" aria-label="Légende">
+      <span class="etat ok">Pris en charge</span>
+      <span class="etat essai">En essai</span>
+      <span class="etat prevu">Prévu</span>
+    </div>
+    <div class="tableau-cadre apparait">
+      <table class="tableau machines">
+        <caption>Machines prises en charge</caption>
+        <thead><tr><th scope="col">Machine</th><th scope="col">Rôle</th><th scope="col">Branchement</th><th scope="col">Ce que fait le RIP</th><th scope="col">État</th></tr></thead>
+        <tbody>
+          <tr>
+            <th scope="row">Epson SureColor SC-S80600<small>laize 1 626 mm, 9 encres</small></th>
+            <td data-l="Rôle">Impression</td>
+            <td data-l="Branchement">Réseau (port 9100), IPP</td>
+            <td data-l="Ce que fait le RIP">Pilote direct ESC/P2 : séparation sur les 9 encres avec les couples clair et foncé, limite d'encre, tramage, envoi. Lecture SNMP du support chargé, des encres et des alertes.</td>
+            <td data-l="État"><span class="etat ok">Pris en charge</span><small>Blanc et argent : sortie en fichiers pour l'instant</small></td>
+          </tr>
+          <tr>
+            <th scope="row">Mutoh Kona 1650<small>découpeuse</small></th>
+            <td data-l="Rôle">Découpe</td>
+            <td data-l="Branchement">USB (adaptateur série)</td>
+            <td data-l="Ce que fait le RIP">Découpe HP-GL au pas de 0,01 mm, réglages de coupe par couche, repérage par cadre et code-barres.</td>
+            <td data-l="État"><span class="etat ok">Pris en charge</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Graphtec FC7000<small>découpeuse</small></th>
+            <td data-l="Rôle">Découpe</td>
+            <td data-l="Branchement">Réseau, série ou USB-série</td>
+            <td data-l="Ce que fait le RIP">Découpe HP-GL au pas de 0,025 mm, réglages de coupe, décalage. Repérage ARMS réglé sur la machine.</td>
+            <td data-l="État"><span class="etat ok">Pris en charge</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Roland VersaCAMM VP-300 / VP-540<small>laize 762 ou 1 371 mm</small></th>
+            <td data-l="Rôle">Impression et découpe</td>
+            <td data-l="Branchement">Réseau</td>
+            <td data-l="Ce que fait le RIP">La découpe part par le réseau. L'impression viendra après une capture du flux de la machine.</td>
+            <td data-l="État"><span class="etat essai">Découpe en essai</span><span class="etat prevu">Impression prévue</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">Et les autres ?</span><h2>Six façons de brancher une machine</h2><p>Même sans pilote dédié, le RIP sait souvent déjà parler à votre machine.</p></div>
+    <div class="grille">
+      <article class="tuile apparait"><h3>Réseau (TCP)</h3><p>Le flux part en direct vers l'adresse IP de la machine. Pour l'imprimante en pilote direct et les découpeuses en réseau.</p></article>
+      <article class="tuile apparait"><h3>Série et USB-série</h3><p>Pour les découpeuses branchées en USB par un adaptateur série, avec les réglages du port.</p></article>
+      <article class="tuile apparait"><h3>Périphérique USB</h3><p>Pour une machine vue comme imprimante USB par le système.</p></article>
+      <article class="tuile apparait"><h3>IPP et CUPS</h3><p>Le flux passe par une file CUPS sans pilote, ou par une imprimante IPP.</p></article>
+      <article class="tuile apparait"><h3>Dossier</h3><p>Le RIP dépose ses fichiers séparés, un par encre, pour un logiciel tiers qui surveille le dossier. Aucune machine n'est hors jeu.</p></article>
+      <article class="tuile apparait"><h3>Renvoi vers un autre RIP</h3><p>La machine est branchée sur un autre serveur E-KO RIP, dans le même atelier ou sur un autre site.</p></article>
+    </div>
+    <p class="apparait" style="text-align:center;margin-top:28px;color:var(--texte-2)">Une découpeuse qui comprend le HP-GL fonctionne en général en réseau ou en série, avec le bon pas de découpe. Les réglages sont dans les <a href="/prerequis/">pré-requis</a> et l'aide du logiciel.</p>
+  </div>
+</section>
+
+<section id="demande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">Demande de pilote</span><h2>Votre machine n'est pas dans la liste ?</h2><p>Décrivez-la : marque, modèle, branchement. Les demandes guident l'ordre des prochains pilotes, et une capture du flux envoyé par le logiciel actuel de la machine accélère beaucoup le travail.</p></div>
+    <p class="retour-demande ok" id="demande-envoyee" role="status">Merci, votre demande est envoyée. Nous vous répondons par e-mail.</p>
+    <p class="retour-demande erreur" id="demande-erreur" role="alert">La demande n'est pas partie : un champ obligatoire manque, l'adresse e-mail n'est pas valide, ou trop de demandes sont parties de votre connexion. Vérifiez le formulaire, ou écrivez à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+    <form class="formulaire apparait" id="demande-pilote" action="/compatibilite/demande.php" method="post">
+      <label class="cache-pot" aria-hidden="true">Site web <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
+      <fieldset>
+        <legend>La machine</legend>
+        <div class="champs deux">
+          <label><span>Marque <span class="requis" aria-hidden="true">*</span></span><input type="text" name="marque" required maxlength="80" placeholder="Mimaki, HP, Summa…"></label>
+          <label><span>Modèle <span class="requis" aria-hidden="true">*</span></span><input type="text" name="modele" required maxlength="120" placeholder="Référence exacte"></label>
+          <label>Type
+            <select name="type">
+              <option value="impression">Impression</option>
+              <option value="decoupe">Découpe</option>
+              <option value="impression-decoupe">Impression et découpe</option>
+              <option value="autre">Autre (finition, gravure…)</option>
+            </select>
+          </label>
+          <label>Branchement
+            <select name="branchement">
+              <option value="reseau">Réseau (Ethernet)</option>
+              <option value="usb">USB</option>
+              <option value="serie">Série (RS-232)</option>
+              <option value="autre">Autre ou je ne sais pas</option>
+            </select>
+          </label>
+          <label>Logiciel utilisé aujourd'hui<input type="text" name="logiciel" maxlength="120" placeholder="RIP ou pilote actuel, version"></label>
+          <label>Nombre de machines<input type="number" name="nombre" min="1" max="999" value="1" inputmode="numeric"></label>
+        </div>
+        <label class="case"><input type="checkbox" name="capture" value="oui"> Je peux faire une capture du flux envoyé à la machine, ou prêter un accès pour un essai</label>
+      </fieldset>
+      <fieldset>
+        <legend>Vous</legend>
+        <div class="champs deux">
+          <label><span>Nom <span class="requis" aria-hidden="true">*</span></span><input type="text" name="nom" required maxlength="100" autocomplete="name"></label>
+          <label>Société<input type="text" name="societe" maxlength="120" autocomplete="organization"></label>
+          <label><span>E-mail <span class="requis" aria-hidden="true">*</span></span><input type="email" name="email" required maxlength="160" autocomplete="email" placeholder="vous@atelier.fr"></label>
+          <label>Téléphone<input type="tel" name="telephone" maxlength="30" autocomplete="tel"></label>
+        </div>
+        <label>Précisions<textarea name="message" rows="5" maxlength="3000" placeholder="Encres, options, usage, ce qui compte le plus pour vous…"></textarea></label>
+      </fieldset>
+      <p class="mentions-form">Vos coordonnées servent uniquement à répondre à cette demande. Elles sont envoyées par e-mail à l'équipe E-KO RIP, jamais cédées. Voir les <a href="/mentions-legales/">mentions légales</a>.</p>
+      <div class="actions-form">
+        <button class="bouton bouton-plein" type="submit">Envoyer la demande</button>
+        <p class="message" role="status" aria-live="polite"></p>
+      </div>
+    </form>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/compatibilite/">Compatibilité machines</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>
