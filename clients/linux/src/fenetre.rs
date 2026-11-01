@@ -39,11 +39,10 @@ struct Suivi {
     amorce: bool,
 }
 
-/// Compte cloud connecté : jeton d'accès et dernière liste de sites (le jeton reste en mémoire
-/// et dans `cloud.json`, jamais dans un message).
+/// Compte cloud connecté : jeton d'accès (il reste en mémoire et dans `cloud.json`, jamais
+/// dans un message). La liste des sites est relue à chaque affichage.
 struct EtatCloud {
     jeton: String,
-    moi: Moi,
 }
 
 type Instantane = (Vec<Travail>, Vec<Sortie>, Vec<Machine>, Option<EtatSysteme>);
@@ -675,7 +674,7 @@ impl Fenetre {
                 f.ouvrir_site(site);
             }
         });
-        *self.etat_cloud.borrow_mut() = Some(EtatCloud { jeton, moi: m });
+        *self.etat_cloud.borrow_mut() = Some(EtatCloud { jeton });
         self.pile.set_visible_child_name("cloud");
     }
 
@@ -729,10 +728,11 @@ impl Fenetre {
                     }
                     Err(e) if e.session_perdue() => moi.cloud_expire(),
                     Err(e) => {
-                        // Retour à la liste des sites avec la raison.
-                        let m = moi.etat_cloud.borrow().as_ref().map(|e| (e.jeton.clone(), e.moi.clone()));
-                        if let Some((jeton, m)) = m {
-                            moi.afficher_sites(jeton, m);
+                        // Retour à la liste des sites, relue (un site a pu passer hors ligne ou
+                        // revenir), avec la raison.
+                        let jeton = moi.etat_cloud.borrow().as_ref().map(|e| e.jeton.clone());
+                        if let Some(jeton) = jeton {
+                            moi.charger_sites(jeton, false);
                         }
                         moi.toast(&format!("Ouverture de {} impossible : {}", site.nom, e.message()));
                     }
