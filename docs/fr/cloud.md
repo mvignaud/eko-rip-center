@@ -217,6 +217,34 @@ n'est jamais affichée ni renvoyée).
 Tables de `portail.sqlite` : `notifications` (journal), `abonnements_web`, et deux colonnes de
 `jetons_applis` (`jeton_expo`, `plateforme_expo`).
 
+## Abonnement par machine et sauvegardes en ligne
+
+L'offre se paie **par machine** (gratuit : 1 site, 1 imprimante et 1 découpeur). Pour que la
+plate-forme les compte, le serveur RIP déclare ses machines (identifiant, nom, modèle ; les
+imprimantes d'un côté, les traceurs et tables de découpe de l'autre) à l'ouverture du tunnel,
+à chaque changement du catalogue et toutes les 6 heures. Une machine qui imprime (y compris
+la Roland VersaCAMM, qui découpe elle-même) compte comme imprimante. La plate-forme répond
+avec l'offre du site, et si elle inclut les sauvegardes ou si le site dépasse son forfait.
+
+Les offres payantes incluent la **sauvegarde en ligne de la configuration** : la même archive
+que Système › Sauvegarde (machines, réglages, profils ICC, règles, gabarits, tons directs,
+tarifs, découpe…, ni les comptes ni les travaux), envoyée à la plate-forme qui la conserve. Le serveur la pousse :
+
+- **chaque nuit**, à une minute tirée au hasard entre 1 h et 5 h (heure du serveur), seulement
+  si la configuration a changé ;
+- **2 minutes après un changement** de configuration ;
+- **à la demande**, par un administrateur : `POST /api/cloud/sauvegarder`.
+
+Sur une offre sans sauvegarde, le serveur n'insiste pas jusqu'au prochain inventaire qui l'autorise.
+`GET /api/cloud` expose `sauvegarde` (`derniere` : date Unix ou `null`, `etat` : `ok`, `offre`,
+`quota` ou `erreur`, `message`) et `abonnement` (`offre`, `sauvegardes`, `depassement`).
+
+**Restaurer** : depuis le portail, la plate-forme envoie par le tunnel `POST /api/cloud/restaurer`
+`{"id": "…"}`, signé (`X-EKO-Cloud-Service: t=<unix>,v1=<hex>`, HMAC-SHA256 avec le SHA-256 de
+la clé du site, message `<t>.<corps>`, tolérance 300 s, une signature ne sert qu'une fois). Le
+serveur télécharge l'archive et l'applique comme `POST /api/sauvegarde`. Sans signature valide :
+401 `signature_cloud_invalide`, session ou non.
+
 ## Ce qui ne passe jamais par le cloud
 
 Une requête arrivée par le tunnel est marquée par le serveur lui-même (une requête du réseau
@@ -224,7 +252,7 @@ local ne peut pas porter cette marque). Le serveur refuse alors, avec le code `f
 
 - les routes du pont ERP et le renvoi entre RIP (`/api/renvoi/…`) ;
 - les réglages du pont ERP (`/api/pont…`) et les changements du cloud lui-même (appairage,
-  détachement : à faire depuis l'atelier).
+  détachement : à faire depuis l'atelier), sauf l'ordre de restauration signé de la plate-forme.
 
 Sans compte déclaré, toute requête venue par le cloud est refusée (`cloud_sans_compte`).
 

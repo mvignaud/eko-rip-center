@@ -90,6 +90,7 @@ fn noter(etat: &'static str, erreur: Option<String>) {
 pub fn etat_public(donnees: &Path) -> serde_json::Value {
     let c = lire(donnees);
     let v = vivant();
+    let (sauvegarde, abonnement) = crate::abonnement::etat_public(donnees);
     let appairage = v.appairage.as_ref().filter(|a| a.expire > Instant::now()).map(|a| serde_json::json!({ "code": a.code, "lien": a.lien, "expire_dans": a.expire.saturating_duration_since(Instant::now()).as_secs() }));
     serde_json::json!({
         "rattache": c.is_some(),
@@ -101,6 +102,8 @@ pub fn etat_public(donnees: &Path) -> serde_json::Value {
         "erreur": v.erreur,
         "appairage": appairage,
         "sans_compte": crate::acces::libre(donnees),
+        "sauvegarde": sauvegarde,
+        "abonnement": abonnement,
     })
 }
 
@@ -224,6 +227,7 @@ pub async fn boucle(donnees: PathBuf, service: axum::Router) {
         let servir = eko_rip_cloud::client::servir(&c.url, &c.site, &c.cle, &agent, service.clone(), || {
             ouvert.store(true, std::sync::atomic::Ordering::Relaxed);
             noter("connecte", None);
+            crate::abonnement::reveiller_inventaire();
             eprintln!("cloud : tunnel ouvert");
         });
         let resultat = tokio::select! {
