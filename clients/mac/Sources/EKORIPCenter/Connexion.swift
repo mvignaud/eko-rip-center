@@ -156,9 +156,10 @@ struct ConnexionVue: View {
         }
     }
 
-    /// Onglet cloud : relit le compte et les sites si un jeton est gardé et pas encore lu.
+    /// Onglet cloud : relit le compte et les sites à chaque retour sur la liste si un jeton est
+    /// gardé (un site hors ligne a pu revenir entre-temps).
     private func actualiserCloudSiBesoin() async {
-        if etat.cloudCompte == nil && etat.jetonCloudPresent && !etat.cloudEnLecture {
+        if etat.jetonCloudPresent && !etat.cloudEnLecture {
             await etat.actualiserCloud()
         }
     }
