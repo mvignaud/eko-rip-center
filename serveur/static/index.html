@@ -799,7 +799,6 @@ const textes = {
     aucune_sortie: "Rien en file.", historique: "Historique", archive: (n) => `Archive (${n})`, ajoutee: (d) => `ajoutée ${d}`, finie: (d) => `finie ${d}`,
     erreurs: {
       cloud_sans_compte: "Le cloud demande au moins un compte sur ce serveur (eko-rip-serveur utilisateur ajouter <nom>) : sans compte, l'accès est libre.",
-      lecture_seule: "Accès en lecture seule : modification refusée.",
       cloud_non_rattache: "Ce serveur n'est pas rattaché au cloud E-KO RIP.",
       signature_cloud_invalide: "Ordre du cloud refusé : signature absente, fausse ou périmée.",
       cloud_injoignable: "Plate-forme injoignable : vérifier la connexion Internet du serveur.",
@@ -818,6 +817,7 @@ const textes = {
       aucun_fichier: "Aucun fichier reçu.", dpi_invalide: "Résolution hors de 36 à 2880 dpi.",
       envoi_illisible: "Envoi illisible.", envoi_interrompu: "L'envoi a été interrompu.",
       erreur_interne: "Erreur du serveur.", introuvable: "Élément introuvable.",
+      lecture_seule: "Votre rôle sur ce site (cloud) est en lecture seule.", jeton_push_invalide: "Jeton de notification invalide.", appareil_inconnu: "Téléphone non inscrit aux notifications.", envoi_push_echoue: "La notification n'est pas partie (service push d'Expo).",
       connexion_requise: "Connexion requise.", identifiants_invalides: "Utilisateur ou mot de passe incorrect.",
       trop_d_echecs: "Trop d'essais pour cet utilisateur : réessayer dans 5 minutes.", admin_requis: "Réservé à l'administrateur du RIP.", gabarit_invalide: "Gabarit de cellules invalide : nom unique (60 caractères), cases de 5 mm au moins, 1 à 100 colonnes, 1 à 500 rangées, 2000 cases au plus.", sauvegarde_invalide: "Ce fichier n'est pas une sauvegarde d'E-KO RIP Center.",
       rendu_echoue: "Le rendu a échoué.", decoupe_illisible: "Tracés de découpe illisibles dans ce PDF.",
@@ -1138,7 +1138,6 @@ const textes = {
     aucune_sortie: "Nothing queued.", historique: "History", archive: (n) => `Archive (${n})`, ajoutee: (d) => `added ${d}`, finie: (d) => `finished ${d}`,
     erreurs: {
       cloud_sans_compte: "The cloud needs at least one account on this server (eko-rip-serveur utilisateur ajouter <name>): without accounts, access is open.",
-      lecture_seule: "Read-only access: change refused.",
       cloud_non_rattache: "This server is not attached to the E-KO RIP cloud.",
       signature_cloud_invalide: "Cloud order refused: signature missing, wrong or expired.",
       cloud_injoignable: "Platform unreachable: check the server's Internet connection.",
@@ -1157,6 +1156,7 @@ const textes = {
       aucun_fichier: "No file received.", dpi_invalide: "Resolution outside 36 to 2880 dpi.",
       envoi_illisible: "Unreadable upload.", envoi_interrompu: "The upload was interrupted.",
       erreur_interne: "Server error.", introuvable: "Not found.",
+      lecture_seule: "Your role on this site (cloud) is read-only.", jeton_push_invalide: "Invalid notification token.", appareil_inconnu: "Phone not registered for notifications.", envoi_push_echoue: "The notification was not sent (Expo push service).",
       connexion_requise: "Sign-in required.", identifiants_invalides: "Wrong user name or password.",
       trop_d_echecs: "Too many attempts for this user: try again in 5 minutes.", admin_requis: "Reserved for the RIP administrator.", gabarit_invalide: "Invalid cell template: unique name (60 characters), cells of at least 5 mm, 1 to 100 columns, 1 to 500 rows, 2,000 cells at most.", sauvegarde_invalide: "This file is not an E-KO RIP Center backup.",
       rendu_echoue: "Rendering failed.", decoupe_illisible: "Unreadable cut paths in this PDF.",
