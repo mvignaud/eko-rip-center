@@ -216,10 +216,9 @@ serveur.on('upgrade', (req, client, tete) => {
       }
       amont.write(lignes.join('\r\n') + '\r\n\r\n');
       if (tete && tete.length) amont.write(tete);
-      // La réponse du relais est réécrite en tête canonique avant d'être soudée : le frontal
-      // (LiteSpeed) ne reconnaît la montée WebSocket que sur « Connection: Upgrade » et
-      // « Upgrade: websocket » écrits ainsi ; sinon il traite la suite comme un corps de
-      // réponse ordinaire (découpé en blocs) et les trames arrivent abîmées.
+      // La réponse du relais est réécrite en tête canonique avant d'être soudée. Le frontal
+      // d'o2switch (Passenger) ré-émet malgré tout la suite du 101 en blocs (chunked) : le
+      // serveur RIP les retire de son côté (`ws::SansBlocs`).
       lire_tete(amont, (entete, reste) => {
         client.write(entete);
         if (reste.length) client.write(reste);

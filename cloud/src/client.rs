@@ -104,7 +104,7 @@ where
         return Err(reseau("poignée de main WebSocket invalide"));
     }
     let flux = hyper::upgrade::on(reponse).await.map_err(reseau)?;
-    let flux = TokioIo::new(FluxWs::nouveau(TokioIo::new(flux), tokio_tungstenite::tungstenite::protocol::Role::Client).await);
+    let flux = TokioIo::new(FluxWs::nouveau(ws::SansBlocs::nouveau(TokioIo::new(flux)), tokio_tungstenite::tungstenite::protocol::Role::Client).await);
     connecte();
     hyper::server::conn::http2::Builder::new(TokioExecutor::new())
         .timer(TokioTimer::new())
