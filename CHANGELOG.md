@@ -31,6 +31,14 @@ parité ; d'ici là, 0.Y.Z.
   `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
   pour l'API.
 
+### Corrigé
+- **Rendus bloqués sous Ubuntu 26.04.** AppArmor 5 y confine Ghostscript (profil `gs`) et lui
+  interdit de lire `/var/lib/eko-rip` : tout rendu échouait (« Permission denied » sur
+  `source.pdf`, 0 page). Le paquet serveur ouvre désormais les travaux du RIP à ce profil
+  (`/etc/apparmor.d/local/gs`) et le recharge à l'installation ; retiré à la purge.
+  *Renders failed on Ubuntu 26.04: AppArmor 5 confines Ghostscript; the server package now
+  grants it access to the RIP jobs folder.*
+
 ## [0.30.0] — 2026-10-31
 
 ### Ajouté
