@@ -604,7 +604,7 @@ La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la
 
 ### Modifié
 - Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
-  **Couches**, comme dans ONYX.
+  **Couches**.
 - État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
   impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
   dossier (pas imprimée)**.

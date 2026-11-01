@@ -123,7 +123,7 @@ platform.e-ko.rip, *.platform.e-ko.rip {
 }
 ```
 
-DNS : `platform.e-ko.rip` **et** `*.platform.e-ko.rip` pointent vers le VPS (A 54.36.102.38).
+DNS : `platform.e-ko.rip` **et** `*.platform.e-ko.rip` pointent vers l'hébergement de la plate-forme.
 `GET /api/certificat?domain=<nom>` répond 200 pour la plate-forme et les sites existants, 404
 sinon, ce qui empêche d'obtenir des certificats pour des noms inventés. Let's Encrypt limite à
 50 nouveaux certificats par semaine pour `e-ko.rip` : au-delà, passer à un certificat joker

@@ -1,8 +1,7 @@
 //! Imbrication dans la file (roadmap 5.1 à 5.3) : les impressions en attente d'une même
 //! imprimante, compatibles entre elles, posées ensemble sur une planche ; la planche part
-//! quand son déclencheur le dit (ou sur « Imprimer maintenant »). Logique inspirée de la
-//! file d'ONYX (stratégies de placement, déclenchement au temps ou à la surface) ; rien n'en
-//! est repris. Ici, le calcul seul : la file et les travaux sont dans `main.rs`.
+//! quand son déclencheur le dit (ou sur « Imprimer maintenant »). Stratégies de placement,
+//! déclenchement au temps ou à la surface. Ici, le calcul seul : la file et les travaux sont dans `main.rs`.
 
 use crate::imbrication::{self, PT_PAR_MM, Place, Taille};
 use serde::{Deserialize, Serialize};
