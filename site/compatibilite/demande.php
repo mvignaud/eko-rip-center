@@ -22,7 +22,8 @@ function repondre(bool $ok, string $message, int $code, bool $json): never
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode(['ok' => $ok, 'message' => $message], JSON_UNESCAPED_UNICODE);
     } else {
-        header('Location: /compatibilite/?demande=' . ($ok ? 'envoyee' : 'erreur') . '#demande', true, 303);
+        // Sans JavaScript : l'ancre affiche le bon message par :target, en CSS seul (revue Codex).
+        header('Location: /compatibilite/#' . ($ok ? 'demande-envoyee' : 'demande-erreur'), true, 303);
     }
     exit;
 }

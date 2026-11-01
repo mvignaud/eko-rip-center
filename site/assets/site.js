@@ -105,13 +105,10 @@
   });
 
   // Demande de pilote (/compatibilite/) : envoi sans recharger la page ; sans JavaScript,
-  // le formulaire part quand même et le script renvoie ici avec ?demande=envoyee|erreur.
+  // le formulaire part quand même et le script renvoie sur #demande-envoyee ou #demande-erreur.
   var demande = document.getElementById('demande-pilote');
   if (demande) {
     var retour = demande.querySelector('.message');
-    var etatUrl = new URLSearchParams(location.search).get('demande');
-    if (etatUrl === 'envoyee') retour.textContent = 'Merci, votre demande est envoyée. Nous vous répondons par e-mail.';
-    if (etatUrl === 'erreur') retour.textContent = 'La demande n\'est pas partie. Vérifiez les champs, ou écrivez à contact@e-ko.rip.';
     demande.addEventListener('submit', function (e) {
       if (!window.fetch) return;
       e.preventDefault();

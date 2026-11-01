@@ -511,3 +511,8 @@ section { padding: 96px 0; }
   .tableau.machines td[data-l]::before { content: attr(data-l) " : "; font-weight: 600; color: var(--texte); }
   .tableau.machines td[data-l="État"]::before { display: none; }
 }
+.retour-demande { display: none; max-width: 860px; margin: 0 auto 22px; padding: 16px 20px; border-radius: 14px; font-weight: 600; scroll-margin-top: 90px; }
+.retour-demande:target { display: block; }
+.retour-demande.ok { background: rgba(48, 209, 88, .14); color: #1e8e3e; }
+.retour-demande.erreur { background: rgba(236, 0, 140, .1); color: #b0006a; }
+@media (prefers-color-scheme: dark) { .retour-demande.ok { color: #5fe08a; } .retour-demande.erreur { color: #ff6fbf; } }

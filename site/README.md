@@ -33,7 +33,7 @@ de `/compatibilite/`, envoie la demande par `mail()` à `contact@e-ko.rip` (Repl
 demandeur) et ne garde rien, sauf un compteur par IP hachée (5 envois par heure, dans le
 dossier temporaire de PHP). Pot de miel `website`, origine `https://e-ko.rip` seule, champs
 coupés et nettoyés des retours à la ligne. Avec JavaScript, la page reçoit la réponse en
-JSON ; sans, le script renvoie sur `/compatibilite/?demande=envoyee|erreur#demande`.
+JSON ; sans, le script renvoie sur `/compatibilite/#demande-envoyee` ou `#demande-erreur` (message affiché par `:target`, sans JavaScript).
 
 Les chiffres des pré-requis et la liste des machines suivent `docs/fr/installation-serveur.md`
 et `docs/fr/machines.md` : les mettre à jour ensemble.
