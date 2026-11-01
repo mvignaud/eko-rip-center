@@ -15,6 +15,8 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.32.0] — 2026-11-01
+
 ### Ajouté
 - **Cloud E-KO RIP : notifications.** Les événements des e-mails d'alerte (site hors ligne après
   15 minutes, de retour en ligne, nouvelle app connectée) arrivent aussi par un journal par compte
