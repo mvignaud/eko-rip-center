@@ -91,6 +91,68 @@ CREATE TABLE IF NOT EXISTS abonnements_web (
     appareil TEXT NOT NULL DEFAULT '',
     cree_le INTEGER NOT NULL
 );
+-- Offre de chaque compte (propriétaire de ses sites) et son abonnement dans l'ERP. Une ligne
+-- par compte qui a quitté le Gratuit, ou qui a des machines en dépassement.
+CREATE TABLE IF NOT EXISTS abonnements_cloud (
+    compte INTEGER PRIMARY KEY REFERENCES comptes(id) ON DELETE CASCADE,
+    tier_code TEXT,
+    subscription_code TEXT,
+    supplement_code TEXT,
+    offre TEXT NOT NULL DEFAULT 'gratuit',
+    cycle TEXT NOT NULL DEFAULT 'mensuel',
+    statut TEXT NOT NULL DEFAULT '',
+    seats INTEGER NOT NULL DEFAULT 0,
+    seats_supplement INTEGER NOT NULL DEFAULT 0,
+    seats_envoyes_le INTEGER NOT NULL DEFAULT 0,
+    periode_fin INTEGER,
+    essai_fin INTEGER,
+    essai_prevenu INTEGER NOT NULL DEFAULT 0,
+    moyen_paiement TEXT NOT NULL DEFAULT '',
+    carte_id TEXT,
+    rum TEXT,
+    rum_prevenu INTEGER NOT NULL DEFAULT 0,
+    relance INTEGER NOT NULL DEFAULT 0,
+    fin_periode_resiliation INTEGER NOT NULL DEFAULT 0,
+    gratuit_depuis INTEGER,
+    depassement_depuis INTEGER,
+    depassement_raison TEXT NOT NULL DEFAULT '',
+    suspension_prevenue INTEGER NOT NULL DEFAULT 0,
+    quota_alerte INTEGER NOT NULL DEFAULT 0,
+    bon_commande TEXT NOT NULL DEFAULT '',
+    brouillon TEXT NOT NULL DEFAULT '{}',
+    maj_le INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS abonnements_cloud_code ON abonnements_cloud (subscription_code);
+CREATE INDEX IF NOT EXISTS abonnements_cloud_tiers ON abonnements_cloud (tier_code);
+-- Machines déclarées par chaque serveur RIP (POST /api/site/inventaire).
+CREATE TABLE IF NOT EXISTS inventaires (
+    site TEXT PRIMARY KEY,
+    version TEXT NOT NULL DEFAULT '',
+    imprimantes TEXT NOT NULL DEFAULT '[]',
+    decoupeurs TEXT NOT NULL DEFAULT '[]',
+    nb_imprimantes INTEGER NOT NULL DEFAULT 0,
+    nb_decoupeurs INTEGER NOT NULL DEFAULT 0,
+    recu_le INTEGER NOT NULL,
+    nuit_le INTEGER,
+    echec_prevenu INTEGER NOT NULL DEFAULT 0
+);
+-- Sites dont l'accès à distance est suspendu (offre dépassée au-delà du délai de grâce).
+CREATE TABLE IF NOT EXISTS sites_suspendus (site TEXT PRIMARY KEY, depuis INTEGER NOT NULL);
+-- Webhooks de l'ERP déjà traités (empreinte du corps), gardés 30 jours.
+CREATE TABLE IF NOT EXISTS webhooks_erp (empreinte TEXT PRIMARY KEY, evenement TEXT NOT NULL, recu_le INTEGER NOT NULL);
+-- Index des sauvegardes en ligne (objets S3).
+CREATE TABLE IF NOT EXISTS sauvegardes (
+    id TEXT PRIMARY KEY,
+    site TEXT NOT NULL,
+    compte INTEGER NOT NULL,
+    cree_le INTEGER NOT NULL,
+    octets INTEGER NOT NULL,
+    empreinte TEXT NOT NULL,
+    motif TEXT NOT NULL,
+    cle_s3 TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS sauvegardes_site ON sauvegardes (site, cree_le);
+CREATE INDEX IF NOT EXISTS sauvegardes_compte ON sauvegardes (compte);
 ";
 
 /// Durée d'un jeton d'app (clients Mac, Linux, Windows, mobile).
@@ -141,6 +203,9 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !jetons.iter().any(|x| x == "jeton_expo") {
         c.execute_batch("ALTER TABLE jetons_applis ADD COLUMN jeton_expo TEXT; ALTER TABLE jetons_applis ADD COLUMN plateforme_expo TEXT;")?;
     }
+    // Premier déploiement des offres payantes : point de départ de la grâce de 30 jours des
+    // comptes existants (jamais réécrit).
+    c.execute("INSERT OR IGNORE INTO reglages (cle, valeur) VALUES ('offres_deployees_le', ?1)", [crate::maintenant().to_string()])?;
     Ok(())
 }
 

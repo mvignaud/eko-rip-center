@@ -25,10 +25,11 @@ const COOKIE_OAUTH: &str = "plateforme_oauth";
 fn nom_cookie(r: &Partage, nom: &'static str) -> String {
     if https(r) { format!("__Host-{nom}") } else { nom.to_string() }
 }
-/// Sites qu'un compte peut posséder (service gratuit).
-pub const MAX_SITES: i64 = 10;
+/// Plafond technique de sites par compte (anti-abus). La limite de l'offre, elle, ne bloque
+/// pas le rattachement : les sites en trop comptent en dépassement (grâce de 14 jours).
+pub const MAX_SITES: i64 = 50;
 
-type Champs = Form<HashMap<String, String>>;
+pub(crate) type Champs = Form<HashMap<String, String>>;
 
 pub fn echapper(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
@@ -62,24 +63,24 @@ fn cookie(entetes: &HeaderMap, nom: &str) -> Option<String> {
 }
 
 /// Adresse du visiteur : dernière entrée de `X-Forwarded-For` (posée par Caddy).
-fn ip(entetes: &HeaderMap) -> String {
+pub(crate) fn ip(entetes: &HeaderMap) -> String {
     entetes.get("x-forwarded-for").and_then(|v| v.to_str().ok()).and_then(|v| v.rsplit(',').next()).map(|v| v.trim().to_string()).unwrap_or_else(|| "local".into())
 }
 
-struct Session {
-    compte: Compte,
-    csrf: String,
+pub(crate) struct Session {
+    pub(crate) compte: Compte,
+    pub(crate) csrf: String,
     jeton: String,
 }
 
-fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
+pub(crate) fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
     let jeton = cookie(entetes, &nom_cookie(r, COOKIE_SESSION))?;
     let (compte, csrf) = base::session(&r.base(), &jeton).ok().flatten()?;
     Some(Session { compte, csrf, jeton })
 }
 
 /// Requête POST venue d'une page de la plate-forme.
-fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
+pub(crate) fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
     let url = &r.config.url_publique;
     match entetes.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         Some(o) => o == url,
@@ -87,7 +88,7 @@ fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
     }
 }
 
-fn csrf_ok(s: &Session, f: &HashMap<String, String>) -> bool {
+pub(crate) fn csrf_ok(s: &Session, f: &HashMap<String, String>) -> bool {
     f.get("csrf").is_some_and(|c| crate::egal_constant(c, &s.csrf))
 }
 
@@ -217,9 +218,11 @@ const ICONE_SITES: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="curren
 const ICONE_COMPTE: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 15.3c1.1-1.8 2.8-2.7 4.8-2.7s3.7.9 4.8 2.7"/></svg>"#;
 const ICONE_ADMIN: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5 16 5v4.6c0 3.6-2.5 6.6-6 7.9-3.5-1.3-6-4.3-6-7.9V5z"/><path d="m7.3 10 1.9 1.9 3.6-3.8"/></svg>"#;
 
-const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a>"#;
+const ICONE_ABONNEMENT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M2.5 8h15"/><path d="M5.5 12.2h3"/></svg>"#;
 
-fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
+const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a>"#;
+
+pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     let tete = format!(r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head>"##, echapper(titre));
     let legal = corps.contains(r#"class="carte texte""#);
     let html = match s {
@@ -227,8 +230,9 @@ fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
             let entree = |lien: &str, nom: &str, icone: &str| format!(r#"<a class="entree{}" href="{lien}"{}>{icone}<span>{nom}</span></a>"#, if titre == nom { " active" } else { "" }, if titre == nom { r#" aria-current="page""# } else { "" });
             let admin = if s.compte.super_admin { format!(r#"<div class="rubrique">Plate-forme</div>{}"#, entree("/admin", "Administration", ICONE_ADMIN)) } else { String::new() };
             format!(
-                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
+                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
                 entree("/sites", "Mes sites", ICONE_SITES),
+                entree("/abonnement", "Abonnement", ICONE_ABONNEMENT),
                 entree("/compte", "Mon compte", ICONE_COMPTE),
                 echapper(&s.csrf),
                 echapper(titre)
@@ -242,7 +246,7 @@ fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     Html(html)
 }
 
-fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
+pub(crate) fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
     let _ = r;
     (StatusCode::BAD_REQUEST, page("Erreur", s, &format!(r#"<div class="carte"><p class="erreur">{}</p><p><a href="/">Retour</a></p></div>"#, echapper(texte)))).into_response()
 }
@@ -270,15 +274,15 @@ pub(crate) fn adresse_visiteur(h: &HeaderMap) -> String {
     ip(h)
 }
 
-fn refuse_origine() -> Response {
+pub(crate) fn refuse_origine() -> Response {
     (StatusCode::FORBIDDEN, "Requête refusée : elle ne vient pas de la plate-forme.").into_response()
 }
 
-fn champ(f: &HashMap<String, String>, nom: &str) -> String {
+pub(crate) fn champ(f: &HashMap<String, String>, nom: &str) -> String {
     f.get(nom).map(|v| v.trim().to_string()).unwrap_or_default()
 }
 
-fn hidden_csrf(s: &Session) -> String {
+pub(crate) fn hidden_csrf(s: &Session) -> String {
     format!(r#"<input type="hidden" name="csrf" value="{}">"#, echapper(&s.csrf))
 }
 
@@ -291,7 +295,7 @@ pub async fn accueil(State(r): State<Partage>, h: HeaderMap) -> Response {
     page(
         "Accueil",
         None,
-        r#"<div class="carte"><h1>Vos serveurs RIP, partout</h1><p>E-KO RIP Cloud relie le serveur E-KO RIP Center de votre atelier à cette plate-forme par une connexion sortante sécurisée. Hors de l'atelier, vos postes et l'application mobile y accèdent <strong>sans VPN et sans ouvrir de port</strong>.</p><p>Service gratuit.</p><p class="ligne"><a class="bouton" href="/inscription">Créer un compte</a><a class="bouton discret" href="/connexion">Se connecter</a></p></div>"#,
+        r#"<div class="carte"><h1>Vos serveurs RIP, partout</h1><p>E-KO RIP Cloud relie le serveur E-KO RIP Center de votre atelier à cette plate-forme par une connexion sortante sécurisée. Hors de l'atelier, vos postes et l'application mobile y accèdent <strong>sans VPN et sans ouvrir de port</strong>.</p><p>Offre Gratuite pour toujours (1 site, 1 imprimante et 1 découpeur, sauvegarde en ligne de la dernière version). Offres payantes À la machine, Atelier et Pro pour plus de machines, plus de sites et l'historique des sauvegardes : <a href="/abonnement/offres">voir les offres</a>.</p><p class="ligne"><a class="bouton" href="/inscription">Créer un compte</a><a class="bouton discret" href="/connexion">Se connecter</a></p></div>"#,
     )
     .into_response()
 }
@@ -465,7 +469,7 @@ pub async fn renvoyer_confirmation(State(r): State<Partage>, h: HeaderMap, Form(
     Redirect::to(&format!("{retour}?ok=confirmation")).into_response()
 }
 
-fn page_sans_cache(titre: &str, s: Option<&Session>, corps: &str, statut: StatusCode) -> Response {
+pub(crate) fn page_sans_cache(titre: &str, s: Option<&Session>, corps: &str, statut: StatusCode) -> Response {
     let mut rep = (statut, page(titre, s, corps)).into_response();
     rep.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     rep
@@ -701,11 +705,11 @@ fn carte_navigateurs(r: &Partage, s: &Session) -> String {
 }
 
 /// En-tête `X-CSRF-Token` des appels du script (le corps est du JSON, pas un formulaire).
-fn csrf_entete_ok(s: &Session, h: &HeaderMap) -> bool {
+pub(crate) fn csrf_entete_ok(s: &Session, h: &HeaderMap) -> bool {
     h.get("x-csrf-token").and_then(|v| v.to_str().ok()).is_some_and(|c| crate::egal_constant(c, &s.csrf))
 }
 
-fn reponse_json(statut: StatusCode, code: &str) -> Response {
+pub(crate) fn reponse_json(statut: StatusCode, code: &str) -> Response {
     (statut, Json(serde_json::json!({ "code": code }))).into_response()
 }
 
@@ -766,11 +770,11 @@ pub async fn notifications_proposees(State(r): State<Partage>, h: HeaderMap) -> 
 
 // ————— Mes sites —————
 
-fn exiger(r: &Partage, h: &HeaderMap, ici: &str) -> Result<Session, Box<Response>> {
+pub(crate) fn exiger(r: &Partage, h: &HeaderMap, ici: &str) -> Result<Session, Box<Response>> {
     session(r, h).ok_or_else(|| Box::new(Redirect::to(&format!("/connexion?suite={}", encoder(ici))).into_response()))
 }
 
-fn libelle_role(role: &str) -> &'static str {
+pub(crate) fn libelle_role(role: &str) -> &'static str {
     match role {
         "proprietaire" => "Propriétaire",
         "admin" => "Administrateur",
@@ -779,7 +783,7 @@ fn libelle_role(role: &str) -> &'static str {
     }
 }
 
-fn date(t: Option<u64>) -> String {
+pub(crate) fn date(t: Option<u64>) -> String {
     // Jour UTC (aaaa-mm-jj), sans dépendance de calendrier.
     let Some(t) = t else { return "jamais".into() };
     let jours = (t / 86400) as i64;
@@ -823,8 +827,9 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         };
         let adresse = echapper(&crate::relais::adresse_du_site(&r.config.url_publique, id));
         lignes.push_str(&format!(
-            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a><br><a class="meta" href="/sites/{}/sauvegardes">Sauvegardes</a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
             echapper(&site.nom),
+            echapper(id),
             if en_ligne { "ok" } else { "meta" },
             if en_ligne { "En ligne" } else { "Hors ligne" },
             libelle_role(role),
@@ -843,7 +848,7 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         Some("confirmation") => MESSAGE_CONFIRMATION_ENVOYEE,
         _ => "",
     };
-    let bandeau = format!("{}{}", bandeau_confirmation(&r, &s, "/sites"), bandeau_notifications(&s));
+    let bandeau = format!("{}{}{}", crate::abonnements::bandeau_depassement(&r, s.compte.id), bandeau_confirmation(&r, &s, "/sites"), bandeau_notifications(&s));
     let code = q.get("code").map(|c| echapper(c)).unwrap_or_default();
     let corps = format!(
         r#"<h1>Mes sites</h1>{message}{bandeau}<div class="carte">{liste}</div><div class="carte"><h2>Rattacher un serveur RIP</h2><p class="meta">Sur le serveur : Système › Cloud E-KO RIP › « Connecter à la plate-forme ». Saisissez ici le code affiché (valable 10 minutes).</p><form method="post" action="/sites/rattacher" class="ligne">{}<input type="text" name="code" placeholder="ABCD-1234" required maxlength="12" value="{code}" style="max-width: 12rem; text-transform: uppercase" autocomplete="off"><button type="submit">Rattacher</button></form></div>"#,
@@ -993,7 +998,7 @@ pub async fn supprimer_compte(State(r): State<Partage>, h: HeaderMap, Form(f): C
 
 // ————— Administration —————
 
-fn exiger_admin(r: &Partage, h: &HeaderMap) -> Result<Session, Box<Response>> {
+pub(crate) fn exiger_admin(r: &Partage, h: &HeaderMap) -> Result<Session, Box<Response>> {
     let s = exiger(r, h, "/admin")?;
     if !s.compte.super_admin {
         return Err(Box::new((StatusCode::FORBIDDEN, page("Refusé", Some(&s), r#"<div class="carte"><p class="erreur">Réservé à l'administration de la plate-forme.</p></div>"#)).into_response()));
@@ -1018,6 +1023,8 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         Some("github") => r#"<p class="ok">Accès GitHub enregistré.</p>"#,
         Some("courriels") => r#"<p class="ok">Réglages d'e-mail enregistrés.</p>"#,
         Some("essai") => r#"<p class="ok">E-mail d'essai envoyé à votre adresse.</p>"#,
+        Some("facturation") => r#"<p class="ok">Réglages de facturation enregistrés.</p>"#,
+        Some("stockage") => r#"<p class="ok">Réglages du stockage S3 enregistrés.</p>"#,
         _ => "",
     };
     let connectes = r.connectes();
@@ -1063,6 +1070,9 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
     let corps = format!(
         r#"<h1>Administration</h1>{message}
 {installations}
+{vue_abonnements}
+{facturation}
+{stockage}
 {rapports}
 {courriels}
 <div class="carte"><h2>Connexion Google</h2>
@@ -1092,6 +1102,9 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         installations = carte_installations(&r.statistiques_installations()),
         rapports = carte_rapports(&r, &s, &valeur("github_depot"), !valeur("github_jeton").is_empty()),
         courriels = carte_courriels(&b, &s, actif),
+        vue_abonnements = crate::abonnements::carte_vue_admin(&b, &tous),
+        facturation = crate::abonnements::carte_admin(&b, &s, &r.config.url_publique),
+        stockage = crate::sauvegardes::carte_admin(&b, &s),
     );
     page("Administration", Some(&s), &corps).into_response()
 }
@@ -1365,6 +1378,7 @@ pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<S
     let (titre, contenu) = match nom.as_str() {
         "mentions-legales" => ("Mentions légales", include_str!("../static/legal/mentions-legales.html")),
         "cgu" => ("Conditions générales d'utilisation", include_str!("../static/legal/cgu.html")),
+        "cgv" => ("Conditions générales de vente", include_str!("../static/legal/cgv.html")),
         "confidentialite" => ("Politique de confidentialité", include_str!("../static/legal/confidentialite.html")),
         _ => return StatusCode::NOT_FOUND.into_response(),
     };

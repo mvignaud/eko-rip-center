@@ -36,6 +36,12 @@ pub const URL_EXPO: &str = "https://exp.host/--/api/v2/push/send";
 pub const SITE_HORS_LIGNE: &str = "site_hors_ligne";
 pub const SITE_EN_LIGNE: &str = "site_en_ligne";
 pub const NOUVELLE_APP: &str = "nouvelle_app";
+/// Paiement refusé, relance, résiliation pour impayé, retour au Gratuit.
+pub const PAIEMENT: &str = "paiement";
+/// Quota de sauvegarde, sauvegarde en échec.
+pub const SAUVEGARDE: &str = "sauvegarde";
+/// Offre dépassée, accès à distance suspendu.
+pub const DEPASSEMENT: &str = "depassement";
 
 // ————— Contenu —————
 
@@ -74,6 +80,11 @@ impl Notification {
             corps: format!("Coupure de {}.", duree_fr(fin.saturating_sub(debut))),
             lien: format!("{url}/sites"),
         }
+    }
+
+    /// Notification de facturation ou de sauvegarde (genre `PAIEMENT`, `SAUVEGARDE`, `DEPASSEMENT`).
+    pub fn autre(genre: &'static str, site: Option<&str>, titre: &str, corps: &str, lien: &str) -> Self {
+        Notification { genre, site: site.map(str::to_string), titre: titre.into(), corps: corps.into(), lien: lien.into() }
     }
 
     pub fn nouvelle_app(url: &str, appareil: &str) -> Self {

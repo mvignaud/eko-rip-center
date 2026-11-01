@@ -308,6 +308,9 @@ pub fn resume_hebdomadaire(url: &str, r: &ResumeCompte, debut: u64, fin: u64) ->
         blocs.push(Bloc::Titre(s.nom.clone()));
         let duree = |d: u64| if s.coupures == 0 { "—".to_string() } else { duree_fr(d) };
         blocs.push(Bloc::Chiffres(vec![(s.coupures.to_string(), if s.coupures > 1 { "coupures" } else { "coupure" }.into()), (duree(s.hors_ligne), "hors ligne".into()), (duree(s.plus_longue), "la plus longue".into()), (s.alertes.to_string(), if s.alertes > 1 { "alertes" } else { "alerte" }.into())]));
+        if let Some((derniere, utilise, quota)) = s.sauvegardes {
+            blocs.push(Bloc::Paragraphe(format!("Sauvegardes : {} · {} utilisés sur {}.", derniere.map_or("aucune sauvegarde réussie".to_string(), |d| format!("dernière réussie le {}", date_heure_fr(d))), crate::offres::taille(utilise), crate::offres::taille(quota))));
+        }
     }
     blocs.push(Bloc::Titre("Apps connectées à votre compte cette semaine".into()));
     if r.applis.is_empty() {
@@ -351,7 +354,271 @@ pub fn essai(url: &str, a: &str, nom: &str, maintenant: u64) -> Courriel {
     )
 }
 
-/// Les six messages avec des données d'exemple (`eko-rip-cloud apercu-courriels <dossier>`).
+// ————— Abonnements, facturation et sauvegardes —————
+
+/// Raison commune des e-mails de facturation.
+const RAISON_FACTURATION: &str = "vous êtes titulaire d'un abonnement E-KO RIP Cloud (facturé par SAS GOLDEN PRINT)";
+
+fn faits(l: &[(&str, String)]) -> Bloc {
+    Bloc::Faits(l.iter().map(|(k, v)| (k.to_string(), v.clone())).collect())
+}
+
+/// 7. Abonnement souscrit, ou offre changée.
+#[allow(clippy::too_many_arguments)]
+pub fn abonnement_souscrit(url: &str, a: &str, nom: &str, offre: &str, prix_ht: &str, prochaine: Option<u64>, essai_fin: Option<u64>, change: bool) -> Courriel {
+    let mut l = vec![("Offre", offre.to_string()), ("Prix", format!("{prix_ht} HT"))];
+    if let Some(e) = essai_fin {
+        l.push(("Essai gratuit jusqu'au", date_fr(e)));
+    }
+    if let Some(p) = prochaine {
+        l.push(("Prochaine échéance", date_fr(p)));
+    }
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: if change { format!("Votre offre E-KO RIP Cloud est maintenant « {offre} »") } else { format!("Bienvenue dans l'offre E-KO RIP Cloud « {offre} »") },
+            resume: format!("{offre} · {prix_ht} HT"),
+            titre: if change { "Offre modifiée".into() } else { "Abonnement confirmé".into() },
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, {}", if change { "votre changement d'offre est enregistré." } else { "merci : votre abonnement est enregistré." })),
+                faits(&l),
+                Bloc::Paragraphe("Vos factures sont émises au début de chaque période et restent disponibles dans la page Abonnement du portail.".into()),
+            ],
+            bouton: Some(("Voir mon abonnement".into(), format!("{url}/abonnement"))),
+            lien_en_clair: false,
+            raison: RAISON_FACTURATION.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 8. Facture émise.
+pub fn facture_emise(url: &str, a: &str, nom: &str, reference: &str, montant_ttc: &str, lien_pdf: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre facture E-KO RIP Cloud {reference}"),
+            resume: format!("Montant : {montant_ttc} TTC."),
+            titre: "Nouvelle facture".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, une nouvelle facture a été émise pour votre abonnement E-KO RIP Cloud.")),
+                faits(&[("Facture", reference.to_string()), ("Montant", format!("{montant_ttc} TTC"))]),
+                Bloc::Paragraphe("Elle est réglée automatiquement avec le moyen de paiement enregistré.".into()),
+            ],
+            bouton: Some(("Télécharger la facture (PDF)".into(), lien_pdf.into())),
+            lien_en_clair: false,
+            raison: RAISON_FACTURATION.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// Sujet, titre et texte d'une étape de paiement refusé (0 : refus ; 1 à 3 : relances de l'ERP).
+pub fn etape_relance(etape: u8) -> (&'static str, &'static str, &'static str) {
+    match etape {
+        0 => ("Votre paiement E-KO RIP Cloud a été refusé", "Paiement refusé", "Le prélèvement de votre abonnement n'a pas pu être effectué. Une nouvelle tentative aura lieu automatiquement ; vous pouvez aussi mettre à jour votre moyen de paiement dès maintenant."),
+        1 => ("Votre paiement E-KO RIP Cloud a échoué", "Paiement échoué", "Nous n'avons pas pu encaisser votre abonnement il y a quelques jours. Merci de vérifier votre moyen de paiement ou d'en enregistrer un nouveau : il suffit d'une minute."),
+        2 => ("Action requise : votre abonnement E-KO RIP Cloud est en retard", "Action requise", "Le paiement de votre abonnement échoue toujours. Sans régularisation, votre compte reviendra à l'offre Gratuite et l'accès à distance des sites et machines au-delà de cette offre sera suspendu."),
+        _ => ("Dernier rappel : votre abonnement E-KO RIP Cloud va être résilié", "Dernier rappel", "Dernier rappel avant résiliation : sans paiement, votre compte revient à l'offre Gratuite, l'accès à distance au-delà de cette offre est suspendu et l'historique des sauvegardes est réduit à la dernière version après 90 jours."),
+    }
+}
+
+/// 9. Paiement refusé, puis relances J+3, J+7 et J+14 (formulations des étapes de relance de l'ERP).
+pub fn paiement_refuse(url: &str, a: &str, nom: &str, etape: u8, montant_ttc: Option<&str>, raison_refus: Option<&str>) -> Courriel {
+    let (sujet, titre, texte) = etape_relance(etape);
+    let mut l = Vec::new();
+    if let Some(m) = montant_ttc {
+        l.push(("Montant dû", format!("{m} TTC")));
+    }
+    if let Some(r) = raison_refus.filter(|r| !r.is_empty()) {
+        l.push(("Motif", r.to_string()));
+    }
+    if etape > 0 {
+        l.push(("Relance", format!("{etape} sur 3")));
+    }
+    let mut blocs = vec![Bloc::Paragraphe(format!("Bonjour {nom},")), Bloc::Paragraphe(texte.into())];
+    if !l.is_empty() {
+        blocs.push(faits(&l));
+    }
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu { sujet: sujet.into(), resume: texte.chars().take(90).collect(), titre: titre.into(), blocs, bouton: Some(("Mettre à jour mon moyen de paiement".into(), format!("{url}/abonnement/paiement"))), lien_en_clair: false, raison: RAISON_FACTURATION.into(), preferences: false },
+    )
+}
+
+/// 10. Retour à l'offre Gratuite (résiliation, ou impayé après la dernière relance).
+pub fn retour_gratuit(url: &str, a: &str, nom: &str, impaye: bool) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: if impaye { "Abonnement E-KO RIP Cloud résilié pour impayé".into() } else { "Votre compte E-KO RIP Cloud est revenu à l'offre Gratuite".into() },
+            resume: "Ce qui change pour vos sites et vos sauvegardes.".into(),
+            titre: if impaye { "Abonnement résilié pour impayé".into() } else { "Retour à l'offre Gratuite".into() },
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, {}", if impaye { "faute de paiement après trois relances, votre abonnement est résilié et votre compte revient à l'offre Gratuite." } else { "votre abonnement est terminé : votre compte revient à l'offre Gratuite." })),
+                Bloc::Liste(vec![
+                    "L'offre Gratuite comprend 1 site, 1 imprimante et 1 découpeur.".into(),
+                    "Au-delà, l'accès à distance des sites concernés est suspendu au bout de 14 jours (l'usage dans l'atelier n'est jamais coupé).".into(),
+                    "Vos sauvegardes restent 90 jours, puis seule la dernière version est gardée.".into(),
+                ]),
+                Bloc::Paragraphe("Vous pouvez souscrire de nouveau à tout moment depuis la page Abonnement.".into()),
+            ],
+            bouton: Some(("Voir les offres".into(), format!("{url}/abonnement/offres"))),
+            lien_en_clair: false,
+            raison: RAISON_FACTURATION.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 11. Fin de l'essai gratuit dans 3 jours.
+pub fn fin_essai(url: &str, a: &str, nom: &str, offre: &str, fin: u64, moyen: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre essai E-KO RIP Cloud se termine le {}", date_fr(fin)),
+            resume: "Rien à faire si votre moyen de paiement est à jour.".into(),
+            titre: "Fin de l'essai dans 3 jours".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, l'essai gratuit de l'offre « {offre} » se termine le {}. La première facture sera alors émise et réglée avec le moyen de paiement enregistré.", date_fr(fin))),
+                faits(&[("Offre", offre.to_string()), ("Fin de l'essai", date_fr(fin)), ("Moyen de paiement", if moyen.is_empty() { "à enregistrer".to_string() } else { moyen.to_string() })]),
+                Bloc::Paragraphe("Pour changer d'offre ou résilier avant la fin de l'essai, ouvrez la page Abonnement.".into()),
+            ],
+            bouton: Some(("Voir mon abonnement".into(), format!("{url}/abonnement"))),
+            lien_en_clair: false,
+            raison: RAISON_FACTURATION.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 12. Quota de sauvegarde atteint à 80 % ou 100 %.
+pub fn quota_sauvegarde(url: &str, a: &str, nom: &str, pourcent: u64, utilise: &str, quota: &str) -> Courriel {
+    let plein = pourcent >= 100;
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: if plein { "Espace de sauvegarde E-KO RIP Cloud plein".into() } else { format!("Espace de sauvegarde E-KO RIP Cloud utilisé à {pourcent} %") },
+            resume: format!("{utilise} utilisés sur {quota}."),
+            titre: if plein { "Espace de sauvegarde plein".into() } else { "Espace de sauvegarde presque plein".into() },
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, {}", if plein { "votre espace de sauvegarde en ligne est plein : les nouvelles sauvegardes de vos serveurs RIP sont refusées jusqu'à ce que de la place se libère." } else { "votre espace de sauvegarde en ligne sera bientôt plein." })),
+                Bloc::Chiffres(vec![(utilise.into(), "utilisés".into()), (quota.into(), "compris dans l'offre".into()), (format!("{pourcent} %"), "occupation".into())]),
+                Bloc::Paragraphe("Les anciennes versions sont supprimées automatiquement selon la durée de conservation de votre offre. Pour plus d'espace, passez à une offre supérieure.".into()),
+            ],
+            bouton: Some(("Voir mon abonnement".into(), format!("{url}/abonnement"))),
+            lien_en_clair: false,
+            raison: "vous êtes propriétaire de sites sauvegardés sur E-KO RIP Cloud".into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 13. Sauvegarde nocturne absente deux nuits de suite.
+pub fn sauvegarde_en_echec(url: &str, a: &str, nom: &str, site: &str, derniere: Option<u64>) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Sauvegarde du site « {site} » en échec"),
+            resume: "Aucune sauvegarde reçue depuis deux nuits.".into(),
+            titre: "Sauvegarde en échec".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Le serveur RIP du site « {site} » n'a envoyé aucune sauvegarde nocturne depuis deux nuits de suite.")),
+                faits(&[("Site", site.to_string()), ("Dernière sauvegarde", derniere.map_or("aucune".to_string(), date_heure_fr))]),
+                Bloc::Paragraphe("Vérifiez que le serveur RIP est allumé la nuit et connecté au cloud, et que l'espace de sauvegarde n'est pas plein.".into()),
+            ],
+            bouton: Some(("Voir les sauvegardes".into(), format!("{url}/sites"))),
+            lien_en_clair: false,
+            raison: format!("vous êtes propriétaire ou administrateur du site « {site} »"),
+            preferences: false,
+        },
+    )
+}
+
+/// 14. Restauration effectuée.
+pub fn restauration_effectuee(url: &str, a: &str, nom: &str, site: &str, qui: &str, quand: u64, version: u64) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Sauvegarde restaurée sur le site « {site} »"),
+            resume: format!("Version du {} restaurée par {qui}.", date_heure_fr(version)),
+            titre: "Restauration effectuée".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Une sauvegarde en ligne a été restaurée sur le serveur RIP du site « {site} ».")),
+                faits(&[("Site", site.to_string()), ("Par", qui.to_string()), ("Le", date_heure_fr(quand)), ("Version restaurée", date_heure_fr(version))]),
+                Bloc::Paragraphe("Si vous n'êtes pas à l'origine de cette restauration, prévenez le propriétaire du site.".into()),
+            ],
+            bouton: Some(("Voir mes sites".into(), format!("{url}/sites"))),
+            lien_en_clair: false,
+            raison: format!("vous êtes propriétaire ou administrateur du site « {site} »"),
+            preferences: false,
+        },
+    )
+}
+
+/// 15. Offre dépassée : accès à distance suspendu dans 14 jours, ou suspendu.
+pub fn offre_depassee(url: &str, a: &str, nom: &str, raison: &str, suspension: u64, suspendu: bool) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: if suspendu { "Accès à distance suspendu : offre E-KO RIP Cloud dépassée".into() } else { format!("Offre E-KO RIP Cloud dépassée : accès à distance suspendu le {}", date_fr(suspension)) },
+            resume: raison.into(),
+            titre: if suspendu { "Accès à distance suspendu".into() } else { "Offre dépassée".into() },
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, {}", if suspendu { "le délai de grâce est écoulé : l'accès à distance des sites concernés est suspendu. L'usage dans l'atelier n'est pas touché." } else { "votre parc dépasse ce que comprend votre offre. L'usage dans l'atelier n'est jamais touché, mais l'accès à distance des sites concernés sera suspendu à la fin du délai de grâce." })),
+                faits(&[("Dépassement", raison.to_string()), (if suspendu { "Suspendu depuis le" } else { "Suspension le" }, date_fr(suspension))]),
+                Bloc::Paragraphe("Pour rétablir l'accès, passez à une offre adaptée, ou retirez les machines ou sites en trop.".into()),
+            ],
+            bouton: Some(("Choisir une offre".into(), format!("{url}/abonnement/offres"))),
+            lien_en_clair: false,
+            raison: "vous êtes propriétaire de sites rattachés à E-KO RIP Cloud".into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 16. Mandat de prélèvement SEPA signé.
+pub fn mandat_signe(url: &str, a: &str, nom: &str, rum: &str, iban_fin: &str, lien_pdf: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: "Votre mandat de prélèvement SEPA E-KO RIP Cloud est signé".into(),
+            resume: format!("Référence unique du mandat : {rum}."),
+            titre: "Mandat SEPA signé".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, votre mandat de prélèvement SEPA au profit de SAS GOLDEN PRINT est signé électroniquement. Vos factures E-KO RIP Cloud seront prélevées sur ce compte.")),
+                faits(&[("Référence (RUM)", rum.to_string()), ("Compte", format!("IBAN se terminant par {iban_fin}")), ("Créancier", "SAS GOLDEN PRINT".to_string())]),
+                Bloc::Paragraphe("Vous pouvez contester un prélèvement auprès de votre banque dans les conditions de votre convention de compte.".into()),
+            ],
+            bouton: Some(("Télécharger le mandat (PDF)".into(), lien_pdf.into())),
+            lien_en_clair: false,
+            raison: RAISON_FACTURATION.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// Tous les messages avec des données d'exemple (`eko-rip-cloud apercu-courriels <dossier>`).
 pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
     use crate::evenements::ResumeSite;
     // Lundi 2 novembre 2026, 8 h 00 (Paris).
@@ -360,8 +627,8 @@ pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
         nom: "Atelier Dupont".into(),
         email: "contact@atelier-dupont.fr".into(),
         sites: vec![
-            ResumeSite { nom: "Imprimerie Dupont · Lyon".into(), coupures: 2, hors_ligne: 3 * 3600 + 40 * 60, plus_longue: 3 * 3600, alertes: 1 },
-            ResumeSite { nom: "Atelier de Nantes".into(), coupures: 0, hors_ligne: 0, plus_longue: 0, alertes: 0 },
+            ResumeSite { nom: "Imprimerie Dupont · Lyon".into(), coupures: 2, hors_ligne: 3 * 3600 + 40 * 60, plus_longue: 3 * 3600, alertes: 1, sauvegardes: Some((Some(lundi - 6 * 3600), 3 * crate::offres::GO / 2, 25 * crate::offres::GO)) },
+            ResumeSite { nom: "Atelier de Nantes".into(), coupures: 0, hors_ligne: 0, plus_longue: 0, alertes: 0, sauvegardes: None },
         ],
         applis: vec![("MacBook Pro de Claire".into(), lundi - 4 * 86_400 + 3600), ("iPhone de Claire".into(), lundi - 86_400)],
     };
@@ -373,6 +640,23 @@ pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
         ("nouvelle-app", nouvelle_app(url, "contact@atelier-dupont.fr", "Atelier Dupont", "MacBook Pro de Claire", lundi - 600)),
         ("resume-hebdomadaire", resume_hebdomadaire(url, &r, lundi - 7 * 86_400, lundi)),
         ("essai", essai(url, "contact@atelier-dupont.fr", "Atelier Dupont", lundi)),
+        ("abonnement-souscrit", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Atelier", "19,00 € par mois", Some(lundi + 30 * 86_400), Some(lundi + 30 * 86_400), false)),
+        ("abonnement-change", abonnement_souscrit(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Pro", "490,00 € par an", Some(lundi + 365 * 86_400), None, true)),
+        ("facture-emise", facture_emise(url, "contact@atelier-dupont.fr", "Atelier Dupont", "FA-2026-00142", "22,80 €", &format!("{url}/abonnement/factures/FA-2026-00142.pdf"))),
+        ("paiement-refuse", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 0, Some("22,80 €"), Some("Provision insuffisante"))),
+        ("relance-1", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 1, Some("22,80 €"), None)),
+        ("relance-2", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 2, Some("22,80 €"), None)),
+        ("relance-3", paiement_refuse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 3, Some("22,80 €"), None)),
+        ("resiliation-impaye", retour_gratuit(url, "contact@atelier-dupont.fr", "Atelier Dupont", true)),
+        ("retour-gratuit", retour_gratuit(url, "contact@atelier-dupont.fr", "Atelier Dupont", false)),
+        ("fin-essai", fin_essai(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Atelier", lundi + 3 * 86_400, "Carte se terminant par 4242")),
+        ("quota-80", quota_sauvegarde(url, "contact@atelier-dupont.fr", "Atelier Dupont", 80, "20 Go", "25 Go")),
+        ("quota-100", quota_sauvegarde(url, "contact@atelier-dupont.fr", "Atelier Dupont", 100, "25 Go", "25 Go")),
+        ("sauvegarde-echec", sauvegarde_en_echec(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Imprimerie Dupont · Lyon", Some(lundi - 3 * 86_400))),
+        ("restauration", restauration_effectuee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "Imprimerie Dupont · Lyon", "Claire Dupont", lundi, lundi - 86_400)),
+        ("offre-depassee", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "3 imprimante(s) et 1 découpeur(s) pour 1 imprimante et 1 découpeur compris dans l'offre Gratuit", lundi + 14 * 86_400, false)),
+        ("acces-suspendu", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "2 sites rattachés pour 1 compris dans l'offre Gratuit", lundi, true)),
+        ("mandat-signe", mandat_signe(url, "contact@atelier-dupont.fr", "Atelier Dupont", "GP-SEPA-000123", "0189", &format!("{url}/abonnement/mandat.pdf"))),
     ]
 }
 
@@ -528,7 +812,11 @@ mod tests {
     #[test]
     fn apercus_complets() {
         let v = apercus("https://platform.e-ko.rip");
-        assert_eq!(v.len(), 7);
+        assert_eq!(v.len(), 24);
+        let noms: Vec<&str> = v.iter().map(|(n, _)| *n).collect();
+        for n in ["abonnement-souscrit", "facture-emise", "paiement-refuse", "relance-1", "relance-2", "relance-3", "resiliation-impaye", "fin-essai", "quota-80", "quota-100", "sauvegarde-echec", "restauration", "offre-depassee", "acces-suspendu", "mandat-signe"] {
+            assert!(noms.contains(&n), "aperçu {n} absent");
+        }
         for (_, c) in &v {
             assert!(c.html.starts_with("<!doctype html>") && !c.texte.is_empty() && c.html.contains("display:none"), "{}", c.sujet);
         }
