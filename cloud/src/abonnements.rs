@@ -1705,7 +1705,7 @@ pub async fn envoyer_code_sms(State(r): State<Partage>, h: HeaderMap, axum::Form
         let rum = rum_en_cours(&ab).ok_or("Créez d'abord le mandat.")?;
         let rep = erp.post(&format!("/sepa-mandates/{}/signature/otp", encoder(&rum)), &json!({}), None)?;
         if !rep.ok() {
-            return Err(format!("Code non envoyé : {}", rep.erreur()));
+            return Err(session_mandat_perimee(r, id, &rep).unwrap_or_else(|| format!("Code non envoyé : {}", rep.erreur())));
         }
         regler_brouillon(&r.base(), id, |b| {
             if let Some(m) = b.get_mut("mandat").and_then(Value::as_object_mut) {
@@ -1718,6 +1718,19 @@ pub async fn envoyer_code_sms(State(r): State<Partage>, h: HeaderMap, axum::Form
     .await
     .unwrap_or_else(|_| Err("Service momentanément indisponible.".into()));
     vers_paiement_sepa(resultat.err().as_deref())
+}
+
+/// Session de signature du mandat révoquée ou expirée côté ERP (409) : le mandat ne peut plus
+/// être signé, on l'oublie pour que le client en recrée un. `None` pour toute autre réponse.
+fn session_mandat_perimee(r: &Partage, id: i64, rep: &crate::erp::Reponse) -> Option<String> {
+    let code = rep.corps.get("error").and_then(Value::as_str)?;
+    if rep.statut != 409 || !matches!(code, "signature.expired" | "signature.not_alive") {
+        return None;
+    }
+    let _ = regler_brouillon(&r.base(), id, |b| {
+        b.remove("mandat");
+    });
+    Some("La session de signature a expiré : créez un nouveau mandat.".into())
 }
 
 /// `POST /abonnement/paiement/sepa/annuler` : oublie le mandat en cours (autre IBAN).
@@ -1750,11 +1763,14 @@ pub fn signer_mandat(r: &Partage, id: i64, otp: &str, nom_signe: &str, ip: &str,
     let fin = ab.brouillon.pointer("/mandat/iban_last4").and_then(texte_json).unwrap_or_default();
     let rep = erp.post(&format!("/sepa-mandates/{}/signature/verify", encoder(&rum)), &json!({ "otp": otp }), None)?;
     if !rep.ok() {
+        if let Some(m) = session_mandat_perimee(r, id, &rep) {
+            return Err(m);
+        }
         return Err(if rep.statut == 422 { "Code incorrect ou expiré : redemandez un code.".into() } else { format!("Vérification impossible : {}", rep.erreur()) });
     }
     let rep = erp.post(&format!("/sepa-mandates/{}/signature/finalize", encoder(&rum)), &json!({ "typed_name": nom_signe, "signer_ip": ip, "signer_user_agent": agent, "consent": true }), None)?;
     if !rep.ok() {
-        return Err(format!("Signature refusée : {}", rep.erreur()));
+        return Err(session_mandat_perimee(r, id, &rep).unwrap_or_else(|| format!("Signature refusée : {}", rep.erreur())));
     }
     if rep.donnees().get("status").and_then(texte_json).is_some_and(|st| st != "signed") {
         return Err("Le mandat n'est pas encore signé : réessayez dans un instant.".into());
