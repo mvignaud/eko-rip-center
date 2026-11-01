@@ -262,7 +262,7 @@ runs, when, failed or not), its `travail.consommation` (media, length, ink, dura
 
 ## 7. Jobs sent by the ERP (lot R3)
 
-Shape of a `travaux` item: § 11 of the ERP-side contract (`docs/onyx/pont-erp-cote-erp.md` in
+Shape of a `travaux` item: § 11 of the ERP-side contract (in
 eko-source) — `id` (send uuid), `ref_erp`, `nom`, `prereglage_uuid`, `copies`, `echeance`,
 `fichier { chemin, nom, taille, sha256 }`, and for linked jobs `groupe` and `partie`
 (roadmap 7.8).

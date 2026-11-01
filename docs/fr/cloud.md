@@ -54,7 +54,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
 - **Pages légales** : `/mentions-legales`, `/cgu`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
-  RCS Auch 939 018 024, contact contact@eko.rip, pas de téléphone).
+  RCS Auch 939 018 024, contact contact@e-ko.rip, pas de téléphone).
 - Protections : formulaires acceptés seulement depuis la plate-forme (`Origin`) avec un jeton par
   session ; 5 échecs de mot de passe bloquent le compte 5 minutes ; limites par adresse
   (inscriptions, connexions) ; cookie de session `HttpOnly`, `SameSite=Lax`, jamais transmis
@@ -123,7 +123,7 @@ platform.e-ko.rip, *.platform.e-ko.rip {
 }
 ```
 
-DNS : `platform.e-ko.rip` **et** `*.platform.e-ko.rip` pointent vers le VPS (A 54.36.102.38).
+DNS : `platform.e-ko.rip` **et** `*.platform.e-ko.rip` pointent vers l'hébergement de la plate-forme.
 `GET /api/certificat?domain=<nom>` répond 200 pour la plate-forme et les sites existants, 404
 sinon, ce qui empêche d'obtenir des certificats pour des noms inventés. Let's Encrypt limite à
 50 nouveaux certificats par semaine pour `e-ko.rip` : au-delà, passer à un certificat joker
