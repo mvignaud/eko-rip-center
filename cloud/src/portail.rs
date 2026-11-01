@@ -217,7 +217,7 @@ const ICONE_SITES: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="curren
 const ICONE_COMPTE: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 15.3c1.1-1.8 2.8-2.7 4.8-2.7s3.7.9 4.8 2.7"/></svg>"#;
 const ICONE_ADMIN: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5 16 5v4.6c0 3.6-2.5 6.6-6 7.9-3.5-1.3-6-4.3-6-7.9V5z"/><path d="m7.3 10 1.9 1.9 3.6-3.8"/></svg>"#;
 
-const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a>"#;
+const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a>"#;
 
 fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     let tete = format!(r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head>"##, echapper(titre));
