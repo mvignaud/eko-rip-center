@@ -90,12 +90,31 @@ if (filter_var($d['email'], FILTER_VALIDATE_EMAIL) === false) {
 
 // Plafond par adresse IP (hachée, jamais gardée en clair), fenêtre d'une heure.
 $cle = hash('sha256', ($_SERVER['REMOTE_ADDR'] ?? '') . '|e-ko.rip|' . gmdate('YmdH'));
-$compteur = sys_get_temp_dir() . '/eko-rip-demande-' . $cle;
-$deja = is_file($compteur) ? (int) file_get_contents($compteur) : 0;
+$prefixe = sys_get_temp_dir() . '/eko-rip-demande-';
+// Les compteurs de plus d'une heure sont effacés à chaque demande (revue Codex).
+foreach (glob($prefixe . '*') ?: [] as $vieux) {
+    if (@filemtime($vieux) < time() - 3600) {
+        @unlink($vieux);
+    }
+}
+// Lecture, contrôle et écriture sous un même verrou : deux envois simultanés ne
+// passent pas tous les deux sous le plafond (revue Codex).
+$f = @fopen($prefixe . $cle, 'c+');
+if ($f === false || !flock($f, LOCK_EX)) {
+    repondre(false, 'Le service est momentanément indisponible. Écrivez-nous à ' . DESTINATAIRE . '.', 503, $json);
+}
+$deja = (int) stream_get_contents($f);
 if ($deja >= PLAFOND_PAR_HEURE) {
+    flock($f, LOCK_UN);
+    fclose($f);
     repondre(false, 'Trop de demandes depuis cette connexion. Réessayez dans une heure, ou écrivez à ' . DESTINATAIRE . '.', 429, $json);
 }
-@file_put_contents($compteur, (string) ($deja + 1), LOCK_EX);
+ftruncate($f, 0);
+rewind($f);
+fwrite($f, (string) ($deja + 1));
+fflush($f);
+flock($f, LOCK_UN);
+fclose($f);
 
 $lib = fn (string $v) => $libelles[$v] ?? 'Autre';
 $corps = implode("\n", [
