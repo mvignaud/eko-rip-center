@@ -284,7 +284,8 @@ rentre dans l'offre.
 
 Un serveur RIP rattaché peut envoyer à la plate-forme une sauvegarde de ses réglages (la nuit,
 après un changement ou à la demande). Elles sont **chiffrées** et stockées chez un hébergeur en
-France. Une sauvegarde identique à la précédente n'est pas stockée deux fois.
+France. Une sauvegarde identique à la précédente n'est pas stockée deux fois ; celle de la nuit
+part quand même et confirme à la plate-forme que le serveur sauvegarde bien.
 
 - **Mes sites › Sauvegardes** : liste des versions (date, motif, taille), place utilisée et
   quota de l'offre. Chaque version se télécharge, ou se **restaure** sur le serveur RIP (le

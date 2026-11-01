@@ -208,7 +208,10 @@ pub async fn sauvegarder(etat: &crate::Partage, motif: &'static str) -> Suivi {
         }
     };
     let contenu = empreinte_contenu(&s);
-    if motif != "demande" && avant.empreinte.as_deref() == Some(contenu.as_str()) && avant.etat == "ok" {
+    // Rien n'a changé : un « changement » n'est pas renvoyé. La sauvegarde de nuit part quand
+    // même : la plate-forme répond 409 (identique) mais note la nuit, sinon elle croirait les
+    // sauvegardes en échec.
+    if motif == "changement" && avant.empreinte.as_deref() == Some(contenu.as_str()) && avant.etat == "ok" {
         return avant;
     }
     let corps = serde_json::to_vec_pretty(&s).unwrap_or_default();

@@ -70,11 +70,13 @@ pub struct Abonnement {
     pub bon_commande: String,
     /// Souscription en cours : offre, cycle, contact de facturation, codes, mandat…
     pub brouillon: Value,
+    /// Supplément résilié à l'échéance (référence gardée jusqu'au webhook de fin).
+    pub supplement_resilie: bool,
 }
 
 impl Abonnement {
     pub fn gratuit(compte: i64) -> Self {
-        Abonnement { compte, tier_code: None, subscription_code: None, supplement_code: None, offre: Offre::Gratuit, cycle: Cycle::Mensuel, statut: String::new(), seats: 0, seats_supplement: 0, seats_envoyes_le: 0, periode_fin: None, essai_fin: None, essai_prevenu: false, moyen_paiement: String::new(), carte_id: None, rum: None, rum_prevenu: false, relance: 0, fin_periode_resiliation: false, gratuit_depuis: None, depassement_depuis: None, depassement_raison: String::new(), suspension_prevenue: false, quota_alerte: 0, bon_commande: String::new(), brouillon: json!({}) }
+        Abonnement { compte, tier_code: None, subscription_code: None, supplement_code: None, offre: Offre::Gratuit, cycle: Cycle::Mensuel, statut: String::new(), seats: 0, seats_supplement: 0, seats_envoyes_le: 0, periode_fin: None, essai_fin: None, essai_prevenu: false, moyen_paiement: String::new(), carte_id: None, rum: None, rum_prevenu: false, relance: 0, fin_periode_resiliation: false, gratuit_depuis: None, depassement_depuis: None, depassement_raison: String::new(), suspension_prevenue: false, quota_alerte: 0, bon_commande: String::new(), brouillon: json!({}), supplement_resilie: false }
     }
 
     /// Abonnement payant en cours dans l'ERP.
@@ -87,7 +89,7 @@ impl Abonnement {
     }
 }
 
-const COLONNES: &str = "compte, tier_code, subscription_code, supplement_code, offre, cycle, statut, seats, seats_supplement, seats_envoyes_le, periode_fin, essai_fin, essai_prevenu, moyen_paiement, carte_id, rum, rum_prevenu, relance, fin_periode_resiliation, gratuit_depuis, depassement_depuis, depassement_raison, suspension_prevenue, quota_alerte, bon_commande, brouillon";
+const COLONNES: &str = "compte, tier_code, subscription_code, supplement_code, offre, cycle, statut, seats, seats_supplement, seats_envoyes_le, periode_fin, essai_fin, essai_prevenu, moyen_paiement, carte_id, rum, rum_prevenu, relance, fin_periode_resiliation, gratuit_depuis, depassement_depuis, depassement_raison, suspension_prevenue, quota_alerte, bon_commande, brouillon, supplement_resilie";
 
 fn ligne(r: &rusqlite::Row) -> rusqlite::Result<Abonnement> {
     let u = |i: usize| -> rusqlite::Result<Option<u64>> { Ok(r.get::<_, Option<i64>>(i)?.map(|v| v as u64)) };
@@ -118,6 +120,7 @@ fn ligne(r: &rusqlite::Row) -> rusqlite::Result<Abonnement> {
         quota_alerte: r.get(23)?,
         bon_commande: r.get(24)?,
         brouillon: serde_json::from_str(&r.get::<_, String>(25)?).unwrap_or_else(|_| json!({})),
+        supplement_resilie: r.get(26)?,
     })
 }
 
@@ -147,6 +150,11 @@ pub fn maj(c: &Connection, compte: i64, champs: &[(&str, Sql)]) -> rusqlite::Res
     v.push(entier(crate::maintenant() as i64));
     v.push(entier(compte));
     c.execute(&format!("UPDATE abonnements_cloud SET {}, maj_le = ? WHERE compte = ?", set.join(", ")), rusqlite::params_from_iter(v))?;
+    for (n, x) in champs {
+        if let (&"subscription_code" | &"supplement_code", Sql::Text(code)) = (n, x) {
+            c.execute("INSERT OR IGNORE INTO abonnements_historique (compte, code, cree_le) VALUES (?1, ?2, ?3)", params![compte, code, crate::maintenant() as i64])?;
+        }
+    }
     Ok(())
 }
 
@@ -318,7 +326,7 @@ pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result
     {
         let c = r.base();
         appliquer(&c, id, &sub).map_err(|e| e.to_string())?;
-        maj(&c, id, &[("offre", texte(offre.code())), ("cycle", texte(cycle.code())), ("bon_commande", texte(&ab.texte_brouillon("bon_commande"))), ("gratuit_depuis", Sql::Null), ("relance", entier(0)), ("fin_periode_resiliation", entier(0)), ("supplement_code", Sql::Null), ("seats_supplement", entier(0))]).map_err(|e| e.to_string())?;
+        maj(&c, id, &[("offre", texte(offre.code())), ("cycle", texte(cycle.code())), ("bon_commande", texte(&ab.texte_brouillon("bon_commande"))), ("gratuit_depuis", Sql::Null), ("relance", entier(0)), ("fin_periode_resiliation", entier(0)), ("supplement_code", Sql::Null), ("seats_supplement", entier(0)), ("supplement_resilie", entier(0))]).map_err(|e| e.to_string())?;
     }
     eprintln!("abonnement {} créé pour le compte {id} ({} {}, première facture : {})", texte_json(&sub["code"]).unwrap_or_default(), offre.code(), cycle.code(), premiere_facture.as_deref().unwrap_or("aucune"));
     // Changement d'offre : l'ancien abonnement (et son supplément) s'arrête.
@@ -389,13 +397,20 @@ pub fn recalculer_sieges(r: &Partage, id: i64, t: u64) -> Result<bool, String> {
                 }
                 Some(rep)
             }
+            // Plus de machine en trop : résiliation à l'échéance (la période est payée). La
+            // référence reste jusqu'au webhook `subscription.cancelled` : des machines revenues
+            // d'ici là sont reportées sur ce supplément (PATCH), jamais sur un second.
+            (Some(_), 0) if ab.supplement_resilie => None,
             (Some(sc), 0) => {
                 let rep = erp.post(&format!("/subscriptions/{}/cancel", encoder(sc)), &json!({ "at_period_end": true, "reason": "Plus de machine au-delà du forfait" }), None)?;
                 if rep.ok() {
-                    let _ = maj(&r.base(), id, &[("supplement_code", Sql::Null)]);
+                    let _ = maj(&r.base(), id, &[("supplement_resilie", entier(1))]);
                 }
                 Some(rep)
             }
+            // L'API n'a pas de reprise d'une résiliation programmée : le supplément en attente
+            // garde ses sièges jusqu'à l'échéance, puis le webhook de fin en recrée un si
+            // des machines dépassent encore le forfait.
             (Some(sc), n) => Some(erp.envoyer("PATCH", &format!("/subscriptions/{}", encoder(sc)), &json!({ "seats": n }), None)?),
         };
         match rep {
@@ -562,7 +577,11 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
             let _ = maj(&r.base(), id, &[("fin_periode_resiliation", entier(1))]);
         }
         "subscription.cancelled" if du_supplement => {
-            let _ = maj(&r.base(), id, &[("supplement_code", Sql::Null), ("seats_supplement", entier(0))]);
+            let _ = maj(&r.base(), id, &[("supplement_code", Sql::Null), ("seats_supplement", entier(0)), ("supplement_resilie", entier(0)), ("seats_envoyes_le", entier(0))]);
+            // Des machines sont revenues pendant le préavis : nouveau supplément maintenant.
+            if let Err(e) = recalculer_sieges(r, id, crate::maintenant()) {
+                eprintln!("sièges du compte {id} : {e}");
+            }
         }
         "subscription.cancelled" if du_principal && code_sub.is_some() => {
             let impaye = ab.statut == "past_due" || ab.relance > 0;
@@ -624,7 +643,7 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
 
 /// L'abonnement s'arrête : offre Gratuite (les sauvegardes payantes restent 90 jours).
 pub fn retour_au_gratuit(r: &Partage, id: i64) {
-    let _ = maj(&r.base(), id, &[("offre", texte(Offre::Gratuit.code())), ("statut", texte("cancelled")), ("subscription_code", Sql::Null), ("supplement_code", Sql::Null), ("seats", entier(0)), ("seats_supplement", entier(0)), ("gratuit_depuis", entier(crate::maintenant() as i64)), ("fin_periode_resiliation", entier(0)), ("relance", entier(0)), ("periode_fin", Sql::Null), ("essai_fin", Sql::Null)]);
+    let _ = maj(&r.base(), id, &[("offre", texte(Offre::Gratuit.code())), ("statut", texte("cancelled")), ("subscription_code", Sql::Null), ("supplement_code", Sql::Null), ("supplement_resilie", entier(0)), ("seats", entier(0)), ("seats_supplement", entier(0)), ("gratuit_depuis", entier(crate::maintenant() as i64)), ("fin_periode_resiliation", entier(0)), ("relance", entier(0)), ("periode_fin", Sql::Null), ("essai_fin", Sql::Null)]);
     eprintln!("compte {id} : retour à l'offre Gratuite");
 }
 
@@ -738,7 +757,9 @@ pub async fn page_abonnement(State(r): State<Partage>, h: HeaderMap, Query(q): Q
     } else {
         r#"<p class="ligne"><a class="bouton" href="/abonnement/offres">Voir les offres</a></p>"#.to_string()
     };
-    let factures = if ab.actif() && erp_ok {
+    // Factures aussi après un retour au Gratuit : celles des anciens abonnements restent.
+    let a_eu_des_abonnements = historique(&r.base(), id).map(|h| !h.is_empty()).unwrap_or(false);
+    let factures = if (ab.actif() || a_eu_des_abonnements) && erp_ok {
         let liste = reponse_bloquante(&r, move |r| factures(r, id)).await.unwrap_or_else(|_| Err(String::new()));
         match liste {
             Ok(v) if v.is_empty() => r#"<div class="carte"><h2>Factures</h2><p class="meta">Aucune facture pour l'instant.</p></div>"#.to_string(),
@@ -793,17 +814,33 @@ fn statut_cycle(s: &str) -> String {
     }
 }
 
-/// Cycles de facturation des abonnements du compte (principal et supplément). Bloquant.
+/// Codes de tous les abonnements ERP qu'a eus le compte, du plus ancien au plus récent.
+pub fn historique(c: &Connection, compte: i64) -> rusqlite::Result<Vec<String>> {
+    c.prepare("SELECT code FROM abonnements_historique WHERE compte = ?1 ORDER BY cree_le, rowid")?.query_map([compte], |l| l.get(0))?.collect()
+}
+
+/// Cycles de facturation de tous les abonnements du compte, anciens compris. Bloquant.
 pub fn factures(r: &Partage, id: i64) -> Result<Vec<Value>, String> {
     let (erp, ab) = {
         let c = r.base();
         (Erp::depuis(&c).ok_or("ERP non réglé")?, lire(&c, id).map_err(|e| e.to_string())?)
     };
-    let mut v = Vec::new();
+    let mut codes = historique(&r.base(), id).map_err(|e| e.to_string())?;
     for code in ab.subscription_code.iter().chain(ab.supplement_code.iter()) {
+        if !codes.contains(code) {
+            codes.push(code.clone());
+        }
+    }
+    let mut v = Vec::new();
+    for code in &codes {
         let rep = erp.get(&format!("/subscriptions/{}/billing-cycles", encoder(code)))?;
         if !rep.ok() {
-            return Err(rep.erreur());
+            // Un ancien abonnement illisible ne masque pas les factures des autres.
+            if Some(code) == ab.subscription_code.as_ref() {
+                return Err(rep.erreur());
+            }
+            eprintln!("factures de l'abonnement {code} (compte {id}) : {}", rep.erreur());
+            continue;
         }
         v.extend(rep.donnees().as_array().cloned().unwrap_or_default());
     }
@@ -1492,6 +1529,14 @@ pub fn suivre_carte(r: &Partage, id: i64, paiement: &str) -> Result<Value, Strin
     let fini = d["paid"].as_bool().unwrap_or(false) || d["authorized"].as_bool().unwrap_or(false);
     let statut = d["status"].as_str().unwrap_or("").to_string();
     if fini {
+        // La carte vaut aussi pour le supplément (machines en plus), comme un mandat signé.
+        if let (Some(sc), Some(carte)) = (&ab.supplement_code, &ab.carte_id) {
+            match erp.envoyer("PUT", &format!("/subscriptions/{}/payment-method", encoder(sc)), &json!({ "provider": "stancer_card", "card_id": carte }), None) {
+                Ok(rep) if rep.ok() => {}
+                Ok(rep) => eprintln!("carte du supplément {sc} refusée : {}", rep.erreur()),
+                Err(e) => eprintln!("carte du supplément {sc} : {e}"),
+            }
+        }
         let libelle = ab.texte_brouillon("libelle_carte");
         let _ = maj(&r.base(), id, &[("moyen_paiement", texte(if libelle.is_empty() { "Carte bancaire" } else { &libelle })), ("rum", Sql::Null)]);
         if let Ok(rep) = erp.get(&format!("/subscriptions/{}", encoder(&code)))

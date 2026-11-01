@@ -6036,30 +6036,37 @@ mod tests {
             }
             let derniere = json(appel(&e, "GET", "/api/cloud", None, None).await).await["sauvegarde"]["derniere"].as_u64();
             assert!(derniere.is_some());
-            // Rien n'a changé : la nuit ne renvoie rien ; une demande renvoie.
-            abonnement::sauvegarder(&e, "nuit").await;
+            // Rien n'a changé : un « changement » ne renvoie rien ; la nuit renvoie quand même
+            // (la plate-forme répond 409 identique et note la nuit), et c'est un succès.
             abonnement::sauvegarder(&e, "changement").await;
             assert_eq!(envois(), 1);
+            f.statut_sauvegarde.store(409, Relaxed);
+            assert_eq!(abonnement::sauvegarder(&e, "nuit").await.etat, "ok");
+            assert_eq!(envois(), 2);
+            assert_eq!(f.recu.lock().unwrap().last().unwrap().1["x-eko-motif"], "nuit");
+            f.statut_sauvegarde.store(201, Relaxed);
+            abonnement::sauvegarder(&e, "changement").await;
+            assert_eq!(envois(), 2);
             // Un changement de configuration est envoyé.
             assert!(appel(&e, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Coupe", "demande": { "mode": "decouper" } }))).await.status().is_success());
             abonnement::sauvegarder(&e, "changement").await;
-            assert_eq!(envois(), 2);
+            assert_eq!(envois(), 3);
             assert_eq!(f.recu.lock().unwrap().last().unwrap().1["x-eko-motif"], "changement");
 
             // 402 : l'offre n'inclut pas la sauvegarde ; plus d'essai automatique.
             f.statut_sauvegarde.store(402, Relaxed);
             let s = abonnement::sauvegarder(&e, "demande").await;
             assert_eq!((s.etat.as_str(), s.sans_offre), ("offre", true));
-            assert_eq!(envois(), 3);
+            assert_eq!(envois(), 4);
             assert!(appel(&e, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Autre", "demande": { "mode": "decouper" } }))).await.status().is_success());
             abonnement::sauvegarder(&e, "nuit").await;
-            assert_eq!(envois(), 3, "pas d'essai tant que l'inventaire ne l'autorise pas");
+            assert_eq!(envois(), 4, "pas d'essai tant que l'inventaire ne l'autorise pas");
             // Inventaire favorable : l'essai reprend ; 413 = quota.
             f.statut_sauvegarde.store(413, Relaxed);
             assert!(abonnement::envoyer_inventaire(&e.config.donnees, vec![]).await);
             assert!(!abonnement::suivi(&e.config.donnees).sans_offre);
             assert_eq!(abonnement::sauvegarder(&e, "nuit").await.etat, "quota");
-            assert_eq!(envois(), 4);
+            assert_eq!(envois(), 5);
             // 409 : identique chez la plate-forme, c'est bon.
             f.statut_sauvegarde.store(409, Relaxed);
             assert_eq!(abonnement::sauvegarder(&e, "demande").await.etat, "ok");

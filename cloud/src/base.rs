@@ -120,7 +120,16 @@ CREATE TABLE IF NOT EXISTS abonnements_cloud (
     quota_alerte INTEGER NOT NULL DEFAULT 0,
     bon_commande TEXT NOT NULL DEFAULT '',
     brouillon TEXT NOT NULL DEFAULT '{}',
-    maj_le INTEGER NOT NULL DEFAULT 0
+    maj_le INTEGER NOT NULL DEFAULT 0,
+    supplement_resilie INTEGER NOT NULL DEFAULT 0
+);
+-- Tous les abonnements ERP qu'un compte a eus (principal et supplément) : factures toujours
+-- listées et téléchargeables après un changement d'offre ou un retour au Gratuit.
+CREATE TABLE IF NOT EXISTS abonnements_historique (
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    code TEXT NOT NULL,
+    cree_le INTEGER NOT NULL,
+    PRIMARY KEY (compte, code)
 );
 CREATE INDEX IF NOT EXISTS abonnements_cloud_code ON abonnements_cloud (subscription_code);
 CREATE INDEX IF NOT EXISTS abonnements_cloud_tiers ON abonnements_cloud (tier_code);
@@ -203,6 +212,11 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !jetons.iter().any(|x| x == "jeton_expo") {
         c.execute_batch("ALTER TABLE jetons_applis ADD COLUMN jeton_expo TEXT; ALTER TABLE jetons_applis ADD COLUMN plateforme_expo TEXT;")?;
     }
+    let abonnements: Vec<String> = c.prepare("PRAGMA table_info(abonnements_cloud)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<rusqlite::Result<_>>()?;
+    if !abonnements.iter().any(|x| x == "supplement_resilie") {
+        c.execute_batch("ALTER TABLE abonnements_cloud ADD COLUMN supplement_resilie INTEGER NOT NULL DEFAULT 0;")?;
+    }
+    c.execute_batch("INSERT OR IGNORE INTO abonnements_historique (compte, code, cree_le) SELECT compte, subscription_code, maj_le FROM abonnements_cloud WHERE subscription_code IS NOT NULL; INSERT OR IGNORE INTO abonnements_historique (compte, code, cree_le) SELECT compte, supplement_code, maj_le FROM abonnements_cloud WHERE supplement_code IS NOT NULL;")?;
     // Premier déploiement des offres payantes : point de départ de la grâce de 30 jours des
     // comptes existants (jamais réécrit).
     c.execute("INSERT OR IGNORE INTO reglages (cle, valeur) VALUES ('offres_deployees_le', ?1)", [crate::maintenant().to_string()])?;

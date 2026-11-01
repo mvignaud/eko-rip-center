@@ -79,9 +79,13 @@ async fn faux_erp(State(e): State<Erp>, q: Request) -> Response {
             e.suivis += 1;
             j(StatusCode::OK, json!({ "data": { "status": if e.suivis > 1 { "authorized" } else { "pending" }, "paid": false, "authorized": e.suivis > 1 } }))
         }
-        ("GET", ["subscriptions", _, "billing-cycles"]) => j(StatusCode::OK, json!({ "data": [{ "period_start": "2026-11-01", "period_end": "2026-12-01", "status": "paid", "total_ht": "19.00", "total_ttc": "22.80", "invoice": { "code": "FA-1", "reference": "FA-2026-0001" }, "failure_reason": null }] })),
+        ("GET", ["subscriptions", code, "billing-cycles"]) => {
+            // SUB-1 : facture FA-1 ; autres abonnements : facture FA-<code>.
+            let facture = if *code == "SUB-1" { "FA-1".to_string() } else { format!("FA-{code}") };
+            j(StatusCode::OK, json!({ "data": [{ "period_start": "2026-11-01", "period_end": "2026-12-01", "status": "paid", "total_ht": "19.00", "total_ttc": "22.80", "invoice": { "code": facture, "reference": format!("REF-{facture}") }, "failure_reason": null }] }))
+        }
         ("POST", ["subscriptions", _, "cancel"]) => j(StatusCode::OK, json!({ "data": { "status": "active" } })),
-        ("GET", ["invoices", "FA-1", "pdf"]) | ("GET", ["sepa-mandates", _, "pdf"]) => ([("content-type", "application/pdf")], PDF).into_response(),
+        ("GET", ["invoices", _, "pdf"]) | ("GET", ["sepa-mandates", _, "pdf"]) => ([("content-type", "application/pdf")], PDF).into_response(),
         ("POST", ["sepa-mandates"]) => {
             e.mandats.insert("RUM-1".into(), (corps["tier_code"].as_str().unwrap_or("").to_string(), false));
             j(StatusCode::CREATED, json!({ "data": { "rum": "RUM-1", "status": "pending_signature", "iban_last4": "0189", "pdf_url": "https://erp.test/mandat.pdf" } }))
@@ -428,7 +432,7 @@ async fn souscription_par_prelevement_sepa() {
         assert!(b.boite.lock().unwrap().iter().any(|m| m.sujet.contains("Bienvenue dans l'offre") && m.texte.contains("première facture est émise")), "first_cycle de l'ERP (bill_now)");
         // Page Abonnement : offre, moyen de paiement, factures (PDF relayé, seulement les siennes).
         let page = appel(&b, "GET", "/abonnement", &[("Cookie", &c)], Corps::Rien);
-        assert!(page.corps.contains("Offre Atelier") && page.corps.contains("Prélèvement SEPA (IBAN se terminant par 0189)") && page.corps.contains("FA-2026-0001") && page.corps.contains("/abonnement/factures/FA-1.pdf"), "{}", page.corps);
+        assert!(page.corps.contains("Offre Atelier") && page.corps.contains("Prélèvement SEPA (IBAN se terminant par 0189)") && page.corps.contains("REF-FA-1") && page.corps.contains("/abonnement/factures/FA-1.pdf"), "{}", page.corps);
         assert!(page.corps.contains(r#"href="/abonnement""#) && page.corps.contains("entree active"), "entrée Abonnement de la barre latérale");
         let f = appel(&b, "GET", "/abonnement/factures/FA-1.pdf", &[("Cookie", &c)], Corps::Rien);
         assert_eq!((f.statut, f.octets.as_slice()), (200, PDF));
@@ -495,6 +499,73 @@ async fn souscription_par_carte_puis_sieges() {
         assert_eq!(appels(&b, "PATCH", "/subscriptions/SUB-1").last().unwrap().corps, json!({ "seats": 4 }), "envoyé une heure plus tard");
         let page = appel(&b, "GET", "/abonnement", &[("Cookie", &c)], Corps::Rien);
         assert!(page.corps.contains("Imprimante 3") && page.corps.contains("Atelier de Lyon") && page.corps.contains("Carte Visa"), "{}", page.corps);
+    })
+    .await;
+    let _ = std::fs::remove_dir_all(&b.donnees);
+}
+
+/// Supplément « machines en plus » : résilié à l'échéance sans perdre sa référence (pas de
+/// second supplément si des machines reviennent), recréé au webhook de fin ; carte propagée au
+/// supplément ; factures des anciens abonnements toujours listées et téléchargeables.
+#[tokio::test(flavor = "multi_thread")]
+async fn supplement_carte_et_historique_des_factures() {
+    let b = banc().await;
+    let b2 = b.clone();
+    bl(move || {
+        let b = b2;
+        regler(&b);
+        let (c, j, id) = inscrire(&b, "chef@atelier.fr");
+        let txt = |v: &str| rusqlite::types::Value::Text(v.into());
+        abonnements::maj(&b.r.base(), id, &[("offre", txt("atelier")), ("subscription_code", txt("SUB-A")), ("tier_code", txt("CLI-1")), ("statut", txt("active")), ("carte_id", txt("card_old"))]).unwrap();
+        let (site, cle) = site_de(&b, id, "Atelier de Lyon");
+        let mut t = eko_rip_cloud::maintenant();
+        let mut plus_tard = || {
+            t += 3601;
+            abonnements::entretenir_bloquant(&b.r, t);
+        };
+        // 7 machines pour un forfait de 5 : supplément de 2 sièges, payé par la carte.
+        inventaire(&b, &site, &cle, 5, 2);
+        let subs = appels(&b, "POST", "/subscriptions");
+        assert_eq!((subs.len(), subs[0].corps["plan_code"].as_str(), subs[0].corps["seats"].as_i64()), (1, Some("SUP-M"), Some(2)));
+        let sup = abonnements::lire(&b.r.base(), id).unwrap().supplement_code.unwrap();
+        assert_eq!(appels(&b, "PUT", &format!("/subscriptions/{sup}/payment-method"))[0].corps["card_id"], "card_old");
+        // Plus que 4 machines : résiliation à l'échéance, référence gardée.
+        inventaire(&b, &site, &cle, 3, 1);
+        plus_tard();
+        assert_eq!(appels(&b, "POST", &format!("/subscriptions/{sup}/cancel"))[0].corps["at_period_end"], true);
+        let ab = abonnements::lire(&b.r.base(), id).unwrap();
+        assert_eq!((ab.supplement_code.as_deref(), ab.supplement_resilie), (Some(sup.as_str()), true));
+        plus_tard();
+        assert_eq!(appels(&b, "POST", &format!("/subscriptions/{sup}/cancel")).len(), 1, "résilié une seule fois");
+        // 8 machines avant l'échéance : le supplément en attente prend les sièges, pas de second.
+        inventaire(&b, &site, &cle, 6, 2);
+        plus_tard();
+        assert_eq!(appels(&b, "POST", "/subscriptions").len(), 1, "pas de double facturation");
+        assert_eq!(appels(&b, "PATCH", &format!("/subscriptions/{sup}")).last().unwrap().corps, json!({ "seats": 3 }));
+        // Nouvelle carte : enregistrée aussi sur le supplément après l'authentification.
+        let r = appel(&b, "POST", "/abonnement/paiement/carte", &[("Origin", URL), ("Cookie", &c), ("X-CSRF-Token", &j)], Corps::Json(json!({ "card_id": "card_new", "last4": "4242", "brand": "visa" })));
+        assert_eq!(r.statut, 200, "{}", r.corps);
+        let suivi = || appel(&b, "GET", "/abonnement/paiement/carte/paym_1", &[("Cookie", &c), ("X-CSRF-Token", &j)], Corps::Rien).json();
+        assert_eq!(suivi()["termine"], false);
+        assert_eq!(appels(&b, "PUT", &format!("/subscriptions/{sup}/payment-method")).len(), 1, "pas avant l'authentification");
+        assert_eq!(suivi()["termine"], true);
+        assert_eq!(appels(&b, "PUT", &format!("/subscriptions/{sup}/payment-method")).last().unwrap().corps, json!({ "provider": "stancer_card", "card_id": "card_new" }));
+        // Fin réelle du supplément (webhook) : un nouveau supplément pour les 3 machines en trop.
+        let w = json!({ "event": "subscription.cancelled", "occurred_at": "2026-12-01T00:00:00Z", "tenant": "golden-print", "data": { "subscription": { "code": sup } } });
+        assert_eq!(webhook(&b, &w, eko_rip_cloud::maintenant(), "secret-webhook").statut, 200);
+        let subs = appels(&b, "POST", "/subscriptions");
+        assert_eq!((subs.len(), subs[1].corps["seats"].as_i64()), (2, Some(3)));
+        let ab = abonnements::lire(&b.r.base(), id).unwrap();
+        assert!(ab.supplement_code.as_deref().is_some_and(|x| x != sup) && !ab.supplement_resilie);
+        // Retour au Gratuit : les factures des anciens abonnements restent visibles.
+        abonnements::retour_au_gratuit(&b.r, id);
+        let page = appel(&b, "GET", "/abonnement", &[("Cookie", &c)], Corps::Rien);
+        let facture_sup = if sup == "SUB-1" { "FA-1".to_string() } else { format!("FA-{sup}") };
+        for f in ["FA-SUB-A", facture_sup.as_str()] {
+            assert!(page.corps.contains(&format!("/abonnement/factures/{f}.pdf")), "{f} : {}", page.corps);
+            assert_eq!(appel(&b, "GET", &format!("/abonnement/factures/{f}.pdf"), &[("Cookie", &c)], Corps::Rien).statut, 200, "{f}");
+        }
+        assert_eq!(appel(&b, "GET", "/abonnement/factures/FA-SUB-Z.pdf", &[("Cookie", &c)], Corps::Rien).statut, 404);
     })
     .await;
     let _ = std::fs::remove_dir_all(&b.donnees);
@@ -666,6 +737,11 @@ async fn sauvegardes_en_ligne() {
         assert_eq!(r.statut, 201, "{}", r.corps);
         let v1 = r.json()["id"].as_str().unwrap().to_string();
         assert_eq!(envoyer_sauvegarde(&b, &site, &cle, b"archive-1", "changement").json()["erreur"], "identique");
+        // Nuit sans changement : 409 identique, mais la nuit est notée (pas d'alerte « en échec »).
+        b.r.base().execute("UPDATE inventaires SET nuit_le = 1 WHERE site = ?1", [&site]).unwrap();
+        assert_eq!(envoyer_sauvegarde(&b, &site, &cle, b"archive-1", "nuit").statut, 409);
+        let nuit: i64 = b.r.base().query_row("SELECT nuit_le FROM inventaires WHERE site = ?1", [&site], |l| l.get(0)).unwrap();
+        assert!(nuit > 1_000_000, "nuit_le rafraîchi par un 409 de nuit");
         assert_eq!(envoyer_sauvegarde(&b, &site, &cle, b"archive-1", "inconnu").statut, 400);
         let r = appel(&b, "POST", "/api/site/sauvegardes", &[("Authorization", &format!("Bearer {site}.{cle}")), ("X-EKO-Motif", "nuit"), ("X-EKO-Empreinte", &"0".repeat(64))], Corps::Octets(b"autre".to_vec()));
         assert_eq!((r.statut, r.json()["erreur"].as_str()), (400, Some("empreinte")));
