@@ -1,6 +1,7 @@
 # E-KO RIP Center
 
-RIP d'impression grand format, usage interne. Un serveur Linux reçoit les PDF des
+RIP d'impression grand format libre et gratuit ([AGPL-3.0](LICENSE)), site : [e-ko.rip](https://e-ko.rip).
+Un serveur Linux reçoit les PDF des
 postes par le client E-KO RIP Center (Mac, Linux, Windows) et pilote les machines qui lui
 sont branchées ; un navigateur ne voit qu'une page d'état.
 
