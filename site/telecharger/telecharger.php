@@ -2,7 +2,7 @@
 // E-KO RIP Center : lien de téléchargement direct du client, toujours sur la dernière version.
 //   /telecharger/mac      → le .dmg (universel, signé et notarisé) de la dernière release qui en a un
 //   /telecharger/windows  → l'installateur Windows (.exe, sinon .msi) de la dernière release qui en a un
-// La liste des releases vient de l'API GitHub, gardée 10 minutes en cache (limite de 60 appels
+// La liste des releases vient de l'API GitHub, gardée 10 minutes dans ~/eko-rip-cache (limite de 60 appels
 // par heure sans jeton). Si GitHub ne répond pas, on renvoie vers la page des versions.
 
 declare(strict_types=1);
@@ -26,13 +26,44 @@ if (!isset(MOTIFS[$os])) {
 
 function lire_releases(): ?array
 {
-    $cache = sys_get_temp_dir() . '/eko-rip-releases-' . md5(__DIR__) . '.json';
+    // Cache privé au compte, hors du dossier public (public_html/telecharger → ~/eko-rip-cache),
+    // et non dans le /tmp commun du serveur, qu'un autre compte pourrait remplir (revue Graphify).
+    $dossier = dirname(__DIR__, 2) . '/eko-rip-cache';
+    if (!is_dir($dossier)) {
+        @mkdir($dossier, 0700);
+    }
+    $cache = is_dir($dossier) && is_writable($dossier) && fileowner($dossier) === getmyuid()
+        ? $dossier . '/releases.json'
+        : null;
+    if ($cache === null) {
+        return lire_github();
+    }
     if (is_file($cache) && time() - filemtime($cache) < CACHE_S) {
         $j = json_decode((string) file_get_contents($cache), true);
         if (is_array($j)) {
             return $j;
         }
     }
+    $corps = lire_github_brut();
+    $j = $corps === null ? null : json_decode($corps, true);
+    if (!is_array($j)) {
+        // GitHub muet : on garde l'ancienne copie si elle existe, même périmée.
+        $vieux = is_file($cache) ? json_decode((string) file_get_contents($cache), true) : null;
+        return is_array($vieux) ? $vieux : null;
+    }
+    @file_put_contents($cache, $corps, LOCK_EX);
+    return $j;
+}
+
+function lire_github(): ?array
+{
+    $corps = lire_github_brut();
+    $j = $corps === null ? null : json_decode($corps, true);
+    return is_array($j) ? $j : null;
+}
+
+function lire_github_brut(): ?string
+{
     $url = 'https://api.github.com/repos/' . DEPOT . '/releases?per_page=30';
     $corps = null;
     if (function_exists('curl_init')) {
@@ -53,14 +84,7 @@ function lire_releases(): ?array
         $r = @file_get_contents($url, false, $ctx);
         $corps = is_string($r) ? $r : null;
     }
-    $j = $corps === null ? null : json_decode($corps, true);
-    if (!is_array($j)) {
-        // GitHub muet : on garde l'ancienne copie si elle existe, même périmée.
-        $vieux = is_file($cache) ? json_decode((string) file_get_contents($cache), true) : null;
-        return is_array($vieux) ? $vieux : null;
-    }
-    @file_put_contents($cache, $corps, LOCK_EX);
-    return $j;
+    return $corps;
 }
 
 $releases = lire_releases() ?? [];

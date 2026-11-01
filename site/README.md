@@ -67,5 +67,5 @@ une, la convertir en WebP (qualité 85) et lui donner `width`, `height` et un `a
 `/telecharger/mac` et `/telecharger/windows` (règle dans `.htaccess`, script
 `telecharger/telecharger.php`) renvoient vers le fichier de la dernière release GitHub qui en a
 un : `.dmg` pour Mac, `.exe` (sinon `.msi`) pour Windows. La liste des releases est gardée
-10 minutes en cache ; sans réponse de GitHub, on renvoie vers la page des versions. Rien à
+10 minutes en cache dans `~/eko-rip-cache` (hors du dossier public, pas dans le `/tmp` commun) ; sans réponse de GitHub, on renvoie vers la page des versions. Rien à
 changer à chaque version : il suffit de joindre le fichier à la release.
