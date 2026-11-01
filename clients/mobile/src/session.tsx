@@ -1,10 +1,15 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import {
-  api, definirDemo, definirServeur, definirSurSessionPerdue, ErreurApi, InfoSession, normaliserUrl, sonderServeur, stockage,
+  api, AuthCookieLocal, definirAuth, definirDemo, definirServeur, definirSurSessionPerdue, ErreurApi, InfoSession,
+  normaliserUrl, sonderServeur, stockage,
 } from './api';
 import {
-  activerNotifications, desactiverNotifications, ecrirePrefs, ETAT_NOTIF_INITIAL, EtatNotif, lirePrefs, PrefsNotif,
+  AuthCloud, connecterCloud, deconnecterCloud, inscrirePushCloud, moi, MoiCloud, SiteCloud,
+} from './cloud';
+import {
+  activerNotifications, desactiverNotifications, ecrirePrefs, ETAT_NOTIF_INITIAL, EtatNotif, jetonExpo, lirePrefs,
+  PLATEFORME_PUSH, PrefsNotif,
 } from './notifications';
 
 type Statut = 'chargement' | 'erreur_reseau' | 'deconnecte' | 'connecte';
@@ -24,6 +29,16 @@ interface Session {
   /** Se connecte (nom / mdp ignorés en accès libre). */
   connexion(url: string, nom?: string, mdp?: string): Promise<void>;
   deconnexion(): Promise<void>;
+  /** Compte cloud connecté et ses sites (écran de choix du site), sinon null. */
+  cloud: MoiCloud | null;
+  /** Connexion au cloud E-KO RIP dans le navigateur ; vrai si un compte est connecté. */
+  connexionCloud(): Promise<boolean>;
+  /** Relit les sites du compte cloud (en ligne / hors ligne). */
+  actualiserCloud(): Promise<void>;
+  /** Ouvre un serveur RIP du compte cloud. */
+  choisirSite(site: SiteCloud): Promise<void>;
+  /** Oublie le compte cloud (jeton révoqué sur la plate-forme). */
+  quitterCloud(): Promise<void>;
   demarrerDemo(): void;
   quitterDemo(): void;
   reessayer(): void;
@@ -47,7 +62,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const prefsRef = useRef(prefs);
   prefsRef.current = prefs;
   const [demo, setDemo] = useState(false);
+  const [cloud, setCloud] = useState<MoiCloud | null>(null);
   const jetonRef = useRef<string | null>(null);
+
+  /** Inscrit le téléphone aux notifications de la plate-forme, si un compte cloud est connecté. */
+  const pushCloud = useCallback(async (jeton: string | null) => {
+    const j = await stockage.lire('cloud_jeton');
+    if (j && jeton) await inscrirePushCloud(j, jeton, PLATEFORME_PUSH);
+  }, []);
 
   // Enregistre l'appareil pour les notifications push si l'utilisateur les veut
   const synchroniserNotifs = useCallback(async (p: PrefsNotif) => {
@@ -60,7 +82,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const etat = await activerNotifications(p.fins);
     jetonRef.current = etat.jeton;
     setNotif(etat);
-  }, []);
+    await pushCloud(etat.jeton);
+  }, [pushCloud]);
 
   const finConnexion = useCallback(async (i: InfoSession) => {
     setInfo(i);
@@ -92,11 +115,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (Platform.OS === 'web' && globalThis.location?.search.includes('demo=1')) return demarrerDemo();
     setStatut('chargement');
     const urlMemo = await stockage.lire('url');
-    if (!urlMemo) return setStatut('deconnecte');
+    const jetonCloud = await stockage.lire('cloud_jeton');
+    if (!urlMemo) {
+      // Compte cloud connecté mais aucun site choisi : retour au choix du site
+      if (jetonCloud) moi(jetonCloud).then(setCloud).catch(() => {});
+      return setStatut('deconnecte');
+    }
     setUrl(urlMemo);
     definirServeur(urlMemo);
+    const parCloud = (await stockage.lire('mode')) === 'cloud';
+    definirAuth(parCloud && jetonCloud ? new AuthCloud(jetonCloud) : new AuthCookieLocal());
     try {
       let i = await api.session();
+      if (parCloud) {
+        if (!i.utilisateur) throw new ErreurApi(401, 'jeton_invalide', '');
+        return await finConnexion(i);
+      }
       if (!i.acces_libre && !i.utilisateur) {
         const nom = await stockage.lire('nom');
         const mdp = await stockage.lire('mdp');
@@ -106,8 +140,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }
       await finConnexion(i);
     } catch (e) {
-      if (e instanceof ErreurApi && e.reseau) setStatut('erreur_reseau');
-      else setStatut('deconnecte');
+      if (e instanceof ErreurApi && (e.reseau || e.code === 'site_hors_ligne')) setStatut('erreur_reseau');
+      else {
+        if (parCloud && jetonCloud) moi(jetonCloud).then(setCloud).catch(() => {});
+        setStatut('deconnecte');
+      }
     }
   }, [finConnexion, demarrerDemo]);
 
@@ -131,6 +168,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     sonder: (u) => sonderServeur(u),
     async connexion(u, nom, mdp) {
       const base = normaliserUrl(u);
+      definirAuth(new AuthCookieLocal());
+      await stockage.ecrire('mode', null);
       let i = await sonderServeur(base);
       if (!i.acces_libre) {
         if (!nom || !mdp) throw new ErreurApi(401, 'identifiants_invalides', 'Nom et mot de passe requis.');
@@ -149,15 +188,72 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     async deconnexion() {
       const jeton = jetonRef.current;
       jetonRef.current = null;
+      const parCloud = (await stockage.lire('mode')) === 'cloud';
       await stockage.ecrire('nom', null);
       await stockage.ecrire('mdp', null);
       setInfo({ acces_libre: false, utilisateur: null, role: null });
       setNotif(ETAT_NOTIF_INITIAL);
       setStatut('deconnecte');
-      // Côté serveur, sans bloquer l'interface (le serveur peut être injoignable)
-      desactiverNotifications(jeton)
-        .then(() => api.deconnexion())
-        .catch(() => {});
+      // Côté serveur, sans bloquer l'interface (le serveur peut être injoignable).
+      // Par le cloud : on quitte le site, le compte reste connecté (choix d'un autre site).
+      const fin = desactiverNotifications(jeton);
+      if (parCloud) {
+        await stockage.ecrire('url', null);
+        const j = await stockage.lire('cloud_jeton');
+        if (j) moi(j).then(setCloud).catch(() => {});
+        fin.catch(() => {});
+      } else {
+        fin.then(() => api.deconnexion()).catch(() => {});
+      }
+    },
+    cloud,
+    async connexionCloud() {
+      const jeton = await connecterCloud();
+      if (!jeton) return false;
+      const m = await moi(jeton);
+      setCloud(m);
+      // Autorisation des notifications tout de suite après la première connexion au cloud
+      const p = await lirePrefs();
+      if (p.actives) {
+        try {
+          const j = await jetonExpo();
+          if (typeof j === 'string') await inscrirePushCloud(jeton, j, PLATEFORME_PUSH);
+        } catch { /* refus ou simulateur : l'état s'affiche dans Réglages après le choix du site */ }
+      }
+      return true;
+    },
+    async actualiserCloud() {
+      const j = await stockage.lire('cloud_jeton');
+      if (!j) return setCloud(null);
+      try {
+        setCloud(await moi(j));
+      } catch (e) {
+        if (e instanceof ErreurApi && e.code === 'jeton_invalide') {
+          await stockage.ecrire('cloud_jeton', null);
+          setCloud(null);
+        }
+        throw e;
+      }
+    },
+    async choisirSite(site) {
+      const j = await stockage.lire('cloud_jeton');
+      if (!j) throw new ErreurApi(401, 'jeton_invalide', '');
+      definirAuth(new AuthCloud(j));
+      definirServeur(site.adresse);
+      const i = await api.session();
+      if (!i.utilisateur) throw new ErreurApi(401, 'jeton_invalide', '');
+      await stockage.ecrire('mode', 'cloud');
+      await stockage.ecrire('nom', null);
+      await stockage.ecrire('mdp', null);
+      await stockage.ecrire('url', site.adresse);
+      setUrl(site.adresse);
+      await finConnexion(i);
+    },
+    async quitterCloud() {
+      await deconnecterCloud();
+      await stockage.ecrire('mode', null);
+      definirAuth(new AuthCookieLocal());
+      setCloud(null);
     },
     demarrerDemo,
     quitterDemo,
@@ -169,7 +265,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       await ecrirePrefs(p);
       await synchroniserNotifs(p);
     },
-  }), [statut, url, info, notif, prefs, demo, demarrer, demarrerDemo, quitterDemo, finConnexion, synchroniserNotifs]);
+  }), [statut, url, info, notif, prefs, demo, cloud, demarrer, demarrerDemo, quitterDemo, finConnexion, synchroniserNotifs]);
 
   return <Ctx.Provider value={valeur}>{children}</Ctx.Provider>;
 }

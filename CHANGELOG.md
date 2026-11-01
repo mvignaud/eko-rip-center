@@ -24,8 +24,10 @@ parité ; d'ici là, 0.Y.Z.
   Côté serveur : `GET /api/mobile/etat`, `GET /api/mobile/evenements`,
   `POST /api/mobile/appareils` (et `/retirer`), `POST /api/mobile/essai` ; envoi par le service
   push d'Expo (le serveur doit joindre `exp.host` en HTTPS). Voir
-  [docs/fr/application-mobile.md](docs/fr/application-mobile.md).
-  *Mobile monitoring app (iOS, Android) with push notifications of machine errors.*
+  [docs/fr/application-mobile.md](docs/fr/application-mobile.md). Connexion **par le cloud
+  E-KO RIP** (OAuth + PKCE) pour suivre l'atelier sans VPN, avec choix du site.
+  *Mobile monitoring app (iOS, Android) with push notifications of machine errors, also
+  through the E-KO RIP cloud.*
 - **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
   (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
   (Windows) listent les serveurs trouvés sur l'écran de connexion, un clic suffit. La saisie

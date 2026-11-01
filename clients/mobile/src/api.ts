@@ -74,6 +74,8 @@ export interface InfoSession {
   acces_libre: boolean;
   utilisateur: string | null;
   role: 'admin' | 'operateur' | null;
+  /** Présent quand la session passe par le cloud E-KO RIP. */
+  cloud?: { email: string; nom: string; lecture_seule: boolean };
 }
 
 // ---------- Erreurs ----------
@@ -100,6 +102,11 @@ const MESSAGES: Record<string, string> = {
   jeton_push_invalide: 'Jeton de notification invalide.',
   appareil_inconnu: "Ce téléphone n'est pas inscrit aux notifications.",
   envoi_push_echoue: "La notification n'est pas partie (service push d'Expo).",
+  jeton_invalide: 'Connexion au cloud expirée ou révoquée : reconnectez-vous.',
+  site_hors_ligne: "Ce site n'est pas relié au cloud en ce moment (serveur éteint ou hors ligne).",
+  lecture_seule: 'Votre rôle sur ce site est en lecture seule.',
+  invalid_grant: 'La connexion au cloud a expiré : recommencez.',
+  cloud_etat: 'Réponse inattendue de la plate-forme : recommencez.',
 };
 
 /** Message lisible pour l'utilisateur. */
@@ -250,6 +257,8 @@ async function requete<T>(methode: string, chemin: string, corps?: unknown, rete
     if (await auth.renouveler()) return requete<T>(methode, chemin, corps, false);
     surSessionPerdue?.();
   }
+  // Jeton du cloud révoqué ou expiré : rien à rejouer, retour à l'écran de connexion
+  if (r.status === 401 && err.code === 'jeton_invalide') surSessionPerdue?.();
   throw err;
 }
 

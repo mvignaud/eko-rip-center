@@ -23,8 +23,20 @@ L'adresse du serveur (`192.168.10.109:8640`) puis, si des comptes sont déclaré
 du RIP (opérateur suffit). Le nom et le mot de passe restent dans le trousseau du téléphone
 pour rouvrir la session quand elle expire (12 h, ou redémarrage du serveur).
 
-Hors de l'atelier, l'app ne joint le serveur qu'à travers un VPN. Les notifications, elles,
-arrivent partout : c'est le serveur qui les envoie au service push d'Expo.
+Hors de l'atelier, **Se connecter au cloud** ouvre la plate-forme E-KO RIP
+(`platform.e-ko.rip`) dans le navigateur : mot de passe, Google ou Facebook, puis
+autorisation de l'app. L'app affiche ensuite les sites du compte (en ligne ou non) ; un
+toucher ouvre le serveur à travers le relais, sans second mot de passe, avec le rôle donné
+dans le portail. Le jeton d'app (180 jours) reste dans le trousseau du téléphone ; on le
+révoque par **Se déconnecter du cloud** ou dans le portail (Mon compte › Apps connectées).
+Voir [cloud.md](cloud.md). Sans compte cloud, il faut un VPN.
+
+Juste après la connexion au cloud, l'app demande l'autorisation des notifications et
+inscrit le téléphone sur la plate-forme (`POST /api/moi/push`) : site hors ligne, site de
+retour, nouvelle app connectée au compte. Les alertes des machines viennent, elles, du
+serveur RIP (ci-dessous), qui les envoie au service push d'Expo : elles arrivent partout.
+Un téléphone inscrit à travers le cloud reste destinataire tant qu'il se réinscrit (à chaque
+ouverture de l'app) au moins une fois tous les 30 jours.
 
 ## Notifications
 

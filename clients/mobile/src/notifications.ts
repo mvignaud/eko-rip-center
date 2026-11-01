@@ -53,8 +53,8 @@ export async function ecrirePrefs(p: PrefsNotif) {
 
 // ---------- Enregistrement ----------
 
-/** Demande l'autorisation, récupère le jeton Expo et l'enregistre sur le serveur RIP. */
-export async function activerNotifications(fins: boolean): Promise<EtatNotif> {
+/** Demande l'autorisation et rend le jeton Expo du téléphone, ou l'état qui l'empêche. */
+export async function jetonExpo(): Promise<string | EtatNotif> {
   if (!Device.isDevice) {
     return { code: 'simulateur', message: 'Notifications : indisponibles sur simulateur.', jeton: null };
   }
@@ -62,19 +62,27 @@ export async function activerNotifications(fins: boolean): Promise<EtatNotif> {
   if (!projectId || projectId === PROJET_PLACEHOLDER) {
     return { code: 'projet', message: 'Notifications : projet EAS non configuré', jeton: null };
   }
+  let { status } = await Notifications.getPermissionsAsync();
+  if (status !== 'granted') ({ status } = await Notifications.requestPermissionsAsync());
+  if (status !== 'granted') {
+    return {
+      code: 'refuse',
+      message: "Notifications refusées : autorisez-les dans les réglages du téléphone.",
+      jeton: null,
+    };
+  }
+  return (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+}
+
+export const PLATEFORME_PUSH: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
+
+/** Demande l'autorisation, récupère le jeton Expo et l'enregistre sur le serveur RIP. */
+export async function activerNotifications(fins: boolean): Promise<EtatNotif> {
   try {
-    let { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') ({ status } = await Notifications.requestPermissionsAsync());
-    if (status !== 'granted') {
-      return {
-        code: 'refuse',
-        message: "Notifications refusées : autorisez-les dans les réglages du téléphone.",
-        jeton: null,
-      };
-    }
-    const { data: jeton } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const jeton = await jetonExpo();
+    if (typeof jeton !== 'string') return jeton;
     const nom = Device.deviceName ?? Device.modelName ?? 'Appareil';
-    await api.enregistrerAppareil(jeton, nom, Platform.OS === 'ios' ? 'ios' : 'android', fins);
+    await api.enregistrerAppareil(jeton, nom, PLATEFORME_PUSH, fins);
     await stockage.ecrire('jeton', jeton);
     return { code: 'ok', message: 'Notifications activées.', jeton };
   } catch (e) {
