@@ -15,6 +15,8 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.31.0] — 2026-11-01
+
 ### Ajouté
 - **Découverte automatique du serveur sur le réseau local.** Le serveur s'annonce en DNS-SD
   (`_eko-rip._tcp`, nom de la machine, version) ; les clients Mac, Linux et Tauri
