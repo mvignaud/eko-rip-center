@@ -149,6 +149,8 @@ CREATE TABLE IF NOT EXISTS inventaires (
 CREATE TABLE IF NOT EXISTS sites_suspendus (site TEXT PRIMARY KEY, depuis INTEGER NOT NULL);
 -- Webhooks de l'ERP déjà traités (empreinte du corps), gardés 30 jours.
 CREATE TABLE IF NOT EXISTS webhooks_erp (empreinte TEXT PRIMARY KEY, evenement TEXT NOT NULL, recu_le INTEGER NOT NULL);
+-- Résiliations d'abonnements ERP refusées ou injoignables, retentées par l'entretien.
+CREATE TABLE IF NOT EXISTS resiliations_erp (code TEXT PRIMARY KEY, compte INTEGER NOT NULL, motif TEXT NOT NULL, essais INTEGER NOT NULL DEFAULT 0, cree_le INTEGER NOT NULL);
 -- Index des sauvegardes en ligne (objets S3).
 CREATE TABLE IF NOT EXISTS sauvegardes (
     id TEXT PRIMARY KEY,

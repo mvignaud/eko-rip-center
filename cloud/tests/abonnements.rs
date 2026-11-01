@@ -84,6 +84,7 @@ async fn faux_erp(State(e): State<Erp>, q: Request) -> Response {
             let facture = if *code == "SUB-1" { "FA-1".to_string() } else { format!("FA-{code}") };
             j(StatusCode::OK, json!({ "data": [{ "period_start": "2026-11-01", "period_end": "2026-12-01", "status": "paid", "total_ht": "19.00", "total_ttc": "22.80", "invoice": { "code": facture, "reference": format!("REF-{facture}") }, "failure_reason": null }] }))
         }
+        ("POST", ["subscriptions", "SUP-PANNE", "cancel"]) => j(StatusCode::SERVICE_UNAVAILABLE, json!({ "error": "maintenance" })),
         ("POST", ["subscriptions", _, "cancel"]) => j(StatusCode::OK, json!({ "data": { "status": "active" } })),
         ("GET", ["invoices", _, "pdf"]) | ("GET", ["sepa-mandates", _, "pdf"]) => ([("content-type", "application/pdf")], PDF).into_response(),
         ("POST", ["sepa-mandates"]) => {
@@ -615,6 +616,22 @@ async fn webhooks_de_l_erp() {
         assert_eq!((ab.statut.as_str(), ab.relance), ("past_due", 2));
         let page = appel(&b, "GET", "/abonnement", &[("Cookie", &c)], Corps::Rien);
         assert!(page.corps.contains("relance 2 sur 3"), "bandeau de retard");
+        // Relances épuisées sur un ancien abonnement remplacé : le compte n'est pas touché.
+        let r = webhook(&b, &json!({ "event": "dunning.exhausted", "occurred_at": "y", "data": { "subscription": { "code": "SUB-ANCIEN" }, "tier": { "code": "CLI-W" } } }), t, "secret-webhook");
+        assert_eq!(r.json()["code"], "ignore");
+        assert_eq!(abonnements::lire(&b.r.base(), id).unwrap().offre.code(), "atelier");
+        // Sur le supplément seul : il s'arrête, l'abonnement principal reste ; une résiliation
+        // refusée par l'ERP est gardée pour être retentée.
+        abonnements::maj(&b.r.base(), id, &[("supplement_code", rusqlite::types::Value::Text("SUP-PANNE".into())), ("seats_supplement", rusqlite::types::Value::Integer(2))]).unwrap();
+        let r = webhook(&b, &json!({ "event": "dunning.exhausted", "occurred_at": "z", "data": { "subscription": { "code": "SUP-PANNE" } } }), t, "secret-webhook");
+        assert_eq!(r.json()["code"], "traite");
+        let ab = abonnements::lire(&b.r.base(), id).unwrap();
+        assert!(ab.offre.code() == "atelier" && ab.actif() && ab.supplement_code.is_none() && ab.seats_supplement == 0);
+        let essais: i64 = b.r.base().query_row("SELECT essais FROM resiliations_erp WHERE code = 'SUP-PANNE'", [], |l| l.get(0)).unwrap();
+        assert_eq!(essais, 1);
+        abonnements::entretenir_bloquant(&b.r, t);
+        let essais: i64 = b.r.base().query_row("SELECT essais FROM resiliations_erp WHERE code = 'SUP-PANNE'", [], |l| l.get(0)).unwrap();
+        assert_eq!(essais, 2, "retentée par l'entretien");
         // Relances épuisées : retour au Gratuit, e-mail et notification.
         let r = webhook(&b, &json!({ "event": "dunning.exhausted", "occurred_at": "x", "tenant": "golden-print", "data": { "tier": { "code": "CLI-W" } } }), t, "secret-webhook");
         assert_eq!(r.json()["code"], "traite");

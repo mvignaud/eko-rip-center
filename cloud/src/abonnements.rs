@@ -323,28 +323,65 @@ pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result
     let premiere_facture = sub.pointer("/first_cycle/invoice_code").and_then(texte_json);
     let ancien = ab.subscription_code.clone().filter(|_| ab.actif());
     let ancien_sup = ab.supplement_code.clone();
-    {
+    let local = {
         let c = r.base();
-        appliquer(&c, id, &sub).map_err(|e| e.to_string())?;
-        maj(&c, id, &[("offre", texte(offre.code())), ("cycle", texte(cycle.code())), ("bon_commande", texte(&ab.texte_brouillon("bon_commande"))), ("gratuit_depuis", Sql::Null), ("relance", entier(0)), ("fin_periode_resiliation", entier(0)), ("supplement_code", Sql::Null), ("seats_supplement", entier(0)), ("supplement_resilie", entier(0))]).map_err(|e| e.to_string())?;
-    }
+        appliquer(&c, id, &sub).and_then(|_| maj(&c, id, &[("offre", texte(offre.code())), ("cycle", texte(cycle.code())), ("bon_commande", texte(&ab.texte_brouillon("bon_commande"))), ("gratuit_depuis", Sql::Null), ("relance", entier(0)), ("fin_periode_resiliation", entier(0)), ("supplement_code", Sql::Null), ("seats_supplement", entier(0)), ("supplement_resilie", entier(0))]))
+    };
     eprintln!("abonnement {} créé pour le compte {id} ({} {}, première facture : {})", texte_json(&sub["code"]).unwrap_or_default(), offre.code(), cycle.code(), premiere_facture.as_deref().unwrap_or("aucune"));
-    // Changement d'offre : l'ancien abonnement (et son supplément) s'arrête.
+    // Changement d'offre : l'ancien abonnement (et son supplément) s'arrête, même si
+    // l'écriture locale a échoué (sinon il continuerait d'être facturé). Une résiliation
+    // refusée ou injoignable est gardée et retentée par l'entretien.
     for code in ancien.iter().chain(ancien_sup.iter()) {
         if Some(code) == texte_json(&sub["code"]).as_ref() {
             continue;
         }
-        match erp.post(&format!("/subscriptions/{}/cancel", encoder(code)), &json!({ "at_period_end": false, "reason": "Changement d'offre E-KO RIP Cloud" }), None) {
-            Ok(rep) if rep.ok() => eprintln!("abonnement {code} résilié (changement d'offre du compte {id})"),
-            Ok(rep) => eprintln!("résiliation de l'abonnement {code} refusée : {}", rep.erreur()),
-            Err(e) => eprintln!("résiliation de l'abonnement {code} : {e}"),
-        }
+        resilier_ou_retenter(r, &erp, id, code, "Changement d'offre E-KO RIP Cloud");
     }
+    local.map_err(|e| e.to_string())?;
     if let Some(cp) = compte(r, id) {
         let ab2 = lire(&r.base(), id).map_err(|e| e.to_string())?;
         r.envoyer(courriels::abonnement_souscrit(&r.config.url_publique, &destinataire_facturation(&ab2, &cp), &cp.nom, offre.nom(), &libelle_prix(offre, cycle, ab2.seats), ab2.periode_fin, ab2.essai_fin, ancien.is_some(), premiere_facture.as_deref()));
     }
     Ok(())
+}
+
+/// Résilie tout de suite un abonnement de l'ERP ; en cas de refus ou d'ERP injoignable, la
+/// résiliation est notée dans `resiliations_erp` et retentée par l'entretien. Bloquant.
+pub fn resilier_ou_retenter(r: &Partage, erp: &Erp, id: i64, code: &str, motif: &str) -> bool {
+    match erp.post(&format!("/subscriptions/{}/cancel", encoder(code)), &json!({ "at_period_end": false, "reason": motif }), None) {
+        Ok(rep) if rep.ok() || rep.statut == 404 || rep.statut == 409 => {
+            // 404/409 : abonnement introuvable ou déjà résilié, rien à retenter.
+            eprintln!("abonnement {code} résilié (compte {id}) : HTTP {}", rep.statut);
+            let _ = r.base().execute("DELETE FROM resiliations_erp WHERE code = ?1", [code]);
+            true
+        }
+        autre => {
+            match autre {
+                Ok(rep) => eprintln!("résiliation de l'abonnement {code} refusée, retentée plus tard : {}", rep.erreur()),
+                Err(e) => eprintln!("résiliation de l'abonnement {code}, retentée plus tard : {e}"),
+            }
+            let _ = r.base().execute(
+                "INSERT INTO resiliations_erp (code, compte, motif, essais, cree_le) VALUES (?1, ?2, ?3, 1, ?4) ON CONFLICT(code) DO UPDATE SET essais = essais + 1",
+                params![code, id, motif, crate::maintenant() as i64],
+            );
+            false
+        }
+    }
+}
+
+/// Retente les résiliations en attente (au plus 50 essais chacune, soit près d'une heure). Bloquant.
+fn retenter_resiliations(r: &Partage) {
+    let attente: Vec<(String, i64, String)> = {
+        let c = r.base();
+        c.prepare("SELECT code, compte, motif FROM resiliations_erp WHERE essais < 50").and_then(|mut q| q.query_map([], |l| Ok((l.get(0)?, l.get(1)?, l.get(2)?)))?.collect()).unwrap_or_default()
+    };
+    if attente.is_empty() {
+        return;
+    }
+    let Some(erp) = Erp::depuis(&r.base()) else { return };
+    for (code, id, motif) in attente {
+        resilier_ou_retenter(r, &erp, id, &code, &motif);
+    }
 }
 
 /// Envoie à l'ERP les sièges facturés s'ils ont changé (au plus une fois par heure). Bloquant.
@@ -366,7 +403,15 @@ pub fn recalculer_sieges(r: &Partage, id: i64, t: u64) -> Result<bool, String> {
         return Ok(false);
     }
     let erp = erp.ok_or("ERP non réglé")?;
-    let _ = maj(&r.base(), id, &[("seats_envoyes_le", entier(t as i64))]);
+    // Réservation atomique du créneau : deux appels simultanés (inventaire poussé et
+    // entretien) ne peuvent pas créer chacun un supplément.
+    let pris = r
+        .base()
+        .execute("UPDATE abonnements_cloud SET seats_envoyes_le = ?1 WHERE compte = ?2 AND seats_envoyes_le = ?3", params![t as i64, id, ab.seats_envoyes_le as i64])
+        .map_err(|e| e.to_string())?;
+    if pris != 1 {
+        return Ok(false);
+    }
     if let Some(n) = change_principal {
         let rep = erp.envoyer("PATCH", &format!("/subscriptions/{}", encoder(&code)), &json!({ "seats": n }), None)?;
         if rep.ok() {
@@ -478,8 +523,10 @@ pub fn entretenir_bloquant(r: &Partage, t: u64) {
     let comptes: Vec<i64> = {
         let c = r.base();
         let _ = c.execute("DELETE FROM webhooks_erp WHERE recu_le < ?1", [t.saturating_sub(CONSERVATION_WEBHOOKS) as i64]);
+        let _ = c.execute("DELETE FROM resiliations_erp WHERE essais >= 50 AND cree_le < ?1", [t.saturating_sub(CONSERVATION_WEBHOOKS) as i64]);
         c.prepare("SELECT compte FROM droits WHERE role = 'proprietaire' UNION SELECT compte FROM abonnements_cloud").and_then(|mut q| q.query_map([], |l| l.get(0))?.collect()).unwrap_or_default()
     };
+    retenter_resiliations(r);
     for &id in &comptes {
         verifier_depassement(r, id, t);
     }
@@ -544,8 +591,17 @@ pub async fn webhook(State(r): State<Partage>, h: HeaderMap, corps: Bytes) -> Re
         return Json(json!({ "code": "deja_traite" })).into_response();
     }
     let r2 = r.clone();
-    let traite = tokio::task::spawn_blocking(move || traiter_webhook(&r2, &evenement, &m["data"])).await.unwrap_or(false);
-    Json(json!({ "code": if traite { "traite" } else { "ignore" } })).into_response()
+    match tokio::task::spawn_blocking(move || traiter_webhook(&r2, &evenement, &m["data"])).await {
+        Ok(traite) => Json(json!({ "code": if traite { "traite" } else { "ignore" } })).into_response(),
+        Err(e) => {
+            // Traitement interrompu : l'empreinte est retirée et l'ERP reçoit une erreur, il
+            // renverra l'événement. (Un événement sans compte correspondant est normal : le
+            // webhook reçoit tous les abonnements de GOLDEN PRINT, pas seulement ceux du Cloud.)
+            eprintln!("webhook de l'ERP : traitement interrompu ({e}), il sera rejoué");
+            let _ = r.base().execute("DELETE FROM webhooks_erp WHERE empreinte = ?1", [&empreinte]);
+            portail::reponse_json(StatusCode::INTERNAL_SERVER_ERROR, "traitement_interrompu")
+        }
+    }
 }
 
 /// Rend vrai si l'événement concernait un compte connu.
@@ -588,11 +644,20 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
             retour_au_gratuit(r, id);
             prevenir(r, id, courriels::retour_gratuit(&url, &a, &cp.nom, impaye), Some(Notification::autre(notifications::PAIEMENT, None, "Retour à l'offre Gratuite", "Votre abonnement est terminé : votre compte revient à l'offre Gratuite.", &format!("{url}/abonnement"))));
         }
-        "dunning.exhausted" => {
+        // Relances épuisées sur le supplément seul : il s'arrête, l'abonnement principal reste.
+        "dunning.exhausted" if du_supplement => {
+            let _ = maj(&r.base(), id, &[("supplement_code", Sql::Null), ("seats_supplement", entier(0)), ("supplement_resilie", entier(0))]);
+            let erp = Erp::depuis(&r.base());
+            if let (Some(sc), Some(erp)) = (&code_sub, erp) {
+                resilier_ou_retenter(r, &erp, id, sc, "Relances épuisées (machines supplémentaires)");
+            }
+        }
+        // Seulement pour l'abonnement principal en cours (pas un ancien abonnement remplacé).
+        "dunning.exhausted" if du_principal && ab.subscription_code.is_some() => {
             retour_au_gratuit(r, id);
             prevenir(r, id, courriels::retour_gratuit(&url, &a, &cp.nom, true), Some(Notification::autre(notifications::PAIEMENT, None, "Abonnement résilié pour impayé", "Votre compte revient à l'offre Gratuite.", &format!("{url}/abonnement"))));
         }
-        "cycle.billed" => {
+        "cycle.billed" if du_principal || du_supplement => {
             let code = premier_texte(data, &["/invoice/code", "/cycle/invoice/code", "/invoice_code"]);
             let reference = premier_texte(data, &["/invoice/reference", "/cycle/invoice/reference", "/invoice_reference"]).or(code.clone()).unwrap_or_default();
             let montant = ["/invoice/total_ttc", "/cycle/total_ttc", "/total_ttc"].iter().find_map(|p| data.pointer(p).and_then(offres::centimes));
@@ -604,20 +669,20 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
                 let _ = maj(&r.base(), id, &[("periode_fin", entier(f as i64))]);
             }
         }
-        "cycle.paid" => {
+        "cycle.paid" if du_principal || du_supplement => {
             let mut champs = vec![("relance", entier(0))];
             if du_principal {
                 champs.push(("statut", texte("active")));
             }
             let _ = maj(&r.base(), id, &champs);
         }
-        "cycle.failed" => {
+        "cycle.failed" if du_principal || du_supplement => {
             let _ = maj(&r.base(), id, &[("statut", texte("past_due"))]);
             let montant = ["/cycle/total_ttc", "/total_ttc", "/invoice/total_ttc"].iter().find_map(|p| data.pointer(p).and_then(offres::centimes)).map(offres::euros);
             let raison = premier_texte(data, &["/cycle/failure_reason", "/failure_reason"]);
             prevenir(r, id, courriels::paiement_refuse(&url, &a, &cp.nom, 0, montant.as_deref(), raison.as_deref()), Some(Notification::autre(notifications::PAIEMENT, None, "Paiement refusé", "Le paiement de votre abonnement E-KO RIP Cloud a été refusé.", &format!("{url}/abonnement/paiement"))));
         }
-        "dunning.reminder_sent" => {
+        "dunning.reminder_sent" if du_principal || du_supplement => {
             let etape = data.get("step").or_else(|| data.pointer("/dunning/step")).and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(1).clamp(1, 3);
             let _ = maj(&r.base(), id, &[("relance", entier(etape)), ("statut", texte("past_due"))]);
             let montant = ["/cycle/total_ttc", "/total_ttc", "/invoice/total_ttc"].iter().find_map(|p| data.pointer(p).and_then(offres::centimes)).map(offres::euros);
@@ -643,6 +708,17 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
 
 /// L'abonnement s'arrête : offre Gratuite (les sauvegardes payantes restent 90 jours).
 pub fn retour_au_gratuit(r: &Partage, id: i64) {
+    // Le supplément (machines au-delà du forfait) ne survit pas à l'abonnement principal.
+    // Verrou de la base relâché avant l'appel (une chaîne `if let` garderait ses temporaires).
+    let (ab, erp) = {
+        let c = r.base();
+        (lire(&c, id).ok(), Erp::depuis(&c))
+    };
+    if let (Some(ab), Some(erp)) = (ab, erp)
+        && let Some(sc) = ab.supplement_code.filter(|_| !ab.supplement_resilie)
+    {
+        resilier_ou_retenter(r, &erp, id, &sc, "Fin de l'abonnement E-KO RIP Cloud");
+    }
     let _ = maj(&r.base(), id, &[("offre", texte(Offre::Gratuit.code())), ("statut", texte("cancelled")), ("subscription_code", Sql::Null), ("supplement_code", Sql::Null), ("supplement_resilie", entier(0)), ("seats", entier(0)), ("seats_supplement", entier(0)), ("gratuit_depuis", entier(crate::maintenant() as i64)), ("fin_periode_resiliation", entier(0)), ("relance", entier(0)), ("periode_fin", Sql::Null), ("essai_fin", Sql::Null)]);
     eprintln!("compte {id} : retour à l'offre Gratuite");
 }
