@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" font-family="-apple-system, 'Segoe UI', Ubuntu, Roboto, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">RIP server network ports</title>
+  <desc id="d">Clients reach the server on TCP port 8640 and find it through mDNS (UDP 5353). The server reaches the printers on ports 9100, 631 and SNMP 161, the cutters over USB or the network, and goes out over HTTPS (443) to the Cloud, the ERP and the APT repository. Port 8640 must never be opened to the Internet.</desc>
+  <defs><marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4a505c"/></marker></defs>
+  <rect width="960" height="400" rx="22" fill="#f6f7f9"/>
+  <rect x="380" y="130" width="200" height="140" rx="16" fill="#0a84ff"/>
+  <text x="480" y="186" font-size="18" font-weight="700" fill="#fff" text-anchor="middle">RIP server</text>
+  <text x="480" y="210" font-size="13" fill="#e6f1ff" text-anchor="middle">fixed IP address</text>
+  <text x="480" y="232" font-size="13" fill="#e6f1ff" text-anchor="middle">e.g. 192.168.1.20</text>
+  <g font-size="14" fill="#14161a">
+    <rect x="30" y="60" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="48" y="90" font-weight="700">Mac, Linux, Windows clients</text><text x="48" y="112" font-size="12" fill="#4a505c">TCP 8640 · mDNS discovery UDP 5353</text>
+    <rect x="30" y="165" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="48" y="195" font-weight="700">File-drop workstations</text><text x="48" y="217" font-size="12" fill="#4a505c">Samba TCP 445 (if shared)</text>
+    <rect x="30" y="270" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="48" y="300" font-weight="700">Mobile app (Wi-Fi)</text><text x="48" y="322" font-size="12" fill="#4a505c">TCP 8640</text>
+    <rect x="700" y="40" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="718" y="70" font-weight="700">Printers</text><text x="718" y="92" font-size="12" fill="#4a505c">9100 · IPP 631 · SNMP UDP 161</text>
+    <rect x="700" y="130" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="718" y="160" font-weight="700">Cutters</text><text x="718" y="182" font-size="12" fill="#4a505c">USB (serial) or network</text>
+    <rect x="700" y="220" width="230" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="718" y="250" font-weight="700">Internet (outgoing only)</text><text x="718" y="272" font-size="12" fill="#4a505c">HTTPS 443: Cloud, ERP, updates</text>
+  </g>
+  <g stroke="#4a505c" stroke-width="2" fill="none" marker-end="url(#f)">
+    <path d="M260 95 C320 95 330 160 378 168"/>
+    <path d="M260 200 L378 200"/>
+    <path d="M260 305 C320 305 330 240 378 232"/>
+    <path d="M580 165 C640 160 640 75 698 75"/>
+    <path d="M580 190 C640 190 650 165 698 165"/>
+    <path d="M580 240 C640 245 650 255 698 255"/>
+  </g>
+  <rect x="300" y="312" width="360" height="56" rx="12" fill="#fff0f7" stroke="#ec008c"/>
+  <text x="480" y="337" font-size="13" font-weight="700" fill="#b0006a" text-anchor="middle">Never open port 8640 to the Internet.</text>
+  <text x="480" y="356" font-size="12" fill="#b0006a" text-anchor="middle">For remote access: E-KO RIP Cloud.</text>
+</svg>

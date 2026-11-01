@@ -20,7 +20,9 @@ seule ; le lien de chaque version est dans
 [l'installation du serveur](docs/fr/installation-serveur.md#0-pc-dédié--image-dinstallation-ubuntu).
 Dernière image : 0.16.0.
 
-Documentation : [français](docs/fr/) · [English](docs/en/) · aide par machine
+Documentation utilisateur en ligne : [e-ko.rip/documentation](https://e-ko.rip/documentation/)
+([English](https://e-ko.rip/documentation/en/)), source dans [docs/guide/](docs/guide/).
+Références : [français](docs/fr/) · [English](docs/en/) · aide par machine
 ([fr](docs/fr/machines.md), [en](docs/en/machines.md)) · glossaire ([fr](docs/fr/glossaire.md),
 [en](docs/en/glossary.md)) ·
 [changelog](CHANGELOG.md). Administration et questions fréquentes :

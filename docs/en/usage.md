@@ -1107,7 +1107,8 @@ factors are in the configuration backup.
 - Printing on the Roland.
 - The Kona type 3 frame (multi-segment) has not been tried on the machine yet.
 - A TIFF's spot colour channels: the value direction is still to check on a real
-  Photoshop TIFF; transparency as a white plate will come with roadmap 9.12.
+  Photoshop TIFF (the alpha channel already gives a white or varnish plate: see
+  [Sending a job](#sending-a-job)).
 - The Epson swatch book's `MT-*` metallic colours are not converted yet.
 
 ## Glossary

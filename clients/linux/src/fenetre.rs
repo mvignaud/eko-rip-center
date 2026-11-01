@@ -872,6 +872,15 @@ impl Fenetre {
             r.set_user_agent(Some(&format!("Mozilla/5.0 EKO-RIP-Client/{VERSION} (Linux)")));
         }
         vue.load_uri(&format!("{}/", client.base()));
+        // Liens « Aide » (nouvel onglet) de l'écran du serveur : dans le navigateur par défaut.
+        vue.connect_create(|vue, action| {
+            let uri = action.clone().request().and_then(|r| r.uri()).map(|u| u.to_string()).unwrap_or_default();
+            if uri.starts_with("https://") {
+                let parent = vue.root().and_downcast::<gtk::Window>();
+                gtk::UriLauncher::new(&uri).launch(parent.as_ref(), gio::Cancellable::NONE, |_| {});
+            }
+            None
+        });
         let f = adw::Window::builder().title("Administration — E-KO RIP Center").default_width(1200).default_height(820).transient_for(&self.fen).build();
         let barre = adw::ToolbarView::new();
         barre.add_top_bar(&adw::HeaderBar::new());

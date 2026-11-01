@@ -1,0 +1,23 @@
+# Sommaire de la documentation publique (https://e-ko.rip/documentation/).
+# Une ligne par page : page<TAB>fichier dans docs/<TAB>titre<TAB>description (une phrase).
+# « == Rubrique » ouvre une rubrique. Après tout changement : python3 outils/generer-documentation.py
+== Bien démarrer
+index	guide/fr/index.md	Documentation	Tout pour installer, utiliser et administrer E-KO RIP Center : serveur, clients Mac, Linux et Windows, application mobile et Cloud.
+demarrage	guide/fr/demarrage.md	Prise en main	Comprendre comment s'articulent le serveur, les clients, l'application mobile et le Cloud, puis installer un atelier en cinq étapes.
+== Installer
+serveur	guide/fr/serveur.md	Installer le serveur	Choisir le poste, installer le serveur RIP sous Ubuntu par le dépôt APT, créer les comptes et brancher les machines.
+clients	guide/fr/clients.md	Installer les clients	Installer et connecter le client E-KO RIP Center sur Mac, Linux et Windows.
+application-mobile	guide/fr/application-mobile.md	Application mobile	Suivre la production depuis un téléphone iOS ou Android et recevoir les alertes des machines.
+cloud	guide/fr/cloud.md	Cloud E-KO RIP	Accéder au serveur RIP de l'atelier depuis l'extérieur, sans VPN ni port ouvert, avec la plate-forme gratuite platform.e-ko.rip.
+== Utiliser
+utilisation	fr/utilisation.md	Guide d'utilisation	Envoyer un travail, suivre la file, imprimer, découper, BAT, épreuves, planches, couleur et supports : toutes les fonctions du RIP.
+machines	fr/machines.md	Aide par machine	Réglages et branchements de chaque imprimante et découpeuse prise en charge.
+== Administrer
+administration	guide/fr/administration.md	Administrer le serveur	Comptes, sauvegardes, mises à jour, dossiers partagés, réglages avancés et données du serveur.
+depannage	guide/fr/depannage.md	Dépannage	Les messages courants, leur cause et la marche à suivre.
+glossaire	fr/glossaire.md	Glossaire	Les mots du RIP et de l'impression grand format, expliqués simplement.
+# Renvois : un lien vers un de ces fichiers de docs/ mène à la page indiquée (sans l'ancre).
+-> fr/installation-serveur.md	serveur
+-> fr/installation-client.md	clients
+-> fr/administration.md	administration
+-> fr/cloud.md	cloud

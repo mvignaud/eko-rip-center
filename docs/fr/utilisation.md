@@ -1170,7 +1170,8 @@ le facteur de chacune. Rétention et facteurs sont dans la sauvegarde de la conf
 - L'impression par la Roland.
 - Le cadre Kona type 3 (multi-segments) n'a pas encore été essayé sur la machine.
 - Les canaux de tons directs d'un TIFF : le sens des valeurs reste à vérifier sur un vrai
-  TIFF Photoshop ; la transparence comme plaque de blanc viendra avec la roadmap 9.12.
+  TIFF Photoshop (le canal alpha, lui, donne déjà une plaque de blanc ou de vernis : voir
+  [Envoyer un travail](#envoyer-un-travail)).
 - Les couleurs métallisées `MT-*` du nuancier Epson ne sont pas encore converties.
 
 ## Glossaire

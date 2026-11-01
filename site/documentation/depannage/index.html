@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dépannage · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Les messages courants, leur cause et la marche à suivre.">
+<link rel="canonical" href="https://e-ko.rip/documentation/depannage/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/depannage/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/troubleshooting/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/fr/depannage.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/documentation/en/troubleshooting/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li><li><a href="/documentation/machines/">Aide par machine</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/" aria-current="page">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Administrer</p>
+    <h1>Dépannage</h1>
+    <p class="doc-chapo">Les messages courants, leur cause et la marche à suivre.</p>
+<p>Les situations les plus courantes, de la connexion à l'impression, avec leur cause et la marche à suivre. Le message exact affiché par le client ou l'interface est repris en gras.</p>
+<h2 id="connexion"><a class="ancre" href="#connexion" aria-hidden="true">#</a>Connexion</h2>
+<h3 id="le-client-ne-trouve-pas-le-serveur"><a class="ancre" href="#le-client-ne-trouve-pas-le-serveur" aria-hidden="true">#</a>Le client ne trouve pas le serveur</h3>
+<ol><li>Vérifier que le serveur tourne : <code>systemctl status eko-rip-serveur</code> sur le serveur, ou ouvrir <code>http://&lt;adresse&gt;:8640</code> dans un navigateur : la page d'état doit s'afficher.</li><li>Sur Mac, autoriser l'accès au <strong>réseau local</strong> (Réglages Système › Confidentialité et sécurité › Réseau local).</li><li>La découverte automatique ne traverse ni les routeurs, ni les VPN, ni certains réseaux Wi-Fi invités : saisir l'adresse sous <strong>Saisir une adresse</strong> (<code>192.168.1.20:8640</code>).</li><li>Un pare-feu sur le serveur doit laisser passer le port TCP 8640 (et UDP 5353 pour la découverte).</li></ol>
+<h3 id="le-navigateur-naffiche-quune-page-détat"><a class="ancre" href="#le-navigateur-naffiche-quune-page-détat" aria-hidden="true">#</a>Le navigateur n'affiche qu'une page d'état</h3>
+<p>C'est voulu : dans l'atelier, l'interface complète est réservée aux clients. Utiliser le client (menu <strong>Administration…</strong>) ou l'adresse du site sur le <a href="/documentation/cloud/">Cloud</a>.</p>
+<h3 id="-accès-libre--en-rouge"><a class="ancre" href="#-accès-libre--en-rouge" aria-hidden="true">#</a>« Accès libre » en rouge</h3>
+<p>Aucun compte n'est déclaré : n'importe quel poste du réseau peut tout faire. Créer un compte administrateur (<a href="/documentation/serveur/#créer-les-comptes">Créer les comptes</a>).</p>
+<h3 id="-trop-dessais-pour-cet-utilisateur-"><a class="ancre" href="#-trop-dessais-pour-cet-utilisateur-" aria-hidden="true">#</a>« Trop d'essais pour cet utilisateur. »</h3>
+<p>Cinq mots de passe faux : ce nom est bloqué 5 minutes. Attendre, ou redémarrer le service (ce qui ferme toutes les sessions). Mot de passe oublié : voir <a href="/documentation/administration/#comptes">Comptes</a>.</p>
+<h3 id="-réservé-à-ladministrateur-du-rip-"><a class="ancre" href="#-réservé-à-ladministrateur-du-rip-" aria-hidden="true">#</a>« Réservé à l'administrateur du RIP. »</h3>
+<p>Le compte est <strong>opérateur</strong> : machines, supports, tarifs, profils, réglages enregistrés et sauvegarde sont réservés à l'administrateur.</p>
+<h2 id="envoi-et-rendu"><a class="ancre" href="#envoi-et-rendu" aria-hidden="true">#</a>Envoi et rendu</h2>
+<h3 id="-fichier-trop-volumineux-pour-le-serveur-"><a class="ancre" href="#-fichier-trop-volumineux-pour-le-serveur-" aria-hidden="true">#</a>« Fichier trop volumineux pour le serveur. »</h3>
+<p>Le fichier dépasse la limite (8 Go par défaut). La relever avec <code>EKO_RIP_MAX_MO</code> dans <code>/etc/default/eko-rip-serveur</code>, puis redémarrer.</p>
+<h3 id="un-rendu-échoue"><a class="ancre" href="#un-rendu-échoue" aria-hidden="true">#</a>Un rendu échoue</h3>
+<p>Le message est dans le détail du travail (inspecteur) et dans le journal du serveur. Causes courantes :</p>
+<ul><li>PDF protégé par mot de passe ou abîmé : le réenregistrer depuis le logiciel de mise en page ;</li><li>fichier très grand qui dépasse le délai de rendu (30 min par défaut, <code>EKO_RIP_DELAI_S</code>) ;</li><li>disque plein : voir la place libre dans <strong>Système</strong> ;</li><li><strong>Permission denied</strong> sur tous les rendus sous Ubuntu 26.04 : mettre le serveur à jour (0.31.0 ou plus récent).</li></ul>
+<p>Les polices non incorporées et les images trop peu définies sont signalées dès l'envoi, dans les alertes du travail.</p>
+<h3 id="un-très-grand-format-est-long"><a class="ancre" href="#un-très-grand-format-est-long" aria-hidden="true">#</a>Un très grand format est long</h3>
+<p>Une page dont le rendu dépasserait 3 Go (par exemple une bâche de 1,6 × 3 m à 720 dpi) est rendue par bandes puis recollée : c'est plus long, mais rien n'est à régler. Prévoir la place disque.</p>
+<h3 id="-disque-presque-plein-"><a class="ancre" href="#-disque-presque-plein-" aria-hidden="true">#</a>« Disque presque plein »</h3>
+<p>Il reste moins de 20 Go. Supprimer de vieux travaux, réduire la durée de conservation (<code>EKO_RIP_CONSERVATION_JOURS</code>) ou agrandir le disque des données. Sous 5 Go, le serveur efface lui-même les plus vieux travaux inactifs et refuse ceux qui ne tiendraient pas.</p>
+<h2 id="impression-et-découpe"><a class="ancre" href="#impression-et-découpe" aria-hidden="true">#</a>Impression et découpe</h2>
+<h3 id="-la-sortie-vers-la-machine-a-échoué-"><a class="ancre" href="#-la-sortie-vers-la-machine-a-échoué-" aria-hidden="true">#</a>« La sortie vers la machine a échoué. »</h3>
+<p>La raison est affichée sous la sortie, dans la file : machine éteinte ou injoignable, port USB absent, droit refusé. Corriger, puis <strong>Refaire</strong> la sortie depuis l'historique.</p>
+<h3 id="-limprimante-signale-une-alerte-impression-arrêtée-"><a class="ancre" href="#-limprimante-signale-une-alerte-impression-arrêtée-" aria-hidden="true">#</a>« L'imprimante signale une alerte : impression arrêtée. »</h3>
+<p>L'imprimante a remonté une alerte bloquante (capot ouvert, cartouche vide…). La lever sur la machine, puis <strong>Refaire</strong> la sortie.</p>
+<h3 id="-envoi-à-limprimante-impossible--epson"><a class="ancre" href="#-envoi-à-limprimante-impossible--epson" aria-hidden="true">#</a>« Envoi à l'imprimante impossible » (Epson)</h3>
+<p>Un ton direct du fichier n'a pas d'encre sur la machine : le renommer <code>White</code> ou <code>Metallic</code>, le convertir en CMJN ou l'ajouter à la table des tons directs (<strong>Système › Tons directs</strong>), puis relancer le travail. En connexion réseau directe, le blanc et l'argent passent pour l'instant par une machine en connexion Dossier.</p>
+<h3 id="la-découpe-est-décalée-par-rapport-à-limpression"><a class="ancre" href="#la-découpe-est-décalée-par-rapport-à-limpression" aria-hidden="true">#</a>La découpe est décalée par rapport à l'impression</h3>
+<p>Faire une coupe d'essai, mesurer l'écart et le saisir en <strong>Décalage X / Y</strong> de la découpeuse (<strong>Système › Machines</strong>). Voir aussi le <a href="/documentation/utilisation/#repérage-pour-le-kona">repérage pour le Kona</a>.</p>
+<h3 id="une-machine-ne-peut-pas-être-retirée"><a class="ancre" href="#une-machine-ne-peut-pas-être-retirée" aria-hidden="true">#</a>Une machine ne peut pas être retirée</h3>
+<p><strong>Une sortie attend encore cette machine dans la file.</strong> La passer ou l'annuler d'abord.</p>
+<h3 id="la-durée-estimée-ne-correspond-pas"><a class="ancre" href="#la-durée-estimée-ne-correspond-pas" aria-hidden="true">#</a>La durée estimée ne correspond pas</h3>
+<p>Mesurer la cadence réelle (m² par heure sur la laize) et la saisir en <strong>Cadence</strong> de la machine.</p>
+<h2 id="application-mobile-et-cloud"><a class="ancre" href="#application-mobile-et-cloud" aria-hidden="true">#</a>Application mobile et Cloud</h2>
+<h3 id="lapplication-ne-reçoit-pas-dalertes"><a class="ancre" href="#lapplication-ne-reçoit-pas-dalertes" aria-hidden="true">#</a>L'application ne reçoit pas d'alertes</h3>
+<p>Vérifier que les notifications sont autorisées dans les réglages du téléphone, puis les réglages d'alerte de l'application. Détail : <a href="/documentation/application-mobile/">Application mobile</a>.</p>
+<h3 id="le-site-est--hors-ligne--sur-le-cloud"><a class="ancre" href="#le-site-est--hors-ligne--sur-le-cloud" aria-hidden="true">#</a>Le site est « hors ligne » sur le Cloud</h3>
+<p>Le serveur n'arrive plus à joindre la plate-forme : vérifier qu'il est allumé et qu'il a accès à Internet (HTTPS sortant). Il se reconnecte seul dans la minute qui suit le retour du réseau. Détail : <a href="/documentation/cloud/">Cloud E-KO RIP</a>.</p>
+<h2 id="toujours-bloqué"><a class="ancre" href="#toujours-bloqué" aria-hidden="true">#</a>Toujours bloqué ?</h2>
+<p>Utiliser <strong>Signaler un problème…</strong> dans le client : le rapport part avec le journal du serveur (masqué) et une référence est affichée. Ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a> en indiquant la version du serveur (vue <strong>Système</strong>) et le message exact.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/administration/"><span>Précédent</span>Administrer le serveur</a><a class="doc-suiv" href="/documentation/glossaire/"><span>Suivant</span>Glossaire</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/fr/depannage.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#connexion">Connexion</a></li><li class="niveau-3"><a href="#le-client-ne-trouve-pas-le-serveur">Le client ne trouve pas le serveur</a></li><li class="niveau-3"><a href="#le-navigateur-naffiche-quune-page-détat">Le navigateur n&#x27;affiche qu&#x27;une page d&#x27;état</a></li><li class="niveau-3"><a href="#-accès-libre--en-rouge">« Accès libre » en rouge</a></li><li class="niveau-3"><a href="#-trop-dessais-pour-cet-utilisateur-">« Trop d&#x27;essais pour cet utilisateur. »</a></li><li class="niveau-3"><a href="#-réservé-à-ladministrateur-du-rip-">« Réservé à l&#x27;administrateur du RIP. »</a></li><li class="niveau-2"><a href="#envoi-et-rendu">Envoi et rendu</a></li><li class="niveau-3"><a href="#-fichier-trop-volumineux-pour-le-serveur-">« Fichier trop volumineux pour le serveur. »</a></li><li class="niveau-3"><a href="#un-rendu-échoue">Un rendu échoue</a></li><li class="niveau-3"><a href="#un-très-grand-format-est-long">Un très grand format est long</a></li><li class="niveau-3"><a href="#-disque-presque-plein-">« Disque presque plein »</a></li><li class="niveau-2"><a href="#impression-et-découpe">Impression et découpe</a></li><li class="niveau-3"><a href="#-la-sortie-vers-la-machine-a-échoué-">« La sortie vers la machine a échoué. »</a></li><li class="niveau-3"><a href="#-limprimante-signale-une-alerte-impression-arrêtée-">« L&#x27;imprimante signale une alerte : impression arrêtée. »</a></li><li class="niveau-3"><a href="#-envoi-à-limprimante-impossible--epson">« Envoi à l&#x27;imprimante impossible » (Epson)</a></li><li class="niveau-3"><a href="#la-découpe-est-décalée-par-rapport-à-limpression">La découpe est décalée par rapport à l&#x27;impression</a></li><li class="niveau-3"><a href="#une-machine-ne-peut-pas-être-retirée">Une machine ne peut pas être retirée</a></li><li class="niveau-3"><a href="#la-durée-estimée-ne-correspond-pas">La durée estimée ne correspond pas</a></li><li class="niveau-2"><a href="#application-mobile-et-cloud">Application mobile et Cloud</a></li><li class="niveau-3"><a href="#lapplication-ne-reçoit-pas-dalertes">L&#x27;application ne reçoit pas d&#x27;alertes</a></li><li class="niveau-3"><a href="#le-site-est--hors-ligne--sur-le-cloud">Le site est « hors ligne » sur le Cloud</a></li><li class="niveau-2"><a href="#toujours-bloqué">Toujours bloqué ?</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

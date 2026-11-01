@@ -11,10 +11,17 @@ Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
 | Journal des versions | `changelog/index.html` |
 | Application mobile, confidentialité | `app/index.html`, `app/confidentialite/index.html` |
 | Mentions légales | `mentions-legales/index.html` |
+| Documentation (FR, EN) : générée, ne pas modifier à la main | `documentation/`, `assets/documentation.css`, `assets/documentation.js` |
 | Page 404 | `404.html` |
 
 Styles dans `assets/style.css` (couleurs CMJN de l'icône, mode sombre automatique),
 comportements dans `assets/site.js`, journal dans `assets/journal.js`.
+
+## Documentation
+
+`documentation/` est générée depuis `docs/guide/` (et `docs/fr|en/`) par
+`python3 outils/generer-documentation.py` : voir `docs/guide/README.md`. `publier-site.sh` refuse de
+publier si elle est en retard sur sa source.
 
 ## Journal des versions
 

@@ -24,6 +24,8 @@
   button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-weight: 500; }
   button.discret { background: transparent; color: var(--accent); border: 1px solid var(--trait); padding: 4px 10px; font-weight: 400; }
   button.discret:hover { background: var(--accent-doux); }
+  a.discret { color: var(--accent); border: 1px solid var(--trait); border-radius: 6px; padding: 4px 10px; text-decoration: none; font-size: 13px; }
+  a.discret:hover { background: var(--accent-doux); }
   button.danger { color: var(--echec); }
   button:disabled { opacity: .5; cursor: default; }
   .bouton { display: inline-block; color: var(--accent); border: 1px solid var(--trait); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; text-decoration: none; }
@@ -280,6 +282,7 @@
     <button type="button" id="deconnexion" class="discret" data-t="deconnexion" hidden></button>
     <button type="button" id="theme" class="discret" aria-label="Thème">◐</button>
     <button type="button" id="langue" class="discret"></button>
+    <a id="aide" class="discret" href="https://e-ko.rip/documentation/" target="_blank" rel="noopener" data-t="aide" data-t-title="aide_titre"></a>
   </div>
 </header>
 <p id="acces-libre" class="bandeau" data-t="acces_libre" hidden></p>
@@ -582,6 +585,7 @@ const textes = {
     rendus_etat: (n, max, att) => `${n} en cours sur ${max}` + (att ? ` · ${att} en attente` : ""), jours: (j) => (j ? `${j} jours` : "illimitée"),
     libre_sur: (libre, total) => `${libre} sur ${total}`,
     connexion: "Connexion à E-KO RIP Center", nom_utilisateur: "Utilisateur", mot_de_passe: "Mot de passe", se_connecter: "Se connecter",
+    aide: "Aide", aide_titre: "Documentation d'E-KO RIP Center (e-ko.rip, nouvel onglet)",
     deconnexion: "Se déconnecter", connecte: (n) => `Connecté : ${n}`,
     acces_libre: "Accès libre : aucun utilisateur n'est déclaré sur ce serveur. Créer un compte sur le serveur : eko-rip-serveur utilisateur ajouter <nom>",
     reglage: "Réglage", aucun_reglage: "— saisie libre —", enregistrer_reglage: "Enregistrer…", supprimer_reglage: "Supprimer",
@@ -917,6 +921,7 @@ const textes = {
     rendus_etat: (n, max, att) => `${n} running of ${max}` + (att ? ` · ${att} waiting` : ""), jours: (j) => (j ? `${j} days` : "unlimited"),
     libre_sur: (libre, total) => `${libre} of ${total}`,
     connexion: "Sign in to E-KO RIP Center", nom_utilisateur: "User", mot_de_passe: "Password", se_connecter: "Sign in",
+    aide: "Help", aide_titre: "E-KO RIP Center documentation (e-ko.rip, new tab)",
     deconnexion: "Sign out", connecte: (n) => `Signed in: ${n}`,
     acces_libre: "Open access: no user is declared on this server. Create an account on the server: eko-rip-serveur utilisateur ajouter <name>",
     reglage: "Preset", aucun_reglage: "— free entry —", enregistrer_reglage: "Save…", supprimer_reglage: "Delete",
@@ -2082,6 +2087,7 @@ function appliquerLangue() {
   // Outils de la barre : leur libellé en bulle (il est masqué sur un écran moyen).
   document.querySelectorAll(".barre .outil [data-t]").forEach((n) => { n.closest(".outil").title = n.textContent; });
   boutonLangue.textContent = T().autre;
+  $("aide").href = langue === "en" ? "https://e-ko.rip/documentation/en/" : "https://e-ko.rip/documentation/";
   remplirProfils();
   remplirReglages();
   champsEdition($("edition-envoi"), lireEdition($("edition-envoi")));
