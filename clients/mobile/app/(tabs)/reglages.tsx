@@ -1,5 +1,6 @@
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { api, messageErreur, VERSION_APP } from '../../src/api';
 import { useSession } from '../../src/session';
 import { useTheme } from '../../src/theme';
@@ -83,13 +84,27 @@ export default function Reglages() {
           : <Bouton titre="Se déconnecter" onPress={quitter} couleur={t.erreur} />}
       </View>
 
+      <Pressable onPress={() => WebBrowser.openBrowserAsync(adresseDocumentation())} hitSlop={8} style={styles.aide}>
+        <Text style={{ color: t.accent, fontSize: 15 }}>Aide / Documentation</Text>
+      </Pressable>
+
       <Text style={[styles.version, { color: t.texteDiscret }]}>E-KO RIP version {VERSION_APP}</Text>
     </ScrollView>
   );
 }
 
+/** Page de l'app dans la documentation publique, en français ou en anglais selon le téléphone. */
+function adresseDocumentation(): string {
+  let langue = 'fr';
+  try { langue = Intl.DateTimeFormat().resolvedOptions().locale.slice(0, 2).toLowerCase(); } catch { /* fr */ }
+  return langue === 'fr'
+    ? 'https://e-ko.rip/documentation/application-mobile/'
+    : 'https://e-ko.rip/documentation/en/mobile-app/';
+}
+
 const styles = StyleSheet.create({
   titre: { fontSize: 13, fontWeight: '600', textTransform: 'uppercase', marginHorizontal: 20, marginTop: 12, marginBottom: 8 },
   ligne: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, gap: 12 },
+  aide: { alignSelf: 'center', padding: 6, marginBottom: 4 },
   version: { textAlign: 'center', fontSize: 13, marginTop: 8 },
 });
