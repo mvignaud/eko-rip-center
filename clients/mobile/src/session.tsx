@@ -5,7 +5,7 @@ import {
   normaliserUrl, sonderServeur, stockage,
 } from './api';
 import {
-  AuthCloud, connecterCloud, deconnecterCloud, inscrirePushCloud, moi, MoiCloud, SiteCloud,
+  AuthCloud, connecterCloud, deconnecterCloud, inscrirePushCloud, moi, MoiCloud, retirerPushCloud, SiteCloud,
 } from './cloud';
 import {
   activerNotifications, desactiverNotifications, ecrirePrefs, ETAT_NOTIF_INITIAL, EtatNotif, jetonExpo, lirePrefs,
@@ -75,6 +75,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const synchroniserNotifs = useCallback(async (p: PrefsNotif) => {
     if (!p.actives) {
       await desactiverNotifications(jetonRef.current);
+      // Aussi les notifications de la plate-forme (site hors ligne, nouvelle app…)
+      const j = await stockage.lire('cloud_jeton');
+      if (j) await retirerPushCloud(j);
       jetonRef.current = null;
       setNotif({ code: 'desactive', message: 'Notifications désactivées.', jeton: null });
       return;

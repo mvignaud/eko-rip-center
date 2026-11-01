@@ -5500,7 +5500,16 @@ async fn executer(etat: Partage, s: file::Sortie) {
     // avant, pour que le pont ERP la voie même retirée.
     if s.operation() == machines::Operation::Decoupe {
         let _ = f.ecrire(&etat.config.donnees);
-        f.apres_coupe(s.id, decoupe::reglages().apres_coupe);
+        let politique = decoupe::reglages().apres_coupe;
+        // Archivée ou retirée tout de suite : la veille de la file ne la verrait pas finie.
+        if politique != file::ApresCoupe::Rien
+            && let Some(x) = f.sorties.iter().find(|x| x.id == s.id && x.etat == file::Etat::Terminee)
+        {
+            let noms: std::collections::HashMap<String, String> = etat.machines.read().unwrap().iter().map(|m| (m.id.clone(), m.nom.clone())).collect();
+            let vue = mobile::VueSortie { id: x.id, travail: x.travail, machine: &x.machine, nom: &x.nom, page: x.page, etat: "terminee", decoupe: true, erreur: None };
+            mobile::noter_fin(&etat.config.donnees, &vue, &noms);
+        }
+        f.apres_coupe(s.id, politique);
     }
     let _ = f.ecrire(&etat.config.donnees);
     drop(f);

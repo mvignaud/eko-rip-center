@@ -158,6 +158,10 @@ export function definirDemo(actif: boolean) {
 }
 
 export function definirServeur(url: string) { urlServeur = normaliserUrl(url); }
+/** Clé de stockage propre au serveur choisi (SecureStore n'admet que [A-Za-z0-9._-]). */
+export function cleServeur(prefixe: string): string {
+  return `${prefixe}.${urlServeur.replace(/^https?:\/\//, '').replace(/[^A-Za-z0-9._-]/g, '_')}`;
+}
 export function definirSurSessionPerdue(f: (() => void) | null) { surSessionPerdue = f; }
 
 // ---------- Requêtes ----------

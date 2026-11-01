@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { api, Evenement, messageErreur, stockage } from './api';
+import { api, cleServeur, Evenement, messageErreur, stockage } from './api';
 import { useAppActive } from './hooks';
 
 interface Alertes {
@@ -36,7 +36,8 @@ export function AlertesProvider({ children }: { children: React.ReactNode }) {
   const definirVu = useCallback((n: number) => {
     vuRef.current = n;
     setVu(n);
-    stockage.ecrire('dernier_vu', String(n));
+    // Numéros d'événements propres à chaque serveur : un curseur par serveur
+    stockage.ecrire(cleServeur('dernier_vu'), String(n));
   }, []);
 
   const rafraichir = useCallback(async () => {
@@ -45,7 +46,7 @@ export function AlertesProvider({ children }: { children: React.ReactNode }) {
       setEvenements(r.evenements);
       setErreur(null);
       if (vuRef.current === null) {
-        const memo = await stockage.lire('dernier_vu');
+        const memo = await stockage.lire(cleServeur('dernier_vu'));
         if (memo !== null) { vuRef.current = Number(memo); setVu(Number(memo)); }
         else definirVu(r.dernier); // premier lancement : l'historique n'est pas « nouveau »
       }

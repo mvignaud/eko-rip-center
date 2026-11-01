@@ -125,6 +125,7 @@ impl EtatMachine {
 }
 
 /// Une sortie de la file, vue par la veille.
+#[derive(Clone)]
 pub struct VueSortie<'a> {
     pub id: Uuid,
     pub travail: Uuid,
@@ -339,18 +340,33 @@ pub fn noter_file(donnees: &Path, sorties: &[VueSortie], noms: &HashMap<String, 
             if s.etat == "terminee" && !avant.contains_key(&s.id) {
                 continue;
             }
-            let machine = noms.get(s.machine).map_or(s.machine, String::as_str);
-            let quoi = if s.decoupe { "Découpe" } else { "Impression" };
-            let (genre, titre, texte) = if s.etat == "echec" {
-                (Genre::SortieEchec, format!("{quoi} en échec sur {machine}"), format!("{} (page {}){}", s.nom, s.page, s.erreur.map(|e| format!(" : {e}")).unwrap_or_default()))
-            } else {
-                (Genre::SortieTerminee, format!("{quoi} terminée sur {machine}"), format!("{} (page {})", s.nom, s.page))
-            };
-            n.push((genre, Some(s.machine.to_string()), titre, texte, Some(s.id), Some(s.travail)));
+            n.push(evenement_sortie(s, noms));
         }
         n
     });
     publier(donnees, nouveaux);
+}
+
+fn evenement_sortie(s: &VueSortie, noms: &HashMap<String, String>) -> Nouveau {
+    let machine = noms.get(s.machine).map_or(s.machine, String::as_str);
+    let quoi = if s.decoupe { "Découpe" } else { "Impression" };
+    let (genre, titre, texte) = if s.etat == "echec" {
+        (Genre::SortieEchec, format!("{quoi} en échec sur {machine}"), format!("{} (page {}){}", s.nom, s.page, s.erreur.map(|e| format!(" : {e}")).unwrap_or_default()))
+    } else {
+        (Genre::SortieTerminee, format!("{quoi} terminée sur {machine}"), format!("{} (page {})", s.nom, s.page))
+    };
+    (genre, Some(s.machine.to_string()), titre, texte, Some(s.id), Some(s.travail))
+}
+
+/// Sortie terminée qui va être archivée ou retirée tout de suite (réglage « après la
+/// coupe ») : la veille de la file ne la verrait jamais finie, on la signale ici. Notée
+/// dans l'image de la file, elle n'est pas signalée deux fois.
+pub fn noter_fin(donnees: &Path, s: &VueSortie, noms: &HashMap<String, String>) {
+    let nouveau = avec_veille(donnees, |v| {
+        let image = v.sorties.get_or_insert_with(HashMap::new);
+        (image.insert(s.id, s.etat) != Some(s.etat)).then(|| evenement_sortie(s, noms))
+    });
+    publier(donnees, nouveau.into_iter().collect());
 }
 
 /// Travail écrit : un rendu en échec se signale une fois.
@@ -521,12 +537,22 @@ mod tests {
         let genres: Vec<Genre> = evenements(&donnees, 1, 50).0.iter().map(|e| e.genre).collect();
         assert_eq!(genres, [Genre::EncreVide, Genre::MachineRevenue, Genre::MachineInjoignable]);
 
+        // Découpe archivée ou retirée dès sa fin : signalée une seule fois, avant le ménage.
+        let s2 = Uuid::new_v4();
+        let coupe = |etat| [VueSortie { id: s2, travail: t, machine: "epson", nom: "c.pdf", page: 1, etat, decoupe: true, erreur: None }];
+        noter_file(&donnees, &[vue("echec")[0].clone(), coupe("en_cours")[0].clone()], &noms);
+        let avant = evenements(&donnees, 0, 50).1;
+        noter_fin(&donnees, &coupe("terminee")[0], &noms);
+        noter_file(&donnees, &vue("echec"), &noms);
+        let ev = evenements(&donnees, avant, 50).0;
+        assert_eq!((ev.len(), ev[0].genre, ev[0].titre.as_str()), (1, Genre::SortieTerminee, "Découpe terminée sur Epson"));
+
         noter_travail(&donnees, t, "b.pdf", true, None);
         noter_travail(&donnees, t, "b.pdf", true, None);
-        assert_eq!(evenements(&donnees, 4, 50).0.len(), 1, "un rendu en échec se signale une fois");
+        assert_eq!(evenements(&donnees, 5, 50).0.len(), 1, "un rendu en échec se signale une fois");
         // Relu depuis le disque après un redémarrage.
         VEILLES.lock().unwrap().remove(&donnees);
-        assert_eq!(evenements(&donnees, 0, 50).1, 5);
+        assert_eq!(evenements(&donnees, 0, 50).1, 6);
         let _ = std::fs::remove_dir_all(&donnees);
     }
 }

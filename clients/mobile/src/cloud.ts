@@ -128,6 +128,11 @@ export async function inscrirePushCloud(jeton: string, jetonExpo: string, platef
   } catch { /* plate-forme injoignable : réessayé à la prochaine connexion */ }
 }
 
+/** Désinscrit le téléphone des notifications de la plate-forme. */
+export async function retirerPushCloud(jeton: string): Promise<void> {
+  try { await appel('DELETE', '/api/moi/push', jeton); } catch { /* plate-forme injoignable */ }
+}
+
 /** Révoque le jeton d'app sur la plate-forme et l'oublie. */
 export async function deconnecterCloud(): Promise<void> {
   const jeton = await stockage.lire('cloud_jeton');
