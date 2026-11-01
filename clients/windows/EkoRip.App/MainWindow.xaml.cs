@@ -475,4 +475,13 @@ public sealed partial class MainWindow : Window
     {
         await Proteger(AfficherAPropos);
     }
+
+    /// <summary>Documentation publique, section du client Windows, dans le navigateur par défaut.</summary>
+    private async void Aide_Click(object sender, RoutedEventArgs e)
+    {
+        await Proteger(async () =>
+        {
+            await Windows.System.Launcher.LaunchUriAsync(new Uri("https://e-ko.rip/documentation/clients/#client-windows"));
+        });
+    }
 }

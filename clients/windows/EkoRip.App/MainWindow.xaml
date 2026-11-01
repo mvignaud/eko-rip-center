@@ -230,6 +230,14 @@
                             </AppBarButton.Icon>
                         </AppBarButton>
                         <AppBarSeparator />
+                        <AppBarButton Label="Aide / Documentation" Click="Aide_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE897;" />
+                            </AppBarButton.Icon>
+                            <AppBarButton.KeyboardAccelerators>
+                                <KeyboardAccelerator Key="F1" />
+                            </AppBarButton.KeyboardAccelerators>
+                        </AppBarButton>
                         <AppBarButton Label="À propos d'E-KO RIP Center" Click="APropos_Click">
                             <AppBarButton.Icon>
                                 <FontIcon Glyph="&#xE946;" />

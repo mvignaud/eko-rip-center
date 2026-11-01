@@ -39,6 +39,17 @@ public sealed class FenetreAdministration : Window
             await _vue.EnsureCoreWebView2Async();
             var web = _vue.CoreWebView2;
             web.Settings.UserAgent = "Mozilla/5.0 " + VersionClient.Agent;
+            // Liens target=_blank (bouton « Aide » de l'interface, liens externes) : dans le
+            // navigateur par défaut plutôt que dans une fenêtre WebView2 sans session ni barre.
+            web.NewWindowRequested += (_, args) =>
+            {
+                args.Handled = true;
+                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var lien)
+                    && (lien.Scheme == Uri.UriSchemeHttps || lien.Scheme == Uri.UriSchemeHttp))
+                {
+                    _ = Windows.System.Launcher.LaunchUriAsync(lien);
+                }
+            };
 
             var racine = new Uri(_api.Racine + "/");
             if (_api.CookieSession() is { } cookie)
