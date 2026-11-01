@@ -295,8 +295,8 @@ ce sont ses `sortie.etat` (qui passe, quand, en échec ou non), ses `travail.con
 
 ## 7. Travaux envoyés par l'ERP (lot R3)
 
-Forme d'un élément de `travaux` : § 11 du contrat côté ERP (`docs/onyx/pont-erp-cote-erp.md`
-d'eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
+Forme d'un élément de `travaux` : § 11 du contrat côté ERP (dans
+eko-source) — `id` (uuid de l'envoi), `ref_erp`, `nom`, `prereglage_uuid`, `copies`,
 `echeance`, `fichier { chemin, nom, taille, sha256 }`, et pour des travaux liés `groupe` et
 `partie` (roadmap 7.8).
 

@@ -22,6 +22,10 @@ pub fn ecrire(nom: &str, valeur: &str) {
     }
 }
 
+pub fn supprimer(nom: &str) {
+    let _ = std::fs::remove_file(dossier().join(nom));
+}
+
 /// Adresse saisie (`hôte`, `hôte:8640`, `http://hôte:8640/`) ramenée à `http://hôte:port`.
 /// Sans schéma ni port, le port 8640 du serveur est pris.
 pub fn normaliser_adresse(saisie: &str) -> Option<String> {
@@ -56,6 +60,8 @@ mod tests {
         assert_eq!(normaliser_adresse(" rip.local:9000/ ").as_deref(), Some("http://rip.local:9000"));
         assert_eq!(normaliser_adresse("http://rip:8640").as_deref(), Some("http://rip:8640"));
         assert_eq!(normaliser_adresse("https://rip.e-ko.fr").as_deref(), Some("https://rip.e-ko.fr"));
+        assert_eq!(normaliser_adresse("https://k3x9ab.platform.e-ko.rip").as_deref(), Some("https://k3x9ab.platform.e-ko.rip"));
+        assert_eq!(normaliser_adresse("https://platform.e-ko.rip/s/k3x9ab"), None);
         assert_eq!(normaliser_adresse(""), None);
         assert_eq!(normaliser_adresse("ftp://x"), None);
         assert_eq!(normaliser_adresse("a b"), None);

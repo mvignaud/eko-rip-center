@@ -11,10 +11,17 @@ Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
 | Journal des versions | `changelog/index.html` |
 | Application mobile, confidentialité | `app/index.html`, `app/confidentialite/index.html` |
 | Mentions légales | `mentions-legales/index.html` |
+| Documentation (FR, EN) : générée, ne pas modifier à la main | `documentation/`, `assets/documentation.css`, `assets/documentation.js` |
 | Page 404 | `404.html` |
 
 Styles dans `assets/style.css` (couleurs CMJN de l'icône, mode sombre automatique),
 comportements dans `assets/site.js`, journal dans `assets/journal.js`.
+
+## Documentation
+
+`documentation/` est générée depuis `docs/guide/` (et `docs/fr|en/`) par
+`python3 outils/generer-documentation.py` : voir `docs/guide/README.md`. `publier-site.sh` refuse de
+publier si elle est en retard sur sa source.
 
 ## Journal des versions
 
@@ -47,17 +54,25 @@ cd site && python3 -m http.server 8765   # puis http://localhost:8765
 ## Publier
 
 ```bash
-outils/publier-site.sh
+EKO_SITE_HOTE=<compte>@<hôte> outils/publier-site.sh
 ```
 
 Le CSS et le JS sont mis en cache une heure (`.htaccess`), les pages jamais. Le script
 suffixe donc à la publication les liens vers chaque `.css` et `.js` de `assets/` d'une
 empreinte de leur contenu (`?v=…`) : rien à changer à la main.
 
-Hôte (`EKO_SITE_HOTE`, défaut `sc3nihe1770@fleur.o2switch.net`) et dossier racine du
+Hôte (`EKO_SITE_HOTE`, obligatoire : compte SSH o2switch ou alias de `~/.ssh/config`) et dossier racine du
 domaine dans cPanel (`EKO_SITE_DOSSIER`, défaut `public_html`, racine du domaine e-ko.rip chez o2switch) se changent par variables.
 L'accès SSH d'o2switch n'est ouvert qu'aux adresses IP déclarées dans cPanel
 (« Autorisation SSH »).
 
 Captures : `assets/img/*.webp`, tirées des captures réelles du logiciel. Pour en ajouter
 une, la convertir en WebP (qualité 85) et lui donner `width`, `height` et un `alt`.
+
+## Téléchargement direct des clients
+
+`/telecharger/mac` et `/telecharger/windows` (règle dans `.htaccess`, script
+`telecharger/telecharger.php`) renvoient vers le fichier de la dernière release GitHub qui en a
+un : `.dmg` pour Mac, `.exe` (sinon `.msi`) pour Windows. La liste des releases est gardée
+10 minutes en cache dans `~/eko-rip-cache` (hors du dossier public, pas dans le `/tmp` commun) ; sans réponse de GitHub, on renvoie vers la page des versions. Rien à
+changer à chaque version : il suffit de joindre le fichier à la release.

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installer le serveur · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Choisir le poste, installer le serveur RIP sous Ubuntu par le dépôt APT, créer les comptes et brancher les machines.">
+<link rel="canonical" href="https://e-ko.rip/documentation/serveur/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/serveur/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/server/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/fr/serveur.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/documentation/en/server/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/" aria-current="page">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Installer</p>
+    <h1>Installer le serveur</h1>
+    <p class="doc-chapo">Choisir le poste, installer le serveur RIP sous Ubuntu par le dépôt APT, créer les comptes et brancher les machines.</p>
+<p>Le serveur est le cœur du RIP : il tourne sous Linux sur un PC de l'atelier, reçoit les fichiers des postes, calcule les rendus et pilote les machines. Cette page couvre le choix du poste, l'installation, les comptes et la première mise en route.</p>
+<h2 id="choisir-le-poste-serveur"><a class="ancre" href="#choisir-le-poste-serveur" aria-hidden="true">#</a>Choisir le poste serveur</h2>
+<p>Le serveur est le poste qui ne doit pas s'arrêter. Le rendu des fichiers (Ghostscript) est la tâche la plus lourde.</p>
+<div class="tableau"><table><thead><tr><th></th><th>Essais, petit volume</th><th>Atelier en production</th></tr></thead><tbody><tr><td><strong>Système</strong></td><td>Ubuntu 24.04 ou 26.04 LTS, Debian 13</td><td>Ubuntu 26.04 LTS</td></tr><tr><td><strong>Processeur</strong></td><td>2 cœurs x86 64 bits</td><td>4 cœurs ou plus</td></tr><tr><td><strong>Mémoire</strong></td><td>16 Go</td><td>16 à 32 Go</td></tr><tr><td><strong>Disque des données</strong></td><td>500 Go</td><td>SSD dédié de 1 To ou plus</td></tr><tr><td><strong>Réseau</strong></td><td>câble</td><td>câble, adresse IP fixe</td></tr></tbody></table></div>
+<p>Les paquets sont construits pour les PC <strong>x86 64 bits (amd64)</strong>. Plus de mémoire et de cœurs raccourcissent les rendus de bâches de plusieurs dizaines de m² à haute résolution.</p>
+<p><strong>Disque</strong> : un rendu pèse environ <strong>1 Go par m² à 600 dpi</strong> (le quart à 300 dpi, quatre fois plus à 1 200 dpi). Un SSD réservé au dossier des données (<code>/var/lib/eko-rip</code>), distinct du disque système, évite qu'un gros rendu remplisse le système. Le monter avant la première mise en route. Sous 5 Go libres, le serveur efface les plus vieux travaux inactifs et refuse un travail qui ne tiendrait pas ; sous 20 Go, chaque nouveau travail porte l'alerte « disque presque plein ».</p>
+<p><strong>Onduleur</strong> : y brancher le serveur, le switch et si possible la box. Une coupure arrête le rendu en cours (le travail est à relancer) et une sortie en cours d'envoi (à refaire). Les fichiers de réglage, eux, résistent à la coupure.</p>
+<p><strong>Adresses IP fixes</strong> : à réserver sur le routeur pour le serveur, les imprimantes en réseau et les découpeuses en réseau.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Astuce</p><p>Les pré-requis complets, avec un comparatif, sont aussi sur la page <a href="https://e-ko.rip/prerequis/" rel="noopener">Pré-requis</a> du site.</p></aside>
+<h2 id="installer-par-le-dépôt-apt"><a class="ancre" href="#installer-par-le-dépôt-apt" aria-hidden="true">#</a>Installer par le dépôt APT</h2>
+<p>C'est la méthode conseillée : le serveur se met ensuite à jour avec le reste du système. Sur le PC serveur, dans un terminal :</p>
+<pre class="langue-bash"><code># 1. Ajouter la clé et le dépôt E-KO (une seule fois)
+sudo wget -qO /usr/share/keyrings/eko-rip.gpg https://apt.e-ko.fr/rip/eko-rip.gpg
+echo "deb [signed-by=/usr/share/keyrings/eko-rip.gpg] https://apt.e-ko.fr/rip ./" | sudo tee /etc/apt/sources.list.d/eko-rip.list
+
+# 2. Installer le serveur
+sudo apt update
+sudo apt install eko-rip-serveur</code></pre>
+<p>Le paquet installe Ghostscript, crée le compte système <code>eko-rip</code> et démarre le service <code>eko-rip-serveur</code>, qui redémarre seul avec la machine. Les travaux sont rangés dans <code>/var/lib/eko-rip</code>.</p>
+<p>Vérifier qu'il tourne :</p>
+<pre class="langue-bash"><code>systemctl status eko-rip-serveur</code></pre>
+<p>Puis ouvrir <code>http://&lt;adresse-du-serveur&gt;:8640</code> dans un navigateur d'un autre poste : la page d'état doit s'afficher.</p>
+<figure><a href="/documentation/images/serveur-page-etat.png"><img src="/documentation/images/serveur-page-etat.png" alt="Page d&#x27;état affichée par un navigateur" loading="lazy"></a><figcaption>La page d'état confirme que le serveur répond</figcaption></figure>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Un PC qui sert à la fois de serveur et de poste de travail peut utiliser le script d'installation du client (<code>wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh</code>), qui ajoute le même dépôt : il suffit ensuite de faire <code>sudo apt install eko-rip-serveur</code>.</p></aside>
+<h3 id="sans-dépôt-le-paquet-deb"><a class="ancre" href="#sans-dépôt-le-paquet-deb" aria-hidden="true">#</a>Sans dépôt : le paquet .deb</h3>
+<p>Le paquet <code>eko-rip-serveur_&lt;version&gt;-1_amd64.deb</code> est aussi joint à chaque version sur <a href="https://github.com/mvignaud/eko-rip-center/releases" rel="noopener">GitHub</a>. L'installer avec :</p>
+<pre class="langue-bash"><code>sudo apt install ./eko-rip-serveur_&lt;version&gt;-1_amd64.deb</code></pre>
+<p>Les mises à jour se font alors à la main, de la même façon.</p>
+<h3 id="ubuntu-2604"><a class="ancre" href="#ubuntu-2604" aria-hidden="true">#</a>Ubuntu 26.04</h3>
+<p>Depuis la version 0.31.0, le paquet autorise Ghostscript à lire les travaux du RIP malgré le confinement AppArmor d'Ubuntu 26.04. Une version plus ancienne y échoue sur chaque rendu (« Permission denied ») : mettre à jour.</p>
+<h2 id="créer-les-comptes"><a class="ancre" href="#créer-les-comptes" aria-hidden="true">#</a>Créer les comptes</h2>
+<p>Sans compte, l'accès est libre pour tout le réseau et l'écran l'affiche en rouge. Le Cloud et l'application mobile exigent des comptes.</p>
+<p>Créer le premier compte (administrateur), sur le serveur :</p>
+<pre class="langue-bash"><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter marie</code></pre>
+<p>Le mot de passe est demandé deux fois, sans s'afficher (10 caractères au moins). Puis un compte par opérateur :</p>
+<pre class="langue-bash"><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter julie operateur</code></pre>
+<div class="tableau"><table><thead><tr><th>Rôle</th><th>Peut</th></tr></thead><tbody><tr><td><strong>Administrateur</strong> (<code>admin</code>)</td><td>tout, y compris les machines, supports et tarifs, profils ICC, réglages enregistrés, sauvegarde, Cloud</td></tr><tr><td><strong>Opérateur</strong> (<code>operateur</code>)</td><td>envoyer, éditer, imprimer, découper, gérer la file et les planches ; voit les machines sans pouvoir les régler</td></tr></tbody></table></div>
+<p>Sans rôle précisé : administrateur s'il n'y en a encore aucun, opérateur sinon. Aucun redémarrage n'est nécessaire. La gestion courante (liste, mot de passe oublié, suppression) est dans <a href="/documentation/administration/#comptes">Administrer le serveur</a>.</p>
+<h2 id="brancher-les-machines"><a class="ancre" href="#brancher-les-machines" aria-hidden="true">#</a>Brancher les machines</h2>
+<p>Le serveur parle aux machines par le réseau, en USB ou par un dossier :</p>
+<ul><li><strong>Imprimante en réseau</strong> (Epson SureColor…) : adresse IP fixe, câble, même réseau que le serveur.</li><li><strong>Découpeuse en USB</strong> (Mutoh Kona…) : un port USB libre sur le serveur ; le service a déjà le droit d'y écrire.</li><li><strong>Découpeuse en réseau</strong> (Graphtec, Roland) : adresse IP fixe.</li><li><strong>Imprimante de bureau ou autre RIP</strong> : par IPP/CUPS ou par renvoi vers un autre serveur E-KO RIP.</li></ul>
+<p>Les machines se déclarent ensuite dans le client, <strong>Administration… › Système › Machines</strong>. Chaque modèle a sa page (réglages sur la machine et dans le RIP, vérifications) dans la rubrique <a href="/documentation/machines/">Machines</a>.</p>
+<figure><a href="/documentation/images/interface-systeme-machines.png"><img src="/documentation/images/interface-systeme-machines.png" alt="Liste des machines dans Système" loading="lazy"></a><figcaption>Système › Machines : le catalogue des machines du serveur</figcaption></figure>
+<h2 id="dossiers-surveillés"><a class="ancre" href="#dossiers-surveillés" aria-hidden="true">#</a>Dossiers surveillés</h2>
+<p>Chaque réglage enregistré a son dossier : un fichier déposé dedans part au RIP avec ce réglage, sans ouvrir le client. Pour y déposer depuis les Mac et les PC Windows, partager le dossier par Samba : voir <a href="/documentation/administration/#partager-les-dossiers-surveillés">Partager les dossiers surveillés</a>.</p>
+<h2 id="réglages-du-serveur"><a class="ancre" href="#réglages-du-serveur" aria-hidden="true">#</a>Réglages du serveur</h2>
+<p>Les réglages avancés (port, dossier des données, durée de conservation des travaux, taille maximale d'un fichier…) se font dans <code>/etc/default/eko-rip-serveur</code>, puis :</p>
+<pre class="langue-bash"><code>sudo systemctl restart eko-rip-serveur</code></pre>
+<p>La liste complète est dans <a href="/documentation/administration/#réglages-avancés">Administrer le serveur</a>.</p>
+<h2 id="pc-dédié-image-dinstallation"><a class="ancre" href="#pc-dédié-image-dinstallation" aria-hidden="true">#</a>PC dédié : image d'installation</h2>
+<p>Pour un PC neuf réservé au RIP, une image d'installation Ubuntu prête à l'emploi (serveur, client et bureau, ou serveur seul) est décrite dans la <a href="https://github.com/mvignaud/eko-rip-center/blob/main/docs/fr/installation-serveur.md#0-pc-dédié--image-dinstallation-ubuntu" rel="noopener">référence d'installation</a>. Elle <strong>efface tout le disque</strong> ; le serveur se met ensuite à jour par le dépôt APT.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/demarrage/"><span>Précédent</span>Prise en main</a><a class="doc-suiv" href="/documentation/clients/"><span>Suivant</span>Installer les clients</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/fr/serveur.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#choisir-le-poste-serveur">Choisir le poste serveur</a></li><li class="niveau-2"><a href="#installer-par-le-dépôt-apt">Installer par le dépôt APT</a></li><li class="niveau-3"><a href="#sans-dépôt-le-paquet-deb">Sans dépôt : le paquet .deb</a></li><li class="niveau-3"><a href="#ubuntu-2604">Ubuntu 26.04</a></li><li class="niveau-2"><a href="#créer-les-comptes">Créer les comptes</a></li><li class="niveau-2"><a href="#brancher-les-machines">Brancher les machines</a></li><li class="niveau-2"><a href="#dossiers-surveillés">Dossiers surveillés</a></li><li class="niveau-2"><a href="#réglages-du-serveur">Réglages du serveur</a></li><li class="niveau-2"><a href="#pc-dédié-image-dinstallation">PC dédié : image d&#x27;installation</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

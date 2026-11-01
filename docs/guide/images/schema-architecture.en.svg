@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" width="960" height="520" font-family="-apple-system, 'Segoe UI', Ubuntu, Roboto, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">E-KO RIP Center architecture</title>
+  <desc id="d">Mac, Linux and Windows workstations send files to the shop's RIP server, which drives the printers and cutters. The mobile app follows production. E-KO RIP Cloud gives access from outside through an outgoing connection from the server.</desc>
+  <defs>
+    <marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4a505c"/></marker>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a84ff"/><stop offset="1" stop-color="#0066d6"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="960" height="520" rx="22" fill="#f6f7f9"/>
+  <!-- Atelier -->
+  <rect x="24" y="24" width="640" height="472" rx="18" fill="#ffffff" stroke="#d6dae2" stroke-dasharray="6 6"/>
+  <text x="44" y="56" font-size="15" font-weight="700" fill="#4a505c">SHOP NETWORK</text>
+  <!-- Postes -->
+  <g font-size="14" fill="#14161a">
+    <rect x="48" y="84" width="170" height="64" rx="12" fill="#eceef2"/><text x="64" y="112" font-weight="700">Mac client</text><text x="64" y="132" fill="#4a505c" font-size="12">macOS 14 or later</text>
+    <rect x="48" y="164" width="170" height="64" rx="12" fill="#eceef2"/><text x="64" y="192" font-weight="700">Linux client</text><text x="64" y="212" fill="#4a505c" font-size="12">Ubuntu, Debian</text>
+    <rect x="48" y="244" width="170" height="64" rx="12" fill="#eceef2"/><text x="64" y="272" font-weight="700">Windows client</text><text x="64" y="292" fill="#4a505c" font-size="12">Windows 10 and 11</text>
+    <rect x="48" y="340" width="170" height="64" rx="12" fill="#eceef2"/><text x="64" y="368" font-weight="700">Shared folders</text><text x="64" y="388" fill="#4a505c" font-size="12">drop by drag (Samba)</text>
+  </g>
+  <!-- Serveur -->
+  <rect x="270" y="150" width="170" height="190" rx="16" fill="url(#g)"/>
+  <text x="355" y="196" font-size="17" font-weight="700" fill="#fff" text-anchor="middle">RIP server</text>
+  <text x="355" y="220" font-size="12" fill="#e6f1ff" text-anchor="middle">Linux PC (Ubuntu)</text>
+  <text x="355" y="252" font-size="12" fill="#fff" text-anchor="middle">file rendering</text>
+  <text x="355" y="272" font-size="12" fill="#fff" text-anchor="middle">queue</text>
+  <text x="355" y="292" font-size="12" fill="#fff" text-anchor="middle">machine control</text>
+  <text x="355" y="320" font-size="12" fill="#e6f1ff" text-anchor="middle">port 8640</text>
+  <!-- Machines -->
+  <g font-size="14" fill="#14161a">
+    <rect x="488" y="110" width="156" height="64" rx="12" fill="#eceef2"/><text x="504" y="138" font-weight="700">Printers</text><text x="504" y="158" fill="#4a505c" font-size="12">network, folder, IPP</text>
+    <rect x="488" y="210" width="156" height="64" rx="12" fill="#eceef2"/><text x="504" y="238" font-weight="700">Cutters</text><text x="504" y="258" fill="#4a505c" font-size="12">USB or network</text>
+    <rect x="488" y="310" width="156" height="64" rx="12" fill="#eceef2"/><text x="504" y="338" font-weight="700">Other RIP, ERP</text><text x="504" y="358" fill="#4a505c" font-size="12">forwarding, job folders</text>
+  </g>
+  <g stroke="#4a505c" stroke-width="2" fill="none" marker-end="url(#f)">
+    <path d="M218 116 C245 116 245 190 268 200"/>
+    <path d="M218 196 L268 226"/>
+    <path d="M218 276 C245 276 245 270 268 262"/>
+    <path d="M218 372 C245 372 245 330 268 318"/>
+    <path d="M440 210 C465 200 465 142 486 142"/>
+    <path d="M440 245 L486 242"/>
+    <path d="M440 290 C465 300 465 342 486 342"/>
+  </g>
+  <text x="236" y="438" font-size="12" fill="#4a505c">Clients send the files and manage the queue;</text>
+  <text x="236" y="456" font-size="12" fill="#4a505c">the server does the rest, even with the client closed.</text>
+  <!-- Extérieur -->
+  <text x="700" y="56" font-size="15" font-weight="700" fill="#4a505c">OUTSIDE THE SHOP</text>
+  <rect x="696" y="84" width="240" height="120" rx="16" fill="#ffffff" stroke="#d6dae2"/>
+  <text x="716" y="116" font-size="16" font-weight="700" fill="#14161a">E-KO RIP Cloud</text>
+  <text x="716" y="138" font-size="12" fill="#4a505c">platform.e-ko.rip</text>
+  <text x="716" y="162" font-size="12" fill="#4a505c">free remote access,</text>
+  <text x="716" y="180" font-size="12" fill="#4a505c">no VPN, no open port</text>
+  <rect x="696" y="260" width="200" height="96" rx="16" fill="#ffffff" stroke="#d6dae2"/>
+  <text x="716" y="292" font-size="16" font-weight="700" fill="#14161a">Mobile app</text>
+  <text x="716" y="314" font-size="12" fill="#4a505c">iOS and Android: queue</text>
+  <text x="716" y="332" font-size="12" fill="#4a505c">monitoring and alerts</text>
+  <rect x="696" y="400" width="200" height="80" rx="16" fill="#ffffff" stroke="#d6dae2"/>
+  <text x="716" y="432" font-size="16" font-weight="700" fill="#14161a">Remote workstations</text>
+  <text x="716" y="454" font-size="12" fill="#4a505c">client or browser</text>
+  <g stroke="#ec008c" stroke-width="2.4" fill="none" marker-end="url(#f)">
+    <path d="M355 150 C355 80 560 80 694 130" stroke-dasharray="7 5"/>
+  </g>
+  <text x="440" y="74" font-size="12" fill="#ec008c" font-weight="600">outgoing connection (HTTPS)</text>
+  <g stroke="#4a505c" stroke-width="2" fill="none" marker-end="url(#f)">
+    <path d="M796 258 L796 206"/>
+    <path d="M896 440 C925 440 920 300 916 206"/>
+  </g>
+</svg>

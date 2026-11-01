@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud E-KO RIP · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Accéder au serveur RIP de l&#x27;atelier depuis l&#x27;extérieur, sans VPN ni port ouvert, avec la plate-forme gratuite platform.e-ko.rip.">
+<link rel="canonical" href="https://e-ko.rip/documentation/cloud/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/cloud/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/cloud/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/fr/cloud.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/#installer">Installer</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/documentation/en/cloud/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/" aria-current="page">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Installer</p>
+    <h1>Cloud E-KO RIP</h1>
+    <p class="doc-chapo">Accéder au serveur RIP de l&#x27;atelier depuis l&#x27;extérieur, sans VPN ni port ouvert, avec la plate-forme gratuite platform.e-ko.rip.</p>
+<p>Le cloud <strong>E-KO RIP</strong> donne accès au serveur RIP de l'atelier depuis l'extérieur : à la maison, chez un client, en déplacement. Il fonctionne sans VPN et sans rien changer à la box Internet. Le service est gratuit pour tout serveur E-KO RIP Center.</p>
+<figure><a href="/documentation/images/schema-cloud.svg"><img src="/documentation/images/schema-cloud.svg" alt="Schéma du cloud : atelier, connexion sortante, plate-forme, postes et téléphones à distance" loading="lazy"></a><figcaption>Le serveur de l'atelier se connecte à la plate-forme, les postes et téléphones à distance passent par elle</figcaption></figure>
+<h2 id="à-quoi-sert-le-cloud"><a class="ancre" href="#à-quoi-sert-le-cloud" aria-hidden="true">#</a>À quoi sert le cloud</h2>
+<p>Sans le cloud, le serveur RIP n'est joignable que sur le réseau de l'atelier. Avec le cloud :</p>
+<ul><li>les postes (Mac, Linux, Windows) se connectent au serveur depuis n'importe où ;</li><li>l'interface d'administration s'ouvre dans un navigateur, comme à l'atelier ;</li><li>l'<a href="/documentation/application-mobile/">application mobile</a> suit la production hors de l'atelier ;</li><li>des notifications et des e-mails préviennent quand le serveur ne répond plus.</li></ul>
+<p>Le principe est simple : c'est le serveur de l'atelier qui ouvre lui-même une connexion vers la plate-forme. <strong>Aucun port n'est à ouvrir</strong> sur la box. Les postes et les téléphones à distance passent par la plate-forme pour atteindre le serveur.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Le cloud est facultatif. Le serveur continue de fonctionner normalement à l'atelier, avec ou sans lui.</p></aside>
+<h2 id="créer-un-compte"><a class="ancre" href="#créer-un-compte" aria-hidden="true">#</a>Créer un compte</h2>
+<p>Le portail de la plate-forme se trouve à l'adresse <a href="https://platform.e-ko.rip">https://platform.e-ko.rip</a>.</p>
+<figure><a href="/documentation/images/cloud-connexion.png"><img src="/documentation/images/cloud-connexion.png" alt="Page de connexion du portail" loading="lazy"></a><figcaption>La page de connexion du portail</figcaption></figure>
+<ol><li>Ouvrir <a href="https://platform.e-ko.rip">https://platform.e-ko.rip</a>.</li><li>Choisir <strong>Créer un compte</strong>.</li><li>Saisir le nom (ou le nom de l'atelier), l'adresse e-mail et un mot de passe d'au moins 10 caractères.</li><li>Accepter les conditions d'utilisation, puis valider.</li></ol>
+<p>Si la page propose <strong>Google</strong> ou <strong>Facebook</strong>, ces boutons permettent aussi de s'inscrire sans mot de passe.</p>
+<h3 id="confirmer-ladresse-e-mail"><a class="ancre" href="#confirmer-ladresse-e-mail" aria-hidden="true">#</a>Confirmer l'adresse e-mail</h3>
+<p>Un e-mail de confirmation est envoyé à l'inscription par mot de passe.</p>
+<ol><li>Ouvrir l'e-mail envoyé par <strong>E-KO RIP Cloud</strong> (<code>no-reply@e-ko.fr</code>).</li><li>Cliquer sur le lien de confirmation, valable 24 heures.</li><li>Cliquer sur le bouton de la page pour valider.</li></ol>
+<p>Tant que l'adresse n'est pas confirmée, un bandeau l'indique sur <strong>Mes sites</strong> et <strong>Mon compte</strong>. Il propose <strong>Renvoyer l'e-mail</strong>. Rattacher un serveur est refusé jusqu'à la confirmation. Le reste du portail fonctionne.</p>
+<p>Un compte créé avec Google est confirmé d'office.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Astuce</p><p>Si l'e-mail n'arrive pas, regarder dans les courriers indésirables, puis demander un nouvel envoi depuis le bandeau.</p></aside>
+<h2 id="rattacher-un-serveur-rip"><a class="ancre" href="#rattacher-un-serveur-rip" aria-hidden="true">#</a>Rattacher un serveur RIP</h2>
+<p>Le rattachement se fait en deux temps : un code sur le serveur, puis la saisie de ce code sur le portail. Compter deux minutes.</p>
+<h3 id="avant-de-commencer"><a class="ancre" href="#avant-de-commencer" aria-hidden="true">#</a>Avant de commencer</h3>
+<p>Le serveur doit avoir <strong>au moins un compte utilisateur</strong>. Sans compte, l'accès au serveur est libre sur le réseau local, et le cloud refuse de s'ouvrir pour ne pas laisser l'atelier ouvert à tous.</p>
+<p>Pour créer un compte, voir <a href="/documentation/administration/#comptes">Administrer le serveur</a>. Le serveur doit aussi avoir accès à Internet (voir <a href="/documentation/serveur/">Installer le serveur</a>).</p>
+<h3 id="pas-à-pas"><a class="ancre" href="#pas-à-pas" aria-hidden="true">#</a>Pas à pas</h3>
+<ol><li>Ouvrir l'interface d'administration du serveur RIP, avec un compte administrateur.</li><li>Aller dans <strong>Système › Cloud E-KO RIP</strong>.</li><li>Cliquer sur <strong>Connecter à la plate-forme</strong>. Le serveur affiche un code court, de la forme <code>KXRT-4821</code>, valable <strong>10 minutes</strong>.</li><li>Sur le portail, se connecter avec son compte.</li><li>Aller dans <strong>Mes sites</strong>, rubrique <strong>Rattacher un serveur RIP</strong>.</li><li>Saisir le code, puis cliquer sur <strong>Rattacher</strong>.</li></ol>
+<figure><a href="/documentation/images/cloud-appairage.png"><img src="/documentation/images/cloud-appairage.png" alt="Page Mes sites du portail avec la zone de saisie du code" loading="lazy"></a><figcaption>Saisie du code dans Mes sites</figcaption></figure>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Astuce</p><p>Le serveur affiche aussi un lien : l'ouvrir mène directement à la page de saisie du code.</p></aside>
+<p>Quelques secondes plus tard, le serveur est relié. L'écran <strong>Système › Cloud E-KO RIP</strong> indique <strong>Connecté : accessible à distance</strong> et affiche l'<strong>Adresse à distance</strong>. Le compte qui a saisi le code devient propriétaire du site.</p>
+<figure><a href="/documentation/images/cloud-sites.png"><img src="/documentation/images/cloud-sites.png" alt="Liste Mes sites : état et adresse à distance de chaque site" loading="lazy"></a><figcaption>La liste Mes sites</figcaption></figure>
+<p>Le portail permet de rattacher jusqu'à 10 sites par compte.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Après une coupure de réseau, le serveur se reconnecte tout seul, sans intervention.</p></aside>
+<h2 id="utiliser-laccès-à-distance"><a class="ancre" href="#utiliser-laccès-à-distance" aria-hidden="true">#</a>Utiliser l'accès à distance</h2>
+<p>Chaque site a sa propre adresse :</p>
+<pre><code>https://&lt;site&gt;.platform.e-ko.rip</code></pre>
+<p>Elle est visible dans <strong>Système › Cloud E-KO RIP</strong> sur le serveur, et dans <strong>Mes sites</strong> sur le portail. Elle sert dans trois cas.</p>
+<h3 id="dans-un-client-de-bureau"><a class="ancre" href="#dans-un-client-de-bureau" aria-hidden="true">#</a>Dans un client de bureau</h3>
+<ol><li>Ouvrir le client (voir <a href="/documentation/clients/#client-mac">Mac</a>, <a href="/documentation/clients/#client-linux">Linux</a> ou <a href="/documentation/clients/#client-windows">Windows</a>).</li><li>Saisir l'adresse du site à la place de l'adresse locale du serveur.</li><li>Se connecter avec un compte du serveur RIP.</li></ol>
+<h3 id="dans-un-navigateur"><a class="ancre" href="#dans-un-navigateur" aria-hidden="true">#</a>Dans un navigateur</h3>
+<ol><li>Ouvrir l'adresse du site.</li><li>Se connecter avec un compte du serveur RIP.</li></ol>
+<p>L'interface d'administration fonctionne comme à l'atelier.</p>
+<h3 id="dans-lapplication-mobile"><a class="ancre" href="#dans-lapplication-mobile" aria-hidden="true">#</a>Dans l'application mobile</h3>
+<p>Saisir l'adresse du site dans le champ <strong>Serveur</strong>, ou utiliser <strong>Se connecter au cloud</strong> (voir ci-dessous). Détails dans <a href="/documentation/application-mobile/">Application mobile</a>.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Les comptes utilisés à distance sont ceux du serveur RIP, ceux de <a href="/documentation/administration/#comptes">Administrer le serveur</a>. Le compte de la plate-forme sert au portail et à <strong>Se connecter au cloud</strong>.</p></aside>
+<h2 id="se-connecter-au-cloud-depuis-les-apps"><a class="ancre" href="#se-connecter-au-cloud-depuis-les-apps" aria-hidden="true">#</a>Se connecter au cloud depuis les apps</h2>
+<p>Les apps Mac, Linux et mobile proposent un bouton <strong>Se connecter au cloud</strong> sur leur écran de connexion. Il évite de saisir une adresse et un second mot de passe.</p>
+<ol><li>Cliquer sur <strong>Se connecter au cloud</strong>. Le navigateur s'ouvre sur la plate-forme.</li><li>Se connecter avec son compte (mot de passe, Google ou Facebook).</li><li>Autoriser l'application quand le portail le demande.</li><li>Revenir à l'application : elle affiche la liste des sites du compte, en ligne ou non.</li><li>Choisir le site voulu.</li></ol>
+<p>Les droits dans l'application suivent le rôle du compte sur le site : un propriétaire ou un administrateur est administrateur du RIP, un opérateur est opérateur, un compte en lecture ne peut rien modifier.</p>
+<p>L'accès d'une app reste valable environ 180 jours. À chaque nouvelle app connectée, un e-mail de sécurité est envoyé au titulaire du compte.</p>
+<h3 id="déconnecter-une-app"><a class="ancre" href="#déconnecter-une-app" aria-hidden="true">#</a>Déconnecter une app</h3>
+<ol><li>Se connecter au portail.</li><li>Ouvrir <strong>Mon compte</strong>.</li><li>Dans <strong>Apps connectées</strong>, cliquer sur <strong>Déconnecter toutes les apps</strong>.</li></ol>
+<p>Dans l'app elle-même, <strong>Se déconnecter du cloud</strong> retire l'accès de l'appareil.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Partager un site avec d'autres comptes (collègues, prestataires) avec un rôle opérateur ou lecture est prévu bientôt. Pour l'instant, le propriétaire du site est le compte qui l'a rattaché.</p></aside>
+<h2 id="e-mails-de-la-plate-forme"><a class="ancre" href="#e-mails-de-la-plate-forme" aria-hidden="true">#</a>E-mails de la plate-forme</h2>
+<p>La plate-forme écrit depuis <strong>E-KO RIP Cloud</strong>, adresse <code>no-reply@e-ko.fr</code>. Il n'y a rien à configurer. Ne pas répondre à ces messages.</p>
+<div class="tableau"><table><thead><tr><th>E-mail</th><th>Quand</th></tr></thead><tbody><tr><td>Mot de passe oublié</td><td>À la demande, avec un lien valable 1 heure, utilisable une seule fois.</td></tr><tr><td>Confirmation de l'adresse</td><td>À l'inscription par mot de passe, lien valable 24 heures.</td></tr><tr><td>Site hors ligne</td><td>Le serveur est injoignable depuis 15 minutes.</td></tr><tr><td>Site de nouveau en ligne</td><td>Le serveur répond de nouveau, uniquement si l'alerte « hors ligne » est partie.</td></tr><tr><td>Nouvelle app connectée</td><td>Une app vient de se connecter au compte.</td></tr><tr><td>Résumé hebdomadaire</td><td>Chaque lundi vers 8 h, pour chaque site.</td></tr></tbody></table></div>
+<p>Les alertes de site hors ligne concernent les propriétaires et les administrateurs du site. Au plus une alerte est envoyée par site et par heure.</p>
+<p>Le résumé hebdomadaire indique, pour chaque site : le nombre de coupures, la durée totale hors ligne, la plus longue coupure, les alertes envoyées et les apps connectées dans la semaine.</p>
+<h3 id="choisir-les-e-mails-reçus"><a class="ancre" href="#choisir-les-e-mails-reçus" aria-hidden="true">#</a>Choisir les e-mails reçus</h3>
+<ol><li>Ouvrir <strong>Mon compte</strong> sur le portail.</li><li>Cocher ou décocher <strong>Recevoir les alertes</strong> et <strong>Recevoir le résumé hebdomadaire</strong>.</li></ol>
+<p>Les deux cases sont cochées par défaut. L'e-mail « nouvelle app connectée » est toujours envoyé : c'est une mesure de sécurité.</p>
+<h3 id="mot-de-passe-oublié"><a class="ancre" href="#mot-de-passe-oublié" aria-hidden="true">#</a>Mot de passe oublié</h3>
+<ol><li>Sur la page de connexion, cliquer sur <strong>Mot de passe oublié ?</strong>.</li><li>Saisir l'adresse e-mail du compte.</li><li>Ouvrir l'e-mail reçu et cliquer sur le lien dans l'heure.</li><li>Choisir un nouveau mot de passe.</li></ol>
+<p>Pour des raisons de sécurité, la page répond de la même façon que l'adresse existe ou non. Le nouveau mot de passe ferme toutes les sessions du compte et déconnecte ses apps.</p>
+<h2 id="notifications"><a class="ancre" href="#notifications" aria-hidden="true">#</a>Notifications</h2>
+<p>Les mêmes événements que les alertes par e-mail peuvent arriver en notifications : <strong>site hors ligne</strong>, <strong>site de retour en ligne</strong> et <strong>nouvelle app connectée</strong>. Elles suivent la case <strong>Recevoir les alertes</strong>.</p>
+<h3 id="dans-le-navigateur"><a class="ancre" href="#dans-le-navigateur" aria-hidden="true">#</a>Dans le navigateur</h3>
+<p>Après la première connexion au portail, la page <strong>Mes sites</strong> propose <strong>Recevoir les alertes sur cet ordinateur ?</strong></p>
+<ol><li>Cliquer sur <strong>Activer</strong>.</li><li>Autoriser les notifications quand le navigateur le demande.</li></ol>
+<p>Le bouton <strong>Plus tard</strong> repousse le choix, et la question ne revient plus ensuite. Pour décider plus tard :</p>
+<ol><li>Ouvrir <strong>Mon compte</strong>.</li><li>Dans la carte <strong>Notifications sur cet appareil</strong>, cliquer sur <strong>Activer les notifications du navigateur</strong>.</li><li>Pour arrêter sur un navigateur, cliquer sur <strong>Retirer</strong> à côté de lui.</li></ol>
+<p>Les notifications arrivent même quand la page du portail est fermée, tant que le navigateur est lancé.</p>
+<h3 id="dans-les-apps-mac-linux-et-mobile"><a class="ancre" href="#dans-les-apps-mac-linux-et-mobile" aria-hidden="true">#</a>Dans les apps Mac, Linux et mobile</h3>
+<p>Les apps demandent l'autorisation d'afficher des notifications juste après la première connexion au cloud. Il suffit d'accepter. Si l'autorisation a été refusée, la rétablir dans les réglages du système ou du téléphone.</p>
+<h2 id="gérer-son-compte"><a class="ancre" href="#gérer-son-compte" aria-hidden="true">#</a>Gérer son compte</h2>
+<p><strong>Mon compte</strong> regroupe :</p>
+<ul><li>le nom, l'adresse e-mail et la date d'inscription ;</li><li>les connexions liées (mot de passe, Google, Facebook) ;</li><li>les cases d'e-mails et la carte <strong>Notifications sur cet appareil</strong> ;</li><li>la liste des <strong>Apps connectées</strong> ;</li><li>la suppression du compte.</li></ul>
+<h3 id="supprimer-son-compte"><a class="ancre" href="#supprimer-son-compte" aria-hidden="true">#</a>Supprimer son compte</h3>
+<ol><li>Ouvrir <strong>Mon compte</strong>.</li><li>Aller à la rubrique <strong>Supprimer mon compte</strong>.</li><li>Confirmer.</li></ol>
+<aside class="encadre encadre-attention"><p class="encadre-titre">Attention</p><p>La suppression efface le compte, ses droits et <strong>les sites dont il est propriétaire</strong>. Leur accès à distance s'arrête aussitôt. Le serveur RIP de l'atelier, lui, n'est pas touché : il reste utilisable sur place.</p></aside>
+<h2 id="détacher-un-serveur"><a class="ancre" href="#détacher-un-serveur" aria-hidden="true">#</a>Détacher un serveur</h2>
+<p>Détacher coupe l'accès à distance, sans toucher au serveur ni à ses données.</p>
+<h3 id="depuis-le-serveur"><a class="ancre" href="#depuis-le-serveur" aria-hidden="true">#</a>Depuis le serveur</h3>
+<ol><li>Ouvrir <strong>Système › Cloud E-KO RIP</strong>.</li><li>Cliquer sur <strong>Détacher de la plate-forme</strong>.</li><li>Confirmer.</li></ol>
+<p>L'accès à distance s'arrête aussitôt. Pour le rétablir, refaire le rattachement avec un nouveau code.</p>
+<h3 id="depuis-le-portail"><a class="ancre" href="#depuis-le-portail" aria-hidden="true">#</a>Depuis le portail</h3>
+<ol><li>Ouvrir <strong>Mes sites</strong>.</li><li>Cliquer sur <strong>Retirer</strong> à côté du site, puis confirmer.</li></ol>
+<p>Seul le propriétaire peut retirer un site.</p>
+<h2 id="ce-qui-ne-passe-jamais-par-le-cloud"><a class="ancre" href="#ce-qui-ne-passe-jamais-par-le-cloud" aria-hidden="true">#</a>Ce qui ne passe jamais par le cloud</h2>
+<p>Certaines fonctions restent réservées à l'atelier, même avec le cloud :</p>
+<ul><li>le pont avec l'ERP et ses réglages ;</li><li>le renvoi de travaux entre deux RIP ;</li><li>le rattachement et le détachement du cloud lui-même : ils se font uniquement depuis l'atelier.</li></ul>
+<p>Le serveur refuse ces demandes quand elles arrivent par le cloud. Il les refuse aussi, par prudence, quand aucun compte n'est déclaré sur le serveur.</p>
+<h2 id="sécurité-en-bref"><a class="ancre" href="#sécurité-en-bref" aria-hidden="true">#</a>Sécurité en bref</h2>
+<ul><li>Aucun port n'est ouvert à l'atelier : le serveur se connecte à la plate-forme, jamais l'inverse.</li><li>Chaque site a sa propre adresse, isolée de celle des autres sites et du portail.</li><li>Le mot de passe d'un compte est bloqué 5 minutes après 5 échecs.</li><li>Le portail ne transmet à l'atelier que la session du serveur RIP, jamais les informations du compte de la plate-forme.</li></ul>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="le-site-est--hors-ligne-"><a class="ancre" href="#le-site-est--hors-ligne-" aria-hidden="true">#</a>Le site est « hors ligne »</h3>
+<p>Le serveur RIP de l'atelier n'est pas relié à la plate-forme.</p>
+<ol><li>Vérifier sur place que le serveur est allumé et qu'il a accès à Internet.</li><li>Ouvrir <strong>Système › Cloud E-KO RIP</strong>. Le message <strong>Plate-forme injoignable</strong> indique un problème de connexion Internet.</li><li>Attendre une minute : après une coupure, le serveur se reconnecte seul.</li></ol>
+<p>Si l'alerte est activée, un e-mail « de retour en ligne » confirme la reprise.</p>
+<h3 id="le-code-a-expiré-ou-est-refusé"><a class="ancre" href="#le-code-a-expiré-ou-est-refusé" aria-hidden="true">#</a>Le code a expiré ou est refusé</h3>
+<p>Le code n'est valable que 10 minutes. Sur le serveur, cliquer de nouveau sur <strong>Connecter à la plate-forme</strong> pour en obtenir un nouveau. Si le portail refuse le rattachement, vérifier que l'adresse e-mail du compte est confirmée.</p>
+<h3 id="le-cloud-ne-souvre-pas--au-moins-un-compte-"><a class="ancre" href="#le-cloud-ne-souvre-pas--au-moins-un-compte-" aria-hidden="true">#</a>Le cloud ne s'ouvre pas : « au moins un compte »</h3>
+<p>Créer un compte sur le serveur (voir <a href="/documentation/administration/#comptes">Administrer le serveur</a>), puis recommencer.</p>
+<h3 id="jai-oublié-mon-mot-de-passe"><a class="ancre" href="#jai-oublié-mon-mot-de-passe" aria-hidden="true">#</a>J'ai oublié mon mot de passe</h3>
+<p>Utiliser <strong>Mot de passe oublié ?</strong> sur la page de connexion (voir plus haut). S'il s'agit d'un compte du serveur RIP, voir <a href="/documentation/administration/#comptes">Administrer le serveur</a>.</p>
+<h3 id="je-ne-reçois-pas-les-e-mails"><a class="ancre" href="#je-ne-reçois-pas-les-e-mails" aria-hidden="true">#</a>Je ne reçois pas les e-mails</h3>
+<p>Regarder dans les courriers indésirables. Vérifier l'adresse du compte dans <strong>Mon compte</strong> et les cases cochées. Les e-mails viennent de <code>no-reply@e-ko.fr</code>.</p>
+<h2 id="informations-légales"><a class="ancre" href="#informations-légales" aria-hidden="true">#</a>Informations légales</h2>
+<ul><li>Conditions générales d'utilisation : <a href="https://platform.e-ko.rip/cgu">https://platform.e-ko.rip/cgu</a></li><li>Politique de confidentialité : <a href="https://platform.e-ko.rip/confidentialite">https://platform.e-ko.rip/confidentialite</a></li><li>Mentions légales : <a href="https://platform.e-ko.rip/mentions-legales">https://platform.e-ko.rip/mentions-legales</a></li></ul>
+<p>Une question ? Écrire à contact@e-ko.rip.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/application-mobile/"><span>Précédent</span>Application mobile</a><a class="doc-suiv" href="/documentation/utilisation/"><span>Suivant</span>Guide d&#x27;utilisation</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/fr/cloud.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#à-quoi-sert-le-cloud">À quoi sert le cloud</a></li><li class="niveau-2"><a href="#créer-un-compte">Créer un compte</a></li><li class="niveau-3"><a href="#confirmer-ladresse-e-mail">Confirmer l&#x27;adresse e-mail</a></li><li class="niveau-2"><a href="#rattacher-un-serveur-rip">Rattacher un serveur RIP</a></li><li class="niveau-3"><a href="#avant-de-commencer">Avant de commencer</a></li><li class="niveau-3"><a href="#pas-à-pas">Pas à pas</a></li><li class="niveau-2"><a href="#utiliser-laccès-à-distance">Utiliser l&#x27;accès à distance</a></li><li class="niveau-3"><a href="#dans-un-client-de-bureau">Dans un client de bureau</a></li><li class="niveau-3"><a href="#dans-un-navigateur">Dans un navigateur</a></li><li class="niveau-3"><a href="#dans-lapplication-mobile">Dans l&#x27;application mobile</a></li><li class="niveau-2"><a href="#se-connecter-au-cloud-depuis-les-apps">Se connecter au cloud depuis les apps</a></li><li class="niveau-3"><a href="#déconnecter-une-app">Déconnecter une app</a></li><li class="niveau-2"><a href="#e-mails-de-la-plate-forme">E-mails de la plate-forme</a></li><li class="niveau-3"><a href="#choisir-les-e-mails-reçus">Choisir les e-mails reçus</a></li><li class="niveau-3"><a href="#mot-de-passe-oublié">Mot de passe oublié</a></li><li class="niveau-2"><a href="#notifications">Notifications</a></li><li class="niveau-3"><a href="#dans-le-navigateur">Dans le navigateur</a></li><li class="niveau-3"><a href="#dans-les-apps-mac-linux-et-mobile">Dans les apps Mac, Linux et mobile</a></li><li class="niveau-2"><a href="#gérer-son-compte">Gérer son compte</a></li><li class="niveau-3"><a href="#supprimer-son-compte">Supprimer son compte</a></li><li class="niveau-2"><a href="#détacher-un-serveur">Détacher un serveur</a></li><li class="niveau-3"><a href="#depuis-le-serveur">Depuis le serveur</a></li><li class="niveau-3"><a href="#depuis-le-portail">Depuis le portail</a></li><li class="niveau-2"><a href="#ce-qui-ne-passe-jamais-par-le-cloud">Ce qui ne passe jamais par le cloud</a></li><li class="niveau-2"><a href="#sécurité-en-bref">Sécurité en bref</a></li><li class="niveau-2"><a href="#questions-fréquentes">Questions fréquentes</a></li><li class="niveau-3"><a href="#le-site-est--hors-ligne-">Le site est « hors ligne »</a></li><li class="niveau-3"><a href="#le-code-a-expiré-ou-est-refusé">Le code a expiré ou est refusé</a></li><li class="niveau-3"><a href="#le-cloud-ne-souvre-pas--au-moins-un-compte-">Le cloud ne s&#x27;ouvre pas : « au moins un compte »</a></li><li class="niveau-3"><a href="#jai-oublié-mon-mot-de-passe">J&#x27;ai oublié mon mot de passe</a></li><li class="niveau-3"><a href="#je-ne-reçois-pas-les-e-mails">Je ne reçois pas les e-mails</a></li><li class="niveau-2"><a href="#informations-légales">Informations légales</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

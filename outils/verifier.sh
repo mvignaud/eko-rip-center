@@ -13,6 +13,9 @@ for f in serveur/static/index.html client/ui/index.html; do
   node --check /tmp/eko-rip-page.js || { echo "erreur de syntaxe dans $f"; exit 1; }
 done
 
+echo "· documentation publique à jour (docs/ → site/documentation/)"
+python3 outils/generer-documentation.py --verifier
+
 echo "· clés de traduction en double"
 node outils/doublons-traductions.js serveur/static/index.html
 

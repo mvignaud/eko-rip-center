@@ -12,13 +12,14 @@ use crate::appairage::{self, Appairages, Suivi};
 use crate::installations::{self, Registre};
 use crate::{CHEMIN_TUNNEL, COOKIE_RIP, PROTOCOLE, portail, sites};
 use axum::body::Body;
+use bytes::Bytes;
 use axum::extract::{Path as Chemin, Request, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 use axum::{Json, Router};
 use hyper::client::conn::http2::SendRequest;
-use hyper_util::rt::{TokioExecutor, TokioTimer};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -51,6 +52,17 @@ pub struct Relais {
     base: Mutex<rusqlite::Connection>,
     /// Limites par adresse ou par compte : (essais, début de la fenêtre).
     limites: Mutex<HashMap<String, (u32, std::time::Instant)>>,
+    /// Codes d'autorisation des apps en attente d'échange.
+    codes_applis: Mutex<crate::applis::Codes>,
+    /// Où partent les e-mails (SMTP, ou mémoire dans les tests).
+    pub(crate) courriels: Mutex<crate::courriels::Expediteur>,
+    /// Où partent les pushs (réseau, ou mémoire dans les tests).
+    pub(crate) push: Mutex<crate::notifications::Transport>,
+    /// Sens montant des tunnels `eko-tunnel/2` (requêtes HTTP).
+    montants: crate::montant::Sessions,
+    /// Proposer `eko-tunnel/2` aux serveurs RIP qui le connaissent (frontal qui retient le
+    /// sens montant des WebSocket : hébergement mutualisé).
+    montant_post: std::sync::atomic::AtomicBool,
 }
 
 pub type Partage = Arc<Relais>;
@@ -59,10 +71,18 @@ pub type Partage = Arc<Relais>;
 pub fn nouveau(config: Config) -> Partage {
     let registre = installations::lire(&config.donnees).expect("installations.json");
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default() })
+    // Clés VAPID du Web Push : créées au premier démarrage.
+    crate::notifications::cle_vapid(&base).expect("clés VAPID");
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")) })
 }
 
 impl Relais {
+    /// Choisit `eko-tunnel/2` (sens montant en requêtes HTTP) pour les serveurs qui le
+    /// proposent ; par défaut, `EKO_CLOUD_MONTANT_POST=1`.
+    pub fn regler_montant_post(&self, oui: bool) {
+        self.montant_post.store(oui, Ordering::Relaxed);
+    }
+
     /// Statistiques anonymes des installations (page d'administration).
     pub fn statistiques_installations(&self) -> installations::Statistiques {
         self.installations.lock().unwrap().statistiques(crate::maintenant())
@@ -79,6 +99,10 @@ impl Relais {
 
     pub fn connectes(&self) -> Vec<String> {
         self.tunnels.lock().unwrap().keys().cloned().collect()
+    }
+
+    pub(crate) fn codes_applis(&self) -> std::sync::MutexGuard<'_, crate::applis::Codes> {
+        self.codes_applis.lock().unwrap_or_else(|p| p.into_inner())
     }
 
     pub fn base(&self) -> std::sync::MutexGuard<'_, rusqlite::Connection> {
@@ -126,17 +150,38 @@ pub fn routes(relais: Partage) -> Router {
         .route("/sites/{site}/retirer", post(portail::retirer))
         .route("/appairer", get(portail::appairer))
         .route("/compte", get(portail::mon_compte))
+        .route("/compte/applis/deconnecter", post(portail::deconnecter_applis))
+        .route("/compte/preferences", post(portail::regler_preferences))
+        .route("/compte/push", post(portail::inscrire_navigateur))
+        .route("/compte/push/{id}/retirer", post(portail::retirer_navigateur))
+        .route("/compte/notifications/proposees", post(portail::notifications_proposees))
+        .route("/api/push/cle", get(crate::notifications::cle_route))
+        .route("/sw.js", get(crate::notifications::service_worker))
+        .route("/mot-de-passe/oublie", get(portail::oubli).post(portail::oublier))
+        .route("/mot-de-passe/nouveau", get(portail::nouveau_mot_de_passe).post(portail::reinitialiser))
+        .route("/email/confirmer", get(portail::confirmation).post(portail::confirmer))
+        .route("/email/renvoyer", post(portail::renvoyer_confirmation))
+        .route("/oauth/autoriser", get(crate::applis::autoriser).post(crate::applis::decider))
+        .route("/oauth/jeton", post(crate::applis::jeton))
+        .route("/api/moi", get(crate::applis::moi))
+        .route("/api/moi/deconnexion", post(crate::applis::deconnecter))
+        .route("/api/moi/notifications", get(crate::notifications::liste))
+        .route("/api/moi/push", post(crate::notifications::inscrire_expo).delete(crate::notifications::retirer_expo_route))
         .route("/compte/supprimer", post(portail::supprimer_compte))
         .route("/admin", get(portail::admin))
         .route("/admin/oauth", post(portail::regler_oauth))
         .route("/admin/github", post(portail::regler_github))
+        .route("/admin/courriels", post(portail::regler_courriels))
+        .route("/admin/courriels/essai", post(portail::essai_courriel))
         .route("/admin/rapports/{reference}", get(portail::voir_rapport))
         .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
         .route("/auth/{fournisseur}", get(portail::partir_oauth))
         .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
         .route("/{page}", get(portail::legal))
         .route("/sante", get(|| async { "ok" }))
+        .route("/logo-courriel.png", get(logo_courriel))
         .route(CHEMIN_TUNNEL, get(ouvrir_tunnel))
+        .route("/tunnel/{session}/montant", post(recevoir_montant).layer(axum::extract::DefaultBodyLimit::max(crate::montant::MAX_CORPS + 4096)))
         .route("/api/appairage", post(demander_appairage))
         .route("/api/appairage/{demande}", get(suivre_appairage))
         .route("/api/ping", post(recevoir_ping).layer(axum::extract::DefaultBodyLimit::max(4096)))
@@ -204,7 +249,7 @@ async fn aiguiller(State(relais): State<Partage>, requete: Request, suite: axum:
 async fn entetes_du_portail(mut rep: Response) -> Response {
     let h = rep.headers_mut();
     if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
-        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
         h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
         h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
         h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
@@ -220,6 +265,7 @@ pub async fn entretenir(relais: Partage) {
         relais.appairages.lock().unwrap().purger();
         appairage::purger_validations(&relais.config.donnees);
         enregistrer_installations(&relais).await;
+        crate::evenements::entretenir(&relais).await;
         let d = relais.config.donnees.clone();
         let _ = tokio::task::spawn_blocking(move || crate::rapports::purger(&d, crate::maintenant())).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {
@@ -289,6 +335,16 @@ async fn statistiques_installations(State(relais): State<Partage>, entetes: Head
     Json(relais.installations.lock().unwrap().statistiques(crate::maintenant())).into_response()
 }
 
+/// Logo des e-mails (PNG : les messageries n'affichent pas le SVG), chargé par les
+/// messageries depuis la plate-forme.
+async fn logo_courriel() -> Response {
+    (
+        [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=604800")],
+        &include_bytes!("../static/logo-courriel.png")[..],
+    )
+        .into_response()
+}
+
 fn refus(statut: StatusCode, code: &'static str) -> Response {
     (statut, Json(serde_json::json!({ "code": code }))).into_response()
 }
@@ -300,11 +356,33 @@ fn identifiants(entetes: &HeaderMap) -> Option<(String, String)> {
     Some((site.to_string(), cle.to_string()))
 }
 
-async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> Response {
-    let protocole_ok = requete.headers().get(header::UPGRADE).and_then(|v| v.to_str().ok()).is_some_and(|v| v.eq_ignore_ascii_case(PROTOCOLE));
-    if !protocole_ok {
-        return refus(StatusCode::BAD_REQUEST, "protocole_inconnu");
+/// Forme de la poignée de main du tunnel.
+enum Poignee {
+    /// `Upgrade: websocket` : la clé `Sec-WebSocket-Accept` à rendre, et si le serveur
+    /// propose aussi `eko-tunnel/2`.
+    WebSocket(String, bool),
+    /// `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
+    Directe,
+}
+
+fn poignee(entetes: &HeaderMap) -> Option<Poignee> {
+    let upgrade = entetes.get(header::UPGRADE)?.to_str().ok()?;
+    if upgrade.eq_ignore_ascii_case(PROTOCOLE) {
+        return Some(Poignee::Directe);
     }
+    if !upgrade.eq_ignore_ascii_case("websocket") {
+        return None;
+    }
+    let version_ok = entetes.get(header::SEC_WEBSOCKET_VERSION).is_some_and(|v| v.as_bytes() == b"13");
+    let proposes: Vec<String> = entetes.get_all(header::SEC_WEBSOCKET_PROTOCOL).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(',')).map(|p| p.trim().to_ascii_lowercase()).collect();
+    let protocole_ok = proposes.iter().any(|p| p == PROTOCOLE);
+    let v2 = proposes.iter().any(|p| p == crate::montant::PROTOCOLE_2);
+    let cle = entetes.get(header::SEC_WEBSOCKET_KEY)?;
+    (version_ok && protocole_ok).then(|| Poignee::WebSocket(crate::ws::acceptation(cle.as_bytes()), v2))
+}
+
+async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> Response {
+    let Some(forme) = poignee(requete.headers()) else { return refus(StatusCode::BAD_REQUEST, "protocole_inconnu") };
     let Some((id, cle)) = identifiants(requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "cle_absente") };
     let donnees = relais.config.donnees.clone();
     let site = match tokio::task::spawn_blocking({
@@ -322,36 +400,109 @@ async fn ouvrir_tunnel(State(relais): State<Partage>, mut requete: Request) -> R
     }
     let Some(montee) = requete.extensions_mut().remove::<hyper::upgrade::OnUpgrade>() else { return refus(StatusCode::BAD_REQUEST, "protocole_inconnu") };
     let r = relais.clone();
+    // 0 : ancien tunnel direct ; 1 : WebSocket dans les deux sens ; 2 : WebSocket descendant
+    // et requêtes montantes.
+    let mode = match forme {
+        Poignee::Directe => 0,
+        Poignee::WebSocket(_, v2) => {
+            if v2 && relais.montant_post.load(Ordering::Relaxed) {
+                2
+            } else {
+                1
+            }
+        }
+    };
     tokio::spawn(async move {
         let Ok(flux) = montee.await else { return };
-        let mut b = hyper::client::conn::http2::Builder::new(TokioExecutor::new());
-        b.timer(TokioTimer::new()).keep_alive_interval(Duration::from_secs(25)).keep_alive_timeout(Duration::from_secs(20)).keep_alive_while_idle(true).adaptive_window(true);
-        let Ok((envoi, connexion)) = b.handshake::<_, Body>(flux).await else { return };
-        let generation = r.generation.fetch_add(1, Ordering::Relaxed);
-        let (fin_tx, fin_rx) = tokio::sync::oneshot::channel::<()>();
-        let tache = tokio::spawn(async move {
-            let _ = connexion.await;
-            let _ = fin_tx.send(());
-        });
-        // Une nouvelle connexion du même site remplace l'ancienne (reconnexion après une
-        // coupure que l'ancienne n'a pas encore vue).
-        if let Some(ancien) = r.tunnels.lock().unwrap().insert(id.clone(), Tunnel { envoi, generation, tache: tache.abort_handle() }) {
-            ancien.tache.abort();
-        }
-        eprintln!("tunnel ouvert : site {id}");
-        let _ = tokio::task::spawn_blocking({
-            let (donnees, id) = (donnees.clone(), id.clone());
-            move || sites::noter_connexion(&donnees, &id)
-        })
-        .await;
-        let _ = fin_rx.await;
-        let mut t = r.tunnels.lock().unwrap();
-        if t.get(&id).is_some_and(|x| x.generation == generation) {
-            t.remove(&id);
-            eprintln!("tunnel fermé : site {id}");
+        let role = tokio_tungstenite::tungstenite::protocol::Role::Server;
+        match mode {
+            0 => brancher(r, id, donnees, flux).await,
+            1 => brancher(r, id, donnees, TokioIo::new(crate::ws::FluxWs::nouveau(TokioIo::new(flux), role).await)).await,
+            _ => {
+                let mut ws = crate::ws::FluxWs::nouveau(TokioIo::new(flux), role).await;
+                let (session, lecteur) = r.montants.ouvrir();
+                if ws.envoyer_texte(&format!("session {session}")).await.is_err() {
+                    r.montants.fermer(&session);
+                    return;
+                }
+                let (mut entree, sortie) = tokio::io::split(ws);
+                // Le sens montant du WebSocket ne sert pas (le frontal le retient) ; il est lu
+                // quand même pour que la connexion se ferme proprement s'il en arrive la fin.
+                let vidange = tokio::spawn(async move {
+                    let _ = tokio::io::copy(&mut entree, &mut tokio::io::sink()).await;
+                });
+                brancher(r.clone(), id, donnees, TokioIo::new(tokio::io::join(lecteur, sortie))).await;
+                vidange.abort();
+                r.montants.fermer(&session);
+            }
         }
     });
-    Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "upgrade").header(header::UPGRADE, PROTOCOLE).body(Body::empty()).expect("réponse 101")
+    let reponse = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS).header(header::CONNECTION, "Upgrade");
+    match forme {
+        Poignee::Directe => reponse.header(header::UPGRADE, PROTOCOLE),
+        Poignee::WebSocket(acceptation, _) => reponse
+            .header(header::UPGRADE, "websocket")
+            .header(header::SEC_WEBSOCKET_ACCEPT, acceptation)
+            .header(header::SEC_WEBSOCKET_PROTOCOL, if mode == 2 { crate::montant::PROTOCOLE_2 } else { PROTOCOLE }),
+    }
+    .body(Body::empty())
+    .expect("réponse 101")
+}
+
+/// `POST /tunnel/<session>/montant` : un morceau du sens montant d'un tunnel `eko-tunnel/2`.
+async fn recevoir_montant(State(relais): State<Partage>, Chemin(session): Chemin<String>, entetes: HeaderMap, corps: Bytes) -> Response {
+    let Some(seq) = entetes.get(crate::montant::ENTETE_SEQ).and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok()) else { return refus(StatusCode::BAD_REQUEST, "seq_invalide") };
+    if !crate::montant::session_valide(&session) {
+        return refus(StatusCode::CONFLICT, "session_perdue");
+    }
+    match relais.montants.recevoir(&session, seq, corps).await {
+        crate::montant::Reception::Ok => StatusCode::NO_CONTENT.into_response(),
+        crate::montant::Reception::Perdu => refus(StatusCode::CONFLICT, "session_perdue"),
+    }
+}
+
+/// Ouvre l'HTTP/2 dans le tunnel et le garde dans la table jusqu'à sa fermeture.
+async fn brancher<T>(r: Partage, id: String, donnees: PathBuf, flux: T)
+where
+    T: hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static,
+{
+    let mut b = hyper::client::conn::http2::Builder::new(TokioExecutor::new());
+    b.timer(TokioTimer::new()).keep_alive_interval(Duration::from_secs(25)).keep_alive_timeout(Duration::from_secs(20)).keep_alive_while_idle(true).adaptive_window(true);
+    let Ok((envoi, connexion)) = b.handshake::<_, Body>(flux).await else { return };
+    let generation = r.generation.fetch_add(1, Ordering::Relaxed);
+    let (fin_tx, fin_rx) = tokio::sync::oneshot::channel::<()>();
+    let site = id.clone();
+    let tache = tokio::spawn(async move {
+        if let Err(e) = connexion.await {
+            eprintln!("tunnel {site} : {}", crate::client::chaine(&e));
+        }
+        let _ = fin_tx.send(());
+    });
+    // Une nouvelle connexion du même site remplace l'ancienne (reconnexion après une
+    // coupure que l'ancienne n'a pas encore vue).
+    if let Some(ancien) = r.tunnels.lock().unwrap().insert(id.clone(), Tunnel { envoi, generation, tache: tache.abort_handle() }) {
+        ancien.tache.abort();
+    }
+    eprintln!("tunnel ouvert : site {id}");
+    crate::evenements::site_en_ligne(&r, &id);
+    let _ = tokio::task::spawn_blocking({
+        let (donnees, id) = (donnees.clone(), id.clone());
+        move || sites::noter_connexion(&donnees, &id)
+    })
+    .await;
+    let _ = fin_rx.await;
+    let ferme = {
+        let mut t = r.tunnels.lock().unwrap();
+        let ferme = t.get(&id).is_some_and(|x| x.generation == generation);
+        if ferme {
+            t.remove(&id);
+        }
+        ferme
+    };
+    if ferme {
+        eprintln!("tunnel fermé : site {id}");
+        crate::evenements::site_hors_ligne(&r, &id);
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -467,15 +618,41 @@ async fn relayer(State(relais): State<Partage>, requete: Request) -> Response {
     transmettre(&relais, site, &sous, requete, Mode::Chemin).await
 }
 
+/// Délai maximal pour recevoir les en-têtes de la réponse d'un site à une requête sans corps
+/// (le corps de la réponse, lui, peut durer : téléchargements).
+const DELAI_REPONSE_SITE: Duration = Duration::from_secs(120);
+
 async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Request, mode: Mode) -> Response {
     let envoi = relais.tunnels.lock().unwrap().get(&site).map(|t| t.envoi.clone());
     // Site inconnu ou hors ligne : même réponse (on ne dit pas quels sites existent).
-    let Some(mut envoi) = envoi else { return refus(StatusCode::BAD_GATEWAY, "site_hors_ligne") };
+    let Some(mut envoi) = envoi else { return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne") };
     let max = relais.config.max_octets;
     let longueur = requete.headers().get(header::CONTENT_LENGTH).and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
     if longueur.is_some_and(|l| l > max) {
         return refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros");
     }
+    // Jeton d'app : le compte doit avoir un droit sur ce site ; le serveur RIP reçoit son
+    // identité (le jeton, lui, ne sort jamais vers un atelier).
+    let identite = if crate::applis::porte_jeton_appli(requete.headers()) {
+        let r = relais.clone();
+        let (h, s) = (requete.headers().clone(), site.clone());
+        let verdict = tokio::task::spawn_blocking(move || {
+            let compte = crate::applis::compte_bearer(&r, &h)?;
+            let role = crate::base::droit(&r.base(), &s, compte.id).ok().flatten();
+            Some((compte, role))
+        })
+        .await
+        .ok()
+        .flatten();
+        match verdict {
+            None => return refus(StatusCode::UNAUTHORIZED, "jeton_invalide"),
+            // Même réponse qu'un site inconnu : on ne dit pas quels sites existent.
+            Some((_, None)) => return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne"),
+            Some((compte, Some(role))) => Some(crate::applis::entete_identite(&compte, &role)),
+        }
+    } else {
+        None
+    };
     let (parties, corps) = requete.into_parts();
     let requete_site = format!("/{sous}{}", parties.uri.query().map(|q| format!("?{q}")).unwrap_or_default());
     let Ok(uri) = format!("http://rip{requete_site}").parse::<Uri>() else { return refus(StatusCode::BAD_REQUEST, "adresse_invalide") };
@@ -490,18 +667,30 @@ async fn transmettre(relais: &Partage, site: String, sous: &str, requete: Reques
         if let Some(c) = cookie_rip(&parties.headers) {
             h.insert(header::COOKIE, c);
         }
+        if let Some(i) = identite {
+            h.insert(HeaderName::from_static(crate::applis::ENTETE_IDENTITE), i);
+        }
     }
     let corps = Body::new(http_body_util::Limited::new(corps, max as usize));
     let Ok(sortante) = sortante.body(corps) else { return refus(StatusCode::BAD_REQUEST, "requete_invalide") };
-    if envoi.ready().await.is_err() {
-        return refus(StatusCode::BAD_GATEWAY, "site_hors_ligne");
+    // Tunnel mort mais pas encore vu (le keep-alive met jusqu'à 45 s) : on ne fait pas
+    // attendre indéfiniment.
+    if !matches!(tokio::time::timeout(Duration::from_secs(10), envoi.ready()).await, Ok(Ok(()))) {
+        return refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne");
     }
-    let reponse = match envoi.send_request(sortante).await {
+    // Sans corps à envoyer, la réponse doit venir vite ; un envoi de fichier, lui, n'a de
+    // réponse qu'une fois le fichier parti.
+    let delai = if matches!(parties.method, Method::GET | Method::HEAD | Method::OPTIONS | Method::DELETE) { DELAI_REPONSE_SITE } else { Duration::from_secs(24 * 3600) };
+    let reponse = match tokio::time::timeout(delai, envoi.send_request(sortante)).await {
+        Err(_) => return refus(StatusCode::GATEWAY_TIMEOUT, "site_muet"),
+        Ok(r) => r,
+    };
+    let reponse = match reponse {
         Ok(r) => r,
         Err(e) => {
             // Corps trop gros découvert en route (sans Content-Length).
             let trop_gros = std::error::Error::source(&e).is_some_and(|s| s.to_string().contains("length limit"));
-            return if trop_gros || e.to_string().contains("length limit") { refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros") } else { refus(StatusCode::BAD_GATEWAY, "site_hors_ligne") };
+            return if trop_gros || e.to_string().contains("length limit") { refus(StatusCode::PAYLOAD_TOO_LARGE, "envoi_trop_gros") } else { refus(StatusCode::SERVICE_UNAVAILABLE, "site_hors_ligne") };
         }
     };
     let (mut p, corps) = reponse.into_parts();

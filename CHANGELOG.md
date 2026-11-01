@@ -15,6 +15,61 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+## [0.32.0] — 2026-11-01
+
+### Ajouté
+- **Cloud E-KO RIP : notifications.** Les événements des e-mails d'alerte (site hors ligne après
+  15 minutes, de retour en ligne, nouvelle app connectée) arrivent aussi par un journal par compte
+  que les apps de bureau interrogent chaque minute (`GET /api/moi/notifications`), par push
+  mobile Expo (`POST /api/moi/push`) et par Web Push dans le navigateur (VAPID, chiffrement
+  `aes128gcm` en Rust pur, service worker `/sw.js`, carte « Notifications sur cet appareil » dans
+  « Mon compte »). Le portail propose les notifications après la première connexion, et les apps
+  demandent l'autorisation juste après la première connexion au cloud. Voir `docs/fr/cloud.md`.
+  *Platform notifications: per-account journal for desktop apps, Expo mobile push and browser Web
+  Push (VAPID, pure Rust), offered at first sign-in.*
+- **Cloud E-KO RIP : e-mails de la plate-forme.** Mot de passe oublié (lien d'une heure),
+  confirmation de l'adresse à l'inscription (rattacher un serveur l'exige), alerte « site hors
+  ligne depuis 15 minutes » puis « de retour en ligne », e-mail de sécurité à chaque nouvelle app
+  connectée, résumé hebdomadaire par site le lundi 8 h (heure de Paris), en HTML sobre avec
+  version texte. Envoi par SMTP (réglages dans Administration › E-mails ou `EKO_CLOUD_SMTP_*`),
+  expéditeur `no-reply@e-ko.fr` ; cases d'abonnement dans « Mon compte ». Voir
+  `docs/fr/cloud.md`.
+  *Platform e-mails: password reset, address confirmation, offline/back-online alerts, new-app
+  notice, weekly per-site summary; SMTP configured in Administration.*
+- **Cloud E-KO RIP : « Se connecter au cloud » depuis les apps.** Connexion au compte de la
+  plate-forme par le navigateur (OAuth 2 + PKCE), liste des sites du compte, ouverture d'un
+  serveur RIP sans second mot de passe : le rôle sur le site (portail) donne les droits sur le
+  RIP. Apps connectées visibles et révocables dans « Mon compte ». Voir `docs/fr/cloud.md`.
+  *Cloud sign-in from the apps (OAuth 2 + PKCE): platform account, site list, no second
+  password on the RIP server.*
+- **Clients Mac et Linux : notifications du cloud.** Tant qu'un compte cloud est connecté (même
+  sur un serveur local), l'app interroge `GET /api/moi/notifications` chaque minute et affiche une
+  notification système (site hors ligne ou de retour en ligne, nouvelle app) ; le clic ouvre le
+  site concerné, sinon le lien. Le curseur est mémorisé, sans rattrapage à la première
+  interrogation. Mac : autorisation demandée après la première connexion au cloud ; Linux :
+  réglage « Notifications du cloud » (activé par défaut) et toast à la première connexion.
+  *Mac and Linux clients: native cloud notifications, polled every minute while a cloud account
+  is signed in.*
+
+### Modifié
+- **Cloud E-KO RIP : sens montant du tunnel en requêtes POST (`eko-tunnel/2`).** Le frontal
+  d'o2switch garde pour lui ce que le serveur RIP envoie dans le WebSocket : le tunnel
+  s'établissait puis tombait au bout de 45 s. Le serveur RIP envoie maintenant ce sens par
+  petites requêtes `POST` numérotées, le WebSocket ne portant plus que le sens descendant. La
+  plate-forme ne choisit ce mode que si le serveur le propose ; les serveurs 0.31 restent en
+  `eko-tunnel/1`. *Tunnel upstream as numbered HTTP POSTs (eko-tunnel/2), for front ends that
+  buffer the WebSocket upstream.*
+- **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket
+  ordinaire (sous-protocole `eko-tunnel/1`) qui porte la même connexion HTTP/2 qu'avant ; il
+  traverse ainsi les frontaux des hébergements mutualisés (LiteSpeed, Passenger). La
+  plate-forme accepte encore l'ancien tunnel des serveurs 0.30. Nouveau lanceur Node.js
+  (`cloud/o2switch/app.js`) pour héberger la plate-forme sur o2switch. Voir
+  `docs/fr/cloud.md`.
+  *Cloud tunnel now runs over a standard WebSocket (works behind shared hosting front ends);
+  old tunnels still accepted; Node.js launcher for o2switch.*
+
+## [0.31.0] — 2026-11-01
+
 ### Ajouté
 - **Application mobile de suivi** (iOS, Android ; `clients/mobile/`, Expo). File des sorties
   par machine avec Lancer / Pause / Stop / Relancer / Passer en tête, état des machines
@@ -42,6 +97,14 @@ parité ; d'ici là, 0.Y.Z.
   Cookies du portail en `__Host-` ; certificats à la demande autorisés par
   `GET /api/certificat` (Caddy `on_demand_tls`). L'ancienne forme `/s/<site>` reste servie
   pour l'API.
+
+### Corrigé
+- **Rendus bloqués sous Ubuntu 26.04.** AppArmor 5 y confine Ghostscript (profil `gs`) et lui
+  interdit de lire `/var/lib/eko-rip` : tout rendu échouait (« Permission denied » sur
+  `source.pdf`, 0 page). Le paquet serveur ouvre désormais les travaux du RIP à ce profil
+  (`/etc/apparmor.d/local/gs`) et le recharge à l'installation ; retiré à la purge.
+  *Renders failed on Ubuntu 26.04: AppArmor 5 confines Ghostscript; the server package now
+  grants it access to the RIP jobs folder.*
 
 ## [0.30.0] — 2026-10-31
 
@@ -616,7 +679,7 @@ La 0.12.0 n'a pas été publiée (transfert de l'image de 4 Go en échec dans la
 
 ### Modifié
 - Fiche d'un travail : un grand aperçu, les couches (découpe, plaques) derrière le bouton
-  **Couches**, comme dans ONYX.
+  **Couches**.
 - État d'un travail rendu : **Prêt** (et non « Terminé », qui laissait croire à une
   impression) ; une impression vers une machine sans pilote affiche **Déposée dans le
   dossier (pas imprimée)**.

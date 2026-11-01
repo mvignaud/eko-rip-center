@@ -1,8 +1,8 @@
 #!/bin/sh
 # Publie le site vitrine https://e-ko.rip (dossier site/) sur son hébergement.
 #
-#   outils/publier-site.sh                 # hôte et dossier par défaut
-#   EKO_SITE_HOTE=sc3nihe1770@fleur.o2switch.net EKO_SITE_DOSSIER=public_html outils/publier-site.sh
+#   EKO_SITE_HOTE=<compte>@<hôte o2switch> outils/publier-site.sh
+#   (ou un alias de ~/.ssh/config ; EKO_SITE_DOSSIER vaut public_html par défaut)
 #
 # Le site est statique : rsync suffit. Le journal des versions est lu en direct sur l'ERP
 # (https://app.e-ko.fr/changelog-rip.json) ; ce script en dépose aussi une copie
@@ -11,11 +11,16 @@
 # envoie l'e-mail aux abonnés à son déploiement. Ne rien envoyer d'ici.
 set -eu
 
-HOTE=${EKO_SITE_HOTE:-sc3nihe1770@fleur.o2switch.net}
+HOTE=${EKO_SITE_HOTE:?"EKO_SITE_HOTE manquant : compte SSH de l'hébergement (compte@hôte ou alias de ~/.ssh/config)"}
 DOSSIER=${EKO_SITE_DOSSIER:-public_html}
 ERP=${EKO_ERP_URL:-https://app.e-ko.fr}
 
 RACINE=$(cd "$(dirname "$0")/.." && pwd)
+
+# La documentation (site/documentation/) est générée depuis docs/ : ne jamais publier une
+# version en retard sur sa source.
+python3 "$RACINE/outils/generer-documentation.py" --verifier
+
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

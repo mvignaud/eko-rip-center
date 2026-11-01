@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-KO RIP Cloud · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Reach the print shop&#x27;s RIP server from outside, with no VPN and no open port, through the free platform.e-ko.rip.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/cloud/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/cloud/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/cloud/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/cloud.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/#installer">Install</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/documentation/cloud/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/" aria-current="page">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Install</p>
+    <h1>E-KO RIP Cloud</h1>
+    <p class="doc-chapo">Reach the print shop&#x27;s RIP server from outside, with no VPN and no open port, through the free platform.e-ko.rip.</p>
+<p><strong>E-KO RIP Cloud</strong> gives access to the shop's RIP server from outside: from home, at a customer's site, on the road. It works with no VPN and without changing anything on the Internet router. The service is free for any E-KO RIP Center server.</p>
+<figure><a href="/documentation/images/schema-cloud.en.svg"><img src="/documentation/images/schema-cloud.en.svg" alt="Cloud diagram: shop, outgoing connection, platform, remote workstations and phones" loading="lazy"></a><figcaption>The shop's server connects to the platform; remote workstations and phones go through it</figcaption></figure>
+<h2 id="what-the-cloud-is-for"><a class="ancre" href="#what-the-cloud-is-for" aria-hidden="true">#</a>What the Cloud is for</h2>
+<p>Without the Cloud, the RIP server can only be reached on the shop's network. With the Cloud:</p>
+<ul><li>workstations (Mac, Linux, Windows) connect to the server from anywhere;</li><li>the administration interface opens in a browser, just as in the shop;</li><li>the <a href="/documentation/en/mobile-app/">mobile app</a> follows production away from the shop;</li><li>notifications and e-mails warn you when the server stops responding.</li></ul>
+<p>The principle is simple: the shop's server itself opens a connection to the platform. <strong>No port has to be opened</strong> on the router. Remote workstations and phones go through the platform to reach the server.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>The Cloud is optional. The server keeps working normally in the shop, with or without it.</p></aside>
+<h2 id="creating-an-account"><a class="ancre" href="#creating-an-account" aria-hidden="true">#</a>Creating an account</h2>
+<p>The platform's portal is at <a href="https://platform.e-ko.rip">https://platform.e-ko.rip</a>.</p>
+<figure><a href="/documentation/images/cloud-connexion.png"><img src="/documentation/images/cloud-connexion.png" alt="Portal sign-in page" loading="lazy"></a><figcaption>The portal sign-in page</figcaption></figure>
+<ol><li>Open <a href="https://platform.e-ko.rip">https://platform.e-ko.rip</a>.</li><li>Choose <strong>Create an account</strong> (<em>Créer un compte</em>).</li><li>Enter the name (or the shop's name), the e-mail address and a password of at least 10 characters.</li><li>Accept the terms of use, then confirm.</li></ol>
+<p>If the page offers <strong>Google</strong> or <strong>Facebook</strong>, these buttons also let you sign up without a password.</p>
+<h3 id="confirming-the-e-mail-address"><a class="ancre" href="#confirming-the-e-mail-address" aria-hidden="true">#</a>Confirming the e-mail address</h3>
+<p>A confirmation e-mail is sent when you sign up with a password.</p>
+<ol><li>Open the e-mail sent by <strong>E-KO RIP Cloud</strong> (<code>no-reply@e-ko.fr</code>).</li><li>Click the confirmation link, valid for 24 hours.</li><li>Click the button on the page to confirm.</li></ol>
+<p>Until the address is confirmed, a banner says so on <strong>My sites</strong> (<em>Mes sites</em>) and <strong>My account</strong> (<em>Mon compte</em>). It offers <strong>Resend the e-mail</strong> (<em>Renvoyer l'e-mail</em>). Linking a server is refused until the address is confirmed. The rest of the portal works.</p>
+<p>An account created with Google is confirmed automatically.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Tip</p><p>If the e-mail does not arrive, look in the spam folder, then ask for a new one from the banner.</p></aside>
+<h2 id="linking-a-rip-server"><a class="ancre" href="#linking-a-rip-server" aria-hidden="true">#</a>Linking a RIP server</h2>
+<p>Linking takes two steps: a code on the server, then entering that code on the portal. Allow two minutes.</p>
+<h3 id="before-you-start"><a class="ancre" href="#before-you-start" aria-hidden="true">#</a>Before you start</h3>
+<p>The server must have <strong>at least one user account</strong>. Without an account, access to the server is open on the local network, and the Cloud refuses to open so as not to leave the shop open to everyone.</p>
+<p>To create an account, see <a href="/documentation/en/administration/#accounts">Run the server</a>. The server must also have Internet access (see <a href="/documentation/en/server/">Install the server</a>).</p>
+<h3 id="step-by-step"><a class="ancre" href="#step-by-step" aria-hidden="true">#</a>Step by step</h3>
+<ol><li>Open the RIP server's administration interface, with an administrator account.</li><li>Go to <strong>System › E-KO RIP Cloud</strong>.</li><li>Click <strong>Connect to the platform</strong>. The server shows a short code, such as <code>KXRT-4821</code>, valid for <strong>10 minutes</strong>.</li><li>On the portal, sign in with your account.</li><li>Go to <strong>My sites</strong>, section <strong>Link a RIP server</strong> (<em>Rattacher un serveur RIP</em>).</li><li>Enter the code, then click <strong>Link</strong> (<em>Rattacher</em>).</li></ol>
+<figure><a href="/documentation/images/cloud-appairage.png"><img src="/documentation/images/cloud-appairage.png" alt="The portal&#x27;s My sites page with the code entry box" loading="lazy"></a><figcaption>Entering the code in My sites</figcaption></figure>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Tip</p><p>The server also shows a link: opening it leads straight to the code entry page.</p></aside>
+<p>A few seconds later, the server is linked. The <strong>System › E-KO RIP Cloud</strong> screen shows <strong>Connected: reachable remotely</strong> and displays the <strong>Remote address</strong>. The account that entered the code becomes the owner of the site.</p>
+<figure><a href="/documentation/images/cloud-sites.png"><img src="/documentation/images/cloud-sites.png" alt="My sites list: status and remote address of each site" loading="lazy"></a><figcaption>The My sites list</figcaption></figure>
+<p>The portal lets you link up to 10 sites per account.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>After a network outage, the server reconnects by itself, with no action needed.</p></aside>
+<h2 id="using-remote-access"><a class="ancre" href="#using-remote-access" aria-hidden="true">#</a>Using remote access</h2>
+<p>Each site has its own address:</p>
+<pre><code>https://&lt;site&gt;.platform.e-ko.rip</code></pre>
+<p>It is shown in <strong>System › E-KO RIP Cloud</strong> on the server, and in <strong>My sites</strong> on the portal. It is used in three cases.</p>
+<h3 id="in-a-desktop-client"><a class="ancre" href="#in-a-desktop-client" aria-hidden="true">#</a>In a desktop client</h3>
+<ol><li>Open the client (see <a href="/documentation/en/clients/#mac-client">Mac</a>, <a href="/documentation/en/clients/#linux-client">Linux</a> or <a href="/documentation/en/clients/#windows-client">Windows</a>).</li><li>Enter the site's address in place of the server's local address.</li><li>Sign in with an account of the RIP server.</li></ol>
+<h3 id="in-a-browser"><a class="ancre" href="#in-a-browser" aria-hidden="true">#</a>In a browser</h3>
+<ol><li>Open the site's address.</li><li>Sign in with an account of the RIP server.</li></ol>
+<p>The administration interface works just as in the shop.</p>
+<h3 id="in-the-mobile-app"><a class="ancre" href="#in-the-mobile-app" aria-hidden="true">#</a>In the mobile app</h3>
+<p>Enter the site's address in the <strong>Server</strong> field, or use <strong>Sign in to the cloud</strong> (see below). Details in <a href="/documentation/en/mobile-app/">Mobile app</a>.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>The accounts used remotely are those of the RIP server, the ones in <a href="/documentation/en/administration/#accounts">Run the server</a>. The platform account is used for the portal and for <strong>Sign in to the cloud</strong>.</p></aside>
+<h2 id="signing-in-to-the-cloud-from-the-apps"><a class="ancre" href="#signing-in-to-the-cloud-from-the-apps" aria-hidden="true">#</a>Signing in to the cloud from the apps</h2>
+<p>The Mac, Linux and mobile apps have a <strong>Sign in to the cloud</strong> button (<em>Se connecter au cloud</em>) on their sign-in screen. It saves you from entering an address and a second password.</p>
+<ol><li>Click <strong>Sign in to the cloud</strong>. The browser opens on the platform.</li><li>Sign in with your account (password, Google or Facebook).</li><li>Authorise the app when the portal asks.</li><li>Go back to the app: it shows the list of the account's sites, online or not.</li><li>Choose the site you want.</li></ol>
+<p>Rights in the app follow the account's role on the site: an owner or an administrator is a RIP administrator, an operator is an operator, a read-only account cannot change anything.</p>
+<p>An app's access stays valid for about 180 days. Each time a new app is connected, a security e-mail is sent to the account holder.</p>
+<h3 id="disconnecting-an-app"><a class="ancre" href="#disconnecting-an-app" aria-hidden="true">#</a>Disconnecting an app</h3>
+<ol><li>Sign in to the portal.</li><li>Open <strong>My account</strong>.</li><li>In <strong>Connected apps</strong> (<em>Apps connectées</em>), click <strong>Disconnect all apps</strong> (<em>Déconnecter toutes les apps</em>).</li></ol>
+<p>In the app itself, <strong>Sign out of the cloud</strong> (<em>Se déconnecter du cloud</em>) removes the device's access.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>Sharing a site with other accounts (colleagues, contractors) with an operator or read-only role is planned for soon. For now, the owner of a site is the account that linked it.</p></aside>
+<h2 id="e-mails-from-the-platform"><a class="ancre" href="#e-mails-from-the-platform" aria-hidden="true">#</a>E-mails from the platform</h2>
+<p>The platform writes from <strong>E-KO RIP Cloud</strong>, address <code>no-reply@e-ko.fr</code>. There is nothing to set up. Do not reply to these messages.</p>
+<div class="tableau"><table><thead><tr><th>E-mail</th><th>When</th></tr></thead><tbody><tr><td>Forgotten password</td><td>On request, with a link valid for 1 hour, usable once only.</td></tr><tr><td>Address confirmation</td><td>When signing up with a password, link valid for 24 hours.</td></tr><tr><td>Site offline</td><td>The server has been unreachable for 15 minutes.</td></tr><tr><td>Site back online</td><td>The server answers again, only if the "offline" alert was sent.</td></tr><tr><td>New app connected</td><td>An app has just connected to the account.</td></tr><tr><td>Weekly summary</td><td>Every Monday around 8 a.m., for each site.</td></tr></tbody></table></div>
+<p>Site offline alerts go to the site's owners and administrators. At most one alert is sent per site per hour.</p>
+<p>The weekly summary gives, for each site: the number of outages, the total time offline, the longest outage, the alerts sent and the apps connected during the week.</p>
+<h3 id="choosing-which-e-mails-to-receive"><a class="ancre" href="#choosing-which-e-mails-to-receive" aria-hidden="true">#</a>Choosing which e-mails to receive</h3>
+<ol><li>Open <strong>My account</strong> on the portal.</li><li>Tick or untick <strong>Receive alerts</strong> and <strong>Receive the weekly summary</strong> (<em>Recevoir les alertes</em>, <em>Recevoir le résumé hebdomadaire</em>).</li></ol>
+<p>Both boxes are ticked by default. The "new app connected" e-mail is always sent: it is a security measure.</p>
+<h3 id="forgotten-password"><a class="ancre" href="#forgotten-password" aria-hidden="true">#</a>Forgotten password</h3>
+<ol><li>On the sign-in page, click <strong>Forgot your password?</strong> (<em>Mot de passe oublié ?</em>).</li><li>Enter the account's e-mail address.</li><li>Open the e-mail you receive and click the link within the hour.</li><li>Choose a new password.</li></ol>
+<p>For security reasons, the page answers the same way whether the address exists or not. The new password closes all of the account's sessions and disconnects its apps.</p>
+<h2 id="notifications"><a class="ancre" href="#notifications" aria-hidden="true">#</a>Notifications</h2>
+<p>The same events as the e-mail alerts can arrive as notifications: <strong>site offline</strong>, <strong>site back online</strong> and <strong>new app connected</strong>. They follow the <strong>Receive alerts</strong> box.</p>
+<h3 id="in-the-browser"><a class="ancre" href="#in-the-browser" aria-hidden="true">#</a>In the browser</h3>
+<p>After the first sign-in to the portal, the <strong>My sites</strong> page offers <strong>Receive alerts on this computer?</strong> (<em>Recevoir les alertes sur cet ordinateur ?</em>)</p>
+<ol><li>Click <strong>Enable</strong> (<em>Activer</em>).</li><li>Allow notifications when the browser asks.</li></ol>
+<p>The <strong>Later</strong> button (<em>Plus tard</em>) postpones the choice, and the question does not come back afterwards. To decide later:</p>
+<ol><li>Open <strong>My account</strong>.</li><li>In the <strong>Notifications on this device</strong> card (<em>Notifications sur cet appareil</em>), click <strong>Enable browser notifications</strong> (<em>Activer les notifications du navigateur</em>).</li><li>To stop on one browser, click <strong>Remove</strong> (<em>Retirer</em>) next to it.</li></ol>
+<p>Notifications arrive even when the portal page is closed, as long as the browser is running.</p>
+<h3 id="in-the-mac-linux-and-mobile-apps"><a class="ancre" href="#in-the-mac-linux-and-mobile-apps" aria-hidden="true">#</a>In the Mac, Linux and mobile apps</h3>
+<p>The apps ask for permission to show notifications right after the first sign-in to the cloud. Just accept. If permission was refused, restore it in the system or phone settings.</p>
+<h2 id="managing-your-account"><a class="ancre" href="#managing-your-account" aria-hidden="true">#</a>Managing your account</h2>
+<p><strong>My account</strong> brings together:</p>
+<ul><li>the name, the e-mail address and the sign-up date;</li><li>the linked sign-in methods (password, Google, Facebook);</li><li>the e-mail boxes and the <strong>Notifications on this device</strong> card;</li><li>the list of <strong>Connected apps</strong>;</li><li>account deletion.</li></ul>
+<h3 id="deleting-your-account"><a class="ancre" href="#deleting-your-account" aria-hidden="true">#</a>Deleting your account</h3>
+<ol><li>Open <strong>My account</strong>.</li><li>Go to the <strong>Delete my account</strong> section (<em>Supprimer mon compte</em>).</li><li>Confirm.</li></ol>
+<aside class="encadre encadre-attention"><p class="encadre-titre">Warning</p><p>Deletion erases the account, its rights and <strong>the sites it owns</strong>. Their remote access stops immediately. The shop's RIP server itself is not touched: it stays usable on site.</p></aside>
+<h2 id="unlinking-a-server"><a class="ancre" href="#unlinking-a-server" aria-hidden="true">#</a>Unlinking a server</h2>
+<p>Unlinking cuts remote access, without touching the server or its data.</p>
+<h3 id="from-the-server"><a class="ancre" href="#from-the-server" aria-hidden="true">#</a>From the server</h3>
+<ol><li>Open <strong>System › E-KO RIP Cloud</strong>.</li><li>Click <strong>Unlink from the platform</strong>.</li><li>Confirm.</li></ol>
+<p>Remote access stops immediately. To restore it, link the server again with a new code.</p>
+<h3 id="from-the-portal"><a class="ancre" href="#from-the-portal" aria-hidden="true">#</a>From the portal</h3>
+<ol><li>Open <strong>My sites</strong>.</li><li>Click <strong>Remove</strong> (<em>Retirer</em>) next to the site, then confirm.</li></ol>
+<p>Only the owner can remove a site.</p>
+<h2 id="what-never-goes-through-the-cloud"><a class="ancre" href="#what-never-goes-through-the-cloud" aria-hidden="true">#</a>What never goes through the Cloud</h2>
+<p>Some functions stay reserved for the shop, even with the Cloud:</p>
+<ul><li>the ERP bridge and its settings;</li><li>forwarding jobs between two RIPs;</li><li>linking and unlinking the Cloud itself: these are done only from the shop.</li></ul>
+<p>The server refuses these requests when they arrive through the Cloud. For safety, it also refuses them when no account is declared on the server.</p>
+<h2 id="security-in-brief"><a class="ancre" href="#security-in-brief" aria-hidden="true">#</a>Security in brief</h2>
+<ul><li>No port is open in the shop: the server connects to the platform, never the other way round.</li><li>Each site has its own address, isolated from those of other sites and from the portal.</li><li>An account's password is blocked for 5 minutes after 5 failures.</li><li>The portal passes only the RIP server's session to the shop, never the platform account's information.</li></ul>
+<h2 id="frequently-asked-questions"><a class="ancre" href="#frequently-asked-questions" aria-hidden="true">#</a>Frequently asked questions</h2>
+<h3 id="the-site-is-offline"><a class="ancre" href="#the-site-is-offline" aria-hidden="true">#</a>The site is "offline"</h3>
+<p>The shop's RIP server is not linked to the platform.</p>
+<ol><li>Check on site that the server is switched on and has Internet access.</li><li>Open <strong>System › E-KO RIP Cloud</strong>. The message <strong>Platform unreachable</strong> points to an Internet connection problem.</li><li>Wait a minute: after an outage, the server reconnects by itself.</li></ol>
+<p>If the alert is enabled, a "back online" e-mail confirms recovery.</p>
+<h3 id="the-code-has-expired-or-is-refused"><a class="ancre" href="#the-code-has-expired-or-is-refused" aria-hidden="true">#</a>The code has expired or is refused</h3>
+<p>The code is valid for only 10 minutes. On the server, click <strong>Connect to the platform</strong> again to get a new one. If the portal refuses the link, check that the account's e-mail address is confirmed.</p>
+<h3 id="the-cloud-will-not-open-at-least-one-account"><a class="ancre" href="#the-cloud-will-not-open-at-least-one-account" aria-hidden="true">#</a>The Cloud will not open: "at least one account"</h3>
+<p>Create an account on the server (see <a href="/documentation/en/administration/#accounts">Run the server</a>), then try again.</p>
+<h3 id="i-forgot-my-password"><a class="ancre" href="#i-forgot-my-password" aria-hidden="true">#</a>I forgot my password</h3>
+<p>Use <strong>Forgot your password?</strong> on the sign-in page (see above). For a RIP server account, see <a href="/documentation/en/administration/#accounts">Run the server</a>.</p>
+<h3 id="i-do-not-receive-the-e-mails"><a class="ancre" href="#i-do-not-receive-the-e-mails" aria-hidden="true">#</a>I do not receive the e-mails</h3>
+<p>Look in the spam folder. Check the account's address in <strong>My account</strong> and the boxes ticked. The e-mails come from <code>no-reply@e-ko.fr</code>.</p>
+<h2 id="legal-information"><a class="ancre" href="#legal-information" aria-hidden="true">#</a>Legal information</h2>
+<ul><li>Terms of use: <a href="https://platform.e-ko.rip/cgu">https://platform.e-ko.rip/cgu</a></li><li>Privacy policy: <a href="https://platform.e-ko.rip/confidentialite">https://platform.e-ko.rip/confidentialite</a></li><li>Legal notice: <a href="https://platform.e-ko.rip/mentions-legales">https://platform.e-ko.rip/mentions-legales</a></li></ul>
+<p>A question? Write to contact@e-ko.rip.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/mobile-app/"><span>Previous</span>Mobile app</a><a class="doc-suiv" href="/documentation/en/usage/"><span>Next</span>User guide</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/cloud.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#what-the-cloud-is-for">What the Cloud is for</a></li><li class="niveau-2"><a href="#creating-an-account">Creating an account</a></li><li class="niveau-3"><a href="#confirming-the-e-mail-address">Confirming the e-mail address</a></li><li class="niveau-2"><a href="#linking-a-rip-server">Linking a RIP server</a></li><li class="niveau-3"><a href="#before-you-start">Before you start</a></li><li class="niveau-3"><a href="#step-by-step">Step by step</a></li><li class="niveau-2"><a href="#using-remote-access">Using remote access</a></li><li class="niveau-3"><a href="#in-a-desktop-client">In a desktop client</a></li><li class="niveau-3"><a href="#in-a-browser">In a browser</a></li><li class="niveau-3"><a href="#in-the-mobile-app">In the mobile app</a></li><li class="niveau-2"><a href="#signing-in-to-the-cloud-from-the-apps">Signing in to the cloud from the apps</a></li><li class="niveau-3"><a href="#disconnecting-an-app">Disconnecting an app</a></li><li class="niveau-2"><a href="#e-mails-from-the-platform">E-mails from the platform</a></li><li class="niveau-3"><a href="#choosing-which-e-mails-to-receive">Choosing which e-mails to receive</a></li><li class="niveau-3"><a href="#forgotten-password">Forgotten password</a></li><li class="niveau-2"><a href="#notifications">Notifications</a></li><li class="niveau-3"><a href="#in-the-browser">In the browser</a></li><li class="niveau-3"><a href="#in-the-mac-linux-and-mobile-apps">In the Mac, Linux and mobile apps</a></li><li class="niveau-2"><a href="#managing-your-account">Managing your account</a></li><li class="niveau-3"><a href="#deleting-your-account">Deleting your account</a></li><li class="niveau-2"><a href="#unlinking-a-server">Unlinking a server</a></li><li class="niveau-3"><a href="#from-the-server">From the server</a></li><li class="niveau-3"><a href="#from-the-portal">From the portal</a></li><li class="niveau-2"><a href="#what-never-goes-through-the-cloud">What never goes through the Cloud</a></li><li class="niveau-2"><a href="#security-in-brief">Security in brief</a></li><li class="niveau-2"><a href="#frequently-asked-questions">Frequently asked questions</a></li><li class="niveau-3"><a href="#the-site-is-offline">The site is &quot;offline&quot;</a></li><li class="niveau-3"><a href="#the-code-has-expired-or-is-refused">The code has expired or is refused</a></li><li class="niveau-3"><a href="#the-cloud-will-not-open-at-least-one-account">The Cloud will not open: &quot;at least one account&quot;</a></li><li class="niveau-3"><a href="#i-forgot-my-password">I forgot my password</a></li><li class="niveau-3"><a href="#i-do-not-receive-the-e-mails">I do not receive the e-mails</a></li><li class="niveau-2"><a href="#legal-information">Legal information</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

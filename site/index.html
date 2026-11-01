@@ -32,6 +32,7 @@
       <a href="#open-source">Open source</a>
       <a href="/compatibilite/">Machines</a>
       <a href="#installer">Installer</a>
+      <a href="/documentation/">Documentation</a>
       <a href="/changelog/">Nouveautés</a>
     </nav>
     <a class="bouton bouton-plein bouton-petit" href="#installer">Installer</a>
@@ -45,7 +46,7 @@
   <div class="heros-fond" aria-hidden="true"><span class="c"></span><span class="m"></span><span class="j"></span></div>
   <div class="conteneur">
     <div class="rosace apparait" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    <p class="apparait"><span class="pastille">Version <span data-derniere-version>0.30</span> · Gratuit · Code bientôt ouvert</span></p>
+    <p class="apparait"><span class="pastille">Version <span data-derniere-version>0.30</span> · Gratuit · Open source (AGPL-3.0)</span></p>
     <h1 class="apparait">Le RIP grand format<br><span class="degrade">qui pilote tout l'atelier.</span></h1>
     <p class="chapo apparait">E-KO RIP Center reçoit vos PDF, les rend en plaques d'encre CMJN, blanc et argent, prépare l'impression et la découpe, et parle directement à vos machines. Un serveur Linux au cœur de l'atelier, une vraie application sur chaque poste.</p>
     <div class="actions apparait">
@@ -317,7 +318,7 @@
     <div>
       <div class="apparait">
         <span class="surtitre">Open source</span>
-        <h2>Pourquoi le code sera ouvert.</h2>
+        <h2>Pourquoi le code est ouvert.</h2>
         <p style="color:var(--texte-2);font-size:18px;margin-bottom:28px">E-KO RIP Center est né dans un atelier qui voulait comprendre et maîtriser l'outil qui fait tourner ses machines. Le publier est la suite logique.</p>
       </div>
       <ul class="raisons">
@@ -330,9 +331,9 @@
       </ul>
     </div>
     <aside class="carte-depot apparait">
-      <span class="pastille" style="background:rgba(255,255,255,.12);color:#fff">Bientôt public</span>
+      <span class="pastille" style="background:rgba(255,255,255,.12);color:#fff">Public · AGPL-3.0</span>
       <h3 style="margin-top:14px">Le dépôt GitHub</h3>
-      <p>Serveur, clients Mac, Linux et Windows, Cloud et documentation en français et en anglais : tout le code est dans un seul dépôt, qui ouvrira prochainement.</p>
+      <p>Serveur, clients Mac, Linux et Windows, Cloud et documentation en français et en anglais : tout le code est dans un seul dépôt public, sous licence libre AGPL-3.0. Chacun peut l'utiliser, l'étudier et l'améliorer ; une version modifiée qui est redistribuée ou proposée en ligne doit rester ouverte.</p>
       <pre>git clone https://github.com/mvignaud/eko-rip-center
 cd eko-rip-center
 cargo run --release -p eko-rip-serveur</pre>
@@ -368,12 +369,16 @@ cargo run --release -p eko-rip-serveur</pre>
       <pre><span class="invite">$ </span>wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh</pre>
     </div>
     <div class="panneau-install" role="tabpanel" id="inst-mac" aria-labelledby="t-mac" hidden>
-      <p>macOS 14 ou plus récent, Apple Silicon et Intel. L'application signée est fournie avec chaque version, sur demande à <a href="mailto:contact@e-ko.rip" style="color:#7cc4ff">contact@e-ko.rip</a> en attendant l'ouverture du dépôt.</p>
+      <p>macOS 14 ou plus récent, Apple Silicon et Intel. L'application est signée et notarisée par Apple : elle s'ouvre sans avertissement.</p>
+      <p><a class="bouton bouton-clair" href="/telecharger/mac">Télécharger pour Mac (.dmg)</a></p>
+      <p style="font-size:14px;opacity:.8">Toujours la dernière version. Les versions précédentes sont sur <a href="https://github.com/mvignaud/eko-rip-center/releases" rel="noopener" style="color:#7cc4ff">GitHub</a>.</p>
     </div>
     <div class="panneau-install" role="tabpanel" id="inst-windows" aria-labelledby="t-windows" hidden>
-      <p>Le client Windows natif est en préparation. D'ici là, un client Windows x64 (.msi) est fourni sur demande à <a href="mailto:contact@e-ko.rip" style="color:#7cc4ff">contact@e-ko.rip</a>.</p>
+      <p>Windows 10 et 11, 64 bits. Le client natif est en préparation ; le client actuel n'est pas encore signé : au premier lancement, cliquer sur <strong>Informations complémentaires</strong> puis <strong>Exécuter quand même</strong>.</p>
+      <p><a class="bouton bouton-clair" href="/telecharger/windows">Télécharger pour Windows (.exe)</a></p>
     </div>
   </div>
+  <p class="apparait" style="text-align:center;margin-top:28px">Serveur, clients, application mobile et Cloud pas à pas : <a href="/documentation/demarrage/" style="color:#7cc4ff">lire la documentation</a>.</p>
 </section>
 
 <!-- ================= Nouveautés ================= -->
@@ -395,6 +400,7 @@ cargo run --release -p eko-rip-serveur</pre>
   <div class="conteneur">
     <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
     <nav>
+      <a href="/documentation/">Documentation</a>
       <a href="/changelog/">Nouveautés</a>
       <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
       <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>

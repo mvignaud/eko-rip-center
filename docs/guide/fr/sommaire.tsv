@@ -1,0 +1,33 @@
+# Sommaire de la documentation publique (https://e-ko.rip/documentation/).
+# Une ligne par page : page<TAB>fichier dans docs/<TAB>titre<TAB>description (une phrase).
+# « == Rubrique » ouvre une rubrique, « === Groupe » un groupe dedans (Machines › Imprimantes) ; chaque modèle
+# de serveur/src/machines.rs doit avoir sa page (identifiant epson-sc-s80600 pour EpsonScS80600). Après tout changement : python3 outils/generer-documentation.py
+== Bien démarrer
+index	guide/fr/index.md	Documentation	Tout pour installer, utiliser et administrer E-KO RIP Center : serveur, clients Mac, Linux et Windows, application mobile et Cloud.
+demarrage	guide/fr/demarrage.md	Prise en main	Comprendre comment s'articulent le serveur, les clients, l'application mobile et le Cloud, puis installer un atelier en cinq étapes.
+== Installer
+serveur	guide/fr/serveur.md	Installer le serveur	Choisir le poste, installer le serveur RIP sous Ubuntu par le dépôt APT, créer les comptes et brancher les machines.
+clients	guide/fr/clients.md	Installer les clients	Installer et connecter le client E-KO RIP Center sur Mac, Linux et Windows.
+application-mobile	guide/fr/application-mobile.md	Application mobile	Suivre la production depuis un téléphone iOS ou Android et recevoir les alertes des machines.
+cloud	guide/fr/cloud.md	Cloud E-KO RIP	Accéder au serveur RIP de l'atelier depuis l'extérieur, sans VPN ni port ouvert, avec la plate-forme gratuite platform.e-ko.rip.
+== Utiliser
+utilisation	fr/utilisation.md	Guide d'utilisation	Envoyer un travail, suivre la file, imprimer, découper, BAT, épreuves, planches, couleur et supports : toutes les fonctions du RIP.
+== Machines
+machines	fr/machines.md	Toutes les machines	Les imprimantes, plotters et tables de découpe pris en charge, comment les ajouter et les brancher.
+=== Imprimantes
+epson-sc-s80600:machines/epson-sc-s80600	fr/machines/epson-sc-s80600.md	Epson SureColor SC-S80600	Brancher et régler l'Epson SC-S80600 : pilote direct, supports, média chargé, ennuis courants.
+roland-versacamm:machines/roland-versacamm	fr/machines/roland-versacamm.md	Roland VersaCAMM VP-300 / VP-540	Brancher la Roland VersaCAMM et lui envoyer la découpe par le réseau.
+=== Plotters de découpe
+mutoh-kona:machines/mutoh-kona	fr/machines/mutoh-kona.md	Mutoh Kona 1650	Brancher le Kona en USB, régler la découpe et le repérage par cadre et code-barres.
+graphtec-fc7000:machines/graphtec-fc7000	fr/machines/graphtec-fc7000.md	Graphtec FC7000	Brancher la Graphtec FC7000 et lui envoyer la découpe en HP-GL.
+=== Tables de découpe
+tables-de-decoupe:machines/tables-de-decoupe	fr/machines/tables-de-decoupe.md	Tables de découpe	Les tables de découpe et la préparation des planches qui leur sont destinées.
+== Administrer
+administration	guide/fr/administration.md	Administrer le serveur	Comptes, sauvegardes, mises à jour, dossiers partagés, réglages avancés et données du serveur.
+depannage	guide/fr/depannage.md	Dépannage	Les messages courants, leur cause et la marche à suivre.
+glossaire	fr/glossaire.md	Glossaire	Les mots du RIP et de l'impression grand format, expliqués simplement.
+# Renvois : un lien vers un de ces fichiers de docs/ mène à la page indiquée (sans l'ancre).
+-> fr/installation-serveur.md	serveur
+-> fr/installation-client.md	clients
+-> fr/administration.md	administration
+-> fr/cloud.md	cloud

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · Documentation · E-KO RIP Center</title>
+<meta name="description" content="How the server, clients, mobile app and Cloud fit together, then setting up a print shop in five steps.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/getting-started/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/getting-started/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/demarrage/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/getting-started.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/#installer">Install</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/documentation/demarrage/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/" aria-current="page">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Getting started</p>
+    <h1>Getting started</h1>
+    <p class="doc-chapo">How the server, clients, mobile app and Cloud fit together, then setting up a print shop in five steps.</p>
+<p>This page introduces the parts of E-KO RIP Center and the order in which to install them. Allow one hour for a simple shop: one server, one or two workstations, one printer and one cutter.</p>
+<h2 id="the-parts-of-the-rip"><a class="ancre" href="#the-parts-of-the-rip" aria-hidden="true">#</a>The parts of the RIP</h2>
+<div class="tableau"><table><thead><tr><th>Part</th><th>Where</th><th>Role</th></tr></thead><tbody><tr><td><strong>RIP server</strong></td><td>a Linux PC in the shop, switched on all the time</td><td>receives the files, calculates the renders, keeps the queue, drives the machines</td></tr><tr><td><strong>E-KO RIP Center client</strong></td><td>each workstation (Mac, Linux, Windows)</td><td>sends the files, follows the jobs, starts printing and cutting</td></tr><tr><td><strong>Mobile app</strong></td><td>iOS or Android phone</td><td>follows the queue and the machines, receives alerts (empty cartridge, machine unreachable…)</td></tr><tr><td><strong>E-KO RIP Cloud</strong></td><td>online service, <code>platform.e-ko.rip</code></td><td>gives access to the server from outside, with no VPN and no open port</td></tr><tr><td><strong>Administration interface</strong></td><td>in the client (<strong>Administration…</strong>) or through the Cloud in a browser</td><td>machine settings, media, colour, accounts, backup</td></tr></tbody></table></div>
+<figure><a href="/documentation/images/schema-architecture.en.svg"><img src="/documentation/images/schema-architecture.en.svg" alt="Overview diagram" loading="lazy"></a><figcaption>The clients and the app talk to the server; the server talks to the machines</figcaption></figure>
+<p>A browser opened on the server's address inside the shop only shows a <strong>status page</strong> (version, machines, address to enter in the client): the full interface is reserved for the clients.</p>
+<figure><a href="/documentation/images/serveur-page-etat.png"><img src="/documentation/images/serveur-page-etat.png" alt="The server status page seen in a browser" loading="lazy"></a><figcaption>The server status page, opened in a browser</figcaption></figure>
+<h2 id="set-up-a-print-shop-in-five-steps"><a class="ancre" href="#set-up-a-print-shop-in-five-steps" aria-hidden="true">#</a>Set up a print shop in five steps</h2>
+<h3 id="1-prepare-the-server"><a class="ancre" href="#1-prepare-the-server" aria-hidden="true">#</a>1. Prepare the server</h3>
+<p>Choose a 64-bit (x86) PC that will stay switched on, preferably with an SSD reserved for the data, connected by cable and on a UPS. Give it a <strong>fixed IP address</strong> on the router. Details: <a href="/documentation/en/server/#choosing-the-server-pc">choosing the server PC</a>.</p>
+<h3 id="2-install-the-server"><a class="ancre" href="#2-install-the-server" aria-hidden="true">#</a>2. Install the server</h3>
+<p>On Ubuntu 24.04 or 26.04 LTS, add the E-KO repository then install the <code>eko-rip-serveur</code> package. The service starts by itself and restarts with the PC. Details: <a href="/documentation/en/server/#installing-from-the-apt-repository">installing from the APT repository</a>.</p>
+<h3 id="3-create-the-accounts"><a class="ancre" href="#3-create-the-accounts" aria-hidden="true">#</a>3. Create the accounts</h3>
+<p>As long as no account exists, any computer on the network can do everything, and the screen shows this in red. Create at least one <strong>administrator</strong> account, then one <strong>operator</strong> account per person. Details: <a href="/documentation/en/server/#creating-the-accounts">accounts and roles</a>.</p>
+<h3 id="4-install-the-clients"><a class="ancre" href="#4-install-the-clients" aria-hidden="true">#</a>4. Install the clients</h3>
+<p>On each workstation, install the client then choose the server in the <strong>Servers found on the network</strong> (<em>Serveurs trouvés sur le réseau</em>) list. Details: <a href="/documentation/en/clients/">install the clients</a>.</p>
+<h3 id="5-declare-the-machines"><a class="ancre" href="#5-declare-the-machines" aria-hidden="true">#</a>5. Declare the machines</h3>
+<p>In the client, open <strong>Administration…</strong>, then <strong>System › Machines</strong>: add each printer and each cutter, its connection (network, USB, folder) and its media. Every model has its own page in the <a href="/documentation/en/machines/">Machines</a> section.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Tip</p><p>Before the first real production run, send a small test PDF, check its preview and its plates in the inspector, then print it on an offcut.</p></aside>
+<h2 id="what-next"><a class="ancre" href="#what-next" aria-hidden="true">#</a>What next</h2>
+<ul><li><a href="/documentation/en/usage/#sending-a-job">Send a first job</a> and learn the queue.</li><li>Install the <a href="/documentation/en/mobile-app/">mobile app</a> to be warned of a breakdown.</li><li>Link the server to <a href="/documentation/en/cloud/">E-KO RIP Cloud</a> to reach it from outside.</li><li>Schedule a <a href="/documentation/en/administration/#backing-up">configuration backup</a>.</li></ul>
+<h2 id="what-the-server-needs-on-the-network"><a class="ancre" href="#what-the-server-needs-on-the-network" aria-hidden="true">#</a>What the server needs on the network</h2>
+<figure><a href="/documentation/images/schema-reseau.en.svg"><img src="/documentation/images/schema-reseau.en.svg" alt="Ports used by the server" loading="lazy"></a><figcaption>What the server listens on and what it reaches; only port 8640 is used by the clients</figcaption></figure>
+<div class="tableau"><table><thead><tr><th>Direction</th><th>Port</th><th>For</th></tr></thead><tbody><tr><td>Workstations → server</td><td>TCP <strong>8640</strong></td><td>clients, mobile app inside the shop, forwarding between RIPs</td></tr><tr><td>Workstations ↔ server</td><td>UDP 5353 (mDNS)</td><td>automatic discovery of the server by the clients</td></tr><tr><td>Workstations → server</td><td>TCP 445</td><td>shared hot folders (Samba), if you share them</td></tr><tr><td>Server → printers</td><td>TCP 9100, 631 (IPP), UDP 161 (SNMP)</td><td>sending jobs, ink levels, loaded media</td></tr><tr><td>Server → Internet</td><td>TCP 443 (HTTPS, outgoing)</td><td>updates, E-KO RIP Cloud, ERP</td></tr></tbody></table></div>
+<aside class="encadre encadre-attention"><p class="encadre-titre">Warning</p><p>Never open port 8640 to the Internet: the connection is not encrypted. To work remotely, use <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>.</p></aside>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/"><span>Previous</span>Documentation</a><a class="doc-suiv" href="/documentation/en/server/"><span>Next</span>Install the server</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/getting-started.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#the-parts-of-the-rip">The parts of the RIP</a></li><li class="niveau-2"><a href="#set-up-a-print-shop-in-five-steps">Set up a print shop in five steps</a></li><li class="niveau-3"><a href="#1-prepare-the-server">1. Prepare the server</a></li><li class="niveau-3"><a href="#2-install-the-server">2. Install the server</a></li><li class="niveau-3"><a href="#3-create-the-accounts">3. Create the accounts</a></li><li class="niveau-3"><a href="#4-install-the-clients">4. Install the clients</a></li><li class="niveau-3"><a href="#5-declare-the-machines">5. Declare the machines</a></li><li class="niveau-2"><a href="#what-next">What next</a></li><li class="niveau-2"><a href="#what-the-server-needs-on-the-network">What the server needs on the network</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>
