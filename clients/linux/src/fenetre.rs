@@ -734,22 +734,30 @@ impl Fenetre {
     }
 
     /// Le jeton est révoqué ou expiré : on l'oublie et on revient au choix du serveur.
+    /// Jeton du cloud refusé. Un serveur RIP local ouvert reste ouvert : seul le jeton est oublié.
     fn cloud_expire(self: &Rc<Self>) {
+        let local = self.client.borrow().as_ref().is_some_and(|c| !c.est_cloud());
+        if local {
+            self.oublier_cloud();
+            return;
+        }
         self.arreter_minuterie();
         self.oublier_cloud();
         self.montrer_serveur(Some("Connexion au cloud expirée : se reconnecter."));
     }
 
-    /// Efface le jeton, le dernier site et le serveur cloud ouvert.
+    /// Efface le jeton, le dernier site et le serveur cloud ouvert (un serveur local reste ouvert).
     fn oublier_cloud(&self) {
         cloud::oublier_jeton();
         config::supprimer("site_cloud");
-        config::supprimer("mode");
         self.reinitialiser_notifications_cloud();
         self.sites_cloud.borrow_mut().clear();
         *self.etat_cloud.borrow_mut() = None;
-        self.action_deconnecter.set_enabled(false);
-        self.action_signaler.set_enabled(false);
+        if self.client.borrow().as_ref().is_none_or(|c| c.est_cloud()) {
+            config::supprimer("mode");
+            self.action_deconnecter.set_enabled(false);
+            self.action_signaler.set_enabled(false);
+        }
         if self.client.borrow().as_ref().is_some_and(|c| c.est_cloud()) {
             *self.client.borrow_mut() = None;
             *self.session.borrow_mut() = Session::default();

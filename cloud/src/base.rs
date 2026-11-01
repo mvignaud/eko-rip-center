@@ -234,7 +234,8 @@ pub fn lier_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &
 /// Un fournisseur qui a VÉRIFIÉ l'e-mail (Google) prend un compte existant à cet e-mail : celui
 /// qui prouve l'adresse en est le titulaire. Tout autre accès est retiré (mot de passe,
 /// autre fournisseur, sessions ouvertes) : quelqu'un qui aurait inscrit cet e-mail avant son
-/// titulaire, sans pouvoir le prouver, perd la main. Le titulaire se connecte ensuite par ce
+/// titulaire, sans pouvoir le prouver, perd la main, y compris les apps qu'il aurait connectées
+/// et les navigateurs abonnés aux notifications. Le titulaire se connecte ensuite par ce
 /// fournisseur.
 pub fn reprendre_par_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &str) -> rusqlite::Result<bool> {
     let col = colonne_fournisseur(fournisseur);
@@ -242,6 +243,7 @@ pub fn reprendre_par_fournisseur(c: &Connection, compte: i64, fournisseur: &str,
     t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, echecs = 0, bloque_jusqua = 0, email_verifie = 1 WHERE id = ?1", [compte])?;
     t.execute("DELETE FROM sessions WHERE compte = ?1", [compte])?;
     t.execute("DELETE FROM jetons_courriel WHERE compte = ?1", [compte])?;
+    revoquer_jetons_du_compte(&t, compte)?;
     let lie = t.execute(&format!("UPDATE OR IGNORE comptes SET {col} = ?1 WHERE id = ?2"), params![ident, compte])? == 1;
     if lie {
         t.commit()?;
@@ -485,8 +487,10 @@ pub fn jetons_du_compte(c: &Connection, compte: i64) -> rusqlite::Result<Vec<(St
     q.query_map(params![compte, crate::maintenant() as i64], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)))?.collect()
 }
 
+/// Retire toutes les apps connectées du compte et les navigateurs abonnés à ses notifications.
 pub fn revoquer_jetons_du_compte(c: &Connection, compte: i64) -> rusqlite::Result<()> {
     c.execute("DELETE FROM jetons_applis WHERE compte = ?1", [compte])?;
+    c.execute("DELETE FROM abonnements_web WHERE compte = ?1", [compte])?;
     Ok(())
 }
 
@@ -524,10 +528,14 @@ mod tests {
         let id = creer_compte(&c, "titulaire@exemple.fr", "Tiers", Some(&hacher("phrase-du-tiers"))).unwrap().unwrap();
         assert!(lier_fournisseur(&c, id, "facebook", "fb-tiers").unwrap());
         let (jeton, _) = ouvrir_session(&c, id).unwrap();
+        let appli = creer_jeton_appli(&c, id, "Mac du tiers").unwrap();
+        assert!(crate::notifications::ajouter_abonnement(&c, id, "https://push.exemple/tiers", "p", "a", "Navigateur du tiers", 1).unwrap());
         // Le titulaire arrive par Google (e-mail vérifié) : il reprend le compte.
         assert!(reprendre_par_fournisseur(&c, id, "google", "g-titulaire").unwrap());
         assert!(matches!(connecter(&c, "titulaire@exemple.fr", "phrase-du-tiers").unwrap(), Connexion::Refusee), "mot de passe du tiers retiré");
         assert!(session(&c, &jeton).unwrap().is_none(), "sessions du tiers fermées");
+        assert!(compte_du_jeton(&c, &appli).unwrap().is_none(), "apps du tiers déconnectées");
+        assert_eq!(c.query_row("SELECT COUNT(*) FROM abonnements_web WHERE compte = ?1", [id], |r| r.get::<_, i64>(0)).unwrap(), 0, "notifications du tiers coupées");
         assert!(compte_par_fournisseur(&c, "facebook", "fb-tiers").unwrap().is_none(), "autre fournisseur retiré");
         assert_eq!(compte_par_fournisseur(&c, "google", "g-titulaire").unwrap().unwrap().id, id);
         let _ = std::fs::remove_dir_all(&d);

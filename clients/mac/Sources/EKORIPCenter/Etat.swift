@@ -315,16 +315,21 @@ final class Etat {
     var jetonCloudPresent: Bool { Trousseau.lire() != nil }
 
     /// Oublie le jeton (trousseau) et tout ce qui en dépend, sans appel réseau.
-    private func oublierCloud() {
+    /// Oublie le jeton du cloud. La connexion en cours n'est fermée que si elle passe par le
+    /// cloud (ou si `fermerConnexion` le demande) : un serveur RIP local ouvert reste utilisable.
+    private func oublierCloud(fermerConnexion: Bool? = nil) {
+        let fermer = fermerConnexion ?? (siteCloud != nil)
         Trousseau.oublier()
         arreterNotificationsCloud()
         UserDefaults.standard.removeObject(forKey: Cles.dernierNotificationCloud)
         cloudCompte = nil
         cloudSites = []
         siteCloud = nil
-        api?.session.invalidateAndCancel()
-        api = nil
-        session = nil
+        if fermer {
+            api?.session.invalidateAndCancel()
+            api = nil
+            session = nil
+        }
         UserDefaults.standard.removeObject(forKey: Cles.siteCloud)
     }
 
@@ -419,7 +424,7 @@ final class Etat {
             UserDefaults.standard.set("cloud", forKey: Cles.modeConnexion)
             await entrer()
         } catch let e as ErreurApi where e.statut == 401 {
-            oublierCloud()
+            oublierCloud(fermerConnexion: true)
             erreurConnexion = Libelles.erreur("jeton_invalide", nil)
             phase = .adresse
         } catch {
@@ -436,7 +441,7 @@ final class Etat {
         arreterBoucle()
         vider()
         let jeton = Trousseau.lire()
-        oublierCloud()
+        oublierCloud(fermerConnexion: true)
         erreurConnexion = nil
         phase = .adresse
         if let jeton { try? await ClientCloud().deconnecter(jeton: jeton) }
