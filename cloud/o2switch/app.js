@@ -274,6 +274,9 @@ function lire_tete(amont, suite) {
       if (montee && (nom === 'content-length' || nom === 'transfer-encoding' || nom === 'date')) continue;
       sortie.push(`${NOMS[nom] || nom}: ${valeur}`);
     }
+    // Le frontal (PowerBoost, de type nginx, et Passenger) met en tampon ce qu'il prend pour
+    // un corps de réponse : le tunnel ne transmettrait plus rien jusqu'au remplissage du tampon.
+    if (montee) sortie.push('X-Accel-Buffering: no', 'Cache-Control: no-cache, no-transform');
     suite(Buffer.from(sortie.join('\r\n') + '\r\n\r\n', 'latin1'), tampon.subarray(fin + 4));
   };
   amont.on('data', lire);
