@@ -26,8 +26,8 @@ jobs:
           done
       - name: Clés de traduction en double (la dernière écrase l'autre sans erreur)
         run: node outils/doublons-traductions.js serveur/static/index.html
-      - run: cargo clippy -p eko-rip-serveur --all-targets --locked -- -D warnings
-      - run: cargo test -p eko-rip-serveur --locked
+      - run: cargo clippy -p eko-rip-serveur -p eko-rip-cloud --all-targets --locked -- -D warnings
+      - run: cargo test -p eko-rip-serveur -p eko-rip-cloud --locked
       - run: cargo install cargo-deb --locked
       - run: cargo deb -p eko-rip-serveur --locked --output dist/
       - uses: actions/upload-artifact@v7

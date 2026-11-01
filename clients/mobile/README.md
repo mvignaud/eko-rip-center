@@ -14,7 +14,7 @@ Expo SDK 58, React Native, TypeScript, expo-router (onglets). Aucune bibliothèq
 - `src/notifications.ts` : jeton push Expo, canal Android « alertes », enregistrement sur le serveur.
 - `src/alertes.tsx` : événements et pastille de l'onglet Alertes.
 
-L'adresse du serveur peut contenir un chemin (`https://rip.e-ko.fr/s/atelier`) : les URL sont construites
+L'adresse du serveur peut contenir un chemin (`https://platform.e-ko.rip/s/atelier`, ou directement `https://atelier.platform.e-ko.rip`) : les URL sont construites
 par simple concaténation `base + /api/...`.
 
 ## Lancer en développement

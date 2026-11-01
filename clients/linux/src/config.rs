@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 pub const PORT_PAR_DEFAUT: u16 = 8640;
 
-fn dossier() -> PathBuf {
+pub fn dossier() -> PathBuf {
     gtk::glib::user_config_dir().join("e-ko-rip-center")
 }
 

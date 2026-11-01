@@ -128,6 +128,9 @@ enum Libelles {
         "decoupeuse_invalide": "Découpeuse invalide.",
         "decoupeuse_indisponible": "Découpeuse indisponible : un réglage de couche n'existe pas sur cette machine.",
         "trop_gros": "Fichier trop volumineux pour le serveur.",
+        "rapport_invalide": "Rapport invalide : titre de 1 à 120 caractères, description de 1 à 5000, e-mail de 120 au plus.",
+        "rapports_sature": "Trop de rapports envoyés en ce moment : réessayez dans quelques minutes.",
+        "plateforme_injoignable": "La plate-forme E-KO est injoignable depuis le serveur : réessayez plus tard.",
         "reseau": "Serveur injoignable.",
     ]
 

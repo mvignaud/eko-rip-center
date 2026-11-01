@@ -2,6 +2,7 @@
 //! plaques d'encre et les garde prêts pour les machines branchées sur le serveur.
 
 mod acces;
+mod annonce;
 mod bat;
 mod blanc;
 mod couleur;
@@ -39,6 +40,9 @@ mod balises;
 mod regles;
 mod recalibration;
 mod cellules;
+mod cloud;
+mod rapports;
+mod telemetrie;
 mod rendus;
 mod releves;
 mod reperage;
@@ -434,10 +438,22 @@ async fn main() {
     tokio::spawn(pont::boucle(etat.config.donnees.clone()));
     tokio::spawn(prendre_envois(etat.clone()));
     tokio::spawn(veiller_la_file(etat.clone()));
+    // Cloud E-KO RIP : la même API sert dans le tunnel vers la plate-forme, marquée pour
+    // que `garder` en ferme une partie (pont ERP, renvoi, réglages du cloud).
+    let par_cloud = routes(etat.clone()).layer(DefaultBodyLimit::max(max)).layer(axum::Extension(cloud::ParCloud));
+    tokio::spawn(cloud::boucle(etat.config.donnees.clone(), par_cloud));
+    // Rapports de bug automatiques (si l'administrateur l'a accepté) : plantage écrit avant l'arrêt.
+    rapports::installer_crochet(etat.config.donnees.clone());
+    tokio::spawn(rapports::boucle(etat.config.donnees.clone()));
+    // Ping anonyme d'installation (à l'installation, à chaque mise à jour, puis chaque semaine).
+    let e = etat.clone();
+    tokio::spawn(telemetrie::boucle(etat.config.donnees.clone(), move || (e.machines.read().unwrap().len(), reglages::lire(&e.config.donnees).len())));
     let app = routes(etat).layer(DefaultBodyLimit::max(max));
 
     let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
     println!("E-KO RIP Center à l'écoute sur http://{adresse}");
+    // Annonce sur le réseau local (les clients trouvent le serveur sans adresse) : sans bloquer ni échouer.
+    annonce::demarrer(&adresse);
     axum::serve(ecoute, app).await.unwrap();
 }
 
@@ -516,6 +532,11 @@ fn routes(etat: Partage) -> Router {
         .route("/api/mobile/appareils", axum::routing::post(inscrire_appareil))
         .route("/api/mobile/appareils/retirer", axum::routing::post(retirer_appareil))
         .route("/api/mobile/essai", axum::routing::post(essai_mobile))
+        .route("/api/cloud", get(lire_cloud).delete(detacher_cloud))
+        .route("/api/cloud/appairage", axum::routing::post(appairer_cloud))
+        .route("/api/telemetrie", get(lire_telemetrie).post(regler_telemetrie))
+        .route("/api/rapports", axum::routing::post(signaler_probleme))
+        .route("/api/rapports/reglage", get(lire_reglage_rapports).post(regler_rapports))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
@@ -1461,6 +1482,7 @@ fn reprendre_fiche(donnees: &std::path::Path, t: &mut Travail) {
 
 async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     let jeton = etat.rendu.attendre(place).await;
+    let debut_rendu = std::time::Instant::now();
     let mut a_sortir = false;
     let donnees = &etat.config.donnees;
     t.statut = Statut::EnCours;
@@ -1605,6 +1627,13 @@ async fn traiter(etat: Partage, mut t: Travail, place: rendus::Place) {
     reprendre_fiche(donnees, &mut t);
     if let Err(e) = ecrire(donnees, &t) {
         eprintln!("travail {} : état non enregistré : {e}", t.id);
+    }
+    // Rapport de bug automatique (s'il est accepté) : rendu en échec, ou anormalement long.
+    let duree = debut_rendu.elapsed();
+    if matches!(t.statut, Statut::Echec) && let Some(code @ ("rendu_echoue" | "decoupe_illisible")) = t.code_erreur.as_deref() {
+        rapports::signaler(donnees, "erreur", code, t.erreur.as_deref().unwrap_or(""));
+    } else if duree > Duration::from_secs(60 * env_ou("EKO_RIP_LENTEUR_MIN", "30").parse::<u64>().unwrap_or(30).max(1)) {
+        rapports::signaler(donnees, "lenteur", "rendu_lent", &format!("rendu en {} min : {} page(s), {} dpi", duree.as_secs() / 60, t.pages.len(), t.demande.dpi));
     }
     // Mise en file automatique à son tour : après les arrivées automatiques d'avant.
     jeton.terminer(a_sortir.then(|| t.clone()), |t| {
@@ -2666,6 +2695,16 @@ async fn accueil(State(etat): State<Partage>, entetes: axum::http::HeaderMap) ->
 
 async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
     let chemin = requete.uri().path();
+    // Venue par le tunnel du cloud : jamais le pont ERP, le renvoi entre RIP ni les réglages
+    // du pont et du cloud ; et jamais sans compte (l'accès libre reste au réseau local).
+    if requete.extensions().get::<cloud::ParCloud>().is_some() {
+        if chemin.starts_with("/api/renvoi/") || chemin.starts_with(erp::PREFIXE) || chemin.starts_with("/api/pont") || chemin.starts_with("/api/cloud") && requete.method() != axum::http::Method::GET {
+            return refus(StatusCode::FORBIDDEN, "ferme_par_cloud", None);
+        }
+        if acces::libre(&etat.config.donnees) {
+            return refus(StatusCode::FORBIDDEN, "cloud_sans_compte", None);
+        }
+    }
     // Pont ERP (exception accordée par le gérant le 24/10) : le jeton de l'ERP ouvre ses
     // seules routes ; elles restent fermées sans lui, même quand l'accès humain est libre.
     let bearer = requete.headers().get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "));
@@ -2706,6 +2745,92 @@ struct ReglagePont {
     actif: bool,
     #[serde(default)]
     secret: Option<String>,
+}
+
+/// « Signaler un problème » (Système, clients Mac et Linux) : transmis à la plate-forme, avec
+/// le journal masqué du serveur si demandé. Rend la référence du rapport.
+async fn signaler_probleme(State(etat): State<Partage>, Json(s): Json<rapports::Signalement>) -> Response {
+    let corps = match rapports::preparer(&etat.config.donnees, &s) {
+        Ok(c) => c,
+        Err(code) => return refus(StatusCode::BAD_REQUEST, code, None),
+    };
+    let joindre = s.joindre_journal;
+    match tokio::task::spawn_blocking(move || rapports::envoyer_signalement(corps, joindre)).await {
+        Ok(Ok(reference)) => (StatusCode::CREATED, Json(serde_json::json!({ "reference": reference }))).into_response(),
+        Ok(Err(code)) if code == rapports::RAPPORT_INVALIDE => refus(StatusCode::BAD_REQUEST, code, None),
+        Ok(Err(code)) if code == rapports::RAPPORTS_SATURE => refus(StatusCode::TOO_MANY_REQUESTS, code, None),
+        _ => refus(StatusCode::BAD_GATEWAY, rapports::PLATEFORME_INJOIGNABLE, None),
+    }
+}
+
+/// Rapports automatiques : `auto` vaut null tant que l'administrateur n'a pas répondu.
+async fn lire_reglage_rapports(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "auto": rapports::auto(&etat.config.donnees) }))
+}
+
+#[derive(Deserialize)]
+struct ReglageRapports {
+    auto: bool,
+}
+
+async fn regler_rapports(State(etat): State<Partage>, Json(r): Json<ReglageRapports>) -> Response {
+    match rapports::regler_auto(&etat.config.donnees, r.auto) {
+        Ok(()) => Json(serde_json::json!({ "auto": r.auto })).into_response(),
+        Err(_) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", None),
+    }
+}
+
+/// Statistiques anonymes d'installation (Système).
+async fn lire_telemetrie(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(telemetrie::etat_public(&etat.config.donnees))
+}
+
+#[derive(Deserialize)]
+struct ReglageTelemetrie {
+    actif: bool,
+}
+
+/// Coche ou décoche l'envoi (administrateur).
+async fn regler_telemetrie(State(etat): State<Partage>, Json(r): Json<ReglageTelemetrie>) -> Response {
+    let donnees = &etat.config.donnees;
+    match telemetrie::modifier(donnees, |e| e.desactive = !r.actif) {
+        Ok(_) => Json(telemetrie::etat_public(donnees)).into_response(),
+        Err(_) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", None),
+    }
+}
+
+/// Cloud E-KO RIP (Système) : rattachement, état du tunnel, appairage en cours.
+async fn lire_cloud(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    Json(cloud::etat_public(&etat.config.donnees))
+}
+
+/// Demande un code d'appairage à la plate-forme (administrateur). Refusé sans compte :
+/// l'accès libre du réseau local ne doit jamais sortir de l'atelier.
+async fn appairer_cloud(State(etat): State<Partage>) -> Response {
+    let donnees = etat.config.donnees.clone();
+    if acces::libre(&donnees) {
+        return refus(StatusCode::CONFLICT, "cloud_sans_compte", None);
+    }
+    if cloud::lire(&donnees).is_some() {
+        return refus(StatusCode::CONFLICT, "cloud_deja_rattache", None);
+    }
+    let url = cloud::url_plateforme();
+    match tokio::task::spawn_blocking(move || cloud::demander(&url)).await {
+        Ok(Ok(_)) => {
+            tokio::spawn(cloud::suivre(donnees.clone()));
+            Json(cloud::etat_public(&donnees)).into_response()
+        }
+        Ok(Err(code)) => refus(StatusCode::BAD_GATEWAY, code, None),
+        Err(_) => refus(StatusCode::BAD_GATEWAY, "cloud_injoignable", None),
+    }
+}
+
+/// Détache le serveur de la plate-forme : le tunnel se ferme, la clé est oubliée.
+async fn detacher_cloud(State(etat): State<Partage>) -> Response {
+    match cloud::detacher(&etat.config.donnees) {
+        Ok(()) => Json(cloud::etat_public(&etat.config.donnees)).into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
 }
 
 async fn lire_pont(State(etat): State<Partage>) -> Json<serde_json::Value> {
@@ -5312,7 +5437,12 @@ async fn executer(etat: Partage, s: file::Sortie) {
         x.consommation = reel;
         match resultat {
             Ok(_) => x.etat = file::Etat::Terminee,
-            Err((code, e)) => (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e)),
+            Err((code, e)) => {
+                if code == "sortie_echouee" {
+                    rapports::signaler(&etat.config.donnees, "erreur", code, &e);
+                }
+                (x.etat, x.code_erreur, x.erreur) = (file::Etat::Echec, Some(code.into()), Some(e))
+            }
         }
     }
     // Planche imprimée : les impressions qu'elle remplaçait le sont aussi (elles ne
@@ -5766,6 +5896,101 @@ mod tests {
             assert_eq!(r.status(), StatusCode::ACCEPTED);
             let v: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap();
             assert_eq!(v["mode"], serde_json::json!("decouper"));
+        }
+
+        /// Cloud : une requête venue par le tunnel n'atteint ni le pont ERP, ni le renvoi, ni
+        /// les réglages du pont et du cloud, et rien du tout sans compte (l'accès libre reste
+        /// au réseau local). L'appairage est refusé sans compte.
+        #[tokio::test]
+        async fn cloud_ferme_ce_qui_ne_sort_pas_de_l_atelier() {
+            let e = etat("cloud-garde");
+            let par_cloud = |methode: &str, uri: &str| {
+                let r = Request::builder().method(methode).uri(uri).header(header::USER_AGENT, "EKO-RIP-Client/1.0").extension(cloud::ParCloud).body(Body::empty()).unwrap();
+                let e = e.clone();
+                async move { routes(e).oneshot(r).await.unwrap() }
+            };
+            let code = |r: Response| async move { serde_json::from_slice::<serde_json::Value>(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap()["code"].as_str().unwrap_or("").to_string() };
+            // Sans compte : tout est fermé par le cloud, ouvert en local ; pas d'appairage.
+            let r = par_cloud("GET", "/api/travaux").await;
+            assert_eq!(r.status(), StatusCode::FORBIDDEN);
+            assert_eq!(code(r).await, "cloud_sans_compte");
+            assert_eq!(appel(&e, "GET", "/api/travaux", None, None).await.status(), StatusCode::OK);
+            let r = appel(&e, "POST", "/api/cloud/appairage", None, None).await;
+            assert_eq!(r.status(), StatusCode::CONFLICT);
+            assert_eq!(code(r).await, "cloud_sans_compte");
+
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "chef".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            for (m, uri) in [("GET", "/api/pont"), ("POST", "/api/pont"), ("POST", "/api/renvoi/epson"), ("GET", &format!("{}contrat", erp::PREFIXE)), ("POST", "/api/cloud/appairage"), ("DELETE", "/api/cloud")] {
+                let r = par_cloud(m, uri).await;
+                assert_eq!(r.status(), StatusCode::FORBIDDEN, "{m} {uri}");
+                assert_eq!(code(r).await, "ferme_par_cloud", "{m} {uri}");
+            }
+            // Le reste suit les règles habituelles : session demandée.
+            assert_eq!(par_cloud("GET", "/api/travaux").await.status(), StatusCode::UNAUTHORIZED);
+            assert_eq!(par_cloud("GET", "/api/cloud").await.status(), StatusCode::UNAUTHORIZED);
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Cloud de bout en bout : vraie plate-forme sur un port local, vrai tunnel ouvert par
+        /// la boucle du serveur ; connexion avec un compte du RIP au travers de la plate-forme.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn cloud_tunnel_de_bout_en_bout() {
+            let e = etat("cloud-tunnel");
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "chef".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            let plateforme = e.config.donnees.join("plateforme");
+            let (site, cle) = eko_rip_cloud::sites::creer(&plateforme, "Atelier", None).unwrap();
+            let relais = eko_rip_cloud::relais::nouveau(eko_rip_cloud::relais::Config { donnees: plateforme, url_publique: "http://plateforme.test".into(), max_octets: 1 << 20, jeton_stats: String::new() });
+            let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}", ecoute.local_addr().unwrap());
+            tokio::spawn(async move { axum::serve(ecoute, eko_rip_cloud::relais::routes(relais)).await.unwrap() });
+            std::fs::write(cloud::fichier(&e.config.donnees), serde_json::to_vec(&cloud::Config { url: base.clone(), site: site.id.clone(), cle }).unwrap()).unwrap();
+            tokio::spawn(cloud::boucle(e.config.donnees.clone(), routes(e.clone()).layer(axum::Extension(cloud::ParCloud))));
+            let mut ouvert = false;
+            for _ in 0..100 {
+                if cloud::etat_public(&e.config.donnees)["etat"] == "connecte" {
+                    ouvert = true;
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+            assert!(ouvert, "{}", cloud::etat_public(&e.config.donnees));
+            let etat = cloud::etat_public(&e.config.donnees);
+            assert_eq!(etat["adresse"], eko_rip_cloud::relais::adresse_du_site(&base, &site.id));
+            assert!(etat.get("cle").is_none() && !etat.to_string().contains("cle\""), "la clé ne sort jamais");
+
+            let racine = format!("{base}/s/{}", site.id);
+            let resultat = tokio::task::spawn_blocking(move || {
+                let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).build().into();
+                let statut = |r: Result<ureq::http::Response<ureq::Body>, ureq::Error>| r.unwrap().status().as_u16();
+                let sans = statut(agent.get(format!("{racine}/api/travaux")).header("User-Agent", "EKO-RIP-Client/1.0").call());
+                let r = agent.post(format!("{racine}/api/session")).header("User-Agent", "EKO-RIP-Client/1.0").send_json(serde_json::json!({ "nom": "chef", "mot_de_passe": "phrase-de-passe-longue" })).unwrap();
+                let cookie = r.headers()["set-cookie"].to_str().unwrap().to_string();
+                let jeton = cookie.split(';').next().unwrap().to_string();
+                let avec = statut(agent.get(format!("{racine}/api/travaux")).header("User-Agent", "EKO-RIP-Client/1.0").header("Cookie", &jeton).call());
+                let pont = statut(agent.get(format!("{racine}/api/pont")).header("User-Agent", "EKO-RIP-Client/1.0").header("Cookie", &jeton).call());
+                (sans, r.status().as_u16(), cookie, avec, pont)
+            })
+            .await
+            .unwrap();
+            assert_eq!(resultat.0, 401);
+            assert_eq!(resultat.1, 204);
+            assert!(resultat.2.contains(&format!("Path=/s/{}/", site.id)), "{}", resultat.2);
+            assert_eq!(resultat.3, 200);
+            assert_eq!(resultat.4, 403);
+
+            // Détaché : le tunnel se ferme aussitôt, le site repasse hors ligne.
+            cloud::detacher(&e.config.donnees).unwrap();
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let racine = format!("{base}/s/{}", site.id);
+            let apres = tokio::task::spawn_blocking(move || {
+                let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).build().into();
+                agent.get(format!("{racine}/api/travaux")).call().unwrap().status().as_u16()
+            })
+            .await
+            .unwrap();
+            assert_eq!(apres, 502);
+            assert_eq!(cloud::etat_public(&e.config.donnees)["etat"], "inactif");
+            std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }
 
         /// Renvoi vers un autre RIP (roadmap 9.4) : le flux part par la connexion de la

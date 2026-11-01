@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 User=eko-rip
-# Accès au plotter (/dev/kona).
-SupplementaryGroups=dialout
+# Accès au plotter (/dev/kona) ; journal du service lu pour les rapports de bug (lecture seule).
+SupplementaryGroups=dialout systemd-journal
 EnvironmentFile=-/etc/default/eko-rip-serveur
 Environment=EKO_RIP_DATA=/var/lib/eko-rip
 ExecStart=/usr/bin/eko-rip-serveur

@@ -117,6 +117,12 @@ cat > "$APP/Contents/Info.plist" <<PLIST
             </array>
         </dict>
     </array>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_eko-rip._tcp</string>
+    </array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>E-KO RIP Center cherche les serveurs RIP de votre réseau local pour vous éviter de saisir leur adresse.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <!-- Le serveur RIP parle HTTP sur le réseau local. -->

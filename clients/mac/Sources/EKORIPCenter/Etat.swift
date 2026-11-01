@@ -99,6 +99,7 @@ final class Etat {
     var message: MessageUtilisateur?
     var annonce: String?
     var fichiersAEnvoyer: [URL] = []
+    var signalementOuvert = false
     var envois: [EnvoiEnCours] = []
 
     private(set) var api: Api?

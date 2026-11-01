@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    if ! getent passwd eko-rip-cloud >/dev/null; then
+        adduser --system --group --home /var/lib/eko-rip-cloud --no-create-home eko-rip-cloud
+    fi
+    install -d -o eko-rip-cloud -g eko-rip-cloud -m 0700 /var/lib/eko-rip-cloud
+fi
+#DEBHELPER#

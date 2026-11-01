@@ -5,6 +5,7 @@ use crate::api::{Client, Erreur, Resultat, VERSION};
 use crate::commande::Commande;
 use crate::config;
 use crate::connexion::{ICONE, PageIdentification, PageServeur};
+use crate::decouverte::{self, Serveur};
 use crate::envoi;
 use crate::inspecteur::Inspecteur;
 use crate::machines::Machines;
@@ -57,6 +58,7 @@ pub struct Fenetre {
     bouton_suspendre: gtk::Button,
     contenu_suspendre: adw::ButtonContent,
     action_deconnecter: gio::SimpleAction,
+    action_signaler: gio::SimpleAction,
     travaux: Rc<Travaux>,
     machines: Machines,
     systeme: Systeme,
@@ -69,6 +71,8 @@ pub struct Fenetre {
     page: RefCell<String>,
     precedent: RefCell<String>,
     en_vol: Cell<bool>,
+    /// Recherche des serveurs du réseau en cours.
+    recherche_serveurs: Cell<bool>,
     hors_ligne: Cell<bool>,
     minuterie: RefCell<Option<glib::SourceId>>,
     suivi: RefCell<Suivi>,
@@ -143,6 +147,7 @@ impl Fenetre {
 
         let menu = gio::Menu::new();
         menu.append(Some("Administration…"), Some("win.administration"));
+        menu.append(Some("Signaler un problème…"), Some("win.signaler"));
         menu.append(Some("Changer de serveur…"), Some("win.changer-serveur"));
         menu.append(Some("Se déconnecter"), Some("win.deconnecter"));
         let menu_bas = gio::Menu::new();
@@ -176,6 +181,7 @@ impl Fenetre {
         let fen = adw::ApplicationWindow::builder().application(app).title("E-KO RIP Center").icon_name(ICONE).default_width(1360).default_height(820).content(&toasts).build();
 
         let action_deconnecter = gio::SimpleAction::new("deconnecter", None);
+        let action_signaler = gio::SimpleAction::new("signaler", None);
         let moi = Rc::new(Fenetre {
             app: app.clone(),
             fen,
@@ -195,6 +201,7 @@ impl Fenetre {
             bouton_suspendre,
             contenu_suspendre,
             action_deconnecter,
+            action_signaler,
             travaux,
             machines,
             systeme,
@@ -207,6 +214,7 @@ impl Fenetre {
             page: RefCell::new("travaux".into()),
             precedent: RefCell::new("serveur".into()),
             en_vol: Cell::new(false),
+            recherche_serveurs: Cell::new(false),
             hors_ligne: Cell::new(false),
             minuterie: RefCell::new(None),
             suivi: RefCell::new(Suivi::default()),
@@ -268,6 +276,12 @@ impl Fenetre {
         self.serveur.bouton.connect_clicked(move |_| aller());
         self.serveur.adresse.connect_entry_activated(move |_| se_connecter());
         let f = Rc::downgrade(self);
+        self.serveur.rechercher.connect_clicked(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.rechercher_serveurs();
+            }
+        });
+        let f = Rc::downgrade(self);
         self.serveur.annuler.connect_clicked(move |_| {
             if let Some(f) = f.upgrade() {
                 let p = f.precedent.borrow().clone();
@@ -322,6 +336,15 @@ impl Fenetre {
         });
         self.fen.add_action(&self.action_deconnecter);
         self.action_deconnecter.set_enabled(false);
+        // « Signaler un problème… » : seulement connecté au serveur.
+        let faible = Rc::downgrade(self);
+        self.action_signaler.connect_activate(move |_, _| {
+            if let Some(m) = faible.upgrade() {
+                m.signaler();
+            }
+        });
+        self.fen.add_action(&self.action_signaler);
+        self.action_signaler.set_enabled(false);
 
         // Glisser-déposer de fichiers sur la fenêtre.
         let cible = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
@@ -398,7 +421,7 @@ impl Fenetre {
 
     // --- Connexion ---
 
-    fn montrer_serveur(&self, message: Option<&str>) {
+    fn montrer_serveur(self: &Rc<Self>, message: Option<&str>) {
         let courant = self.pile.visible_child_name().map(|n| n.to_string()).unwrap_or_default();
         if courant != "serveur" {
             *self.precedent.borrow_mut() = courant;
@@ -409,11 +432,39 @@ impl Fenetre {
         if let Some(m) = message {
             self.toast(m);
         }
+        self.rechercher_serveurs();
+    }
+
+    /// Cherche les serveurs annoncés sur le réseau local (~3 s, hors du fil GTK) et les propose.
+    fn rechercher_serveurs(self: &Rc<Self>) {
+        if self.recherche_serveurs.replace(true) {
+            return;
+        }
+        self.afficher_trouves(&[], true);
+        glib::spawn_future_local({
+            let moi = self.clone();
+            async move {
+                let trouves = gio::spawn_blocking(decouverte::chercher).await.unwrap_or_default();
+                moi.recherche_serveurs.set(false);
+                moi.afficher_trouves(&trouves, false);
+            }
+        });
+    }
+
+    fn afficher_trouves(self: &Rc<Self>, serveurs: &[Serveur], en_cours: bool) {
+        let faible = Rc::downgrade(self);
+        self.serveur.maj_trouves(serveurs, en_cours, move |adresse| {
+            if let Some(f) = faible.upgrade() {
+                f.serveur.adresse.set_text(&adresse);
+                f.connecter_a(&adresse);
+            }
+        });
     }
 
     fn montrer_identification(&self, message: Option<&str>) {
         self.arreter_minuterie();
         self.action_deconnecter.set_enabled(false);
+        self.action_signaler.set_enabled(false);
         let base = self.client.borrow().as_ref().map(|c| c.base().to_string()).unwrap_or_default();
         self.ident.serveur.set_text(&base);
         self.ident.mot_de_passe.set_text("");
@@ -510,6 +561,7 @@ impl Fenetre {
     /// Connecté : écran principal et rafraîchissement toutes les 3 secondes.
     fn entrer(self: &Rc<Self>) {
         self.action_deconnecter.set_enabled(self.session.borrow().utilisateur.is_some());
+        self.action_signaler.set_enabled(true);
         self.pile.set_visible_child_name("principal");
         self.hors_ligne.set(false);
         self.en_vol.set(false);
@@ -826,6 +878,76 @@ impl Fenetre {
         barre.set_content(Some(&vue));
         f.set_content(Some(&barre));
         f.present();
+    }
+
+    /// Fenêtre « Signaler un problème… » : le rapport part au serveur, qui y joint son journal.
+    fn signaler(self: &Rc<Self>) {
+        use crate::rapport;
+        let titre = adw::EntryRow::builder().title("Titre").build();
+        let email = adw::EntryRow::builder().title("E-mail (facultatif, pour être recontacté)").input_purpose(gtk::InputPurpose::Email).build();
+        let journal = adw::SwitchRow::builder().title("Joindre le journal du serveur").subtitle("Noms de fichiers masqués").active(true).build();
+        let saisie = gtk::Frame::new(None);
+        let description = gtk::TextView::builder().wrap_mode(gtk::WrapMode::WordChar).top_margin(8).bottom_margin(8).left_margin(8).right_margin(8).accessible_role(gtk::AccessibleRole::TextBox).build();
+        let defilement = gtk::ScrolledWindow::builder().child(&description).min_content_height(160).vexpand(true).build();
+        saisie.set_child(Some(&defilement));
+        let etiquette = gtk::Label::builder().label("Description").xalign(0.0).css_classes(["heading"]).build();
+        let note = gtk::Label::builder()
+            .label("Le titre et la description seront publiés sur GitHub (dépôt public) : n'y mettez pas d'information confidentielle. Le journal et l'e-mail restent privés.")
+            .wrap(true)
+            .xalign(0.0)
+            .css_classes(["caption", "dim-label"])
+            .build();
+        let groupe = adw::PreferencesGroup::new();
+        groupe.add(&titre);
+        groupe.add(&email);
+        groupe.add(&journal);
+        let etat = gtk::Label::builder().xalign(0.0).wrap(true).css_classes(["error"]).visible(false).build();
+        let boite = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).build();
+        for w in [groupe.upcast_ref::<gtk::Widget>(), etiquette.upcast_ref(), saisie.upcast_ref(), note.upcast_ref(), etat.upcast_ref()] {
+            boite.append(w);
+        }
+        let annuler = gtk::Button::with_label("Annuler");
+        let envoyer = gtk::Button::builder().label("Envoyer").css_classes(["suggested-action"]).build();
+        let entete = adw::HeaderBar::builder().show_end_title_buttons(false).show_start_title_buttons(false).build();
+        entete.pack_start(&annuler);
+        entete.pack_end(&envoyer);
+        let barre = adw::ToolbarView::new();
+        barre.add_top_bar(&entete);
+        barre.set_content(Some(&boite));
+        let fenetre = adw::Window::builder().title("Signaler un problème").modal(true).transient_for(&self.fen).default_width(520).content(&barre).build();
+        let f = fenetre.clone();
+        annuler.connect_clicked(move |_| f.close());
+        let moi = self.clone();
+        let f = fenetre.clone();
+        envoyer.connect_clicked(move |b| {
+            let tampon = description.buffer();
+            let texte = tampon.text(&tampon.start_iter(), &tampon.end_iter(), false).to_string();
+            if titre.text().trim().is_empty() || texte.trim().is_empty() {
+                etat.set_label("Le titre et la description sont obligatoires.");
+                etat.set_visible(true);
+                return;
+            }
+            let corps = rapport::corps(&titre.text(), &texte, &email.text(), journal.is_active(), VERSION, &crate::telemetrie::os());
+            etat.set_visible(false);
+            b.set_sensitive(false);
+            let (b, f, etat) = (b.clone(), f.clone(), etat.clone());
+            moi.lancer_res(move |c| c.rapporter(corps), move |moi, r| match r {
+                Ok(reference) => {
+                    f.close();
+                    moi.toast(&format!("Merci, rapport envoyé (référence {reference})."));
+                }
+                Err(e) if e.session_perdue() => {
+                    f.close();
+                    moi.erreur(&e);
+                }
+                Err(e) => {
+                    b.set_sensitive(true);
+                    etat.set_label(&rapport::message_erreur(&e));
+                    etat.set_visible(true);
+                }
+            });
+        });
+        fenetre.present();
     }
 
     fn a_propos(&self) {

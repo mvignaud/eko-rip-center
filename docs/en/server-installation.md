@@ -164,6 +164,7 @@ Ghostscript (`apt install ghostscript`), then run `./eko-rip-serveur`.
 | `EKO_RIP_EPSON_COMMUNAUTE` | `public` | Epson SNMP community |
 | `EKO_RIP_EXPO_JETON` | (empty) | Expo access token, when "enhanced push security" is on for the mobile app's Expo project |
 | `EKO_RIP_EXPO_URL` | `https://exp.host/--/api/v2/push/send` | Expo push service (change for tests only) |
+| `EKO_RIP_ANNONCE` | `1` | `0`: do not announce the server on the local network (clients find it by themselves, otherwise the address must be typed) |
 | `EKO_RIP_ACCES_NAVIGATEUR` | `0` | `1`: full interface in a browser too (development only) |
 
 ## Sharing the hot folders (Samba)
