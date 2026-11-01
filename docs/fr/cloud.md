@@ -184,8 +184,9 @@ le relais s'il s'arrête et lui passe les requêtes comme le WebSocket du tunnel
 4. **Application.** cPanel → « Setup Node.js App » → Create : Node 22, mode Production,
    racine `eko-rip-cloud`, URL `platform.e-ko.rip`, fichier de démarrage `app.js`. Variables :
    `EKO_CLOUD_URL=https://platform.e-ko.rip`, `EKO_CLOUD_DATA=/home/<compte>/eko-cloud-data`
-   (hors de la racine web), et si besoin `EKO_CLOUD_PORT_INTERNE` (8650 par défaut, à changer
-   s'il est pris sur le serveur), `EKO_CLOUD_JETON_STATS`. Start.
+   (hors de la racine web), et si besoin `EKO_CLOUD_JETON_STATS`. Start. Le relais écoute sur
+   un socket local (`~/eko-rip-cloud/relais.sock`, `EKO_CLOUD_ADDR=unix:<chemin>`) et non sur
+   un port : o2switch arrête en quelques secondes tout programme du compte qui ouvre un port.
 5. **Premier compte.** En SSH, dans `~/eko-rip-cloud` :
    `EKO_CLOUD_DATA=~/eko-cloud-data ./eko-rip-cloud admin <e-mail>`.
 6. **Vérifier.** `curl https://platform.e-ko.rip/sante` répond `ok`, puis rattacher un serveur

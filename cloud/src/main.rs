@@ -112,10 +112,32 @@ async fn main() {
     let adresse = env_ou("EKO_CLOUD_ADDR", "127.0.0.1:8650");
     let r = relais::nouveau(config);
     tokio::spawn(relais::entretenir(r.clone()));
-    let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
-    println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
-    // À l'arrêt : plus de nouvelles connexions, au plus 5 s pour les requêtes en cours (les
-    // tunnels, eux, ne finissent jamais d'eux-mêmes), puis on sort.
+    // `unix:<chemin>` : socket local (hébergement mutualisé, où un port TCP ouvert est abattu).
+    if let Some(chemin) = adresse.strip_prefix("unix:") {
+        let _ = std::fs::remove_file(chemin);
+        let ecoute = tokio::net::UnixListener::bind(chemin).expect("socket d'écoute");
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(chemin, std::fs::Permissions::from_mode(0o600));
+        }
+        println!("E-KO RIP Cloud à l'écoute sur {adresse}");
+        servir(ecoute, &r).await;
+        let _ = std::fs::remove_file(chemin);
+    } else {
+        let ecoute = tokio::net::TcpListener::bind(&adresse).await.expect("adresse d'écoute");
+        println!("E-KO RIP Cloud à l'écoute sur http://{adresse}");
+        servir(ecoute, &r).await;
+    }
+    relais::enregistrer_installations(&r).await;
+}
+
+/// Sert jusqu'à l'arrêt : plus de nouvelles connexions, au plus 5 s pour les requêtes en
+/// cours (les tunnels, eux, ne finissent jamais d'eux-mêmes), puis on sort.
+async fn servir<L>(ecoute: L, r: &relais::Partage)
+where
+    L: axum::serve::Listener,
+    L::Addr: std::fmt::Debug,
+{
     let (signal, attente) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         arret().await;
@@ -133,7 +155,6 @@ async fn main() {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         } => eprintln!("arrêt : connexions encore ouvertes après 5 s, fermées"),
     }
-    relais::enregistrer_installations(&r).await;
 }
 
 /// Ctrl-C ou SIGTERM (arrêt par systemd) : on écrit le registre des installations avant de sortir.
