@@ -41,7 +41,9 @@ public sealed class FenetreAdministration : Window
             web.Settings.UserAgent = "Mozilla/5.0 " + VersionClient.Agent;
             // Liens target=_blank (bouton « Aide » de l'interface, liens externes) : dans le
             // navigateur par défaut plutôt que dans une fenêtre WebView2 sans session ni barre.
-            web.NewWindowRequested += (_, args) =>
+            // (« sender » et non « _ » : avec un seul « _ », c'est un vrai paramètre, et
+            // « _ = LaunchUriAsync(…) » ci-dessous lui serait affecté.)
+            web.NewWindowRequested += (sender, args) =>
             {
                 args.Handled = true;
                 if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var lien)
