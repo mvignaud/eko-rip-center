@@ -37,9 +37,9 @@ de `serveur/src/machines.rs` a sa page, dans les deux langues, avec l'identifian
 de la variante (`EpsonScS80600` → `epson-sc-s80600`, adresse `machines/epson-sc-s80600/`) :
 le générateur échoue sinon. Ajouter un modèle au RIP, c'est donc aussi :
 
-1. écrire `docs/fr/machines/<identifiant>.md` et `docs/en/machines/<identifiant>.md` (mêmes
-   sections que les autres : ce que fait le RIP, brancher, sur la machine, dans le RIP,
-   vérifier, ennuis courants) ;
+1. écrire `docs/fr/machines/<identifiant>.md` et `docs/en/machines/<identifiant>.md` (sur le
+   modèle des autres : ce que fait le RIP, brancher, sur la machine, dans le RIP, vérifier,
+   ennuis courants ; une section sans objet pour ce modèle peut manquer) ;
 2. l'ajouter dans les deux `sommaire.tsv`, sous sa famille (une famille nouvelle s'ouvre par
    une ligne « === ») ;
 3. l'ajouter au tableau de `docs/fr/machines.md` et `docs/en/machines.md`.
