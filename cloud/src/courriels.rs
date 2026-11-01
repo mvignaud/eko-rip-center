@@ -149,7 +149,7 @@ a {{ color: {ACCENT}; }}
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">{resume}{bourrage}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="fond" style="background-color:#f5f5f7"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" class="conteneur" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px">
-<tr><td class="marque texte" style="padding:0 8px 18px;font:700 20px/1.2 {FONTE};color:#1d1d1f;letter-spacing:-.01em">E-KO RIP <span style="font-weight:400;color:{ACCENT}">Cloud</span></td></tr>
+<tr><td style="padding:0 8px 18px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-right:12px;vertical-align:middle"><img src="{url}/logo-courriel.png" width="40" height="40" alt="E-KO RIP" style="display:block;width:40px;height:40px;border:0;border-radius:9px"></td><td class="marque texte" style="vertical-align:middle;font:700 20px/1.2 {FONTE};color:#1d1d1f;letter-spacing:-.01em">E-KO RIP <span style="font-weight:400;color:{ACCENT}">Cloud</span></td></tr></table></td></tr>
 <tr><td class="carte" style="background-color:#ffffff;border:1px solid #e5e5ea;border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td class="marge" style="padding:36px 40px">
 <h1 class="texte" style="margin:0 0 18px;font:600 26px/1.2 {FONTE};color:#1d1d1f;letter-spacing:-.015em">{titre}</h1>
 {corps}{bouton}</td></tr></table></td></tr>
@@ -503,7 +503,7 @@ mod tests {
     fn gabarit_commun() {
         let c = site_hors_ligne("https://platform.e-ko.rip", "a@b.fr", "Élodie <Dupont>", "Atelier <script>alert(1)</script>", 1_000_000, 1_000_900);
         assert!(c.html.contains("max-width:600px") && c.html.contains("prefers-color-scheme: dark") && c.html.contains(r#"name="color-scheme""#));
-        assert!(c.html.contains("E-KO RIP") && !c.html.contains("<img"), "marque en texte, aucune image distante");
+        assert!(c.html.contains("E-KO RIP") && c.html.matches("<img").count() == 1 && c.html.contains(r#"src="https://platform.e-ko.rip/logo-courriel.png""#), "logo servi par la plate-forme, marque aussi en texte");
         assert!(c.html.contains("&lt;script&gt;") && !c.html.contains("<script>"), "contenu utilisateur échappé");
         assert_eq!(c.html.matches(r#"class="bouton""#).count(), 1, "un seul bouton");
         assert!(c.html.contains(r#"href="https://platform.e-ko.rip/sites""#) && c.html.contains("https://platform.e-ko.rip/compte"));

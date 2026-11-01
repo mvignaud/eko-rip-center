@@ -156,6 +156,7 @@ pub fn routes(relais: Partage) -> Router {
         .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
         .route("/{page}", get(portail::legal))
         .route("/sante", get(|| async { "ok" }))
+        .route("/logo-courriel.png", get(logo_courriel))
         .route(CHEMIN_TUNNEL, get(ouvrir_tunnel))
         .route("/api/appairage", post(demander_appairage))
         .route("/api/appairage/{demande}", get(suivre_appairage))
@@ -308,6 +309,16 @@ async fn statistiques_installations(State(relais): State<Partage>, entetes: Head
         return refus(StatusCode::UNAUTHORIZED, "non_autorise");
     }
     Json(relais.installations.lock().unwrap().statistiques(crate::maintenant())).into_response()
+}
+
+/// Logo des e-mails (PNG : les messageries n'affichent pas le SVG), chargé par les
+/// messageries depuis la plate-forme.
+async fn logo_courriel() -> Response {
+    (
+        [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=604800")],
+        &include_bytes!("../static/logo-courriel.png")[..],
+    )
+        .into_response()
 }
 
 fn refus(statut: StatusCode, code: &'static str) -> Response {
