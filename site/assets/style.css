@@ -80,12 +80,14 @@ code { font-family: var(--mono); font-size: .88em; background: var(--fond-3); pa
 .nav { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
 .nav a { color: var(--texte-2); }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--texte); text-decoration: none; }
+.nav .nav-mobile { display: none; }
 .nav-bouton { display: none; margin-left: auto; background: none; border: 0; color: var(--texte); padding: 8px; cursor: pointer; }
 @media (max-width: 860px) {
   .nav-bouton { display: block; }
   .nav { display: none; position: absolute; top: 60px; left: 0; right: 0; flex-direction: column; gap: 0; background: var(--fond-2); border-bottom: 1px solid var(--trait); padding: 8px 16px 16px; }
   .nav.ouverte { display: flex; }
   .nav a { padding: 12px 4px; border-bottom: 1px solid var(--trait); }
+  .nav .nav-mobile { display: block; }
   .entete .bouton { display: none; }
 }
 

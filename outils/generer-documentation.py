@@ -425,6 +425,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
     <button class="nav-bouton" aria-label="{t["menu"]}" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <nav class="nav" id="nav">
       {nav_site}
+      <a class="nav-mobile" href="/#installer">{t["installer"]}</a>
       <a href="{lien_autre}" hreflang="{L["autre"]}" lang="{L["autre"]}" class="doc-langue">{L["autre"].upper()}</a>
     </nav>
     <a class="bouton bouton-plein bouton-petit" href="/#installer">{t["installer"]}</a>
