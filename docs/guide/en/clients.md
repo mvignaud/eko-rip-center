@@ -13,18 +13,18 @@ The window has three panes:
   and the actions **Print** (*Imprimer*), **Retry** (*Relancer*), **TIFF proof** (*Épreuve
   TIFF*) and **Delete** (*Supprimer*).
 
+![Client window: the job list and the inspector](../images/client-linux.png "The client window (here on Linux, interface in French): sidebar, job table, inspector of the chosen job")
+
 You send a file by **dragging it onto the window** (or onto the Dock icon on Mac), or with the
-**+** button: the client asks which preset to apply and, optionally, the customer, the order and
+**+ Send** (*+ Envoyer*) button: the client asks which preset to apply and, optionally, the customer, the order and
 the quantity. Accepted formats: PDF, PDF-compatible AI, SVG, TIFF, PNG and JPEG. A notification
 tells you when the render is ready.
 
-![Job upload window](../images/interface-import.png "Sending a job in the administration interface: preset, mode, resolution, media")
+![Job upload window](../images/client-linux-envoi.png "Send to the RIP (Envoyer au RIP): the file, the preset to apply and the optional job ticket")
 
 The full settings screens (machines, media, colour, cutting, accounts, backup, Cloud) open from
 the **Administration…** menu. How to use them is explained in the
 [user guide](../../en/usage.md).
-
-![Administration interface: the job list](../images/interface-travaux.png "Administration…: the job list, the inspector and the toolbar")
 
 ## Mac client
 
@@ -48,7 +48,7 @@ are updated separately; a client slightly older than the server keeps working.
 
 ## Linux client
 
-![Linux client window](../images/client-linux.png "The Linux client (GTK 4): same layout as on Mac")
+![Machines view of the Linux client](../images/client-linux-machines.png "The Linux client (GTK 4), Machines view: the queue of each printer and cutter")
 
 **Requirements**: Ubuntu 24.04 or later, or Debian 13 (GNOME desktop recommended), 64-bit PC.
 
