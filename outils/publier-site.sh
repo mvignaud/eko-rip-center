@@ -2,7 +2,7 @@
 # Publie le site vitrine https://e-ko.rip (dossier site/) sur son hébergement.
 #
 #   outils/publier-site.sh                 # hôte et dossier par défaut
-#   EKO_SITE_HOTE=n0c EKO_SITE_DOSSIER=e-ko.rip outils/publier-site.sh
+#   EKO_SITE_HOTE=sc3nihe1770@fleur.o2switch.net EKO_SITE_DOSSIER=public_html outils/publier-site.sh
 #
 # Le site est statique : rsync suffit. Le journal des versions est lu en direct sur l'ERP
 # (https://app.e-ko.fr/changelog-rip.json) ; ce script en dépose aussi une copie
@@ -12,7 +12,7 @@
 set -eu
 
 HOTE=${EKO_SITE_HOTE:-sc3nihe1770@fleur.o2switch.net}
-DOSSIER=${EKO_SITE_DOSSIER:-e-ko.rip}
+DOSSIER=${EKO_SITE_DOSSIER:-public_html}
 ERP=${EKO_ERP_URL:-https://app.e-ko.fr}
 
 RACINE=$(cd "$(dirname "$0")/.." && pwd)

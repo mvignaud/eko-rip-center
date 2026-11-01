@@ -456,3 +456,55 @@ section { padding: 96px 0; }
   .apparait { opacity: 1; transform: none; }
   .fenetre { transform: none; }
 }
+
+/* ---------- Pré-requis et compatibilité ---------- */
+.niveau { display: flex; flex-direction: column; gap: 6px; }
+.niveau .pastille { align-self: flex-start; }
+.niveau h3 { margin: 6px 0 0; }
+.niveau.conseille { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--ombre); }
+.niveau.conseille .pastille { background: var(--accent); color: #fff; }
+.note-niveau { margin-top: auto !important; padding-top: 12px; font-size: 14px !important; }
+.tableau-cadre { margin-top: 48px; overflow-x: auto; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--fond-2); box-shadow: var(--ombre); }
+.tableau { width: 100%; border-collapse: collapse; font-size: 15px; }
+.tableau caption { text-align: left; padding: 18px 20px 6px; font-weight: 700; font-size: 17px; }
+.tableau th, .tableau td { text-align: left; vertical-align: top; padding: 14px 20px; border-top: 1px solid var(--trait); }
+.tableau thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--texte-3); border-top: 0; }
+.tableau tbody th { font-weight: 600; white-space: nowrap; }
+.tableau td { color: var(--texte-2); }
+.tableau small { display: block; font-weight: 400; font-size: 13px; color: var(--texte-3); margin-top: 4px; white-space: normal; }
+.tableau.machines { min-width: 760px; }
+.tableau.machines tbody th { white-space: normal; min-width: 170px; }
+.legende-etats { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.etat { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; margin: 0 4px 4px 0; }
+.etat::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: currentColor; }
+.etat.ok { background: rgba(48, 209, 88, .14); color: #1e8e3e; }
+.etat.essai { background: rgba(255, 159, 10, .16); color: #b26a00; }
+.etat.prevu { background: var(--fond-3); color: var(--texte-2); }
+@media (prefers-color-scheme: dark) { .etat.ok { color: #5fe08a; } .etat.essai { color: #ffc35a; } }
+.appel { margin-top: 64px; text-align: center; padding: 40px 24px; border-radius: var(--rayon); background: var(--fond-2); border: 1px solid var(--trait); }
+.appel p { color: var(--texte-2); }
+.appel .actions, .actions-form { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.formulaire { max-width: 860px; margin: 0 auto; display: grid; gap: 22px; }
+.formulaire fieldset { margin: 0; padding: 22px 24px; border: 1px solid var(--trait); border-radius: var(--rayon); background: var(--fond-2); display: grid; gap: 16px; }
+.formulaire legend { font-weight: 700; padding: 0 8px; }
+.champs { display: grid; gap: 16px; }
+.champs.deux { grid-template-columns: 1fr 1fr; }
+@media (max-width: 640px) { .champs.deux { grid-template-columns: 1fr; } .formulaire fieldset { padding: 18px 16px; } }
+.formulaire label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--texte-2); }
+.formulaire input:not([type="checkbox"]), .formulaire select, .formulaire textarea { font: inherit; font-weight: 400; font-size: 16px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--trait); background: var(--fond); color: var(--texte); width: 100%; box-sizing: border-box; }
+.formulaire textarea { resize: vertical; min-height: 110px; }
+.formulaire input:focus, .formulaire select:focus, .formulaire textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.formulaire label.case { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+.formulaire label.case input { margin-top: 4px; width: 18px; height: 18px; flex: none; accent-color: var(--accent); }
+.requis { color: var(--magenta); }
+.mentions-form { font-size: 13px; color: var(--texte-3); margin: 0; text-align: center; }
+.actions-form .message { margin: 0; color: var(--texte-2); min-height: 1.4em; }
+@media (max-width: 760px) {
+  .tableau.machines { min-width: 0; }
+  .tableau.machines thead { display: none; }
+  .tableau.machines tr { display: block; padding: 14px 18px; border-top: 1px solid var(--trait); }
+  .tableau.machines th, .tableau.machines td { display: block; border: 0; padding: 3px 0; }
+  .tableau.machines tbody th { min-width: 0; font-size: 16px; padding-bottom: 6px; }
+  .tableau.machines td[data-l]::before { content: attr(data-l) " : "; font-weight: 600; color: var(--texte); }
+  .tableau.machines td[data-l="État"]::before { display: none; }
+}

@@ -104,5 +104,34 @@
     });
   });
 
+  // Demande de pilote (/compatibilite/) : envoi sans recharger la page ; sans JavaScript,
+  // le formulaire part quand même et le script renvoie ici avec ?demande=envoyee|erreur.
+  var demande = document.getElementById('demande-pilote');
+  if (demande) {
+    var retour = demande.querySelector('.message');
+    var etatUrl = new URLSearchParams(location.search).get('demande');
+    if (etatUrl === 'envoyee') retour.textContent = 'Merci, votre demande est envoyée. Nous vous répondons par e-mail.';
+    if (etatUrl === 'erreur') retour.textContent = 'La demande n\'est pas partie. Vérifiez les champs, ou écrivez à contact@e-ko.rip.';
+    demande.addEventListener('submit', function (e) {
+      if (!window.fetch) return;
+      e.preventDefault();
+      var bouton = demande.querySelector('button[type="submit"]');
+      bouton.disabled = true;
+      retour.textContent = 'Envoi…';
+      fetch(demande.action, {
+        method: 'POST',
+        body: new URLSearchParams(new FormData(demande)),
+        headers: { Accept: 'application/json' }
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; });
+      }).then(function (j) {
+        retour.textContent = j.message || 'La demande n\'est pas partie. Écrivez-nous à contact@e-ko.rip.';
+        if (j.ok) demande.reset();
+      }).catch(function () {
+        retour.textContent = 'La demande n\'est pas partie. Écrivez-nous à contact@e-ko.rip.';
+      }).then(function () { bouton.disabled = false; });
+    });
+  }
+
   document.querySelectorAll('[data-annee]').forEach(function (n) { n.textContent = String(new Date().getFullYear()); });
 })();
