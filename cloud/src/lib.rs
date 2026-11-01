@@ -10,6 +10,7 @@
 //! La plate-forme accepte encore `Upgrade: eko-tunnel/1` seul (serveurs RIP 0.30).
 
 pub mod appairage;
+pub mod applis;
 pub mod base;
 pub mod client;
 pub mod installations;
@@ -38,6 +39,19 @@ pub fn aleatoire_hex(octets: usize) -> String {
 pub fn sha256_hex(texte: &str) -> String {
     use sha2::Digest;
     sha2::Sha256::digest(texte.as_bytes()).iter().map(|o| format!("{o:02x}")).collect()
+}
+
+/// Base64 « URL » sans remplissage (RFC 4648 § 5), pour PKCE et l'en-tête d'identité.
+pub fn base64url(octets: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut s = String::with_capacity(octets.len().div_ceil(3) * 4);
+    for bloc in octets.chunks(3) {
+        let n = (bloc[0] as u32) << 16 | (*bloc.get(1).unwrap_or(&0) as u32) << 8 | *bloc.get(2).unwrap_or(&0) as u32;
+        for i in 0..=bloc.len() {
+            s.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
+        }
+    }
+    s
 }
 
 /// Comparaison en temps constant (longueurs égales attendues : empreintes).

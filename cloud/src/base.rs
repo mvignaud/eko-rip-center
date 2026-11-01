@@ -34,7 +34,20 @@ CREATE TABLE IF NOT EXISTS droits (
     PRIMARY KEY (site, compte)
 );
 CREATE TABLE IF NOT EXISTS reglages (cle TEXT PRIMARY KEY, valeur TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS jetons_applis (
+    empreinte TEXT PRIMARY KEY,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    appareil TEXT NOT NULL,
+    cree_le INTEGER NOT NULL,
+    expire INTEGER NOT NULL,
+    vu_le INTEGER NOT NULL
+);
 ";
+
+/// Durée d'un jeton d'app (clients Mac, Linux, Windows, mobile).
+pub const DUREE_JETON_APPLI: u64 = 180 * 24 * 3600;
+/// Préfixe des jetons d'app : les reconnaître sans base.
+pub const PREFIXE_JETON_APPLI: &str = "ekoa_";
 
 /// Durée d'une session du portail.
 pub const DUREE_SESSION: u64 = 30 * 24 * 3600;
@@ -310,4 +323,45 @@ mod tests {
         assert_eq!(compte_par_fournisseur(&c, "google", "g-titulaire").unwrap().unwrap().id, id);
         let _ = std::fs::remove_dir_all(&d);
     }
+}
+
+// ————— Jetons des apps (« Se connecter au cloud ») —————
+
+/// Crée un jeton d'app pour `compte` ; seule son empreinte est gardée.
+pub fn creer_jeton_appli(c: &Connection, compte: i64, appareil: &str) -> rusqlite::Result<String> {
+    let jeton = format!("{PREFIXE_JETON_APPLI}{}", crate::aleatoire_hex(32));
+    let t = crate::maintenant() as i64;
+    let appareil: String = appareil.chars().filter(|c| !c.is_control()).take(80).collect();
+    c.execute("DELETE FROM jetons_applis WHERE expire < ?1", [t])?;
+    c.execute("INSERT INTO jetons_applis (empreinte, compte, appareil, cree_le, expire, vu_le) VALUES (?1, ?2, ?3, ?4, ?5, ?4)", params![crate::sha256_hex(&jeton), compte, appareil, t, t + DUREE_JETON_APPLI as i64])?;
+    Ok(jeton)
+}
+
+/// Compte d'un jeton d'app valable (ni expiré, ni compte suspendu).
+pub fn compte_du_jeton(c: &Connection, jeton: &str) -> rusqlite::Result<Option<Compte>> {
+    if !jeton.starts_with(PREFIXE_JETON_APPLI) {
+        return Ok(None);
+    }
+    let t = crate::maintenant() as i64;
+    let empreinte = crate::sha256_hex(jeton);
+    let Some(id) = c.query_row("SELECT compte FROM jetons_applis WHERE empreinte = ?1 AND expire >= ?2", params![empreinte, t], |r| r.get::<_, i64>(0)).optional()? else { return Ok(None) };
+    // Date de dernière utilisation, à l'heure près (pas une écriture par requête).
+    c.execute("UPDATE jetons_applis SET vu_le = ?2 WHERE empreinte = ?1 AND vu_le < ?2 - 3600", params![empreinte, t])?;
+    Ok(compte_par_id(c, id)?.filter(|cp| !cp.suspendu))
+}
+
+pub fn revoquer_jeton_appli(c: &Connection, jeton: &str) -> rusqlite::Result<()> {
+    c.execute("DELETE FROM jetons_applis WHERE empreinte = ?1", [crate::sha256_hex(jeton)])?;
+    Ok(())
+}
+
+/// Apps connectées d'un compte : (appareil, créé le, vu le).
+pub fn jetons_du_compte(c: &Connection, compte: i64) -> rusqlite::Result<Vec<(String, u64, u64)>> {
+    let mut q = c.prepare("SELECT appareil, cree_le, vu_le FROM jetons_applis WHERE compte = ?1 AND expire >= ?2 ORDER BY vu_le DESC")?;
+    q.query_map(params![compte, crate::maintenant() as i64], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64, r.get::<_, i64>(2)? as u64)))?.collect()
+}
+
+pub fn revoquer_jetons_du_compte(c: &Connection, compte: i64) -> rusqlite::Result<()> {
+    c.execute("DELETE FROM jetons_applis WHERE compte = ?1", [compte])?;
+    Ok(())
 }

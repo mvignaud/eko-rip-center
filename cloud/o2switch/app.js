@@ -136,7 +136,9 @@ function demarrer() {
   } catch (_) {
     // Sans journal, on lance quand même.
   }
-  relais = spawn(BINAIRE, [], { env, stdio: ['ignore', sortie, sortie] });
+  // Groupe de processus à part : quand l'hébergeur tue le groupe du lanceur (SIGKILL), le
+  // relais survit et le lanceur suivant le reprend ; sur SIGTERM, le lanceur le lui transmet.
+  relais = spawn(BINAIRE, [], { env, stdio: ['ignore', sortie, sortie], detached: true });
   if (typeof sortie === 'number') fs.closeSync(sortie);
   try {
     fs.writeFileSync(PID, String(relais.pid));
