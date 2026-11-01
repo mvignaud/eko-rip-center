@@ -61,6 +61,9 @@ pub struct Client {
     /// Envois et téléchargements de fichiers : aucun délai de lecture (rendus longs).
     pub(crate) agent_long: ureq::Agent,
     cookie: Mutex<Option<String>>,
+    /// Jeton d'accès du cloud : porté (`Authorization: Bearer`) par toutes les requêtes.
+    /// Jamais affiché ni journalisé (le type n'implémente pas `Debug`).
+    jeton: Option<String>,
 }
 
 impl Client {
@@ -68,7 +71,17 @@ impl Client {
         let ua = format!("EKO-RIP-Client/{VERSION} (Linux)");
         let court = ureq::AgentBuilder::new().user_agent(&ua).timeout_connect(Duration::from_secs(5)).timeout_read(Duration::from_secs(30)).timeout_write(Duration::from_secs(30)).build();
         let long = ureq::AgentBuilder::new().user_agent(&ua).timeout_connect(Duration::from_secs(5)).build();
-        Client { base: base.trim_end_matches('/').to_string(), agent: court, agent_long: long, cookie: Mutex::new(None) }
+        Client { base: base.trim_end_matches('/').to_string(), agent: court, agent_long: long, cookie: Mutex::new(None), jeton: None }
+    }
+
+    /// Client d'un site du cloud : `base` est l'adresse propre du site, `jeton` celui du compte.
+    pub fn cloud(base: &str, jeton: &str) -> Self {
+        Client { jeton: Some(jeton.to_string()), ..Client::new(base) }
+    }
+
+    /// Vrai pour un site ouvert par le cloud (jeton Bearer, pas de compte local).
+    pub fn est_cloud(&self) -> bool {
+        self.jeton.is_some()
     }
 
     pub fn base(&self) -> &str {
@@ -79,7 +92,12 @@ impl Client {
         format!("{}{chemin}", self.base)
     }
 
+    /// Ajoute l'authentification à toute requête : jeton Bearer du cloud, sinon cookie de session.
+    /// Toutes les requêtes (JSON, envois, aperçus, épreuves) passent par ici.
     pub(crate) fn avec_cookie(&self, r: ureq::Request) -> ureq::Request {
+        if let Some(j) = &self.jeton {
+            return r.set("Authorization", &format!("Bearer {j}"));
+        }
         match self.cookie.lock().unwrap().as_deref() {
             Some(c) => r.set("Cookie", c),
             None => r,

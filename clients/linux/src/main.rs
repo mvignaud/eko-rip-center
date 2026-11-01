@@ -1,6 +1,7 @@
 //! E-KO RIP Center, client Linux natif (GTK 4 et libadwaita) : parle à l'API JSON du serveur.
 
 mod api;
+mod cloud;
 mod commande;
 mod config;
 mod connexion;

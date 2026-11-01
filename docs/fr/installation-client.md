@@ -49,6 +49,18 @@ est gardé dans le trousseau du Mac (service `fr.e-ko.rip.cloud`). En essai, la 
 autre plate-forme. **Administration…** est indisponible à distance pour
 l'instant (page web qui ne peut pas porter le jeton). Détails : [cloud.md](cloud.md).
 
+### Se connecter au cloud (Linux)
+
+Le client Linux natif a le même écran : **Cloud → Se connecter au cloud** ouvre le navigateur par
+défaut sur la plate-forme, qui revient sur une écoute locale temporaire (`127.0.0.1`, port libre,
+5 minutes au plus ; **Annuler** l'abandonne). Si le navigateur ne s'ouvre pas, l'adresse
+d'autorisation s'affiche pour la copier. Les sites du compte sont listés (un site hors ligne est
+grisé) ; le dernier site ouvert est rouvert au lancement suivant. Le jeton est gardé dans
+`~/.config/e-ko-rip-center/cloud.json` (droits 0600) ; **Se déconnecter du cloud** (écran des
+sites, ou menu **Se déconnecter** sur un site cloud) le révoque et l'oublie. La variable
+`EKO_RIP_CLOUD_URL` vise une autre plate-forme (essais). **Administration…** est indisponible à
+distance pour l'instant.
+
 La découverte utilise DNS-SD (mDNS, `_eko-rip._tcp`, port UDP 5353) : elle ne traverse pas les
 routeurs ni les VPN (utiliser alors l'adresse). Sur Mac, macOS demande d'autoriser l'accès au
 réseau local au premier lancement. Le serveur s'annonce sous le nom de la machine

@@ -13,6 +13,20 @@ pub struct Session {
     pub utilisateur: Option<String>,
     #[serde(default)]
     pub role: Option<String>,
+    /// Présent quand la session vient du cloud.
+    #[serde(default)]
+    pub cloud: Option<SessionCloud>,
+}
+
+/// `cloud` de `GET /api/session` : le compte de la plate-forme et ses droits.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct SessionCloud {
+    #[serde(default)]
+    pub email: String,
+    #[serde(default)]
+    pub nom: String,
+    #[serde(default)]
+    pub lecture_seule: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]

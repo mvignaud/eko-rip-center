@@ -3,8 +3,9 @@
 
 use crate::api::{Client, Erreur, Resultat, VERSION};
 use crate::commande::Commande;
+use crate::cloud::{self, Moi, Site};
 use crate::config;
-use crate::connexion::{ICONE, PageIdentification, PageServeur};
+use crate::connexion::{ICONE, PageCloud, PageIdentification, PageServeur};
 use crate::decouverte::{self, Serveur};
 use crate::envoi;
 use crate::inspecteur::Inspecteur;
@@ -20,6 +21,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Dernier état connu du serveur.
 #[derive(Default)]
@@ -37,6 +39,13 @@ struct Suivi {
     amorce: bool,
 }
 
+/// Compte cloud connecté : jeton d'accès et dernière liste de sites (le jeton reste en mémoire
+/// et dans `cloud.json`, jamais dans un message).
+struct EtatCloud {
+    jeton: String,
+    moi: Moi,
+}
+
 type Instantane = (Vec<Travail>, Vec<Sortie>, Vec<Machine>, Option<EtatSysteme>);
 
 pub struct Fenetre {
@@ -46,6 +55,7 @@ pub struct Fenetre {
     pile: gtk::Stack,
     serveur: PageServeur,
     ident: PageIdentification,
+    cloud: PageCloud,
     contenu: gtk::Stack,
     titre_pile: gtk::Stack,
     titre_page: adw::WindowTitle,
@@ -65,6 +75,12 @@ pub struct Fenetre {
     inspecteur: Rc<Inspecteur>,
     cmd: Sender<Commande>,
     client: RefCell<Option<Arc<Client>>>,
+    /// Compte cloud connecté, s'il y en a un.
+    etat_cloud: RefCell<Option<EtatCloud>>,
+    /// Levé pour abandonner l'attente du navigateur.
+    cloud_annule: RefCell<Arc<AtomicBool>>,
+    /// Une connexion au cloud est en cours (anti double clic).
+    cloud_occupe: Cell<bool>,
     session: RefCell<Session>,
     donnees: RefCell<Donnees>,
     choisi: RefCell<Option<String>>,
@@ -172,9 +188,11 @@ impl Fenetre {
 
         let serveur = PageServeur::new();
         let ident = PageIdentification::new();
+        let cloud = PageCloud::new();
         let pile = gtk::Stack::new();
         pile.add_named(&serveur.racine, Some("serveur"));
         pile.add_named(&ident.racine, Some("identification"));
+        pile.add_named(&cloud.racine, Some("cloud"));
         pile.add_named(&separation, Some("principal"));
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&pile));
@@ -189,6 +207,7 @@ impl Fenetre {
             pile,
             serveur,
             ident,
+            cloud,
             contenu,
             titre_pile,
             titre_page,
@@ -208,6 +227,9 @@ impl Fenetre {
             inspecteur,
             cmd,
             client: RefCell::new(None),
+            etat_cloud: RefCell::new(None),
+            cloud_annule: RefCell::new(Arc::new(AtomicBool::new(false))),
+            cloud_occupe: Cell::new(false),
             session: RefCell::new(Session::default()),
             donnees: RefCell::new(Donnees::default()),
             choisi: RefCell::new(None),
@@ -285,7 +307,34 @@ impl Fenetre {
         self.serveur.annuler.connect_clicked(move |_| {
             if let Some(f) = f.upgrade() {
                 let p = f.precedent.borrow().clone();
-                f.pile.set_visible_child_name(&p);
+                // L'écran du cloud n'est pas un retour possible : on revient au site ouvert.
+                f.pile.set_visible_child_name(if p == "cloud" { "principal" } else { &p });
+            }
+        });
+        let f = Rc::downgrade(self);
+        self.serveur.cloud.connect_activated(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.choisir_cloud();
+            }
+        });
+        let f = Rc::downgrade(self);
+        self.cloud.annuler.connect_clicked(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.cloud_annule.borrow().store(true, Ordering::Relaxed);
+                f.cloud_occupe.set(false);
+                f.montrer_serveur(None);
+            }
+        });
+        let f = Rc::downgrade(self);
+        self.cloud.deconnecter.connect_clicked(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.deconnexion_cloud();
+            }
+        });
+        let f = Rc::downgrade(self);
+        self.cloud.changer.connect_clicked(move |_| {
+            if let Some(f) = f.upgrade() {
+                f.montrer_serveur(None);
             }
         });
         let f = Rc::downgrade(self);
@@ -370,6 +419,12 @@ impl Fenetre {
 
     /// Premier affichage : serveur retenu, sinon saisie de l'adresse.
     pub fn demarrer(self: &Rc<Self>) {
+        if config::lire("mode").as_deref() == Some("cloud")
+            && let Some(jeton) = cloud::jeton_retenu(&cloud::plateforme())
+        {
+            self.charger_sites(jeton, true);
+            return;
+        }
         match config::lire("serveur").and_then(|a| config::normaliser_adresse(&a)) {
             Some(adresse) => {
                 self.serveur.adresse.set_text(&adresse);
@@ -393,7 +448,9 @@ impl Fenetre {
     fn erreur(self: &Rc<Self>, e: &Erreur) {
         if e.session_perdue() {
             self.arreter_minuterie();
-            if self.client.borrow().is_some() {
+            if self.client.borrow().as_ref().is_some_and(|c| c.est_cloud()) {
+                self.cloud_expire();
+            } else if self.client.borrow().is_some() {
                 self.montrer_identification(Some("Session expirée : se reconnecter."));
             }
         } else {
@@ -498,25 +555,206 @@ impl Fenetre {
                 match r {
                     Ok(session) => {
                         config::ecrire("serveur", &adresse);
+                        config::ecrire("mode", "local");
                         moi.serveur.adresse.set_text(&adresse);
-                        moi.arreter_minuterie();
-                        *moi.client.borrow_mut() = Some(client);
-                        *moi.donnees.borrow_mut() = Donnees::default();
-                        *moi.suivi.borrow_mut() = Suivi::default();
-                        *moi.choisi.borrow_mut() = None;
-                        moi.travaux.maj(&[], None);
-                        let libre = session.acces_libre || session.utilisateur.is_some();
-                        *moi.session.borrow_mut() = session;
-                        if libre {
-                            moi.entrer();
-                        } else {
-                            moi.montrer_identification(None);
-                        }
+                        moi.installer_client(client, session);
                     }
                     Err(e) => moi.montrer_serveur(Some(&format!("Connexion impossible à {adresse} : {}", e.message()))),
                 }
             }
         });
+    }
+
+    /// Le serveur répond : il devient le serveur de travail (écran principal, ou identification).
+    fn installer_client(self: &Rc<Self>, client: Arc<Client>, session: Session) {
+        self.arreter_minuterie();
+        let cloud = client.est_cloud();
+        *self.client.borrow_mut() = Some(client);
+        *self.donnees.borrow_mut() = Donnees::default();
+        *self.suivi.borrow_mut() = Suivi::default();
+        *self.choisi.borrow_mut() = None;
+        self.travaux.maj(&[], None);
+        // Par le cloud, le compte de la plate-forme tient lieu de connexion.
+        let libre = cloud || session.acces_libre || session.utilisateur.is_some();
+        *self.session.borrow_mut() = session;
+        if libre {
+            self.entrer();
+        } else {
+            self.montrer_identification(None);
+        }
+    }
+
+    // --- Cloud ---
+
+    /// Clic sur « Se connecter au cloud » : sites du compte déjà connecté, sinon navigateur.
+    fn choisir_cloud(self: &Rc<Self>) {
+        if self.cloud_occupe.get() {
+            return;
+        }
+        match cloud::jeton_retenu(&cloud::plateforme()) {
+            Some(jeton) => self.charger_sites(jeton, false),
+            None => self.autoriser_cloud(),
+        }
+    }
+
+    /// Ouvre le navigateur sur la plate-forme et attend son retour (fil à part).
+    fn autoriser_cloud(self: &Rc<Self>) {
+        let plateforme = cloud::plateforme();
+        let preparation = match cloud::preparer(&plateforme, glib::host_name().as_str()) {
+            Ok(p) => p,
+            Err(e) => {
+                self.toast(&e.message());
+                return;
+            }
+        };
+        self.cloud_occupe.set(true);
+        let annule = Arc::new(AtomicBool::new(false));
+        *self.cloud_annule.borrow_mut() = annule.clone();
+        self.cloud.montrer_attente("Autorisez l'accès dans votre navigateur, puis revenez ici.", true);
+        self.pile.set_visible_child_name("cloud");
+        let url = preparation.url.clone();
+        let moi = self.clone();
+        gtk::UriLauncher::new(&url).launch(Some(&self.fen), gio::Cancellable::NONE, move |r| {
+            if r.is_err() {
+                moi.cloud.montrer_lien(&url);
+            }
+        });
+        glib::spawn_future_local({
+            let moi = self.clone();
+            async move {
+                let a = annule.clone();
+                let r = gio::spawn_blocking(move || cloud::terminer(&plateforme, preparation, &a)).await.unwrap_or_else(|_| Err(Erreur::locale("erreur_interne", None)));
+                if annule.load(Ordering::Relaxed) {
+                    return;
+                }
+                moi.cloud_occupe.set(false);
+                match r {
+                    Ok((jeton, m)) => {
+                        if cloud::retenir_jeton(&cloud::plateforme(), &jeton).is_err() {
+                            moi.toast("Connexion non mémorisée : le jeton n'a pas pu être enregistré.");
+                        }
+                        moi.afficher_sites(jeton, m);
+                    }
+                    Err(e) => moi.montrer_serveur(Some(&e.message())),
+                }
+            }
+        });
+    }
+
+    /// Lit le compte et ses sites avec le jeton retenu. `reouvrir` : rouvrir directement le
+    /// dernier site s'il est en ligne (lancement de l'application).
+    fn charger_sites(self: &Rc<Self>, jeton: String, reouvrir: bool) {
+        self.cloud_occupe.set(true);
+        self.cloud.montrer_attente("Chargement de vos sites…", false);
+        self.pile.set_visible_child_name("cloud");
+        glib::spawn_future_local({
+            let moi = self.clone();
+            async move {
+                let (plateforme, j) = (cloud::plateforme(), jeton.clone());
+                let r = gio::spawn_blocking(move || cloud::moi(&plateforme, &j)).await.unwrap_or_else(|_| Err(Erreur::locale("erreur_interne", None)));
+                moi.cloud_occupe.set(false);
+                match r {
+                    Ok(m) => {
+                        let dernier = config::lire("site_cloud").filter(|_| reouvrir).and_then(|id| m.sites.iter().find(|s| s.id == id && s.en_ligne).cloned());
+                        moi.afficher_sites(jeton, m);
+                        if let Some(site) = dernier {
+                            moi.ouvrir_site(site);
+                        }
+                    }
+                    Err(e) if e.session_perdue() => moi.cloud_expire(),
+                    Err(e) => moi.montrer_serveur(Some(&e.message())),
+                }
+            }
+        });
+    }
+
+    fn afficher_sites(self: &Rc<Self>, jeton: String, m: Moi) {
+        let faible = Rc::downgrade(self);
+        self.cloud.montrer_sites(&m.compte, &m.sites, move |site| {
+            if let Some(f) = faible.upgrade() {
+                f.ouvrir_site(site);
+            }
+        });
+        *self.etat_cloud.borrow_mut() = Some(EtatCloud { jeton, moi: m });
+        self.pile.set_visible_child_name("cloud");
+    }
+
+    /// Le jeton est révoqué ou expiré : on l'oublie et on revient au choix du serveur.
+    fn cloud_expire(self: &Rc<Self>) {
+        self.arreter_minuterie();
+        self.oublier_cloud();
+        self.montrer_serveur(Some("Connexion au cloud expirée : se reconnecter."));
+    }
+
+    /// Efface le jeton, le dernier site et le serveur cloud ouvert.
+    fn oublier_cloud(&self) {
+        cloud::oublier_jeton();
+        config::supprimer("site_cloud");
+        config::supprimer("mode");
+        *self.etat_cloud.borrow_mut() = None;
+        self.action_deconnecter.set_enabled(false);
+        self.action_signaler.set_enabled(false);
+        if self.client.borrow().as_ref().is_some_and(|c| c.est_cloud()) {
+            *self.client.borrow_mut() = None;
+            *self.session.borrow_mut() = Session::default();
+            *self.donnees.borrow_mut() = Donnees::default();
+            self.travaux.maj(&[], None);
+        }
+    }
+
+    /// Ouvre un site du compte : son adresse propre, avec le jeton sur chaque requête.
+    fn ouvrir_site(self: &Rc<Self>, site: Site) {
+        let Some(jeton) = self.etat_cloud.borrow().as_ref().map(|e| e.jeton.clone()) else { return };
+        let Some(adresse) = config::normaliser_adresse(&site.adresse) else {
+            self.toast("Adresse du site invalide.");
+            return;
+        };
+        if self.cloud_occupe.replace(true) {
+            return;
+        }
+        let client = Arc::new(Client::cloud(&adresse, &jeton));
+        self.cloud.montrer_attente(&format!("Ouverture de {}…", site.nom), false);
+        self.pile.set_visible_child_name("cloud");
+        glib::spawn_future_local({
+            let moi = self.clone();
+            async move {
+                let c = client.clone();
+                let r = gio::spawn_blocking(move || c.session()).await.unwrap_or_else(|_| Err(Erreur::locale("erreur_interne", None)));
+                moi.cloud_occupe.set(false);
+                match r {
+                    Ok(session) => {
+                        config::ecrire("mode", "cloud");
+                        config::ecrire("site_cloud", &site.id);
+                        moi.installer_client(client, session);
+                    }
+                    Err(e) if e.session_perdue() => moi.cloud_expire(),
+                    Err(e) => {
+                        // Retour à la liste des sites avec la raison.
+                        let m = moi.etat_cloud.borrow().as_ref().map(|e| (e.jeton.clone(), e.moi.clone()));
+                        if let Some((jeton, m)) = m {
+                            moi.afficher_sites(jeton, m);
+                        }
+                        moi.toast(&format!("Ouverture de {} impossible : {}", site.nom, e.message()));
+                    }
+                }
+            }
+        });
+    }
+
+    /// « Se déconnecter du cloud » : le jeton est oublié tout de suite, puis révoqué en arrière-plan.
+    fn deconnexion_cloud(self: &Rc<Self>) {
+        self.arreter_minuterie();
+        self.cloud_annule.borrow().store(true, Ordering::Relaxed);
+        self.cloud_occupe.set(false);
+        let jeton = self.etat_cloud.borrow().as_ref().map(|e| e.jeton.clone()).or_else(|| cloud::jeton_retenu(&cloud::plateforme()));
+        self.oublier_cloud();
+        if let Some(jeton) = jeton {
+            let plateforme = cloud::plateforme();
+            glib::spawn_future_local(async move {
+                let _ = gio::spawn_blocking(move || cloud::deconnecter(&plateforme, &jeton)).await;
+            });
+        }
+        self.montrer_serveur(Some("Déconnecté du cloud."));
     }
 
     fn valider_identification(self: &Rc<Self>) {
@@ -545,6 +783,10 @@ impl Fenetre {
     }
 
     fn deconnecter(self: &Rc<Self>) {
+        if self.client.borrow().as_ref().is_some_and(|c| c.est_cloud()) {
+            self.deconnexion_cloud();
+            return;
+        }
         self.arreter_minuterie();
         self.lancer_res(|c| c.deconnecter(), |moi, _| {
             *moi.session.borrow_mut() = Session::default();
@@ -560,7 +802,8 @@ impl Fenetre {
 
     /// Connecté : écran principal et rafraîchissement toutes les 3 secondes.
     fn entrer(self: &Rc<Self>) {
-        self.action_deconnecter.set_enabled(self.session.borrow().utilisateur.is_some());
+        let cloud = self.client.borrow().as_ref().is_some_and(|c| c.est_cloud());
+        self.action_deconnecter.set_enabled(cloud || self.session.borrow().utilisateur.is_some());
         self.action_signaler.set_enabled(true);
         self.pile.set_visible_child_name("principal");
         self.hors_ligne.set(false);
@@ -867,6 +1110,10 @@ impl Fenetre {
     fn administration(&self) {
         use webkit::prelude::*;
         let Some(client) = self.client.borrow().clone() else { return };
+        if client.est_cloud() {
+            self.toast("Indisponible à distance pour l'instant.");
+            return;
+        }
         let vue = webkit::WebView::new();
         if let Some(r) = WebViewExt::settings(&vue) {
             r.set_user_agent(Some(&format!("Mozilla/5.0 EKO-RIP-Client/{VERSION} (Linux)")));
