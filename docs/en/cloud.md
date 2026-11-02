@@ -45,8 +45,9 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   contact, optional purchase order number, promo or partner code, terms of sale accepted), pay by
   **card** (secure field of the payment provider, 3-D Secure in an overlay, never leaving the
   portal) or **SEPA direct debit** (mandate shown in the page, signed with an SMS code; a mandate
-  is valid for the company it was created for). 30-day trial on the first paid subscription
-  when the plan offers it. Invoices (PDF) at the start of each period; every e-mail comes from the
+  is valid for the company it was created for). 30-day trial when the account's first paid
+  subscription is the Atelier plan (no invoice before it ends, the card is only checked; once
+  per account, even after a cancellation). Invoices (PDF) at the start of each period; every e-mail comes from the
   platform. Plan changes are immediate (new period at the new price); cancellation takes effect
   at the end of the current period; failed payments get reminders around D+3, D+7 and D+14, then
   the account goes back to Free.
