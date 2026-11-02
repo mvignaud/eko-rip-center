@@ -268,12 +268,20 @@ public sealed partial class MainWindow
         }
         catch (ErreurApi e)
         {
-            if (version == _versionApercu) TexteApercu.Text = e.Message;
+            if (version == _versionApercu)
+            {
+                TexteApercu.Text = e.Message;
+                _cleApercu = null; // échec passager : la prochaine actualisation réessaie
+            }
         }
         catch (Exception)
         {
             // Image illisible (PNG tronqué, mémoire…).
-            if (version == _versionApercu) TexteApercu.Text = "Aperçu illisible";
+            if (version == _versionApercu)
+            {
+                TexteApercu.Text = "Aperçu illisible";
+                _cleApercu = null;
+            }
         }
         finally
         {

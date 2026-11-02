@@ -399,10 +399,18 @@ public sealed partial class MainWindow : Window
         if (args.Item is not LigneTravail ligne) return;
 
         var menu = new MenuFlyout();
-        var relancer = new MenuFlyoutItem { Text = "Relancer le rendu", IsEnabled = !ligne.Travail.Statut.Occupe() };
+        var relancer = new MenuFlyoutItem { Text = "Relancer le rendu" };
         relancer.Click += async (_, _) => await Proteger(() => _c.Relancer(ligne.Travail));
-        var supprimer = new MenuFlyoutItem { Text = "Supprimer…", IsEnabled = !ligne.Travail.Statut.Occupe() };
+        var supprimer = new MenuFlyoutItem { Text = "Supprimer…" };
         supprimer.Click += async (_, _) => await ConfirmerSuppression(ligne.Travail);
+        // La ligne est gardée d'une actualisation à l'autre (Mettre) : l'état des actions se
+        // calcule à l'ouverture du menu, sur le statut du moment.
+        menu.Opening += (_, _) =>
+        {
+            var libre = !ligne.Travail.Statut.Occupe();
+            relancer.IsEnabled = libre;
+            supprimer.IsEnabled = libre;
+        };
         menu.Items.Add(relancer);
         menu.Items.Add(new MenuFlyoutSeparator());
         menu.Items.Add(supprimer);
@@ -467,6 +475,8 @@ public sealed partial class MainWindow : Window
     private async void Actualiser_Click(object sender, RoutedEventArgs e)
     {
         await Proteger(_c.Rafraichir);
+        // Actualiser redemande aussi un aperçu resté en échec (réseau revenu).
+        if (_c.Rubrique == Rubrique.Travaux) MettreAJourInspecteur(true);
     }
 
     private void Administration_Click(object sender, RoutedEventArgs e)
