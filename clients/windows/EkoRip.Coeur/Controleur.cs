@@ -414,7 +414,14 @@ public sealed class Controleur : IDisposable
 
     // ------------------------------------------------------------ Erreurs et messages
 
-    private static string Texte(Exception e) => e.Message;
+    /// <summary>
+    /// Message de l'erreur ; certaines exceptions de Windows (COM) n'en ont pas : on donne alors
+    /// leur type et leur code, plutôt qu'une boîte « Action impossible » vide.
+    /// </summary>
+    private static string Texte(Exception e) =>
+        string.IsNullOrWhiteSpace(e.Message)
+            ? $"Erreur inattendue de Windows ({e.GetType().Name}, code 0x{e.HResult:X8})."
+            : e.Message;
 
     /// <summary>
     /// 401 : retour à l'écran de connexion. Sinon l'erreur est dite à l'opérateur, ou, pendant

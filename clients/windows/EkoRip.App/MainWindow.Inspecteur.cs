@@ -264,7 +264,7 @@ public sealed partial class MainWindow
         }
         catch (ErreurApi e) when (e.ConnexionRequise)
         {
-            _c.Traiter(e);
+            TraiterErreur(e);
         }
         catch (ErreurApi e)
         {

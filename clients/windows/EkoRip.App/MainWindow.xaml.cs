@@ -77,8 +77,18 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception e)
         {
-            _c.Traiter(e);
+            TraiterErreur(e);
         }
+    }
+
+    /// <summary>
+    /// Erreur d'une action de l'opérateur : dite à l'écran, et notée dans erreurs.log quand elle
+    /// ne vient pas de l'API (exception Windows inattendue, souvent sans message).
+    /// </summary>
+    private void TraiterErreur(Exception e)
+    {
+        if (e is not ErreurApi and not OperationCanceledException) Journal.Ecrire(e);
+        _c.Traiter(e);
     }
 
     // ------------------------------------------------------------ Mise à jour de l'interface

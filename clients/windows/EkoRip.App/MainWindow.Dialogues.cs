@@ -96,21 +96,19 @@ public sealed partial class MainWindow
     private nint Fenetre() => WindowNative.GetWindowHandle(this);
 
     /// <summary>Bouton « Envoyer » : choix de fichiers, puis feuille d'envoi.</summary>
-    private async Task ChoisirFichiers()
+    /// <remarks>
+    /// Boîte « Ouvrir » native (<see cref="SelecteurFichiers"/>) : FileOpenPicker.PickMultipleFilesAsync
+    /// échoue dès qu'on choisit plusieurs fichiers dans une application non empaquetée.
+    /// </remarks>
+    private Task ChoisirFichiers()
     {
-        var selecteur = new FileOpenPicker
+        var chemins = SelecteurFichiers.Ouvrir(Fenetre(), "Envoyer au RIP", new[]
         {
-            ViewMode = PickerViewMode.List,
-            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
-        };
-        foreach (var extension in new[] { ".pdf", ".ai", ".svg", ".tif", ".tiff", ".png", ".jpg", ".jpeg" })
-            selecteur.FileTypeFilter.Add(extension);
-        // Sans le HWND de la fenêtre, un sélecteur WinUI 3 de bureau échoue.
-        InitializeWithWindow.Initialize(selecteur, Fenetre());
-
-        var fichiers = await selecteur.PickMultipleFilesAsync();
-        if (fichiers is { Count: > 0 })
-            _c.ProposerEnvoi(fichiers.Select(f => f.Path));
+            ("Fichiers d'impression (PDF, AI, SVG, TIFF, PNG, JPEG)", "*.pdf;*.ai;*.svg;*.tif;*.tiff;*.png;*.jpg;*.jpeg"),
+            ("Tous les fichiers", "*.*"),
+        });
+        if (chemins.Count > 0) _c.ProposerEnvoi(chemins);
+        return Task.CompletedTask;
     }
 
     private void SurFichiersProposes(IReadOnlyList<string> fichiers)
@@ -189,7 +187,7 @@ public sealed partial class MainWindow
         }
         catch (Exception e)
         {
-            _c.Traiter(e);
+            TraiterErreur(e);
         }
     }
 
@@ -221,7 +219,7 @@ public sealed partial class MainWindow
         }
         catch (Exception e)
         {
-            _c.Traiter(e);
+            TraiterErreur(e);
         }
         finally
         {
@@ -266,7 +264,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            _c.Traiter(ex);
+            TraiterErreur(ex);
         }
         finally
         {

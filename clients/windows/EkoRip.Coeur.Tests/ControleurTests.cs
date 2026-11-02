@@ -55,6 +55,17 @@ public class ControleurTests
     }
 
     [Fact]
+    public void Une_erreur_windows_sans_message_n_affiche_pas_une_boite_vide()
+    {
+        var (c, _, _, _) = Fabriquer(_ => GestionnaireFictif.Json("{}"));
+        c.Traiter(new System.Runtime.InteropServices.COMException("", unchecked((int)0x80004005)));
+        Assert.Equal("Action impossible", c.Message?.Titre);
+        Assert.Contains("COMException", c.Message?.Texte);
+        Assert.Contains("0x80004005", c.Message?.Texte);
+        c.Dispose();
+    }
+
+    [Fact]
     public async Task Un_reglage_cree_apres_la_connexion_est_relu_a_l_envoi()
     {
         var reglages = """[]""";
