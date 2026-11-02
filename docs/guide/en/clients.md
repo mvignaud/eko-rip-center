@@ -71,7 +71,7 @@ déconnecter*), **About E-KO RIP Center** (*À propos d'E-KO RIP Center*).
 
 ## Windows client
 
-![Mock-up of the native Windows client](../images/client-windows.png "The native Windows client, in preparation (preview of the planned interface)")
+![Native Windows client](../images/client-windows.png "The Windows client: job queue, inspector on the right")
 
 **Requirements**: Windows 10 or 11, 64-bit.
 
@@ -80,10 +80,23 @@ déconnecter*), **About E-KO RIP Center** (*À propos d'E-KO RIP Center*).
 3. The client is not signed yet: if Windows shows "Windows protected your PC", click **More
    info** then **Run anyway** (once per workstation).
 
+The client installs for the current user, without administrator rights, and appears in the
+Start menu as **E-KO RIP Center**. To update it, download and run the new installer: it replaces
+the previous version.
+
+The Windows client has the same interface as the Mac and Linux clients: sidebar (Jobs, Machines,
+System), job queue as a table, inspector on the right, drag-and-drop upload with a choice of
+preset (or **No preset** (*Sans réglage*) for the server's defaults) and a Windows notification
+when a job is ready.
+
+**Menu** (**…** button in the toolbar): **Refresh** (*Actualiser*, F5), **Administration…**,
+**Change server…** (*Changer de serveur…*), **Sign out** (*Se déconnecter*), **Help /
+Documentation** (*Aide / Documentation*, F1), **About E-KO RIP Center** (*À propos d'E-KO RIP
+Center*). In the Administration window, external links open in the default browser.
+
 > [!NOTE]
-> A native Windows client, along the lines of the Mac and Linux clients, is in preparation. In
-> the meantime, the Windows client opens the server's interface in its window: all the features
-> are there, with a different layout.
+> The Windows client does not look for servers on the network yet: type the server's address,
+> for example `192.168.1.20:8640`.
 
 ## Connecting to the server
 

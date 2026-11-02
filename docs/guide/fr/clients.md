@@ -69,7 +69,7 @@ problème…**, **Changer de serveur…**, **Se déconnecter**, **À propos d'E-
 
 ## Client Windows
 
-![Maquette du client Windows natif](../images/client-windows.png "Le client Windows natif en préparation (aperçu de l'interface prévue)")
+![Client Windows natif](../images/client-windows.png "Le client Windows : file des travaux, inspecteur à droite")
 
 **Pré-requis** : Windows 10 ou 11, 64 bits.
 
@@ -79,10 +79,23 @@ problème…**, **Changer de serveur…**, **Se déconnecter**, **À propos d'E-
    cliquer **Informations complémentaires** puis **Exécuter quand même** (une seule fois par
    poste).
 
+Le client s'installe pour l'utilisateur courant, sans droits d'administrateur, et apparaît dans
+le menu Démarrer sous le nom **E-KO RIP Center**. Pour le mettre à jour, télécharger et lancer
+le nouvel installateur : il remplace l'ancienne version.
+
+Le client Windows reprend l'interface des clients Mac et Linux : barre latérale (Travaux,
+Machines, Système), file des travaux en tableau, inspecteur à droite, envoi par glisser-déposer
+avec choix du réglage (ou **Sans réglage** pour les réglages par défaut du serveur) et
+notification Windows quand un travail est prêt.
+
+**Menu** (bouton **…** de la barre d'outils) : **Actualiser** (F5), **Administration…**,
+**Changer de serveur…**, **Se déconnecter**, **Aide / Documentation** (F1), **À propos
+d'E-KO RIP Center**. Dans la fenêtre Administration, les liens externes s'ouvrent dans le
+navigateur par défaut.
+
 > [!NOTE]
-> Un client Windows natif, sur le modèle des clients Mac et Linux, est en préparation. En
-> attendant, le client Windows ouvre l'interface du serveur dans sa fenêtre : toutes les
-> fonctions y sont, avec une présentation différente.
+> Le client Windows ne cherche pas encore les serveurs sur le réseau : saisir l'adresse du
+> serveur, par exemple `192.168.1.20:8640`.
 
 ## Se connecter au serveur
 

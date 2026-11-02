@@ -7,7 +7,7 @@ vrai logiciel par système, qui parle à l'API JSON du serveur.
 |---|---|---|---|
 | macOS | `clients/mac/` | SwiftUI (Swift Package, macOS 14+) | lot 1 |
 | Linux (Ubuntu) | `clients/linux/` | Rust, GTK 4 + libadwaita | lot 1 |
-| Windows | — | WinUI 3 | en attente d'un PC Windows |
+| Windows | `clients/windows/` | C# WinUI 3 (.NET 8, Windows App SDK 1.6) | lot 1, à compiler sur PC Windows |
 
 Le client Tauri (`client/`) reste livré tant que les nouveaux ne font pas tout.
 Icône commune : `clients/icone/` (« Rosace », PNG de 16 à 1024 px et SVG source).
@@ -88,3 +88,7 @@ machines, planche d'imbrication, détourage, mise en coupe.
   `E-KO RIP Center.app` universelle signée ad hoc, puis `.dmg`.
 - Linux : `cargo deb` dans `clients/linux/` sur le serveur de test (Ubuntu 26.04), paquet
   `e-ko-rip-center` publié sur le dépôt APT comme avant (il remplacera le client Tauri).
+- Windows : `dotnet publish clients/windows/EkoRip.App -c Release -r win-x64` sur un PC Windows
+  (SDK .NET 8) → dossier autonome avec `EkoRipCenter.exe`, sans MSIX pour l'instant ; la logique
+  (`EkoRip.Coeur`) se teste partout avec `dotnet test clients/windows/EkoRip.Coeur.Tests`.
+  Voir `clients/windows/README.md`.

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Client Windows natif : WinUI 3 (Windows App SDK 1.6), non empaqueté (pas de MSIX) et
+       autonome (le runtime Windows App SDK est livré avec l'exécutable) : on lance l'exe tel quel. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>EkoRip.Client</RootNamespace>
+    <AssemblyName>EkoRipCenter</AssemblyName>
+    <Product>E-KO RIP Center</Product>
+    <AssemblyTitle>E-KO RIP Center</AssemblyTitle>
+    <Description>Client Windows du RIP d'impression grand format.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\icone.ico</ApplicationIcon>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <DefaultLanguage>fr-FR</DefaultLanguage>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <!-- Sans plateforme précisée, `dotnet build` vise x64 (Windows App SDK ne gère pas AnyCPU). -->
+    <Platform Condition="'$(Platform)' == '' Or '$(Platform)' == 'AnyCPU'">x64</Platform>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$(Platform)</RuntimeIdentifier>
+    <!-- Le code généré par le compilateur XAML ne doit pas faire échouer la compilation. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">false</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250602001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EkoRip.Coeur\EkoRip.Coeur.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

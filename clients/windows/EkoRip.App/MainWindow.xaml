@@ -1,0 +1,525 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="EkoRip.Client.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:EkoRip.Client"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="E-KO RIP Center">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <!-- Racine : reçoit aussi le glisser-déposer de fichiers sur toute la fenêtre. -->
+    <Grid x:Name="Racine"
+          Background="Transparent"
+          AllowDrop="True"
+          DragOver="Racine_DragOver"
+          DragLeave="Racine_DragLeave"
+          Drop="Racine_Drop"
+          Loaded="Racine_Loaded">
+
+        <Grid.Resources>
+          <ResourceDictionary>
+            <!-- Fond d'aperçu : gris neutre et opaque, clair ou sombre selon le thème, jamais de matériau translucide. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="FondApercuBrush" Color="#D6D6D6" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="FondApercuBrush" Color="#383838" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <Style x:Key="CarteStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="16" />
+            </Style>
+            <Style x:Key="PuceStyle" TargetType="Border">
+                <Setter Property="Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="8,2" />
+            </Style>
+            <Style x:Key="TexteSecondaire" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Style>
+            <Style x:Key="TexteCritique" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style x:Key="TexteAttention" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+            </Style>
+            <Style x:Key="TexteSucces" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorSuccessBrush}" />
+            </Style>
+            <Style x:Key="IconeCritique" TargetType="FontIcon">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCriticalBrush}" />
+            </Style>
+            <Style x:Key="IconeAttention" TargetType="FontIcon">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorCautionBrush}" />
+            </Style>
+            <Style x:Key="IconeSucces" TargetType="FontIcon">
+                <Setter Property="Foreground" Value="{ThemeResource SystemFillColorSuccessBrush}" />
+            </Style>
+            <Style x:Key="IconeAccent" TargetType="FontIcon">
+                <Setter Property="Foreground" Value="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+            </Style>
+          </ResourceDictionary>
+        </Grid.Resources>
+
+        <!-- Démarrage -->
+        <Grid x:Name="VueDemarrage" Visibility="Visible">
+            <ProgressRing IsActive="True" Width="48" Height="48"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- Adresse puis identifiant -->
+        <Grid x:Name="VueConnexion" Visibility="Collapsed">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Width="400" Spacing="16" Padding="0,48"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image Source="ms-appx:///Assets/icone-256.png" Width="88" Height="88"
+                           HorizontalAlignment="Center" />
+                    <TextBlock Text="E-KO RIP Center"
+                               Style="{StaticResource TitleLargeTextBlockStyle}"
+                               HorizontalAlignment="Center" />
+                    <TextBlock x:Name="SousTitreConnexion"
+                               Style="{StaticResource TexteSecondaire}"
+                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+
+                    <TextBox x:Name="ChampAdresse" Header="Adresse du serveur" PlaceholderText="hôte:8640"
+                             TextChanged="ChampConnexion_TextChanged" KeyDown="ChampConnexion_KeyDown" />
+                    <TextBox x:Name="ChampNom" Header="Identifiant" Visibility="Collapsed"
+                             TextChanged="ChampConnexion_TextChanged" KeyDown="ChampConnexion_KeyDown" />
+                    <PasswordBox x:Name="ChampMotDePasse" Header="Mot de passe" Visibility="Collapsed"
+                                 PasswordChanged="ChampMotDePasse_PasswordChanged" KeyDown="ChampConnexion_KeyDown" />
+
+                    <TextBlock x:Name="TexteErreurConnexion"
+                               Style="{StaticResource TexteCritique}"
+                               TextWrapping="Wrap" TextAlignment="Center" Visibility="Collapsed" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                        <Button x:Name="BoutonChangerServeur" Content="Changer de serveur"
+                                Visibility="Collapsed" Click="ChangerServeurConnexion_Click" />
+                        <Button x:Name="BoutonAnnulerAdresse" Content="Annuler"
+                                Visibility="Collapsed" Click="AnnulerAdresse_Click" />
+                        <Button x:Name="BoutonConnecter" Content="Se connecter"
+                                Style="{StaticResource AccentButtonStyle}" Click="Connecter_Click" />
+                        <ProgressRing x:Name="AnneauConnexion" Width="20" Height="20" IsActive="False" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Principal -->
+        <NavigationView x:Name="Navigation"
+                        Visibility="Collapsed"
+                        PaneDisplayMode="Left"
+                        OpenPaneLength="220"
+                        IsSettingsVisible="False"
+                        IsBackButtonVisible="Collapsed"
+                        IsPaneToggleButtonVisible="False"
+                        SelectionChanged="Navigation_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItemHeader Content="Production" />
+                <NavigationViewItem x:Name="EntreeTravaux" Content="Travaux" Tag="Travaux">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8FD;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="BadgeTravaux" Value="0" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItemHeader Content="Atelier" />
+                <NavigationViewItem x:Name="EntreeMachines" Content="Machines" Tag="Machines">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE749;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge x:Name="BadgeMachines" Value="0" Visibility="Collapsed" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItemHeader Content="Serveur" />
+                <NavigationViewItem x:Name="EntreeSysteme" Content="Système" Tag="Systeme">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE713;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- Barre de commandes : Envoyer, Imprimer, Suspendre, Épreuve, recherche. -->
+                <CommandBar x:Name="Commandes"
+                            Grid.Row="0"
+                            DefaultLabelPosition="Right"
+                            Background="Transparent"
+                            IsDynamicOverflowEnabled="True">
+                    <CommandBar.Content>
+                        <AutoSuggestBox x:Name="Recherche"
+                                        Width="280"
+                                        Margin="12,6,0,0"
+                                        PlaceholderText="Nom ou dossier"
+                                        QueryIcon="Find"
+                                        TextChanged="Recherche_TextChanged" />
+                    </CommandBar.Content>
+
+                    <AppBarButton x:Name="BoutonEnvoyer" Icon="Add" Label="Envoyer"
+                                  ToolTipService.ToolTip="Envoyer des fichiers au RIP (Ctrl+O)"
+                                  Click="Envoyer_Click">
+                        <AppBarButton.KeyboardAccelerators>
+                            <KeyboardAccelerator Key="O" Modifiers="Control" />
+                        </AppBarButton.KeyboardAccelerators>
+                    </AppBarButton>
+
+                    <AppBarButton x:Name="BoutonImprimer" Icon="Print" Label="Imprimer"
+                                  ToolTipService.ToolTip="Mettre la page affichée en file sur une machine">
+                        <AppBarButton.Flyout>
+                            <MenuFlyout x:Name="MenuImprimer" Opening="MenuImprimer_Opening" />
+                        </AppBarButton.Flyout>
+                    </AppBarButton>
+
+                    <AppBarButton x:Name="BoutonSuspendre" Icon="Pause" Label="Suspendre"
+                                  Click="Suspendre_Click" />
+
+                    <AppBarButton x:Name="BoutonEpreuve" Icon="Download" Label="Épreuve TIFF"
+                                  ToolTipService.ToolTip="Télécharger l'épreuve TIFF de la page affichée"
+                                  Click="Epreuve_Click" />
+
+                    <AppBarToggleButton x:Name="BoutonInspecteur" Label="Inspecteur"
+                                        ToolTipService.ToolTip="Afficher ou masquer l'inspecteur"
+                                        IsChecked="True"
+                                        Checked="Inspecteur_Bascule"
+                                        Unchecked="Inspecteur_Bascule">
+                        <AppBarToggleButton.Icon>
+                            <FontIcon Glyph="&#xE8A0;" />
+                        </AppBarToggleButton.Icon>
+                    </AppBarToggleButton>
+
+                    <CommandBar.SecondaryCommands>
+                        <AppBarButton Icon="Refresh" Label="Actualiser" Click="Actualiser_Click">
+                            <AppBarButton.KeyboardAccelerators>
+                                <KeyboardAccelerator Key="F5" />
+                            </AppBarButton.KeyboardAccelerators>
+                        </AppBarButton>
+                        <AppBarButton x:Name="BoutonAdministration" Label="Administration…" Click="Administration_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE713;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarSeparator />
+                        <AppBarButton Label="Changer de serveur…" Click="ChangerServeur_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE774;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarButton x:Name="BoutonDeconnecter" Label="Se déconnecter" Click="Deconnecter_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xF3B1;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                        <AppBarSeparator />
+                        <AppBarButton Label="Aide / Documentation" Click="Aide_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE897;" />
+                            </AppBarButton.Icon>
+                            <AppBarButton.KeyboardAccelerators>
+                                <KeyboardAccelerator Key="F1" />
+                            </AppBarButton.KeyboardAccelerators>
+                        </AppBarButton>
+                        <AppBarButton Label="À propos d'E-KO RIP Center" Click="APropos_Click">
+                            <AppBarButton.Icon>
+                                <FontIcon Glyph="&#xE946;" />
+                            </AppBarButton.Icon>
+                        </AppBarButton>
+                    </CommandBar.SecondaryCommands>
+                </CommandBar>
+
+                <!-- Contenu : la rubrique choisie, puis l'inspecteur à droite (Travaux seulement). -->
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="ColonneInspecteur" Width="380" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Grid.Column="0">
+                        <!-- Travaux : tableau triable -->
+                        <Grid x:Name="PanneauTravaux">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <Grid x:Name="EnTeteTableau" Grid.Row="0" Margin="20,4,28,4" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" MinWidth="90" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="110" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="EnTeteNom" Grid.Column="0" Tag="Nom" Click="EnTete_Click"
+                                        Style="{StaticResource TextBlockButtonStyle}" Content="Nom" />
+                                <Button x:Name="EnTeteDossier" Grid.Column="1" Tag="Dossier" Click="EnTete_Click"
+                                        Style="{StaticResource TextBlockButtonStyle}" Content="Dossier" />
+                                <Button x:Name="EnTetePages" Grid.Column="2" Tag="Pages" Click="EnTete_Click"
+                                        Style="{StaticResource TextBlockButtonStyle}" Content="Pages" />
+                                <Button x:Name="EnTeteStatut" Grid.Column="3" Tag="Statut" Click="EnTete_Click"
+                                        Style="{StaticResource TextBlockButtonStyle}" Content="Statut" />
+                                <Button x:Name="EnTeteDate" Grid.Column="4" Tag="Date" Click="EnTete_Click"
+                                        Style="{StaticResource TextBlockButtonStyle}" Content="Date" />
+                            </Grid>
+
+                            <ListView x:Name="ListeTravaux"
+                                      Grid.Row="1"
+                                      SelectionMode="Single"
+                                      IsItemClickEnabled="False"
+                                      SelectionChanged="ListeTravaux_SelectionChanged"
+                                      ContainerContentChanging="ListeTravaux_ContainerContentChanging">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:LigneTravail">
+                                        <Grid ColumnSpacing="8" Padding="0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="90" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="60" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="110" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{x:Bind Nom, Mode=OneWay}"
+                                                       ToolTipService.ToolTip="{x:Bind Nom, Mode=OneWay}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Dossier, Mode=OneWay}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind Pages, Mode=OneWay}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8"
+                                                        VerticalAlignment="Center"
+                                                        ToolTipService.ToolTip="{x:Bind InfoErreur, Mode=OneWay}">
+                                                <ProgressRing IsActive="True" Width="14" Height="14"
+                                                              Visibility="{x:Bind VisibiliteAnneau, Mode=OneWay}" />
+                                                <Ellipse Width="8" Height="8"
+                                                         Fill="{x:Bind CouleurStatut, Mode=OneWay}"
+                                                         Visibility="{x:Bind VisibilitePastille, Mode=OneWay}" />
+                                                <TextBlock Text="{x:Bind Statut, Mode=OneWay}" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="4"
+                                                       Text="{x:Bind DateTexte, Mode=OneWay}"
+                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                       VerticalAlignment="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+
+                            <StackPanel x:Name="VideTravaux"
+                                        Grid.Row="1"
+                                        Spacing="6"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        IsHitTestVisible="False"
+                                        Visibility="Collapsed">
+                                <FontIcon Glyph="&#xE8FD;" FontSize="40" Opacity="0.5" />
+                                <TextBlock x:Name="TitreVide" Text="Aucun travail" HorizontalAlignment="Center"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock x:Name="TexteVide" HorizontalAlignment="Center" TextAlignment="Center"
+                                           TextWrapping="Wrap" MaxWidth="360"
+                                           Style="{StaticResource TexteSecondaire}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Machines : cartes -->
+                        <ScrollViewer x:Name="PanneauMachines" Visibility="Collapsed">
+                            <StackPanel Padding="20" Spacing="16">
+                                <StackPanel x:Name="ListeMachines" Spacing="16" MaxWidth="900" HorizontalAlignment="Stretch" />
+                                <StackPanel x:Name="VideMachines" Spacing="6" HorizontalAlignment="Center" Visibility="Collapsed">
+                                    <FontIcon Glyph="&#xE749;" FontSize="40" Opacity="0.5" />
+                                    <TextBlock Text="Aucune machine" HorizontalAlignment="Center"
+                                               Style="{StaticResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="Le catalogue du serveur est vide." HorizontalAlignment="Center"
+                                               Style="{StaticResource TexteSecondaire}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Système -->
+                        <ScrollViewer x:Name="PanneauSysteme" Visibility="Collapsed">
+                            <Grid>
+                                <StackPanel x:Name="ContenuSysteme" Padding="20" Spacing="16" MaxWidth="700"
+                                            HorizontalAlignment="Stretch" />
+                                <StackPanel x:Name="AttenteSysteme" Orientation="Horizontal" Spacing="12"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <ProgressRing IsActive="True" Width="24" Height="24" />
+                                    <TextBlock Text="Lecture de l'état du serveur…" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <!-- Cadre qui s'allume quand on survole la fenêtre avec des fichiers. -->
+                        <Border x:Name="CadreDepot"
+                                Margin="4"
+                                CornerRadius="10"
+                                BorderThickness="3"
+                                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                                IsHitTestVisible="False"
+                                Visibility="Collapsed" />
+                    </Grid>
+
+                    <!-- Inspecteur -->
+                    <Border x:Name="Inspecteur"
+                            Grid.Column="1"
+                            Background="{ThemeResource LayerFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            BorderThickness="1,0,0,0">
+                        <Grid>
+                            <StackPanel x:Name="InspecteurVide" Spacing="6" Padding="24"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <FontIcon Glyph="&#xE8A0;" FontSize="40" Opacity="0.5" />
+                                <TextBlock Text="Aucun travail choisi" HorizontalAlignment="Center"
+                                           Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Text="Choisissez un travail dans la file pour voir son aperçu, sa fiche et ses sorties."
+                                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                                           Style="{StaticResource TexteSecondaire}" />
+                            </StackPanel>
+
+                            <Grid x:Name="InspecteurContenu" Visibility="Collapsed">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <StackPanel Grid.Row="0" Padding="14" Spacing="8">
+                                    <TextBlock x:Name="TitreInspecteur"
+                                               Style="{StaticResource SubtitleTextBlockStyle}"
+                                               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
+                                               IsTextSelectionEnabled="True" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <ProgressRing x:Name="AnneauStatut" Width="14" Height="14" IsActive="False"
+                                                      Visibility="Collapsed" VerticalAlignment="Center" />
+                                        <Ellipse x:Name="PastilleStatut" Width="8" Height="8" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="TexteStatut" />
+                                        <TextBlock x:Name="TexteDossier" Style="{StaticResource TexteSecondaire}" />
+                                    </StackPanel>
+                                    <SelectorBar x:Name="Onglets" SelectionChanged="Onglets_SelectionChanged">
+                                        <SelectorBarItem x:Name="OngletApercu" Text="Aperçu" IsSelected="True" />
+                                        <SelectorBarItem x:Name="OngletFiche" Text="Fiche" />
+                                        <SelectorBarItem x:Name="OngletSorties" Text="Sorties" />
+                                    </SelectorBar>
+                                </StackPanel>
+
+                                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                                    <Grid Padding="14,0,14,14">
+                                        <!-- Aperçu -->
+                                        <StackPanel x:Name="PanneauApercu" Spacing="14">
+                                            <Border Height="300" CornerRadius="8"
+                                                    Background="{ThemeResource FondApercuBrush}">
+                                                <Grid Padding="8">
+                                                    <Image x:Name="ImageApercu" Stretch="Uniform" />
+                                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                                                        <ProgressRing x:Name="AnneauApercu" IsActive="False" Width="32" Height="32" />
+                                                        <TextBlock x:Name="TexteApercu" TextAlignment="Center" TextWrapping="Wrap"
+                                                                   Style="{StaticResource TexteSecondaire}" />
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <Grid x:Name="NavigationPages" Visibility="Collapsed">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Button x:Name="PagePrecedente" Grid.Column="0" Click="PagePrecedente_Click"
+                                                        ToolTipService.ToolTip="Page précédente">
+                                                    <FontIcon Glyph="&#xE76B;" FontSize="14" />
+                                                </Button>
+                                                <TextBlock x:Name="TextePage" Grid.Column="1"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                <Button x:Name="PageSuivante" Grid.Column="2" Click="PageSuivante_Click"
+                                                        ToolTipService.ToolTip="Page suivante">
+                                                    <FontIcon Glyph="&#xE76C;" FontSize="14" />
+                                                </Button>
+                                            </Grid>
+
+                                            <TextBlock x:Name="TexteErreurTravail" Style="{StaticResource TexteCritique}"
+                                                       TextWrapping="Wrap" Visibility="Collapsed" />
+                                            <StackPanel x:Name="InfosApercu" Spacing="6" />
+                                            <StackPanel x:Name="ListeAlertes" Spacing="6" />
+                                        </StackPanel>
+
+                                        <!-- Fiche -->
+                                        <StackPanel x:Name="PanneauFiche" Spacing="8" Visibility="Collapsed" />
+
+                                        <!-- Sorties -->
+                                        <StackPanel x:Name="PanneauSorties" Spacing="10" Visibility="Collapsed" />
+                                    </Grid>
+                                </ScrollViewer>
+
+                                <!-- Imprimer, Épreuve TIFF, Relancer, Supprimer -->
+                                <Grid Grid.Row="2" Padding="14" ColumnSpacing="8" RowSpacing="8"
+                                      BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,1,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <DropDownButton x:Name="BoutonImprimerInspecteur" Grid.Row="0" Grid.Column="0"
+                                                    Content="Imprimer" HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Center">
+                                        <DropDownButton.Flyout>
+                                            <MenuFlyout x:Name="MenuImprimerInspecteur" Placement="TopEdgeAlignedLeft"
+                                                        Opening="MenuImprimerInspecteur_Opening" />
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+                                    <Button x:Name="BoutonEpreuveInspecteur" Grid.Row="0" Grid.Column="1"
+                                            Content="Épreuve TIFF" HorizontalAlignment="Stretch"
+                                            Click="Epreuve_Click" />
+                                    <Button x:Name="BoutonRelancer" Grid.Row="1" Grid.Column="0"
+                                            Content="Relancer" HorizontalAlignment="Stretch"
+                                            Click="Relancer_Click" />
+                                    <Button x:Name="BoutonSupprimer" Grid.Row="1" Grid.Column="1"
+                                            Content="Supprimer" HorizontalAlignment="Stretch"
+                                            Click="Supprimer_Click" />
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- Barre d'état : serveur injoignable, envois en cours, annonce brève. -->
+                <Border x:Name="BarreEtat"
+                        Grid.Row="2"
+                        Visibility="Collapsed"
+                        Padding="14,8"
+                        Background="{ThemeResource LayerFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="0,1,0,0">
+                    <StackPanel x:Name="ContenuBarreEtat" Spacing="6" />
+                </Border>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>
