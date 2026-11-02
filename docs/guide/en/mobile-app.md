@@ -168,7 +168,7 @@ Demo mode shows the app with made-up data, with no server and no connection.
 
 ## Privacy
 
-The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The publisher receives no account, no advertising and no audience measurement.
+The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The app has no advertising and no audience measurement. Without the Cloud, the publisher receives nothing; with it, the platform knows your account, the phone's name and, if notifications are on, its notification token.
 
 - Credentials are kept in the phone's secure storage and sent only to the server you chose.
 - For notifications, a phone token is passed to the server (or to the E-KO RIP Cloud platform if you sign in with it); the messages then go through the Expo notification service, then through Apple or Google.
