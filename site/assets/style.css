@@ -80,12 +80,14 @@ code { font-family: var(--mono); font-size: .88em; background: var(--fond-3); pa
 .nav { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
 .nav a { color: var(--texte-2); }
 .nav a:hover, .nav a[aria-current="page"] { color: var(--texte); text-decoration: none; }
+.nav .nav-mobile { display: none; }
 .nav-bouton { display: none; margin-left: auto; background: none; border: 0; color: var(--texte); padding: 8px; cursor: pointer; }
 @media (max-width: 860px) {
   .nav-bouton { display: block; }
   .nav { display: none; position: absolute; top: 60px; left: 0; right: 0; flex-direction: column; gap: 0; background: var(--fond-2); border-bottom: 1px solid var(--trait); padding: 8px 16px 16px; }
   .nav.ouverte { display: flex; }
   .nav a { padding: 12px 4px; border-bottom: 1px solid var(--trait); }
+  .nav .nav-mobile { display: block; }
   .entete .bouton { display: none; }
 }
 
@@ -516,3 +518,10 @@ section { padding: 96px 0; }
 .retour-demande.ok { background: rgba(48, 209, 88, .14); color: #1e8e3e; }
 .retour-demande.erreur { background: rgba(236, 0, 140, .1); color: #b0006a; }
 @media (prefers-color-scheme: dark) { .retour-demande.ok { color: #5fe08a; } .retour-demande.erreur { color: #ff6fbf; } }
+
+/* Page Cloud : prix des offres */
+.tuile .prix { margin: 4px 0 2px; color: var(--texte-2); font-size: 15px; }
+.tuile .prix strong { color: var(--texte); font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin-right: 4px; }
+.encadre-facultatif { max-width: 860px; margin: 0 auto; padding: 22px 26px; border-radius: var(--rayon); background: var(--fond-2); border: 1px solid var(--trait); border-left: 4px solid var(--accent); box-shadow: var(--ombre); }
+.encadre-facultatif h2 { font-size: 22px; margin: 0 0 8px; }
+.encadre-facultatif p { margin: 8px 0 0; color: var(--texte-2); }

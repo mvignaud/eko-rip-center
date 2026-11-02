@@ -28,6 +28,7 @@ mod images;
 mod imbrication;
 mod linearisation;
 mod g7;
+mod mobile;
 mod mosaique;
 mod nid;
 mod pont;
@@ -39,6 +40,7 @@ mod balises;
 mod regles;
 mod recalibration;
 mod cellules;
+mod abonnement;
 mod cloud;
 mod rapports;
 mod telemetrie;
@@ -436,10 +438,12 @@ async fn main() {
     tokio::spawn(relever(etat.clone()));
     tokio::spawn(pont::boucle(etat.config.donnees.clone()));
     tokio::spawn(prendre_envois(etat.clone()));
+    tokio::spawn(veiller_la_file(etat.clone()));
     // Cloud E-KO RIP : la même API sert dans le tunnel vers la plate-forme, marquée pour
     // que `garder` en ferme une partie (pont ERP, renvoi, réglages du cloud).
     let par_cloud = routes(etat.clone()).layer(DefaultBodyLimit::max(max)).layer(axum::Extension(cloud::ParCloud));
     tokio::spawn(cloud::boucle(etat.config.donnees.clone(), par_cloud));
+    tokio::spawn(abonnement::boucle(etat.clone()));
     // Rapports de bug automatiques (si l'administrateur l'a accepté) : plantage écrit avant l'arrêt.
     rapports::installer_crochet(etat.config.donnees.clone());
     tokio::spawn(rapports::boucle(etat.config.donnees.clone()));
@@ -525,12 +529,20 @@ fn routes(etat: Partage) -> Router {
         .route("/api/erp/contrat", get(contrat_erp))
         .route("/api/pont", get(lire_pont).post(regler_pont))
         .route("/api/pont/instance", axum::routing::post(nouvelle_instance))
+        .route("/api/mobile/etat", get(etat_mobile))
+        .route("/api/mobile/evenements", get(evenements_mobiles))
+        .route("/api/mobile/appareils", axum::routing::post(inscrire_appareil))
+        .route("/api/mobile/appareils/retirer", axum::routing::post(retirer_appareil))
+        .route("/api/mobile/essai", axum::routing::post(essai_mobile))
         .route("/api/cloud", get(lire_cloud).delete(detacher_cloud))
         .route("/api/cloud/appairage", axum::routing::post(appairer_cloud))
+        .route("/api/cloud/sauvegarder", axum::routing::post(sauvegarder_cloud))
+        .route("/api/cloud/restaurer", axum::routing::post(restaurer_par_cloud))
         .route("/api/telemetrie", get(lire_telemetrie).post(regler_telemetrie))
         .route("/api/rapports", axum::routing::post(signaler_probleme))
         .route("/api/rapports/reglage", get(lire_reglage_rapports).post(regler_rapports))
         .route("/api/session", get(lire_session).post(ouvrir_session).delete(fermer_session))
+        .layer(axum::middleware::from_fn(signaler_changement))
         .layer(axum::middleware::from_fn_with_state(etat.clone(), garder))
         .with_state(etat)
 }
@@ -545,6 +557,7 @@ fn ecrire(donnees: &std::path::Path, t: &Travail) -> std::io::Result<()> {
     etat::ecrire(&dossier(donnees, t.id).join("job.json"), t, false)?;
     if !t.estimation {
         pont::noter_travail(donnees, t.id, t.statut.code(), t.code_erreur.as_deref(), t.pages.len(), t.cree_le, t.erp.as_ref());
+        mobile::noter_travail(donnees, t.id, &t.nom, matches!(t.statut, Statut::Echec), t.erreur.as_deref().or(t.code_erreur.as_deref()));
     }
     Ok(())
 }
@@ -1988,14 +2001,25 @@ async fn enregistrer_machines(State(etat): State<Partage>, Json(mut liste): Json
 
 /// Configuration du serveur en un fichier (machines, tarifs, réglages, profils ICC).
 async fn exporter_config(State(etat): State<Partage>) -> Response {
+    let s = match construire_sauvegarde(&etat).await {
+        Ok(s) => s,
+        Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e)),
+    };
+    let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
+    ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
+}
+
+/// La sauvegarde de la configuration, sans requête HTTP : export à la main et sauvegarde
+/// en ligne du cloud en partent. Erreur : le profil ICC illisible.
+async fn construire_sauvegarde(etat: &Partage) -> Result<sauvegarde::Sauvegarde, String> {
     let mut profils = std::collections::BTreeMap::new();
     for p in couleur::lister(&etat.config.profils) {
         match tokio::fs::read(etat.config.profils.join(&p.fichier)).await {
             Ok(o) => profils.insert(p.fichier, sauvegarde::hex(&o)),
-            Err(e) => return refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(format!("{} : {e}", p.fichier))),
+            Err(e) => return Err(format!("{} : {e}", p.fichier)),
         };
     }
-    let s = sauvegarde::Sauvegarde {
+    Ok(sauvegarde::Sauvegarde {
         format: sauvegarde::FORMAT.into(),
         version: env!("CARGO_PKG_VERSION").into(),
         cree_le: maintenant(),
@@ -2012,9 +2036,7 @@ async fn exporter_config(State(etat): State<Partage>) -> Response {
         balises: Some(balises::lire(&etat.config.donnees)),
         gabarits: Some(cellules::lire(&etat.config.donnees)),
         g7: Some(g7::lire(&etat.config.donnees)),
-    };
-    let nom = format!("attachment; filename=\"eko-rip-config-{}.json\"", date_utc(s.cree_le).replace([' ', ':'], "-"));
-    ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, nom)], serde_json::to_vec_pretty(&s).unwrap_or_default()).into_response()
+    })
 }
 
 /// Remplace machines, tarifs et réglages, ajoute ou remplace les profils. Tout est
@@ -2321,9 +2343,14 @@ async fn relever_maintenant(etat: &Etat, m: &machines::Machine) -> Option<u64> {
 async fn relever(etat: Partage) {
     let mut derniers: std::collections::HashMap<String, Option<releves::Releve>> = Default::default();
     loop {
-        let cibles: Vec<(String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.snmp.clone()?))).collect();
-        for (id, hote) in cibles {
-            let Some(Lecture { releve: r, numero, largeur_mm, chauffages, alertes }) = lire_releve(hote).await else { continue };
+        let cibles: Vec<(String, String, String)> = etat.machines.read().unwrap().iter().filter(|m| m.modele == machines::Modele::EpsonScS80600).filter_map(|m| Some((m.id.clone(), m.nom.clone(), m.snmp.clone()?))).collect();
+        for (id, nom, hote) in cibles {
+            let Some(Lecture { releve: r, numero, largeur_mm, chauffages, alertes }) = lire_releve(hote).await else {
+                mobile::noter_releve_manque(&etat.config.donnees, &id, &nom);
+                continue;
+            };
+            // Notifications de l'app mobile (alertes, encres) : à chaque relevé, même inchangé.
+            mobile::noter_releve(&etat.config.donnees, &id, &nom, &r.encres, &alertes, r.longueur_m, r.le);
             // Support chargé lu sur la machine (n° de support), s'il a changé (roadmap 1.3).
             if let Some(n) = numero {
                 let support_uuid = supports::par_numero(&supports::lire(&etat.config.donnees, "epson"), &id, n).and_then(|s| s.id);
@@ -2680,15 +2707,49 @@ async fn accueil(State(etat): State<Partage>, entetes: axum::http::HeaderMap) ->
     Html(include_str!("../static/accueil.html").replace("{version}", env!("CARGO_PKG_VERSION")).replace("{hote}", &echapper(hote)).replace("{machines}", &lignes))
 }
 
-async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
-    let chemin = requete.uri().path();
+/// Rôle d'une personne connectée par la plate-forme cloud (« Se connecter au cloud ») ;
+/// `lecture` : rôle d'opérateur, en lecture seule.
+fn role_cloud(i: &eko_rip_cloud::applis::IdentiteCloud) -> (acces::Role, bool) {
+    match i.role.as_str() {
+        "admin" => (acces::Role::Admin, false),
+        "operateur" => (acces::Role::Operateur, false),
+        _ => (acces::Role::Operateur, true),
+    }
+}
+
+async fn garder(State(etat): State<Partage>, mut requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
+    let par_cloud = requete.extensions().get::<cloud::ParCloud>().is_some();
+    // Identité posée par la plate-forme : crue seulement venue par le tunnel (la plate-forme
+    // retire cet en-tête des requêtes qu'elle reçoit) ; sur le réseau local, ignorée.
+    let identite = if par_cloud { requete.headers().get(eko_rip_cloud::applis::ENTETE_IDENTITE).and_then(|v| v.to_str().ok()).and_then(eko_rip_cloud::applis::lire_identite) } else { None };
+    requete.headers_mut().remove(eko_rip_cloud::applis::ENTETE_IDENTITE);
+    if let Some(i) = &identite {
+        requete.extensions_mut().insert(i.clone());
+    }
+    let chemin = requete.uri().path().to_string();
+    let chemin = chemin.as_str();
+    // Ordre de restauration de la plate-forme : pas de session, mais une signature HMAC avec
+    // la clé du site (la plate-forme seule la connaît avec ce serveur). Sans signature valide,
+    // 401 ; une requête du réseau local n'a jamais la marque `Signee`.
+    if par_cloud && chemin == "/api/cloud/restaurer" && requete.method() == axum::http::Method::POST {
+        let (parts, corps) = requete.into_parts();
+        let Ok(octets) = axum::body::to_bytes(corps, 4096).await else { return refus(StatusCode::UNAUTHORIZED, "signature_cloud_invalide", None) };
+        let entete = parts.headers.get(abonnement::ENTETE_SERVICE).and_then(|v| v.to_str().ok());
+        if !cloud::lire(&etat.config.donnees).is_some_and(|c| abonnement::signature_valide(&c.cle, entete, &octets, maintenant())) {
+            return refus(StatusCode::UNAUTHORIZED, "signature_cloud_invalide", None);
+        }
+        let mut requete = axum::extract::Request::from_parts(parts, axum::body::Body::from(octets));
+        requete.extensions_mut().insert(abonnement::Signee);
+        return suite.run(requete).await;
+    }
     // Venue par le tunnel du cloud : jamais le pont ERP, le renvoi entre RIP ni les réglages
-    // du pont et du cloud ; et jamais sans compte (l'accès libre reste au réseau local).
-    if requete.extensions().get::<cloud::ParCloud>().is_some() {
+    // du pont et du cloud ; et jamais sans compte (l'accès libre reste au réseau local), sauf
+    // pour une personne identifiée par la plate-forme.
+    if par_cloud {
         if chemin.starts_with("/api/renvoi/") || chemin.starts_with(erp::PREFIXE) || chemin.starts_with("/api/pont") || chemin.starts_with("/api/cloud") && requete.method() != axum::http::Method::GET {
             return refus(StatusCode::FORBIDDEN, "ferme_par_cloud", None);
         }
-        if acces::libre(&etat.config.donnees) {
+        if identite.is_none() && acces::libre(&etat.config.donnees) {
             return refus(StatusCode::FORBIDDEN, "cloud_sans_compte", None);
         }
     }
@@ -2708,10 +2769,24 @@ async fn garder(State(etat): State<Partage>, requete: axum::extract::Request, su
     if chemin.starts_with("/api/") && !est_client(&etat, requete.headers()) {
         return refus(StatusCode::FORBIDDEN, "client_requis", None);
     }
-    if !chemin.starts_with("/api/") || chemin == "/api/session" || acces::libre(&etat.config.donnees) {
+    if !chemin.starts_with("/api/") || chemin == "/api/session" {
         return suite.run(requete).await;
     }
-    let Some(role) = role_session(&etat, requete.headers()) else { return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None) };
+    let role = match &identite {
+        Some(i) => {
+            let (role, lecture_seule) = role_cloud(i);
+            // Lecture seule : s'inscrire aux notifications du téléphone reste permis.
+            if lecture_seule && requete.method() != axum::http::Method::GET && !chemin.starts_with("/api/mobile/") {
+                return refus(StatusCode::FORBIDDEN, "lecture_seule", None);
+            }
+            role
+        }
+        None if acces::libre(&etat.config.donnees) => return suite.run(requete).await,
+        None => match role_session(&etat, requete.headers()) {
+            Some(r) => r,
+            None => return refus(StatusCode::UNAUTHORIZED, "connexion_requise", None),
+        },
+    };
     if role != acces::Role::Admin && acces::reserve_admin(requete.method(), chemin) {
         return refus(StatusCode::FORBIDDEN, "admin_requis", None);
     }
@@ -2789,6 +2864,55 @@ async fn regler_telemetrie(State(etat): State<Partage>, Json(r): Json<ReglageTel
 /// Cloud E-KO RIP (Système) : rattachement, état du tunnel, appairage en cours.
 async fn lire_cloud(State(etat): State<Partage>) -> Json<serde_json::Value> {
     Json(cloud::etat_public(&etat.config.donnees))
+}
+
+/// Après une écriture réussie de l'API : la configuration a pu changer (sauvegarde en ligne
+/// 2 minutes plus tard, si elle diffère de la précédente) et, pour les machines, l'inventaire
+/// de l'abonnement est renvoyé à la plate-forme.
+async fn signaler_changement(requete: axum::extract::Request, suite: axum::middleware::Next) -> Response {
+    let (methode, chemin) = (requete.method().clone(), requete.uri().path().to_string());
+    let ecriture = ![axum::http::Method::GET, axum::http::Method::HEAD, axum::http::Method::OPTIONS].contains(&methode)
+        && chemin.starts_with("/api/")
+        && !["/api/file", "/api/travaux", "/api/session", "/api/imbrications", "/api/rapports"].iter().any(|p| chemin.starts_with(p))
+        && (!chemin.starts_with("/api/cloud") || chemin == "/api/cloud/restaurer");
+    let r = suite.run(requete).await;
+    if ecriture && r.status().is_success() {
+        abonnement::config_modifiee(chemin == "/api/machines" || chemin == "/api/sauvegarde" || chemin == "/api/cloud/restaurer");
+    }
+    r
+}
+
+/// Sauvegarde en ligne tout de suite (administrateur) : rend l'état de la sauvegarde.
+async fn sauvegarder_cloud(State(etat): State<Partage>) -> Response {
+    if cloud::lire(&etat.config.donnees).is_none() {
+        return refus(StatusCode::CONFLICT, "cloud_non_rattache", None);
+    }
+    let s = abonnement::sauvegarder(&etat, "demande").await;
+    if s.etat == "erreur" {
+        return refus(StatusCode::BAD_GATEWAY, "cloud_injoignable", s.message);
+    }
+    Json(abonnement::etat_public(&etat.config.donnees).0).into_response()
+}
+
+/// Restaure une sauvegarde en ligne sur ordre de la plate-forme (signé : voir `garder`) :
+/// même chemin que `POST /api/sauvegarde`.
+async fn restaurer_par_cloud(State(etat): State<Partage>, signee: Option<axum::Extension<abonnement::Signee>>, corps: axum::body::Bytes) -> Response {
+    if signee.is_none() {
+        return refus(StatusCode::UNAUTHORIZED, "signature_cloud_invalide", None);
+    }
+    let Some(c) = cloud::lire(&etat.config.donnees) else { return refus(StatusCode::CONFLICT, "cloud_non_rattache", None) };
+    let Some(commande) = serde_json::from_slice::<abonnement::Commande>(&corps).ok().filter(|c| abonnement::id_valide(&c.id)) else {
+        return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", None);
+    };
+    let id = commande.id;
+    let octets = match tokio::task::spawn_blocking(move || abonnement::telecharger(&c, &id)).await {
+        Ok(Ok(o)) => o,
+        Ok(Err(404)) => return introuvable(),
+        _ => return refus(StatusCode::BAD_GATEWAY, "cloud_injoignable", None),
+    };
+    let Ok(s) = serde_json::from_slice::<sauvegarde::Sauvegarde>(&octets) else { return refus(StatusCode::BAD_REQUEST, "sauvegarde_invalide", None) };
+    let r = restaurer_config(State(etat), Json(s)).await;
+    if r.status().is_success() { Json(serde_json::json!({ "restaure": true })).into_response() } else { r }
 }
 
 /// Demande un code d'appairage à la plate-forme (administrateur). Refusé sans compte :
@@ -2930,7 +3054,12 @@ fn role_session(etat: &Etat, entetes: &axum::http::HeaderMap) -> Option<acces::R
     acces::lire(&etat.config.donnees).into_iter().find(|u| u.nom == nom).map(|u| u.role)
 }
 
-async fn lire_session(State(etat): State<Partage>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
+async fn lire_session(State(etat): State<Partage>, cloud: Option<axum::Extension<eko_rip_cloud::applis::IdentiteCloud>>, entetes: axum::http::HeaderMap) -> Json<serde_json::Value> {
+    // Connecté par la plate-forme : pas de compte local à ouvrir.
+    if let Some(axum::Extension(i)) = cloud {
+        let (role, lecture_seule) = role_cloud(&i);
+        return Json(serde_json::json!({ "acces_libre": false, "utilisateur": i.email, "role": role, "cloud": { "email": i.email, "nom": i.nom, "lecture_seule": lecture_seule } }));
+    }
     let ouvert = acces::libre(&etat.config.donnees);
     let utilisateur = jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now()));
     // Accès libre : tout est permis, comme un administrateur.
@@ -2967,6 +3096,136 @@ async fn fermer_session(State(etat): State<Partage>, entetes: axum::http::Header
     }
     let cookie = format!("{}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0", acces::COOKIE);
     (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+}
+
+// --- Application mobile de suivi (iOS, Android) ---
+
+/// Code d'état d'une sortie, tel que l'API le donne.
+fn code_sortie(e: file::Etat) -> &'static str {
+    match e {
+        file::Etat::EnAttente => "en_attente",
+        file::Etat::Suspendue => "suspendue",
+        file::Etat::EnCours => "en_cours",
+        file::Etat::Terminee => "terminee",
+        file::Etat::Echec => "echec",
+        file::Etat::Annulee => "annulee",
+        file::Etat::Imbriquee => "imbriquee",
+    }
+}
+
+/// Toutes les 5 s, la file comparée à la précédente : échecs et fins vers les téléphones.
+async fn veiller_la_file(etat: Partage) {
+    loop {
+        let sorties = etat.file.lock().unwrap().sorties.clone();
+        let noms: std::collections::HashMap<String, String> = etat.machines.read().unwrap().iter().map(|m| (m.id.clone(), m.nom.clone())).collect();
+        let vues: Vec<mobile::VueSortie> = sorties
+            .iter()
+            .filter(|s| !s.archivee)
+            .map(|s| mobile::VueSortie { id: s.id, travail: s.travail, machine: &s.machine, nom: &s.nom, page: s.page, etat: code_sortie(s.etat), decoupe: s.operation() == machines::Operation::Decoupe, erreur: s.erreur.as_deref().or(s.code_erreur.as_deref()) })
+            .collect();
+        mobile::noter_file(&etat.config.donnees, &vues, &noms);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+
+/// Écran d'accueil de l'app : chaque machine avec son dernier relevé, sa sortie en cours
+/// et ce qui l'attend ; et le numéro du dernier événement (pastille « Alertes »).
+async fn etat_mobile(State(etat): State<Partage>) -> Json<serde_json::Value> {
+    let donnees = &etat.config.donnees;
+    let sorties = etat.file.lock().unwrap().sorties.clone();
+    let catalogue = etat.machines.read().unwrap().clone();
+    let machines: Vec<serde_json::Value> = catalogue
+        .iter()
+        .map(|m| {
+            let releve = mobile::etat_machine(donnees, &m.id).unwrap_or_default();
+            let a_elle = || sorties.iter().filter(|s| s.machine == m.id && !s.archivee);
+            let en_cours = a_elle().find(|s| s.etat == file::Etat::EnCours).map(|s| serde_json::json!({ "sortie": s.id, "nom": s.nom, "page": s.page, "debut": s.debut }));
+            let operations: Vec<machines::Operation> = [machines::Operation::Impression, machines::Operation::Decoupe].into_iter().filter(|&o| m.fait(o)).collect();
+            serde_json::json!({
+                "id": m.id,
+                "nom": m.nom,
+                "modele": m.modele,
+                "operations": operations,
+                "snmp": m.snmp.is_some(),
+                "joignable": releve.joignable(),
+                "releve_le": releve.releve_le,
+                "encres": releve.encres.iter().map(|(e, pc)| serde_json::json!({ "encre": e, "pourcent": pc })).collect::<Vec<_>>(),
+                "longueur_restante_m": releve.longueur_m,
+                "alertes": releve.alertes,
+                "en_cours": en_cours,
+                "en_attente": a_elle().filter(|s| s.etat == file::Etat::EnAttente).count(),
+                "suspendues": a_elle().filter(|s| s.etat == file::Etat::Suspendue).count(),
+            })
+        })
+        .collect();
+    let (_, dernier) = mobile::evenements(donnees, u64::MAX, 0);
+    Json(serde_json::json!({ "version": env!("CARGO_PKG_VERSION"), "dernier_evenement": dernier, "machines": machines }))
+}
+
+#[derive(Deserialize)]
+struct DepuisEvenement {
+    #[serde(default)]
+    depuis: u64,
+    limite: Option<usize>,
+}
+
+async fn evenements_mobiles(State(etat): State<Partage>, axum::extract::Query(q): axum::extract::Query<DepuisEvenement>) -> Json<serde_json::Value> {
+    let (evenements, dernier) = mobile::evenements(&etat.config.donnees, q.depuis, q.limite.unwrap_or(50).min(200));
+    Json(serde_json::json!({ "evenements": evenements, "dernier": dernier }))
+}
+
+#[derive(Deserialize)]
+struct Inscription {
+    jeton: String,
+    #[serde(default)]
+    nom: String,
+    #[serde(default)]
+    plateforme: String,
+    #[serde(default)]
+    fins: bool,
+}
+
+/// Inscrit un téléphone pour les notifications, au nom du compte connecté.
+async fn inscrire_appareil(State(etat): State<Partage>, cloud: Option<axum::Extension<eko_rip_cloud::applis::IdentiteCloud>>, entetes: axum::http::HeaderMap, Json(i): Json<Inscription>) -> Response {
+    if !mobile::jeton_valide(&i.jeton) {
+        return refus(StatusCode::BAD_REQUEST, "jeton_push_invalide", None);
+    }
+    // Par le cloud : l'e-mail du compte de la plate-forme, gardé tant que le téléphone se
+    // réinscrit (voir `mobile::DUREE_INSCRIPTION_CLOUD`) ; sinon le compte local de la session.
+    let (utilisateur, par_cloud) = match cloud {
+        Some(axum::Extension(c)) => (Some(c.email), true),
+        None => (jeton_requete(&entetes).and_then(|j| etat.sessions.lock().unwrap().utilisateur(&j, std::time::Instant::now())), false),
+    };
+    let a = mobile::Appareil { jeton: i.jeton, nom: i.nom, plateforme: i.plateforme, utilisateur, fins: i.fins, inscrit_le: maintenant(), cloud: par_cloud };
+    match mobile::inscrire(&etat.config.donnees, a) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+#[derive(Deserialize)]
+struct JetonPush {
+    jeton: String,
+}
+
+async fn retirer_appareil(State(etat): State<Partage>, Json(j): Json<JetonPush>) -> Response {
+    match mobile::retirer(&etat.config.donnees, &j.jeton) {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
+}
+
+/// Notification d'essai, vers un téléphone inscrit seulement (le serveur ne relaie pas
+/// vers n'importe quel jeton).
+async fn essai_mobile(State(etat): State<Partage>, Json(j): Json<JetonPush>) -> Response {
+    if !mobile::appareils(&etat.config.donnees).iter().any(|a| a.jeton == j.jeton) {
+        return refus(StatusCode::NOT_FOUND, "appareil_inconnu", None);
+    }
+    match tokio::task::spawn_blocking(move || mobile::essai(&j.jeton)).await {
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Err(e)) => refus(StatusCode::BAD_GATEWAY, "envoi_push_echoue", Some(e)),
+        Err(e) => refus(StatusCode::INTERNAL_SERVER_ERROR, "erreur_interne", Some(e.to_string())),
+    }
 }
 
 async fn lister_reglages(State(etat): State<Partage>) -> Json<Vec<reglages::Reglage>> {
@@ -5318,7 +5577,16 @@ async fn executer(etat: Partage, s: file::Sortie) {
     // avant, pour que le pont ERP la voie même retirée.
     if s.operation() == machines::Operation::Decoupe {
         let _ = f.ecrire(&etat.config.donnees);
-        f.apres_coupe(s.id, decoupe::reglages().apres_coupe);
+        let politique = decoupe::reglages().apres_coupe;
+        // Archivée ou retirée tout de suite : la veille de la file ne la verrait pas finie.
+        if politique != file::ApresCoupe::Rien
+            && let Some(x) = f.sorties.iter().find(|x| x.id == s.id && x.etat == file::Etat::Terminee)
+        {
+            let noms: std::collections::HashMap<String, String> = etat.machines.read().unwrap().iter().map(|m| (m.id.clone(), m.nom.clone())).collect();
+            let vue = mobile::VueSortie { id: x.id, travail: x.travail, machine: &x.machine, nom: &x.nom, page: x.page, etat: "terminee", decoupe: true, erreur: None };
+            mobile::noter_fin(&etat.config.donnees, &vue, &noms);
+        }
+        f.apres_coupe(s.id, politique);
     }
     let _ = f.ecrire(&etat.config.donnees);
     drop(f);
@@ -5790,7 +6058,244 @@ mod tests {
             // Le reste suit les règles habituelles : session demandée.
             assert_eq!(par_cloud("GET", "/api/travaux").await.status(), StatusCode::UNAUTHORIZED);
             assert_eq!(par_cloud("GET", "/api/cloud").await.status(), StatusCode::UNAUTHORIZED);
+
+            // Personne connectée par la plate-forme (« Se connecter au cloud ») : pas de session
+            // locale, son rôle sur le site décide ; l'en-tête n'est cru que venu par le tunnel.
+            let identite = |role: &str| eko_rip_cloud::base64url(serde_json::json!({ "compte": 1, "email": "chef@atelier.fr", "nom": "Chef", "role": role }).to_string().as_bytes());
+            let avec = |methode: &str, uri: &str, role: &str, tunnel: bool| {
+                let mut r = Request::builder().method(methode).uri(uri).header(header::USER_AGENT, "EKO-RIP-Client/1.0").header("x-eko-cloud-identite", identite(role)).body(Body::empty()).unwrap();
+                if tunnel {
+                    r.extensions_mut().insert(cloud::ParCloud);
+                }
+                let e = e.clone();
+                async move { routes(e).oneshot(r).await.unwrap() }
+            };
+            assert_eq!(avec("GET", "/api/travaux", "admin", true).await.status(), StatusCode::OK);
+            assert_eq!(avec("GET", "/api/travaux", "admin", false).await.status(), StatusCode::UNAUTHORIZED, "en local, l'en-tête est ignoré");
+            let r = avec("GET", "/api/session", "operateur", true).await;
+            let session: serde_json::Value = serde_json::from_slice(&axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap()).unwrap();
+            assert_eq!((session["utilisateur"].as_str(), session["role"].as_str(), session["cloud"]["lecture_seule"].as_bool()), (Some("chef@atelier.fr"), Some("operateur"), Some(false)));
+            let r = avec("POST", "/api/tarifs", "operateur", true).await;
+            assert_eq!(code(r).await, "admin_requis");
+            let r = avec("POST", "/api/travaux/x/relancer", "lecture", true).await;
+            assert_eq!(code(r).await, "lecture_seule");
+            assert_eq!(avec("GET", "/api/travaux", "lecture", true).await.status(), StatusCode::OK);
+            // Lecture seule : le téléphone peut quand même s'inscrire aux notifications.
+            let r = avec("POST", "/api/mobile/appareils", "lecture", true).await;
+            assert_ne!(r.status(), StatusCode::FORBIDDEN, "inscription mobile permise en lecture seule");
+            // Toujours fermé par le cloud, même identifié.
+            assert_eq!(code(avec("POST", "/api/pont", "admin", true).await).await, "ferme_par_cloud");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
+        }
+
+        /// Fausse plate-forme de l'abonnement : enregistre les requêtes reçues, répond selon
+        /// `statut_sauvegarde` et `archive`.
+        #[derive(Default)]
+        struct FaussePlateforme {
+            recu: std::sync::Mutex<Vec<(String, axum::http::HeaderMap, Vec<u8>)>>,
+            statut_sauvegarde: std::sync::atomic::AtomicU16,
+            sauvegardes_permises: std::sync::atomic::AtomicBool,
+            archive: std::sync::Mutex<Vec<u8>>,
+        }
+
+        async fn fausse_plateforme() -> (Arc<FaussePlateforme>, String) {
+            use axum::extract::State as Etat;
+            use std::sync::atomic::Ordering::Relaxed;
+            let f = Arc::new(FaussePlateforme::default());
+            f.statut_sauvegarde.store(201, Relaxed);
+            f.sauvegardes_permises.store(true, Relaxed);
+            let app = axum::Router::new()
+                .route("/api/site/inventaire", axum::routing::post(|Etat(f): Etat<Arc<FaussePlateforme>>, h: axum::http::HeaderMap, c: axum::body::Bytes| async move {
+                    f.recu.lock().unwrap().push(("inventaire".into(), h, c.to_vec()));
+                    Json(serde_json::json!({ "offre": "atelier", "sauvegardes": f.sauvegardes_permises.load(Relaxed), "depassement": true }))
+                }))
+                .route("/api/site/sauvegardes", axum::routing::post(|Etat(f): Etat<Arc<FaussePlateforme>>, h: axum::http::HeaderMap, c: axum::body::Bytes| async move {
+                    f.recu.lock().unwrap().push(("sauvegarde".into(), h, c.to_vec()));
+                    let statut = StatusCode::from_u16(f.statut_sauvegarde.load(Relaxed)).unwrap();
+                    let erreur = match statut.as_u16() { 402 => "offre", 413 => "quota", 409 => "identique", _ => "" };
+                    (statut, Json(serde_json::json!({ "id": "sauv1", "erreur": erreur })))
+                }))
+                .route("/api/site/sauvegardes/{id}", get(|Etat(f): Etat<Arc<FaussePlateforme>>, h: axum::http::HeaderMap, Chemin(id): Chemin<String>| async move {
+                    f.recu.lock().unwrap().push((format!("telechargement {id}"), h, vec![]));
+                    if id == "absente" { return StatusCode::NOT_FOUND.into_response(); }
+                    f.archive.lock().unwrap().clone().into_response()
+                }))
+                .with_state(f.clone());
+            let ecoute = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}", ecoute.local_addr().unwrap());
+            tokio::spawn(async move { axum::serve(ecoute, app).await.unwrap() });
+            (f, base)
+        }
+
+        async fn json(r: Response) -> serde_json::Value {
+            serde_json::from_slice(&axum::body::to_bytes(r.into_body(), 1 << 26).await.unwrap()).unwrap_or_default()
+        }
+
+        async fn code(r: Response) -> String {
+            json(r).await["code"].as_str().unwrap_or_default().to_string()
+        }
+
+        fn rattacher(e: &Partage, base: &str) {
+            std::fs::write(cloud::fichier(&e.config.donnees), serde_json::to_vec(&cloud::Config { url: base.into(), site: "s1".into(), cle: "cle-secrete".into() }).unwrap()).unwrap();
+        }
+
+        /// Inventaire : imprimantes et découpeurs envoyés avec les identifiants du tunnel ;
+        /// la réponse (offre, dépassement) est exposée par `GET /api/cloud`.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn abonnement_inventaire_envoye_a_la_plateforme() {
+            let e = etat("abo-inventaire");
+            let (f, base) = fausse_plateforme().await;
+            rattacher(&e, &base);
+            let liste = e.machines.read().unwrap().clone();
+            assert!(abonnement::envoyer_inventaire(&e.config.donnees, liste.clone()).await);
+            {
+                let recu = f.recu.lock().unwrap();
+                let (_, h, corps) = recu.iter().find(|r| r.0 == "inventaire").expect("inventaire reçu");
+                assert_eq!(h["authorization"], "Bearer s1.cle-secrete");
+                let v: serde_json::Value = serde_json::from_slice(corps).unwrap();
+                assert_eq!(v["version"], env!("CARGO_PKG_VERSION"));
+                let nb = |c: &str| v[c].as_array().unwrap().len();
+                assert_eq!(nb("imprimantes"), liste.iter().filter(|m| m.modele.imprime()).count());
+                assert_eq!(nb("imprimantes") + nb("decoupeurs"), liste.len());
+            }
+            let c = json(appel(&e, "GET", "/api/cloud", None, None).await).await;
+            assert_eq!(c["abonnement"], serde_json::json!({ "offre": "atelier", "sauvegardes": true, "depassement": true }));
+            assert_eq!(c["sauvegarde"], serde_json::json!({ "derniere": null, "etat": "ok", "message": null }));
+        }
+
+        /// Sauvegarde en ligne : en-têtes, empreinte, pas de renvoi si rien n'a changé, 402 (plus
+        /// d'essai automatique jusqu'à un inventaire favorable), 413, 409.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn abonnement_sauvegarde_poussee_et_refus_de_l_offre() {
+            use std::sync::atomic::Ordering::Relaxed;
+            let e = etat("abo-sauvegarde");
+            let (f, base) = fausse_plateforme().await;
+            let envois = || f.recu.lock().unwrap().iter().filter(|r| r.0 == "sauvegarde").count();
+            // Non rattaché : rien ne part, et la route locale refuse.
+            assert_eq!(abonnement::sauvegarder(&e, "demande").await.derniere, None);
+            assert_eq!(envois(), 0);
+            assert_eq!(appel(&e, "POST", "/api/cloud/sauvegarder", None, None).await.status(), StatusCode::CONFLICT);
+            rattacher(&e, &base);
+
+            let r = appel(&e, "POST", "/api/cloud/sauvegarder", None, None).await;
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(json(r).await["etat"], "ok");
+            {
+                let recu = f.recu.lock().unwrap();
+                let (_, h, corps) = recu.iter().find(|r| r.0 == "sauvegarde").unwrap();
+                assert_eq!(h["authorization"], "Bearer s1.cle-secrete");
+                assert_eq!(h["x-eko-motif"], "demande");
+                assert_eq!(h["content-type"], "application/octet-stream");
+                assert_eq!(h["x-eko-empreinte"].to_str().unwrap(), abonnement::sha256_octets(corps));
+                let s: sauvegarde::Sauvegarde = serde_json::from_slice(corps).unwrap();
+                assert_eq!(s.format, sauvegarde::FORMAT);
+            }
+            let derniere = json(appel(&e, "GET", "/api/cloud", None, None).await).await["sauvegarde"]["derniere"].as_u64();
+            assert!(derniere.is_some());
+            // Rien n'a changé : un « changement » ne renvoie rien ; la nuit renvoie quand même
+            // (la plate-forme répond 409 identique et note la nuit), et c'est un succès.
+            abonnement::sauvegarder(&e, "changement").await;
+            assert_eq!(envois(), 1);
+            f.statut_sauvegarde.store(409, Relaxed);
+            assert_eq!(abonnement::sauvegarder(&e, "nuit").await.etat, "ok");
+            assert_eq!(envois(), 2);
+            assert_eq!(f.recu.lock().unwrap().last().unwrap().1["x-eko-motif"], "nuit");
+            f.statut_sauvegarde.store(201, Relaxed);
+            abonnement::sauvegarder(&e, "changement").await;
+            assert_eq!(envois(), 2);
+            // Un changement de configuration est envoyé.
+            assert!(appel(&e, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Coupe", "demande": { "mode": "decouper" } }))).await.status().is_success());
+            abonnement::sauvegarder(&e, "changement").await;
+            assert_eq!(envois(), 3);
+            assert_eq!(f.recu.lock().unwrap().last().unwrap().1["x-eko-motif"], "changement");
+
+            // 402 : l'offre n'inclut pas la sauvegarde ; plus d'essai automatique.
+            f.statut_sauvegarde.store(402, Relaxed);
+            let s = abonnement::sauvegarder(&e, "demande").await;
+            assert_eq!((s.etat.as_str(), s.sans_offre), ("offre", true));
+            assert_eq!(envois(), 4);
+            assert!(appel(&e, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Autre", "demande": { "mode": "decouper" } }))).await.status().is_success());
+            abonnement::sauvegarder(&e, "nuit").await;
+            assert_eq!(envois(), 4, "pas d'essai tant que l'inventaire ne l'autorise pas");
+            // Inventaire favorable : l'essai reprend ; 413 = quota.
+            f.statut_sauvegarde.store(413, Relaxed);
+            assert!(abonnement::envoyer_inventaire(&e.config.donnees, vec![]).await);
+            assert!(!abonnement::suivi(&e.config.donnees).sans_offre);
+            assert_eq!(abonnement::sauvegarder(&e, "nuit").await.etat, "quota");
+            assert_eq!(envois(), 5);
+            // 409 : identique chez la plate-forme, c'est bon.
+            f.statut_sauvegarde.store(409, Relaxed);
+            assert_eq!(abonnement::sauvegarder(&e, "demande").await.etat, "ok");
+            // Inventaire qui annonce une offre sans sauvegarde.
+            f.sauvegardes_permises.store(false, Relaxed);
+            abonnement::envoyer_inventaire(&e.config.donnees, vec![]).await;
+            let c = json(appel(&e, "GET", "/api/cloud", None, None).await).await;
+            assert_eq!((c["sauvegarde"]["etat"].as_str(), c["abonnement"]["sauvegardes"].as_bool()), (Some("offre"), Some(false)));
+        }
+
+        /// Restauration commandée par la plate-forme : signature HMAC, fenêtre de 300 s, rejeu.
+        #[tokio::test(flavor = "multi_thread")]
+        async fn abonnement_restauration_signee() {
+            // Source : un serveur avec un réglage, dont l'archive est servie par la plate-forme.
+            let source = etat("abo-restaure-source");
+            assert!(appel(&source, "POST", "/api/reglages", None, Some(serde_json::json!({ "nom": "Coupe", "demande": { "mode": "decouper" } }))).await.status().is_success());
+            let archive = axum::body::to_bytes(appel(&source, "GET", "/api/sauvegarde", None, None).await.into_body(), 1 << 26).await.unwrap().to_vec();
+            let (f, base) = fausse_plateforme().await;
+            *f.archive.lock().unwrap() = archive;
+            // Cible : un serveur avec un compte, rattaché.
+            let e = etat("abo-restaure-cible");
+            acces::ecrire(&e.config.donnees, &[acces::Utilisateur { role: acces::Role::Admin, nom: "chef".into(), hachage: acces::hacher("phrase-de-passe-longue").unwrap() }]).unwrap();
+            rattacher(&e, &base);
+            let envoyer = |entete: Option<String>, corps: &str, par_cloud: bool| {
+                let mut r = Request::builder().method("POST").uri("/api/cloud/restaurer").header(header::CONTENT_TYPE, "application/json");
+                if let Some(h) = entete {
+                    r = r.header(abonnement::ENTETE_SERVICE, h);
+                }
+                let mut r = r.body(Body::from(corps.to_string())).unwrap();
+                if par_cloud {
+                    r.extensions_mut().insert(cloud::ParCloud);
+                }
+                routes(e.clone()).oneshot(r)
+            };
+            let corps = r#"{"id":"sauv1"}"#;
+            let maintenant = maintenant();
+            let reglages = || reglages::lire(&e.config.donnees).len();
+            assert_eq!(reglages(), 0);
+
+            // Sans signature, mauvaise clé, corps modifié, trop vieille ou trop neuve : 401, rien ne change.
+            for entete in [None, Some(abonnement::signature("autre-cle", maintenant, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant, br#"{"id":"autre"}"#)), Some(abonnement::signature("cle-secrete", maintenant - 301, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant + 301, corps.as_bytes())), Some("t=1,v1=zz".to_string())] {
+                let r = envoyer(entete.clone(), corps, true).await.unwrap();
+                assert_eq!(r.status(), StatusCode::UNAUTHORIZED, "{entete:?}");
+                assert_eq!(code(r).await, "signature_cloud_invalide");
+            }
+            assert_eq!(reglages(), 0);
+            assert!(f.recu.lock().unwrap().iter().all(|r| !r.0.starts_with("telechargement")));
+
+            // Signature valide hors tunnel : la marque du tunnel manque, la session aussi.
+            let valide = abonnement::signature("cle-secrete", maintenant, corps.as_bytes());
+            assert!(envoyer(Some(valide.clone()), corps, false).await.unwrap().status().is_client_error());
+            assert_eq!(reglages(), 0);
+
+            // Signature valide par le tunnel (ni session ni agent de client) : restauré.
+            let r = envoyer(Some(valide.clone()), corps, true).await.unwrap();
+            assert_eq!(r.status(), StatusCode::OK);
+            assert_eq!(json(r).await, serde_json::json!({ "restaure": true }));
+            assert_eq!(reglages(), 1);
+            {
+                let recu = f.recu.lock().unwrap();
+                let (_, h, _) = recu.iter().find(|r| r.0 == "telechargement sauv1").unwrap();
+                assert_eq!(h["authorization"], "Bearer s1.cle-secrete");
+            }
+            // Rejeu de la même commande : refusé.
+            assert_eq!(envoyer(Some(valide), corps, true).await.unwrap().status(), StatusCode::UNAUTHORIZED);
+
+            // Archive inconnue de la plate-forme, identifiant malformé.
+            let c = r#"{"id":"absente"}"#;
+            let r = envoyer(Some(abonnement::signature("cle-secrete", maintenant, c.as_bytes())), c, true).await.unwrap();
+            assert_eq!(r.status(), StatusCode::NOT_FOUND);
+            let c = r#"{"id":"../x"}"#;
+            let r = envoyer(Some(abonnement::signature("cle-secrete", maintenant, c.as_bytes())), c, true).await.unwrap();
+            assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         }
 
         /// Cloud de bout en bout : vraie plate-forme sur un port local, vrai tunnel ouvert par
@@ -5850,7 +6355,7 @@ mod tests {
             })
             .await
             .unwrap();
-            assert_eq!(apres, 502);
+            assert_eq!(apres, 503);
             assert_eq!(cloud::etat_public(&e.config.donnees)["etat"], "inactif");
             std::fs::remove_dir_all(&e.config.donnees).unwrap();
         }

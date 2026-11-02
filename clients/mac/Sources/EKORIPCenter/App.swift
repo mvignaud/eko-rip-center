@@ -2,6 +2,12 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
+/// Adresses du menu Aide.
+enum AdressesAide {
+    static let documentation = URL(string: "https://e-ko.rip/documentation/clients/#client-mac")!
+    static let guide = URL(string: "https://e-ko.rip/documentation/utilisation/")!
+}
+
 @main
 @MainActor
 struct EKORIPCenterApp: App {
@@ -24,6 +30,9 @@ struct EKORIPCenterApp: App {
                     .disabled(etat.phase != .connecte)
             }
             CommandGroup(replacing: .help) {
+                Button("Documentation E-KO RIP Center") { NSWorkspace.shared.open(AdressesAide.documentation) }
+                Button("Guide d'utilisation") { NSWorkspace.shared.open(AdressesAide.guide) }
+                Divider()
                 Button("Signaler un problème…") { etat.signalementOuvert = true }
                     .disabled(etat.phase != .connecte)
             }
@@ -31,16 +40,20 @@ struct EKORIPCenterApp: App {
                 Button("Actualiser") { Task { await etat.rafraichir() } }
                     .keyboardShortcut("r")
                     .disabled(etat.phase != .connecte)
-                Button("Administration…") {
+                // La page d'administration est une page web : le jeton du cloud ne peut pas y
+                // passer. En mode cloud, le menu est grisé avec sa raison.
+                Button(etat.siteCloud == nil ? "Administration…" : "Administration… (\(Libelles.cloudAdminIndisponible.lowercased()))") {
                     if let racine = etat.api?.racine { Administration.ouvrir(racine: racine) }
                 }
                     .keyboardShortcut(",", modifiers: [.command, .option])
-                    .disabled(etat.phase != .connecte)
+                    .disabled(etat.phase != .connecte || etat.siteCloud != nil)
                 Divider()
                 Button("Changer de serveur…") { etat.changerServeur() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
                 Button("Se déconnecter") { Task { await etat.deconnecter() } }
-                    .disabled(etat.phase != .connecte || etat.session?.accesLibre == true)
+                    .disabled(etat.phase != .connecte || etat.siteCloud != nil || etat.session?.accesLibre == true)
+                Button(Libelles.cloudDeconnexion) { Task { await etat.deconnecterCloud() } }
+                    .disabled(etat.cloudCompte == nil)
             }
         }
     }
@@ -109,5 +122,14 @@ final class DelegueApp: NSObject, NSApplicationDelegate, UNUserNotificationCente
     /// Affiche aussi la notification quand l'application est au premier plan.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         [.banner, .sound]
+    }
+
+    /// Clic sur une notification du cloud : ouvre le site concerné, sinon le lien.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let infos = response.notification.request.content.userInfo
+        let site = infos["site"] as? String
+        let lien = infos["lien"] as? String
+        guard site?.isEmpty == false || lien?.isEmpty == false else { return }
+        await Etat.partage.ouvrirNotificationCloud(site: site, lien: lien)
     }
 }

@@ -2,14 +2,15 @@
 //! Google, Facebook), « Mes sites » (rattacher un serveur par son code, retirer), compte,
 //! espace super-administrateur (clés Google / Facebook, comptes, sites), pages légales.
 //!
-//! Pages rendues côté serveur, sans script. Toute requête POST doit venir de la plate-forme
+//! Pages rendues côté serveur, sans script (sauf l'inscription aux notifications du navigateur,
+//! qui a besoin de l'API Push). Toute requête POST doit venir de la plate-forme
 //! elle-même (`Origin`, ou à défaut `Referer`) et, une fois connecté, porter le jeton
 //! anti-falsification de la session.
 
 use crate::base::{self, Compte, Connexion};
 use crate::relais::Partage;
 use crate::{appairage, sites};
-use axum::Form;
+use axum::{Form, Json};
 use axum::extract::{Path as Chemin, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{Html, IntoResponse, Redirect, Response};
@@ -24,10 +25,11 @@ const COOKIE_OAUTH: &str = "plateforme_oauth";
 fn nom_cookie(r: &Partage, nom: &'static str) -> String {
     if https(r) { format!("__Host-{nom}") } else { nom.to_string() }
 }
-/// Sites qu'un compte peut posséder (service gratuit).
-pub const MAX_SITES: i64 = 10;
+/// Plafond technique de sites par compte (anti-abus). La limite de l'offre, elle, ne bloque
+/// pas le rattachement : les sites en trop comptent en dépassement (grâce de 14 jours).
+pub const MAX_SITES: i64 = 50;
 
-type Champs = Form<HashMap<String, String>>;
+pub(crate) type Champs = Form<HashMap<String, String>>;
 
 pub fn echapper(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
@@ -38,29 +40,47 @@ pub fn encoder(s: &str) -> String {
     s.bytes().map(|b| if b.is_ascii_alphanumeric() || b"-._~".contains(&b) { (b as char).to_string() } else { format!("%{b:02X}") }).collect()
 }
 
+/// Inverse d'`encoder` (séquences `%XX` ; invalide : texte vide).
+fn decoder(s: &str) -> String {
+    let o = s.as_bytes();
+    let mut v = Vec::with_capacity(o.len());
+    let mut i = 0;
+    while i < o.len() {
+        if o[i] == b'%' {
+            let Some(b) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok()) else { return String::new() };
+            v.push(b);
+            i += 3;
+        } else {
+            v.push(o[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(v).unwrap_or_default()
+}
+
 fn cookie(entetes: &HeaderMap, nom: &str) -> Option<String> {
     entetes.get_all(header::COOKIE).iter().filter_map(|v| v.to_str().ok()).flat_map(|v| v.split(';')).filter_map(|c| c.trim().split_once('=')).find(|(n, _)| *n == nom).map(|(_, v)| v.to_string())
 }
 
 /// Adresse du visiteur : dernière entrée de `X-Forwarded-For` (posée par Caddy).
-fn ip(entetes: &HeaderMap) -> String {
+pub(crate) fn ip(entetes: &HeaderMap) -> String {
     entetes.get("x-forwarded-for").and_then(|v| v.to_str().ok()).and_then(|v| v.rsplit(',').next()).map(|v| v.trim().to_string()).unwrap_or_else(|| "local".into())
 }
 
-struct Session {
-    compte: Compte,
-    csrf: String,
+pub(crate) struct Session {
+    pub(crate) compte: Compte,
+    pub(crate) csrf: String,
     jeton: String,
 }
 
-fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
+pub(crate) fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
     let jeton = cookie(entetes, &nom_cookie(r, COOKIE_SESSION))?;
     let (compte, csrf) = base::session(&r.base(), &jeton).ok().flatten()?;
     Some(Session { compte, csrf, jeton })
 }
 
 /// Requête POST venue d'une page de la plate-forme.
-fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
+pub(crate) fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
     let url = &r.config.url_publique;
     match entetes.get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         Some(o) => o == url,
@@ -68,7 +88,7 @@ fn origine_ok(r: &Partage, entetes: &HeaderMap) -> bool {
     }
 }
 
-fn csrf_ok(s: &Session, f: &HashMap<String, String>) -> bool {
+pub(crate) fn csrf_ok(s: &Session, f: &HashMap<String, String>) -> bool {
     f.get("csrf").is_some_and(|c| crate::egal_constant(c, &s.csrf))
 }
 
@@ -144,7 +164,7 @@ h2 { font-size: 13px; font-weight: 600; margin: 1.3rem 0 .5rem; }
 p { margin: .5rem 0; }
 ul { padding-left: 1.2rem; }
 label { display: block; margin: .75rem 0; font-size: 13px; font-weight: 500; }
-input[type=text], input[type=email], input[type=password] { display: block; width: 100%; margin-top: .3rem; min-height: 30px; padding: .3rem .6rem; border: .5px solid var(--champ-bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit; font-size: 14px; box-shadow: inset 0 .5px 1px rgba(0,0,0,.06); }
+input[type=text], input[type=email], input[type=password], select { display: block; width: 100%; margin-top: .3rem; min-height: 30px; padding: .3rem .6rem; border: .5px solid var(--champ-bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit; font-size: 14px; box-shadow: inset 0 .5px 1px rgba(0,0,0,.06); }
 input:focus-visible { outline: 3.5px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 0; border-color: var(--accent); }
 input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: .15rem 0 0; flex: none; }
 label.case { font-weight: normal; display: flex; gap: .5rem; align-items: flex-start; }
@@ -198,9 +218,11 @@ const ICONE_SITES: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="curren
 const ICONE_COMPTE: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 15.3c1.1-1.8 2.8-2.7 4.8-2.7s3.7.9 4.8 2.7"/></svg>"#;
 const ICONE_ADMIN: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5 16 5v4.6c0 3.6-2.5 6.6-6 7.9-3.5-1.3-6-4.3-6-7.9V5z"/><path d="m7.3 10 1.9 1.9 3.6-3.8"/></svg>"#;
 
-const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/confidentialite">Confidentialité</a>"#;
+const ICONE_ABONNEMENT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M2.5 8h15"/><path d="M5.5 12.2h3"/></svg>"#;
 
-fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
+const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a>"#;
+
+pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     let tete = format!(r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head>"##, echapper(titre));
     let legal = corps.contains(r#"class="carte texte""#);
     let html = match s {
@@ -208,8 +230,9 @@ fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
             let entree = |lien: &str, nom: &str, icone: &str| format!(r#"<a class="entree{}" href="{lien}"{}>{icone}<span>{nom}</span></a>"#, if titre == nom { " active" } else { "" }, if titre == nom { r#" aria-current="page""# } else { "" });
             let admin = if s.compte.super_admin { format!(r#"<div class="rubrique">Plate-forme</div>{}"#, entree("/admin", "Administration", ICONE_ADMIN)) } else { String::new() };
             format!(
-                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
+                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
                 entree("/sites", "Mes sites", ICONE_SITES),
+                entree("/abonnement", "Abonnement", ICONE_ABONNEMENT),
                 entree("/compte", "Mon compte", ICONE_COMPTE),
                 echapper(&s.csrf),
                 echapper(titre)
@@ -223,20 +246,43 @@ fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     Html(html)
 }
 
-fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
+pub(crate) fn erreur_page(r: &Partage, s: Option<&Session>, texte: &str) -> Response {
     let _ = r;
     (StatusCode::BAD_REQUEST, page("Erreur", s, &format!(r#"<div class="carte"><p class="erreur">{}</p><p><a href="/">Retour</a></p></div>"#, echapper(texte)))).into_response()
 }
 
-fn refuse_origine() -> Response {
+// Pour l'autorisation des apps (`applis`).
+pub(crate) fn session_ouverte(r: &Partage, h: &HeaderMap) -> Option<(Compte, String)> {
+    session(r, h).map(|s| (s.compte, s.csrf))
+}
+
+pub(crate) fn page_erreur(r: &Partage, h: &HeaderMap, texte: &str) -> Response {
+    let s = session(r, h);
+    erreur_page(r, s.as_ref(), texte)
+}
+
+pub(crate) fn page_publique(titre: &str, r: &Partage, h: &HeaderMap, corps: &str) -> Response {
+    let s = session(r, h);
+    page(titre, s.as_ref(), corps).into_response()
+}
+
+pub(crate) fn origine_acceptee(r: &Partage, h: &HeaderMap) -> bool {
+    origine_ok(r, h)
+}
+
+pub(crate) fn adresse_visiteur(h: &HeaderMap) -> String {
+    ip(h)
+}
+
+pub(crate) fn refuse_origine() -> Response {
     (StatusCode::FORBIDDEN, "Requête refusée : elle ne vient pas de la plate-forme.").into_response()
 }
 
-fn champ(f: &HashMap<String, String>, nom: &str) -> String {
+pub(crate) fn champ(f: &HashMap<String, String>, nom: &str) -> String {
     f.get(nom).map(|v| v.trim().to_string()).unwrap_or_default()
 }
 
-fn hidden_csrf(s: &Session) -> String {
+pub(crate) fn hidden_csrf(s: &Session) -> String {
     format!(r#"<input type="hidden" name="csrf" value="{}">"#, echapper(&s.csrf))
 }
 
@@ -249,19 +295,20 @@ pub async fn accueil(State(r): State<Partage>, h: HeaderMap) -> Response {
     page(
         "Accueil",
         None,
-        r#"<div class="carte"><h1>Vos serveurs RIP, partout</h1><p>E-KO RIP Cloud relie le serveur E-KO RIP Center de votre atelier à cette plate-forme par une connexion sortante sécurisée. Hors de l'atelier, vos postes et l'application mobile y accèdent <strong>sans VPN et sans ouvrir de port</strong>.</p><p>Service gratuit.</p><p class="ligne"><a class="bouton" href="/inscription">Créer un compte</a><a class="bouton discret" href="/connexion">Se connecter</a></p></div>"#,
+        r#"<div class="carte"><h1>Vos serveurs RIP, partout</h1><p>E-KO RIP Cloud relie le serveur E-KO RIP Center de votre atelier à cette plate-forme par une connexion sortante sécurisée. Hors de l'atelier, vos postes et l'application mobile y accèdent <strong>sans VPN et sans ouvrir de port</strong>.</p><p>Offre Gratuite pour toujours (1 site, 1 imprimante et 1 découpeur, sauvegarde en ligne de la dernière version). Offres payantes À la machine, Atelier et Pro pour plus de machines, plus de sites et l'historique des sauvegardes : <a href="/abonnement/offres">voir les offres</a>.</p><p class="ligne"><a class="bouton" href="/inscription">Créer un compte</a><a class="bouton discret" href="/connexion">Se connecter</a></p></div>"#,
     )
     .into_response()
 }
 
-fn boutons_fournisseurs(r: &Partage, verbe: &str) -> String {
+fn boutons_fournisseurs(r: &Partage, verbe: &str, suite: &str) -> String {
     let b = r.base();
+    let suite = if suite.is_empty() || suite == "/sites" { String::new() } else { format!("?suite={}", encoder(suite)) };
     let mut html = String::new();
     if base::reglage(&b, "google_client_id").ok().flatten().is_some() && base::reglage(&b, "google_secret").ok().flatten().is_some() {
-        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/google">{verbe} avec Google</a>"#));
+        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/google{suite}">{verbe} avec Google</a>"#));
     }
     if base::reglage(&b, "facebook_app_id").ok().flatten().is_some() && base::reglage(&b, "facebook_secret").ok().flatten().is_some() {
-        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/facebook">{verbe} avec Facebook</a>"#));
+        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/facebook{suite}">{verbe} avec Facebook</a>"#));
     }
     if html.is_empty() { String::new() } else { format!(r#"<div class="fournisseurs">{html}</div><p class="meta">En continuant avec Google ou Facebook, vous acceptez les <a href="/cgu">CGU</a> et la <a href="/confidentialite">politique de confidentialité</a>.</p>"#) }
 }
@@ -270,7 +317,7 @@ fn formulaire_inscription(r: &Partage, erreur: &str, email: &str, nom: &str) -> 
     format!(
         r#"<div class="carte"><h1>Créer un compte</h1>{}{}<form method="post" action="/inscription"><label>Nom ou atelier<input type="text" name="nom" required maxlength="80" value="{}"></label><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><label>Mot de passe (10 caractères au moins)<input type="password" name="mot_de_passe" required minlength="10" autocomplete="new-password"></label><label class="case"><input type="checkbox" name="cgu" value="1" required> <span>J'accepte les <a href="/cgu">conditions générales d'utilisation</a> et la <a href="/confidentialite">politique de confidentialité</a>.</span></label><button type="submit">Créer mon compte</button></form><p class="meta">Déjà inscrit ? <a href="/connexion">Se connecter</a></p></div>"#,
         if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
-        boutons_fournisseurs(r, "S'inscrire"),
+        boutons_fournisseurs(r, "S'inscrire", ""),
         echapper(nom),
         echapper(email)
     )
@@ -307,17 +354,25 @@ pub async fn inscrire(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -
     let hachage = tokio::task::spawn_blocking(move || base::hacher(&mdp)).await.expect("hachage");
     let cree = base::creer_compte(&r.base(), &email, &nom, Some(&hachage));
     match cree {
-        Ok(Some(id)) => connecte(&r, id, "/sites"),
+        Ok(Some(id)) => {
+            envoyer_confirmation(&r, id, &email, &nom);
+            connecte(&r, id, "/sites")
+        }
         Ok(None) => (StatusCode::CONFLICT, page("Créer un compte", None, &formulaire_inscription(&r, "Un compte existe déjà avec cet e-mail : se connecter.", &email, &nom))).into_response(),
         Err(_) => erreur_page(&r, None, "Service momentanément indisponible."),
     }
 }
 
 fn formulaire_connexion(r: &Partage, erreur: &str, email: &str, suite: &str) -> String {
+    formulaire_connexion_info(r, erreur, "", email, suite)
+}
+
+fn formulaire_connexion_info(r: &Partage, erreur: &str, info: &str, email: &str, suite: &str) -> String {
     format!(
-        r#"<div class="carte"><h1>Se connecter</h1>{}{}<form method="post" action="/connexion"><input type="hidden" name="suite" value="{}"><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><label>Mot de passe<input type="password" name="mot_de_passe" required autocomplete="current-password"></label><button type="submit">Se connecter</button></form><p class="meta">Pas encore de compte ? <a href="/inscription">Créer un compte</a></p></div>"#,
+        r#"<div class="carte"><h1>Se connecter</h1>{}{}{}<form method="post" action="/connexion"><input type="hidden" name="suite" value="{}"><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><label>Mot de passe<input type="password" name="mot_de_passe" required autocomplete="current-password"></label><button type="submit">Se connecter</button></form><p class="meta"><a href="/mot-de-passe/oublie">Mot de passe oublié ?</a></p><p class="meta">Pas encore de compte ? <a href="/inscription">Créer un compte</a></p></div>"#,
         if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
-        boutons_fournisseurs(r, "Continuer"),
+        if info.is_empty() { String::new() } else { format!(r#"<p class="ok">{}</p>"#, echapper(info)) },
+        boutons_fournisseurs(r, "Continuer", suite),
         echapper(suite),
         echapper(email)
     )
@@ -328,7 +383,8 @@ pub async fn connexion(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
     if session(&r, &h).is_some() {
         return Redirect::to(&suite).into_response();
     }
-    page("Connexion", None, &formulaire_connexion(&r, "", "", &suite)).into_response()
+    let info = if q.get("ok").map(String::as_str) == Some("reinit") { "Mot de passe modifié : vous pouvez vous connecter." } else { "" };
+    page("Connexion", None, &formulaire_connexion_info(&r, "", info, "", &suite)).into_response()
 }
 
 pub async fn connecter(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
@@ -366,13 +422,359 @@ pub async fn deconnecter(State(r): State<Partage>, h: HeaderMap, Form(f): Champs
     rep
 }
 
+// ————— Mot de passe oublié, confirmation de l'adresse —————
+
+const MESSAGE_CONFIRMATION_ENVOYEE: &str = r#"<p class="ok">E-mail envoyé : ouvrez le lien qu'il contient pour confirmer votre adresse.</p>"#;
+
+/// Crée le lien de confirmation et envoie l'e-mail (hors de la requête).
+fn envoyer_confirmation(r: &Partage, compte: i64, email: &str, nom: &str) {
+    let jeton = base::creer_jeton_courriel(&r.base(), compte, base::OBJET_CONFIRMATION, base::DUREE_JETON_CONFIRMATION);
+    match jeton {
+        Ok(j) => r.envoyer(crate::courriels::confirmation_adresse(&r.config.url_publique, email, nom, &format!("{}/email/confirmer?jeton={j}", r.config.url_publique))),
+        Err(e) => eprintln!("jeton de confirmation : {e}"),
+    }
+}
+
+/// Bandeau « Confirmez votre adresse » (sur /sites et /compte), seulement si les e-mails partent.
+fn bandeau_confirmation(r: &Partage, s: &Session, retour: &str) -> String {
+    if s.compte.email_verifie || !r.courriels_actifs() {
+        return String::new();
+    }
+    format!(
+        r#"<div class="carte"><p><strong>Confirmez votre adresse e-mail.</strong> Un lien vous a été envoyé à {} ; tant qu'il n'est pas ouvert, vous ne pouvez pas rattacher de serveur RIP.</p><form method="post" action="/email/renvoyer">{}<input type="hidden" name="retour" value="{retour}"><button class="discret" type="submit">Renvoyer l'e-mail</button></form></div>"#,
+        echapper(&s.compte.email),
+        hidden_csrf(s)
+    )
+}
+
+pub async fn renvoyer_confirmation(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/sites") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let retour = if f.get("retour").map(String::as_str) == Some("/compte") { "/compte" } else { "/sites" };
+    if s.compte.email_verifie {
+        return Redirect::to(retour).into_response();
+    }
+    if !r.limiter(&format!("renvoi:{}", s.compte.id), 3, Duration::from_secs(3600)) {
+        return erreur_page(&r, Some(&s), "Trop de demandes : réessayer dans une heure.");
+    }
+    envoyer_confirmation(&r, s.compte.id, &s.compte.email, &s.compte.nom);
+    Redirect::to(&format!("{retour}?ok=confirmation")).into_response()
+}
+
+pub(crate) fn page_sans_cache(titre: &str, s: Option<&Session>, corps: &str, statut: StatusCode) -> Response {
+    let mut rep = (statut, page(titre, s, corps)).into_response();
+    rep.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    rep
+}
+
+const LIEN_INVALIDE: &str = r#"<div class="carte"><h1>Lien invalide ou expiré</h1><p>Ce lien a déjà servi ou n'est plus valable.</p><p class="ligne"><a class="bouton" href="/mot-de-passe/oublie">Recevoir un nouveau lien</a><a class="bouton discret" href="/connexion">Se connecter</a></p></div>"#;
+
+fn formulaire_oubli(erreur: &str, email: &str) -> String {
+    format!(
+        r#"<div class="carte"><h1>Mot de passe oublié</h1>{}<p class="meta">Indiquez l'adresse de votre compte : si elle existe, vous recevez un lien (valable 1 heure) pour choisir un nouveau mot de passe.</p><form method="post" action="/mot-de-passe/oublie"><label>E-mail<input type="email" name="email" required autocomplete="email" value="{}"></label><button type="submit">Envoyer le lien</button></form><p class="meta"><a href="/connexion">Retour à la connexion</a></p></div>"#,
+        if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
+        echapper(email)
+    )
+}
+
+pub async fn oubli(State(r): State<Partage>, h: HeaderMap) -> Response {
+    if session(&r, &h).is_some() {
+        return Redirect::to("/compte").into_response();
+    }
+    page("Mot de passe oublié", None, &formulaire_oubli("", "")).into_response()
+}
+
+pub async fn oublier(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let email = champ(&f, "email");
+    if !r.limiter(&format!("oubli:{}", ip(&h)), 10, Duration::from_secs(600)) {
+        return (StatusCode::TOO_MANY_REQUESTS, page("Mot de passe oublié", None, &formulaire_oubli("Trop d'essais depuis cette adresse : réessayer dans quelques minutes.", &email))).into_response();
+    }
+    // Même réponse que le compte existe, soit suspendu, ou n'existe pas : rien à deviner.
+    // Au plus 3 e-mails par heure et par adresse (pas de harcèlement d'un titulaire).
+    if base::email_valide(&email) && r.limiter(&format!("oubli-email:{}", email.to_lowercase()), 3, Duration::from_secs(3600)) {
+        let envoi = {
+            let b = r.base();
+            base::compte_par_email(&b, &email).ok().flatten().filter(|c| !c.suspendu).and_then(|c| base::creer_jeton_courriel(&b, c.id, base::OBJET_REINIT, base::DUREE_JETON_REINIT).ok().map(|j| (c, j)))
+        };
+        if let Some((c, jeton)) = envoi {
+            r.envoyer(crate::courriels::mot_de_passe_oublie(&r.config.url_publique, &c.email, &c.nom, &format!("{}/mot-de-passe/nouveau?jeton={jeton}", r.config.url_publique)));
+        }
+    }
+    page("Mot de passe oublié", None, r#"<div class="carte"><h1>Vérifiez votre boîte e-mail</h1><p>Si un compte existe avec cette adresse, un e-mail contenant un lien vient de lui être envoyé. Le lien est valable 1 heure.</p><p class="meta">Rien reçu ? Regardez dans les courriers indésirables, ou <a href="/mot-de-passe/oublie">recommencez</a>.</p><p><a href="/connexion">Retour à la connexion</a></p></div>"#).into_response()
+}
+
+fn formulaire_nouveau(jeton: &str, erreur: &str) -> String {
+    format!(
+        r#"<div class="carte"><h1>Nouveau mot de passe</h1>{}<form method="post" action="/mot-de-passe/nouveau"><input type="hidden" name="jeton" value="{}"><label>Nouveau mot de passe (10 caractères au moins)<input type="password" name="mot_de_passe" required minlength="10" autocomplete="new-password"></label><label>Confirmation<input type="password" name="confirmation" required minlength="10" autocomplete="new-password"></label><p class="meta">Toutes vos sessions et les apps connectées seront déconnectées.</p><button type="submit">Enregistrer</button></form></div>"#,
+        if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
+        echapper(jeton)
+    )
+}
+
+pub async fn nouveau_mot_de_passe(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
+    let jeton = q.get("jeton").cloned().unwrap_or_default();
+    if !r.limiter(&format!("reinit:{}", ip(&h)), 30, Duration::from_secs(600)) {
+        return erreur_page(&r, None, "Trop d'essais : réessayer dans quelques minutes.");
+    }
+    let valide = base::jeton_courriel_valide(&r.base(), &jeton, base::OBJET_REINIT).ok().flatten().is_some();
+    if valide { page_sans_cache("Nouveau mot de passe", None, &formulaire_nouveau(&jeton, ""), StatusCode::OK) } else { page_sans_cache("Lien invalide", None, LIEN_INVALIDE, StatusCode::BAD_REQUEST) }
+}
+
+pub async fn reinitialiser(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let jeton = champ(&f, "jeton");
+    if !r.limiter(&format!("reinit:{}", ip(&h)), 30, Duration::from_secs(600)) {
+        return erreur_page(&r, None, "Trop d'essais : réessayer dans quelques minutes.");
+    }
+    if base::jeton_courriel_valide(&r.base(), &jeton, base::OBJET_REINIT).ok().flatten().is_none() {
+        return page_sans_cache("Lien invalide", None, LIEN_INVALIDE, StatusCode::BAD_REQUEST);
+    }
+    let mdp = f.get("mot_de_passe").cloned().unwrap_or_default();
+    let erreur = if !base::mot_de_passe_valide(&mdp) {
+        "Mot de passe trop court : 10 caractères au moins."
+    } else if f.get("confirmation") != Some(&mdp) {
+        "Les deux mots de passe ne sont pas identiques."
+    } else {
+        ""
+    };
+    if !erreur.is_empty() {
+        return page_sans_cache("Nouveau mot de passe", None, &formulaire_nouveau(&jeton, erreur), StatusCode::BAD_REQUEST);
+    }
+    let hachage = tokio::task::spawn_blocking(move || base::hacher(&mdp)).await.expect("hachage");
+    match base::reinitialiser_mot_de_passe(&r.base(), &jeton, &hachage) {
+        Ok(Some(_)) => Redirect::to("/connexion?ok=reinit").into_response(),
+        Ok(None) => page_sans_cache("Lien invalide", None, LIEN_INVALIDE, StatusCode::BAD_REQUEST),
+        Err(_) => erreur_page(&r, None, "Service momentanément indisponible."),
+    }
+}
+
+/// Le lien de l'e-mail ouvre une page avec un bouton : c'est le clic (POST) qui consomme le
+/// jeton, pas la simple ouverture (les antivirus et aperçus de messagerie suivent les liens).
+pub async fn confirmation(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashMap<String, String>>) -> Response {
+    let jeton = q.get("jeton").cloned().unwrap_or_default();
+    if !r.limiter(&format!("confirmation:{}", ip(&h)), 30, Duration::from_secs(600)) {
+        return erreur_page(&r, None, "Trop d'essais : réessayer dans quelques minutes.");
+    }
+    let s = session(&r, &h);
+    if base::jeton_courriel_valide(&r.base(), &jeton, base::OBJET_CONFIRMATION).ok().flatten().is_none() {
+        return page_sans_cache("Lien invalide", s.as_ref(), r#"<div class="carte"><h1>Lien invalide ou expiré</h1><p>Ce lien a déjà servi ou n'est plus valable. Connectez-vous : un bandeau vous permet de recevoir un nouveau lien.</p><p><a class="bouton" href="/sites">Mes sites</a></p></div>"#, StatusCode::BAD_REQUEST);
+    }
+    page_sans_cache("Confirmer mon adresse", s.as_ref(), &format!(r#"<div class="carte"><h1>Confirmer mon adresse</h1><p>Un clic pour confirmer que cette adresse e-mail est bien la vôtre.</p><form method="post" action="/email/confirmer"><input type="hidden" name="jeton" value="{}"><button type="submit">Confirmer mon adresse</button></form></div>"#, echapper(&jeton)), StatusCode::OK)
+}
+
+pub async fn confirmer(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    if !r.limiter(&format!("confirmation:{}", ip(&h)), 30, Duration::from_secs(600)) {
+        return erreur_page(&r, None, "Trop d'essais : réessayer dans quelques minutes.");
+    }
+    let s = session(&r, &h);
+    match base::confirmer_email(&r.base(), &champ(&f, "jeton")) {
+        Ok(Some(_)) => page_sans_cache("Adresse confirmée", s.as_ref(), r#"<div class="carte"><h1>Adresse confirmée</h1><p class="ok">Merci : votre adresse e-mail est confirmée. Vous pouvez rattacher vos serveurs RIP.</p><p><a class="bouton" href="/sites">Mes sites</a></p></div>"#, StatusCode::OK),
+        Ok(None) => page_sans_cache("Lien invalide", s.as_ref(), r#"<div class="carte"><h1>Lien invalide ou expiré</h1><p>Ce lien a déjà servi ou n'est plus valable.</p><p><a class="bouton" href="/sites">Mes sites</a></p></div>"#, StatusCode::BAD_REQUEST),
+        Err(_) => erreur_page(&r, s.as_ref(), "Service momentanément indisponible."),
+    }
+}
+
+fn carte_emails(s: &Session) -> String {
+    let c = &s.compte;
+    format!(
+        r#"<div class="carte"><h2>E-mails</h2><form method="post" action="/compte/preferences">{}<label class="case"><input type="checkbox" name="alertes" value="1"{}> <span>Recevoir les alertes (site hors ligne depuis 15 minutes, puis de retour en ligne)</span></label><label class="case"><input type="checkbox" name="resume" value="1"{}> <span>Recevoir le résumé hebdomadaire (le lundi vers 8 h)</span></label><button type="submit">Enregistrer</button></form><p class="meta">Les e-mails de sécurité (mot de passe oublié, confirmation d'adresse, nouvelle app connectée) sont toujours envoyés.</p></div>"#,
+        hidden_csrf(s),
+        if c.alertes { " checked" } else { "" },
+        if c.resume { " checked" } else { "" }
+    )
+}
+
+pub async fn regler_preferences(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/compte") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    if base::regler_preferences(&r.base(), s.compte.id, champ(&f, "alertes") == "1", champ(&f, "resume") == "1").is_err() {
+        return erreur_page(&r, Some(&s), "Enregistrement impossible.");
+    }
+    Redirect::to("/compte?ok=preferences").into_response()
+}
+
+// ————— Notifications du navigateur (Web Push) —————
+
+/// Script commun au bandeau de « Mes sites » et à la carte de « Mon compte » : il ne fait rien
+/// sans élément `[data-push]`. La demande d'autorisation part du clic (exigé par les navigateurs),
+/// avant tout autre appel.
+const SCRIPT_PUSH: &str = r##"<script>
+(function () {
+  var zones = document.querySelectorAll('[data-push]');
+  if (!zones.length) return;
+  var prise = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  function cleBinaire(b64) {
+    var t = (b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(t), out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function envoyer(url, csrf, corps) {
+    return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: corps || '{}' });
+  }
+  function activer(csrf) {
+    return Promise.resolve(Notification.requestPermission()).then(function (p) {
+      if (p !== 'granted') throw new Error('refus');
+      return navigator.serviceWorker.register('/sw.js');
+    }).then(function () { return navigator.serviceWorker.ready; }).then(function (reg) {
+      return fetch('/api/push/cle').then(function (r) { return r.json(); }).then(function (k) {
+        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: cleBinaire(k.cle) });
+      });
+    }).then(function (sub) {
+      return envoyer('/compte/push', csrf, JSON.stringify(sub.toJSON()));
+    }).then(function (r) { if (!r.ok) throw new Error('serveur'); });
+  }
+  Array.prototype.forEach.call(zones, function (zone) {
+    var csrf = zone.getAttribute('data-csrf'), mode = zone.getAttribute('data-push');
+    var etat = zone.querySelector('[data-etat]'), bouton = zone.querySelector('[data-activer]'), plus = zone.querySelector('[data-plus-tard]');
+    function dire(t) { if (etat) etat.textContent = t; }
+    function proposee() { return envoyer('/compte/notifications/proposees', csrf).catch(function () {}); }
+    if (!prise) { if (mode === 'carte') dire('Ce navigateur ne gère pas les notifications.'); return; }
+    if (Notification.permission === 'denied') { if (mode === 'carte') dire('Les notifications sont bloquées pour ce site dans ce navigateur : les autoriser dans ses réglages, puis recharger la page.'); return; }
+    if (mode === 'bandeau' && Notification.permission !== 'default') return;
+    if (mode === 'bandeau') zone.style.display = '';
+    if (bouton) bouton.style.display = '';
+    if (bouton) bouton.addEventListener('click', function () {
+      bouton.disabled = true;
+      activer(csrf).then(function () { return proposee(); }).then(function () {
+        if (mode === 'bandeau') { zone.style.display = 'none'; } else { location.href = '/compte?ok=push'; }
+      }).catch(function () { bouton.disabled = false; dire('Activation impossible : autoriser les notifications quand le navigateur le demande.'); });
+    });
+    if (plus) plus.addEventListener('click', function () { proposee().then(function () { zone.style.display = 'none'; }); });
+  });
+})();
+</script>"##;
+
+fn bandeau_notifications(s: &Session) -> String {
+    if s.compte.notifications_proposees {
+        return String::new();
+    }
+    format!(
+        r#"<div class="carte" data-push="bandeau" data-csrf="{}" style="display:none"><h2>Recevoir les alertes sur cet ordinateur ?</h2><p>Soyez prévenu ici, même quand cette page est fermée, dès qu'un de vos sites est hors ligne ou revient en ligne.</p><p class="ligne"><button type="button" data-activer>Activer</button> <button type="button" class="discret" data-plus-tard>Plus tard</button></p><p class="meta" data-etat></p></div>{SCRIPT_PUSH}"#,
+        echapper(&s.csrf)
+    )
+}
+
+fn carte_navigateurs(r: &Partage, s: &Session) -> String {
+    let inscrits = crate::notifications::abonnements(&r.base(), s.compte.id).unwrap_or_default();
+    let liste = if inscrits.is_empty() {
+        r#"<p class="meta">Aucun navigateur inscrit.</p>"#.to_string()
+    } else {
+        let lignes: String = inscrits
+            .iter()
+            .map(|a| {
+                format!(
+                    r#"<li>{} <span class="meta">— inscrit le {}</span> <form method="post" action="/compte/push/{}/retirer" style="display:inline">{}<button class="discret" type="submit">Retirer</button></form></li>"#,
+                    echapper(if a.appareil.is_empty() { "Navigateur" } else { &a.appareil }),
+                    date(Some(a.cree_le)),
+                    a.id,
+                    hidden_csrf(s)
+                )
+            })
+            .collect();
+        format!("<ul>{lignes}</ul>")
+    };
+    format!(
+        r#"<div class="carte" data-push="carte" data-csrf="{}"><h2>Notifications sur cet appareil</h2><p>Recevez les alertes (site hors ligne, de retour en ligne, nouvelle app connectée) directement dans ce navigateur, même page fermée. Elles suivent la case « Recevoir les alertes » ci-dessus, sauf la nouvelle app connectée, toujours notifiée.</p><p><button type="button" data-activer style="display:none">Activer les notifications du navigateur</button></p><p class="meta" data-etat></p><h2>Navigateurs inscrits</h2>{liste}</div>{SCRIPT_PUSH}"#,
+        echapper(&s.csrf)
+    )
+}
+
+/// En-tête `X-CSRF-Token` des appels du script (le corps est du JSON, pas un formulaire).
+pub(crate) fn csrf_entete_ok(s: &Session, h: &HeaderMap) -> bool {
+    h.get("x-csrf-token").and_then(|v| v.to_str().ok()).is_some_and(|c| crate::egal_constant(c, &s.csrf))
+}
+
+pub(crate) fn reponse_json(statut: StatusCode, code: &str) -> Response {
+    (statut, Json(serde_json::json!({ "code": code }))).into_response()
+}
+
+/// `POST /compte/push` : inscrit ce navigateur (corps : la `PushSubscription` en JSON).
+pub async fn inscrire_navigateur(State(r): State<Partage>, h: HeaderMap, Json(corps): Json<serde_json::Value>) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let Some(s) = session(&r, &h) else { return reponse_json(StatusCode::UNAUTHORIZED, "session_requise") };
+    if !csrf_entete_ok(&s, &h) {
+        return refuse_origine();
+    }
+    let texte = |v: Option<&serde_json::Value>| v.and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let endpoint = texte(corps.get("endpoint"));
+    let (p256dh, auth) = (texte(corps.pointer("/keys/p256dh")), texte(corps.pointer("/keys/auth")));
+    let cle_ok = crate::webpush::decoder(&p256dh).is_some_and(|k| k.len() == 65 && p256::PublicKey::from_sec1_bytes(&k).is_ok());
+    let auth_ok = crate::webpush::decoder(&auth).is_some_and(|a| a.len() == 16);
+    if !crate::notifications::endpoint_valide(&endpoint) || !cle_ok || !auth_ok {
+        return reponse_json(StatusCode::BAD_REQUEST, "abonnement_invalide");
+    }
+    let appareil = crate::notifications::nom_navigateur(h.get(header::USER_AGENT).and_then(|v| v.to_str().ok()).unwrap_or(""));
+    match crate::notifications::ajouter_abonnement(&r.base(), s.compte.id, &endpoint, &p256dh, &auth, &appareil, crate::maintenant()) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => reponse_json(StatusCode::CONFLICT, "trop_de_navigateurs"),
+        Err(_) => reponse_json(StatusCode::SERVICE_UNAVAILABLE, "indisponible"),
+    }
+}
+
+/// `POST /compte/push/{id}/retirer` (formulaire de « Mon compte »).
+pub async fn retirer_navigateur(State(r): State<Partage>, h: HeaderMap, Chemin(id): Chemin<i64>, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/compte") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let _ = crate::notifications::retirer_abonnement(&r.base(), s.compte.id, id);
+    Redirect::to("/compte?ok=push_retire").into_response()
+}
+
+/// `POST /compte/notifications/proposees` : la proposition de « Mes sites » a été vue (Activer
+/// ou Plus tard) ; on ne la refait pas.
+pub async fn notifications_proposees(State(r): State<Partage>, h: HeaderMap) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let Some(s) = session(&r, &h) else { return reponse_json(StatusCode::UNAUTHORIZED, "session_requise") };
+    if !csrf_entete_ok(&s, &h) {
+        return refuse_origine();
+    }
+    let _ = base::marquer_notifications_proposees(&r.base(), s.compte.id);
+    StatusCode::NO_CONTENT.into_response()
+}
+
 // ————— Mes sites —————
 
-fn exiger(r: &Partage, h: &HeaderMap, ici: &str) -> Result<Session, Box<Response>> {
+pub(crate) fn exiger(r: &Partage, h: &HeaderMap, ici: &str) -> Result<Session, Box<Response>> {
     session(r, h).ok_or_else(|| Box::new(Redirect::to(&format!("/connexion?suite={}", encoder(ici))).into_response()))
 }
 
-fn libelle_role(role: &str) -> &'static str {
+pub(crate) fn libelle_role(role: &str) -> &'static str {
     match role {
         "proprietaire" => "Propriétaire",
         "admin" => "Administrateur",
@@ -381,7 +783,7 @@ fn libelle_role(role: &str) -> &'static str {
     }
 }
 
-fn date(t: Option<u64>) -> String {
+pub(crate) fn date(t: Option<u64>) -> String {
     // Jour UTC (aaaa-mm-jj), sans dépendance de calendrier.
     let Some(t) = t else { return "jamais".into() };
     let jours = (t / 86400) as i64;
@@ -390,7 +792,7 @@ fn date(t: Option<u64>) -> String {
 }
 
 /// Jours depuis 1970-01-01 → (année, mois, jour) (algorithme de H. Hinnant).
-fn civil(z: i64) -> (i64, u32, u32) {
+pub(crate) fn civil(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
@@ -425,8 +827,9 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         };
         let adresse = echapper(&crate::relais::adresse_du_site(&r.config.url_publique, id));
         lignes.push_str(&format!(
-            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a><br><a class="meta" href="/sites/{}/sauvegardes">Sauvegardes</a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
             echapper(&site.nom),
+            echapper(id),
             if en_ligne { "ok" } else { "meta" },
             if en_ligne { "En ligne" } else { "Hors ligne" },
             libelle_role(role),
@@ -442,11 +845,13 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
     let message = match q.get("ok").map(String::as_str) {
         Some("rattache") => r#"<p class="ok">Code accepté : le serveur se rattache, il apparaît ici dans quelques secondes (recharger la page).</p>"#,
         Some("retire") => r#"<p class="ok">Site retiré : son accès à distance est coupé.</p>"#,
+        Some("confirmation") => MESSAGE_CONFIRMATION_ENVOYEE,
         _ => "",
     };
+    let bandeau = format!("{}{}{}", crate::abonnements::bandeau_depassement(&r, s.compte.id), bandeau_confirmation(&r, &s, "/sites"), bandeau_notifications(&s));
     let code = q.get("code").map(|c| echapper(c)).unwrap_or_default();
     let corps = format!(
-        r#"<h1>Mes sites</h1>{message}<div class="carte">{liste}</div><div class="carte"><h2>Rattacher un serveur RIP</h2><p class="meta">Sur le serveur : Système › Cloud E-KO RIP › « Connecter à la plate-forme ». Saisissez ici le code affiché (valable 10 minutes).</p><form method="post" action="/sites/rattacher" class="ligne">{}<input type="text" name="code" placeholder="ABCD-1234" required maxlength="12" value="{code}" style="max-width: 12rem; text-transform: uppercase" autocomplete="off"><button type="submit">Rattacher</button></form></div>"#,
+        r#"<h1>Mes sites</h1>{message}{bandeau}<div class="carte">{liste}</div><div class="carte"><h2>Rattacher un serveur RIP</h2><p class="meta">Sur le serveur : Système › Cloud E-KO RIP › « Connecter à la plate-forme ». Saisissez ici le code affiché (valable 10 minutes).</p><form method="post" action="/sites/rattacher" class="ligne">{}<input type="text" name="code" placeholder="ABCD-1234" required maxlength="12" value="{code}" style="max-width: 12rem; text-transform: uppercase" autocomplete="off"><button type="submit">Rattacher</button></form></div>"#,
         hidden_csrf(&s)
     );
     page("Mes sites", Some(&s), &corps).into_response()
@@ -462,6 +867,9 @@ pub async fn rattacher(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) 
     };
     if !csrf_ok(&s, &f) {
         return refuse_origine();
+    }
+    if !s.compte.email_verifie && r.courriels_actifs() {
+        return erreur_page(&r, Some(&s), "Confirmez d'abord votre adresse e-mail (lien reçu à l'inscription, à renvoyer depuis « Mes sites » ou « Mon compte ») avant de rattacher un serveur.");
     }
     if !r.limiter(&format!("rattacher:{}", s.compte.id), 20, Duration::from_secs(3600)) {
         return erreur_page(&r, Some(&s), "Trop d'essais : réessayer dans une heure.");
@@ -519,19 +927,49 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
     let lien = |fournisseur: &str, nom: &str, lie: bool| if lie { format!("<li>{nom} : lié</li>") } else { format!(r#"<li>{nom} : <a href="/auth/{fournisseur}">lier mon compte {nom}</a></li>"#) };
     let message = match q.get("ok").map(String::as_str) {
         Some("lie") => r#"<p class="ok">Connexion liée à votre compte.</p>"#,
+        Some("preferences") => r#"<p class="ok">Préférences d'e-mail enregistrées.</p>"#,
+        Some("push_retire") => r#"<p class="ok">Navigateur retiré : il ne reçoit plus de notifications.</p>"#,
+        Some("push") => r#"<p class="ok">Notifications activées dans ce navigateur.</p>"#,
+        Some("confirmation") => MESSAGE_CONFIRMATION_ENVOYEE,
         _ => "",
     };
+    let applis = base::jetons_du_compte(&r.base(), c.id).unwrap_or_default();
+    let carte_applis = if applis.is_empty() {
+        r#"<div class="carte"><h2>Apps connectées</h2><p class="meta">Aucune. Dans une app E-KO RIP Center, « Se connecter au cloud » vous connecte avec ce compte.</p></div>"#.to_string()
+    } else {
+        let lignes: String = applis.iter().map(|(appareil, cree, vu)| format!("<li>{} <span class=\"meta\">— connectée le {}, vue le {}</span></li>", echapper(appareil), date(Some(*cree)), date(Some(*vu)))).collect();
+        format!(r#"<div class="carte"><h2>Apps connectées</h2><ul>{lignes}</ul><form method="post" action="/compte/applis/deconnecter">{}<button class="discret" type="submit">Déconnecter toutes les apps</button></form></div>"#, hidden_csrf(&s))
+    };
+    let message = if q.get("ok").map(String::as_str) == Some("applis") { r#"<p class="ok">Toutes les apps ont été déconnectées.</p>"# } else { message };
     let corps = format!(
-        r#"<h1>Mon compte</h1>{message}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div><div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
+        r#"<h1>Mon compte</h1>{message}{bandeau}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div>{carte_emails}{carte_navigateurs}{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
         echapper(&c.nom),
         echapper(&c.email),
         date(Some(c.cree_le)),
         if c.a_mot_de_passe { "oui" } else { "non (connexion par Google ou Facebook)" },
         lien("google", "Google", c.google),
         lien("facebook", "Facebook", c.facebook),
-        hidden_csrf(&s)
+        hidden_csrf(&s),
+        bandeau = bandeau_confirmation(&r, &s, "/compte"),
+        carte_emails = carte_emails(&s),
+        carte_navigateurs = carte_navigateurs(&r, &s),
     );
     page("Mon compte", Some(&s), &corps).into_response()
+}
+
+pub async fn deconnecter_applis(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger(&r, &h, "/compte") {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let _ = base::revoquer_jetons_du_compte(&r.base(), s.compte.id);
+    Redirect::to("/compte?ok=applis").into_response()
 }
 
 pub async fn supprimer_compte(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
@@ -560,7 +998,7 @@ pub async fn supprimer_compte(State(r): State<Partage>, h: HeaderMap, Form(f): C
 
 // ————— Administration —————
 
-fn exiger_admin(r: &Partage, h: &HeaderMap) -> Result<Session, Box<Response>> {
+pub(crate) fn exiger_admin(r: &Partage, h: &HeaderMap) -> Result<Session, Box<Response>> {
     let s = exiger(r, h, "/admin")?;
     if !s.compte.super_admin {
         return Err(Box::new((StatusCode::FORBIDDEN, page("Refusé", Some(&s), r#"<div class="carte"><p class="erreur">Réservé à l'administration de la plate-forme.</p></div>"#)).into_response()));
@@ -574,6 +1012,8 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         Err(rep) => return *rep,
     };
     let url = echapper(&r.config.url_publique);
+    // Avant de prendre la base (verrou non réentrant, `courriels_actifs` la prend aussi).
+    let actif = r.courriels_actifs();
     let b = r.base();
     let valeur = |cle: &str| base::reglage(&b, cle).ok().flatten().unwrap_or_default();
     let secret = |cle: &str| if valeur(cle).is_empty() { "non renseigné" } else { "enregistré (laisser vide pour le garder)" };
@@ -581,6 +1021,10 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         Some("oauth") => r#"<p class="ok">Clés enregistrées.</p>"#,
         Some("compte") => r#"<p class="ok">Compte mis à jour.</p>"#,
         Some("github") => r#"<p class="ok">Accès GitHub enregistré.</p>"#,
+        Some("courriels") => r#"<p class="ok">Réglages d'e-mail enregistrés.</p>"#,
+        Some("essai") => r#"<p class="ok">E-mail d'essai envoyé à votre adresse.</p>"#,
+        Some("facturation") => r#"<p class="ok">Réglages de facturation enregistrés.</p>"#,
+        Some("stockage") => r#"<p class="ok">Réglages du stockage S3 enregistrés.</p>"#,
         _ => "",
     };
     let connectes = r.connectes();
@@ -626,7 +1070,11 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
     let corps = format!(
         r#"<h1>Administration</h1>{message}
 {installations}
+{vue_abonnements}
+{facturation}
+{stockage}
 {rapports}
+{courriels}
 <div class="carte"><h2>Connexion Google</h2>
 <p class="meta">Google Cloud Console › API et services › Identifiants › ID client OAuth (application Web).</p>
 <p>Origine JavaScript autorisée : <code>{url}</code><br>URI de redirection autorisé : <code>{url}/auth/google/retour</code></p>
@@ -653,6 +1101,10 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         ns = tous.len(),
         installations = carte_installations(&r.statistiques_installations()),
         rapports = carte_rapports(&r, &s, &valeur("github_depot"), !valeur("github_jeton").is_empty()),
+        courriels = carte_courriels(&b, &s, actif),
+        vue_abonnements = crate::abonnements::carte_vue_admin(&b, &tous),
+        facturation = crate::abonnements::carte_admin(&b, &s, &r.config.url_publique),
+        stockage = crate::sauvegardes::carte_admin(&b, &s),
     );
     page("Administration", Some(&s), &corps).into_response()
 }
@@ -715,6 +1167,106 @@ fn carte_rapports(r: &Partage, s: &Session, depot: &str, jeton: bool) -> String 
         depot = echapper(depot),
         etat = if jeton { "enregistré (laisser vide pour le garder)" } else { "non renseigné" },
     )
+}
+
+/// Carte « E-mails » de l'administration : serveur SMTP et e-mail d'essai.
+fn carte_courriels(b: &rusqlite::Connection, s: &Session, actif: bool) -> String {
+    let valeur = |cle: &str| base::reglage(b, cle).ok().flatten().unwrap_or_default();
+    let securite = valeur("smtp_securite");
+    let impose = ["HOTE", "PORT", "SECURITE", "IDENTIFIANT", "MOT_DE_PASSE", "EXPEDITEUR"].iter().any(|v| std::env::var(format!("EKO_CLOUD_SMTP_{v}")).is_ok_and(|x| !x.trim().is_empty()));
+    let etat = if actif { r#"<p class="ok">Envoi d'e-mails actif.</p>"# } else { r#"<p class="meta">Envoi d'e-mails inactif : sans hôte SMTP, les e-mails sont ignorés (mot de passe oublié compris).</p>"# };
+    format!(
+        r#"<div class="carte"><h2>E-mails</h2>{etat}
+<p class="meta">Serveur SMTP d'envoi (celui de l'ERP). L'expéditeur est « {nom} » ; la connexion est toujours chiffrée.{impose}</p>
+<form method="post" action="/admin/courriels">{csrf}
+<label>Hôte<input type="text" name="smtp_hote" value="{hote}" placeholder="smtp.exemple.fr" autocomplete="off"></label>
+<label>Port (587 en STARTTLS, 465 en TLS direct)<input type="text" name="smtp_port" value="{port}" inputmode="numeric" placeholder="587" autocomplete="off"></label>
+<label>Sécurité<select name="smtp_securite"><option value="starttls"{o1}>STARTTLS</option><option value="tls"{o2}>TLS direct</option></select></label>
+<label>Identifiant<input type="text" name="smtp_identifiant" value="{id}" autocomplete="off"></label>
+<label>Mot de passe ({mdp})<input type="password" name="smtp_mot_de_passe" autocomplete="new-password"></label>
+<label>Adresse de l'expéditeur<input type="email" name="smtp_expediteur" value="{exp}" placeholder="{defaut}" autocomplete="off"></label>
+<label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer le mot de passe enregistré</span></label>
+<button type="submit">Enregistrer</button></form>
+<form method="post" action="/admin/courriels/essai">{csrf}<button class="discret" type="submit">Envoyer un e-mail d'essai</button> <span class="meta">à {moi}</span></form></div>"#,
+        nom = crate::courriels::NOM_EXPEDITEUR,
+        impose = if impose { " Des variables <code>EKO_CLOUD_SMTP_*</code> sont définies : elles priment sur ces réglages." } else { "" },
+        csrf = hidden_csrf(s),
+        hote = echapper(&valeur("smtp_hote")),
+        port = echapper(&valeur("smtp_port")),
+        o1 = if securite != "tls" { " selected" } else { "" },
+        o2 = if securite == "tls" { " selected" } else { "" },
+        id = echapper(&valeur("smtp_identifiant")),
+        mdp = if valeur("smtp_mot_de_passe").is_empty() { "non renseigné" } else { "enregistré (laisser vide pour le garder)" },
+        exp = echapper(&valeur("smtp_expediteur")),
+        defaut = crate::courriels::EXPEDITEUR_DEFAUT,
+        moi = echapper(&s.compte.email),
+    )
+}
+
+pub async fn regler_courriels(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger_admin(&r, &h) {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    let (hote, port, securite, expediteur) = (champ(&f, "smtp_hote"), champ(&f, "smtp_port"), champ(&f, "smtp_securite"), champ(&f, "smtp_expediteur"));
+    if !hote.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ':' | '[' | ']')) || hote.len() > 253 {
+        return erreur_page(&r, Some(&s), "Hôte SMTP invalide.");
+    }
+    if !port.is_empty() && port.parse::<u16>().ok().filter(|p| *p > 0).is_none() {
+        return erreur_page(&r, Some(&s), "Port invalide.");
+    }
+    if !matches!(securite.as_str(), "starttls" | "tls" | "") {
+        return erreur_page(&r, Some(&s), "Sécurité invalide.");
+    }
+    if !expediteur.is_empty() && !base::email_valide(&expediteur) {
+        return erreur_page(&r, Some(&s), "Adresse d'expéditeur invalide.");
+    }
+    let b = r.base();
+    let mut ok = true;
+    for (cle, v) in [("smtp_hote", hote), ("smtp_port", port), ("smtp_securite", securite), ("smtp_identifiant", champ(&f, "smtp_identifiant")), ("smtp_expediteur", expediteur)] {
+        ok &= base::regler(&b, cle, &v).is_ok();
+    }
+    let mdp = champ(&f, "smtp_mot_de_passe");
+    if champ(&f, "effacer") == "1" {
+        ok &= base::regler(&b, "smtp_mot_de_passe", "").is_ok();
+    } else if !mdp.is_empty() {
+        ok &= base::regler(&b, "smtp_mot_de_passe", &mdp).is_ok();
+    }
+    drop(b);
+    if !ok {
+        return erreur_page(&r, Some(&s), "Enregistrement impossible.");
+    }
+    Redirect::to("/admin?ok=courriels").into_response()
+}
+
+/// E-mail d'essai à l'administrateur connecté ; le résultat de l'envoi est affiché.
+pub async fn essai_courriel(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+    if !origine_ok(&r, &h) {
+        return refuse_origine();
+    }
+    let s = match exiger_admin(&r, &h) {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    if !csrf_ok(&s, &f) {
+        return refuse_origine();
+    }
+    if !r.limiter(&format!("essai-courriel:{}", s.compte.id), 10, Duration::from_secs(3600)) {
+        return erreur_page(&r, Some(&s), "Trop d'essais : réessayer dans une heure.");
+    }
+    match r.envoyer_et_attendre(crate::courriels::essai(&r.config.url_publique, &s.compte.email, &s.compte.nom, crate::maintenant())).await {
+        Ok(()) => Redirect::to("/admin?ok=essai").into_response(),
+        Err(e) => {
+            eprintln!("e-mail d'essai non envoyé : {e}");
+            erreur_page(&r, Some(&s), &format!("E-mail d'essai non envoyé : {e}"))
+        }
+    }
 }
 
 pub async fn regler_github(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
@@ -826,6 +1378,7 @@ pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<S
     let (titre, contenu) = match nom.as_str() {
         "mentions-legales" => ("Mentions légales", include_str!("../static/legal/mentions-legales.html")),
         "cgu" => ("Conditions générales d'utilisation", include_str!("../static/legal/cgu.html")),
+        "cgv" => ("Conditions générales de vente", include_str!("../static/legal/cgv.html")),
         "confidentialite" => ("Politique de confidentialité", include_str!("../static/legal/confidentialite.html")),
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
@@ -855,7 +1408,9 @@ fn retour(r: &Partage, f: &Fournisseur) -> String {
     format!("{}/auth/{}/retour", r.config.url_publique, f.nom)
 }
 
-pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>) -> Response {
+pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
+    // Destination après connexion (autorisation d'une app…), gardée dans le cookie d'état.
+    let suite = suite_sure(q.get("suite"));
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
     let Some(id) = base::reglage(&r.base(), f.cle_id).ok().flatten() else { return erreur_page(&r, None, "Connexion non configurée.") };
     let etat = crate::aleatoire_hex(16);
@@ -870,7 +1425,7 @@ pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>)
     );
     let mut rep = Redirect::to(&url).into_response();
     let secure = if https(&r) { "; Secure" } else { "" };
-    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom)).expect("cookie"));
+    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}:{}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom, encoder(&suite))).expect("cookie"));
     rep
 }
 
@@ -948,7 +1503,12 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
         Ok(None) => {
             let nom = if base::nom_valide(&id.nom) { id.nom.clone() } else { email.split('@').next().unwrap_or("Compte").to_string() };
             match base::creer_compte(b, &email, &nom, None) {
-                Ok(Some(cid)) if base::lier_fournisseur(b, cid, fournisseur, &id.ident).unwrap_or(false) => Issue::Connecter(cid),
+                Ok(Some(cid)) if base::lier_fournisseur(b, cid, fournisseur, &id.ident).unwrap_or(false) => {
+                    if id.email_verifie {
+                        let _ = base::marquer_email_verifie(b, cid);
+                    }
+                    Issue::Connecter(cid)
+                }
                 _ => Issue::Refus("Création du compte impossible."),
             }
         }
@@ -958,7 +1518,12 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
 
 pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
-    let attendu = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
+    let valeur = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
+    // Cookie : `<fournisseur>:<état>:<suite encodée>`.
+    let (attendu, suite) = match valeur.as_deref().map(|v| v.splitn(3, ':').collect::<Vec<_>>()) {
+        Some(p) if p.len() >= 2 => (Some(format!("{}:{}", p[0], p[1])), suite_sure(p.get(2).map(|s| decoder(s)).as_ref())),
+        _ => (None, "/sites".to_string()),
+    };
     let recu = q.get("state").map(|s| format!("{}:{s}", f.nom));
     let etat_ok = matches!((&attendu, &recu), (Some(a), Some(b)) if crate::egal_constant(a, b));
     let effacer = HeaderValue::from_str(&format!("{}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0{}", nom_cookie(&r, COOKIE_OAUTH), if https(&r) { "; Secure" } else { "" })).expect("cookie");
@@ -985,7 +1550,7 @@ pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): C
     let Some(ident) = ident else { return avec_effacement(erreur_page(&r, s.as_ref(), "Le fournisseur n'a pas confirmé la connexion : recommencer.")) };
     let issue = resoudre(&r.base(), nom_f, ident, s.as_ref().map(|s| &s.compte));
     avec_effacement(match issue {
-        Issue::Connecter(id) => connecte(&r, id, "/sites"),
+        Issue::Connecter(id) => connecte(&r, id, &suite),
         Issue::Lie => Redirect::to("/compte?ok=lie").into_response(),
         Issue::Refus(m) => erreur_page(&r, s.as_ref(), m),
     })

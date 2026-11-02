@@ -124,7 +124,7 @@ dependencies = [
 
 [[package]]
 name = "e-ko-rip-center"
-version = "0.31.0"
+version = "0.33.0"
 dependencies = [
  "async-channel",
  "gtk4",

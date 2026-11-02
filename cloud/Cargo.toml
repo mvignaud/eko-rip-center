@@ -21,8 +21,9 @@ argon2 = "0.6.0"
 axum = "0.8.9"
 bytes = "1"
 getrandom = "0.4.3"
+futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
 # Portail : comptes, sessions, droits, réglages (SQLite embarqué, rien à installer).
-rusqlite = { version = "0.37", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled", "backup"] }
 http-body-util = "0.1.5"
 hyper = { version = "1.12.0", features = ["client", "server", "http1", "http2"] }
 hyper-util = { version = "0.1.21", features = ["tokio", "service"] }
@@ -32,10 +33,19 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["full"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+# Tunnel en WebSocket (seul `Upgrade` que laissent passer les hébergements mutualisés).
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 webpki-roots = "1.0.11"
 # Connexion Google / Facebook : échange du code côté serveur.
 ureq = { version = "~3.4.2", default-features = false, features = ["rustls", "json"] }
 
+# E-mails de la plate-forme (SMTP) : rustls + ring + racines webpki, sans OpenSSL.
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
+p256 = { version = "0.14", features = ["ecdh", "ecdsa", "arithmetic"] }
+hkdf = "0.13"
+# Signature des webhooks de l'ERP et des commandes de restauration, signature AWS (S3).
+hmac = "0.13"
+aes-gcm = "0.11"
 
 [package.metadata.deb]
 name = "eko-rip-cloud"

@@ -15,6 +15,92 @@ parité ; d'ici là, 0.Y.Z.
 
 ## [Non publié]
 
+### Ajouté
+- **Cloud E-KO RIP : offres payantes.** Gratuit à vie (1 site, 1 imprimante, 1 découpeur), puis
+  À la machine, Atelier et Pro, facturés par GOLDEN PRINT. Page « Abonnement » du portail,
+  souscription avec SIREN et code promo ou partenaire, paiement par carte sur la page (3-D Secure
+  intégré) ou prélèvement SEPA avec mandat signé par code SMS, factures en PDF, résiliation à
+  l'échéance. Tous les e-mails (facture, relances, retour au Gratuit, fin d'essai…) partent de la
+  plate-forme. Dépassement d'offre : 14 jours de grâce puis accès à distance du site suspendu.
+- **Sauvegardes en ligne de la configuration.** Le serveur RIP déclare ses machines et envoie sa
+  sauvegarde chaque nuit, après chaque changement et à la demande ; conservation selon l'offre,
+  alertes de quota et d'échec, restauration depuis le portail.
+- **CGV** de la plate-forme, CGU et politique de confidentialité mises à jour.
+
+## [0.33.0] — 2026-11-01
+
+### Ajouté
+- **Application mobile de suivi** (iOS, Android ; `clients/mobile/`, Expo). File des sorties
+  par machine avec Lancer / Pause / Stop / Relancer / Passer en tête, état des machines
+  (encres, rouleau, alertes), historique des alertes, et **notifications push** : nouvelle
+  alerte de la machine (capot ouvert, support épuisé…), encre sous 5 % ou vide, machine qui
+  ne répond plus puis revient, sortie ou rendu en échec, et en option les fins d'impression.
+  Côté serveur : `GET /api/mobile/etat`, `GET /api/mobile/evenements`,
+  `POST /api/mobile/appareils` (et `/retirer`), `POST /api/mobile/essai` ; envoi par le service
+  push d'Expo (le serveur doit joindre `exp.host` en HTTPS). Voir
+  [docs/fr/application-mobile.md](docs/fr/application-mobile.md). Connexion **par le cloud
+  E-KO RIP** (OAuth + PKCE) pour suivre l'atelier sans VPN, avec choix du site ; un
+  téléphone inscrit par le cloud reste destinataire tant qu'il se réinscrit (30 jours).
+  *Mobile monitoring app (iOS, Android) with push notifications of machine errors, also
+  through the E-KO RIP cloud.*
+
+### Corrigé
+- Le code d'erreur `lecture_seule` (rôle cloud en lecture seule) est traduit dans l'interface.
+  *The cloud read-only error code is now translated.*
+
+## [0.32.0] — 2026-11-01
+
+### Ajouté
+- **Cloud E-KO RIP : notifications.** Les événements des e-mails d'alerte (site hors ligne après
+  15 minutes, de retour en ligne, nouvelle app connectée) arrivent aussi par un journal par compte
+  que les apps de bureau interrogent chaque minute (`GET /api/moi/notifications`), par push
+  mobile Expo (`POST /api/moi/push`) et par Web Push dans le navigateur (VAPID, chiffrement
+  `aes128gcm` en Rust pur, service worker `/sw.js`, carte « Notifications sur cet appareil » dans
+  « Mon compte »). Le portail propose les notifications après la première connexion, et les apps
+  demandent l'autorisation juste après la première connexion au cloud. Voir `docs/fr/cloud.md`.
+  *Platform notifications: per-account journal for desktop apps, Expo mobile push and browser Web
+  Push (VAPID, pure Rust), offered at first sign-in.*
+- **Cloud E-KO RIP : e-mails de la plate-forme.** Mot de passe oublié (lien d'une heure),
+  confirmation de l'adresse à l'inscription (rattacher un serveur l'exige), alerte « site hors
+  ligne depuis 15 minutes » puis « de retour en ligne », e-mail de sécurité à chaque nouvelle app
+  connectée, résumé hebdomadaire par site le lundi 8 h (heure de Paris), en HTML sobre avec
+  version texte. Envoi par SMTP (réglages dans Administration › E-mails ou `EKO_CLOUD_SMTP_*`),
+  expéditeur `no-reply@e-ko.fr` ; cases d'abonnement dans « Mon compte ». Voir
+  `docs/fr/cloud.md`.
+  *Platform e-mails: password reset, address confirmation, offline/back-online alerts, new-app
+  notice, weekly per-site summary; SMTP configured in Administration.*
+- **Cloud E-KO RIP : « Se connecter au cloud » depuis les apps.** Connexion au compte de la
+  plate-forme par le navigateur (OAuth 2 + PKCE), liste des sites du compte, ouverture d'un
+  serveur RIP sans second mot de passe : le rôle sur le site (portail) donne les droits sur le
+  RIP. Apps connectées visibles et révocables dans « Mon compte ». Voir `docs/fr/cloud.md`.
+  *Cloud sign-in from the apps (OAuth 2 + PKCE): platform account, site list, no second
+  password on the RIP server.*
+- **Clients Mac et Linux : notifications du cloud.** Tant qu'un compte cloud est connecté (même
+  sur un serveur local), l'app interroge `GET /api/moi/notifications` chaque minute et affiche une
+  notification système (site hors ligne ou de retour en ligne, nouvelle app) ; le clic ouvre le
+  site concerné, sinon le lien. Le curseur est mémorisé, sans rattrapage à la première
+  interrogation. Mac : autorisation demandée après la première connexion au cloud ; Linux :
+  réglage « Notifications du cloud » (activé par défaut) et toast à la première connexion.
+  *Mac and Linux clients: native cloud notifications, polled every minute while a cloud account
+  is signed in.*
+
+### Modifié
+- **Cloud E-KO RIP : sens montant du tunnel en requêtes POST (`eko-tunnel/2`).** Le frontal
+  d'o2switch garde pour lui ce que le serveur RIP envoie dans le WebSocket : le tunnel
+  s'établissait puis tombait au bout de 45 s. Le serveur RIP envoie maintenant ce sens par
+  petites requêtes `POST` numérotées, le WebSocket ne portant plus que le sens descendant. La
+  plate-forme ne choisit ce mode que si le serveur le propose ; les serveurs 0.31 restent en
+  `eko-tunnel/1`. *Tunnel upstream as numbered HTTP POSTs (eko-tunnel/2), for front ends that
+  buffer the WebSocket upstream.*
+- **Cloud E-KO RIP : le tunnel passe en WebSocket.** Le serveur RIP ouvre un WebSocket
+  ordinaire (sous-protocole `eko-tunnel/1`) qui porte la même connexion HTTP/2 qu'avant ; il
+  traverse ainsi les frontaux des hébergements mutualisés (LiteSpeed, Passenger). La
+  plate-forme accepte encore l'ancien tunnel des serveurs 0.30. Nouveau lanceur Node.js
+  (`cloud/o2switch/app.js`) pour héberger la plate-forme sur o2switch. Voir
+  `docs/fr/cloud.md`.
+  *Cloud tunnel now runs over a standard WebSocket (works behind shared hosting front ends);
+  old tunnels still accepted; Node.js launcher for o2switch.*
+
 ## [0.31.0] — 2026-11-01
 
 ### Ajouté

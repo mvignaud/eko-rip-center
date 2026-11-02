@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Epson SureColor SC-S80600 · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Connect and set up the Epson SC-S80600: direct driver, media, loaded media, common trouble.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/machines/epson-sc-s80600/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/machines/epson-sc-s80600/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/machines/epson-sc-s80600/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/en/machines/epson-sc-s80600.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a class="nav-mobile" href="/#installer">Install</a>
+      <a href="/documentation/machines/epson-sc-s80600/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/" aria-current="page">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Machines › Printers</p>
+    <h1>Epson SureColor SC-S80600</h1>
+    <p class="doc-chapo">Connect and set up the Epson SC-S80600: direct driver, media, loaded media, common trouble.</p>
+<h2 id="what-the-rip-does"><a class="ancre" href="#what-the-rip-does" aria-hidden="true">#</a>What the RIP does</h2>
+<p>It renders the plates, separates them over the 9 inks (light and dark pairs, ink limit), screens them and sends the print itself (direct driver, ESC/P2).</p>
+<h2 id="connect"><a class="ancre" href="#connect" aria-hidden="true">#</a>Connect</h2>
+<p>Network cable, fixed IP.</p>
+<div class="tableau"><table><thead><tr><th>Connection</th><th>Effect</th></tr></thead><tbody><tr><td><strong>Network (TCP)</strong>, host = the Epson's IP, port <strong>9100</strong></td><td>Direct driver: the RIP prints.</td></tr><tr><td><strong>IPP</strong> to a <strong>raw</strong> CUPS queue</td><td>Same stream, through CUPS.</td></tr><tr><td><strong>Forward</strong> to another E-KO RIP</td><td>Same stream, passed to the other server's Epson.</td></tr><tr><td><strong>Folder</strong></td><td>Nothing is printed: one file per channel (<code>K.tif</code>… <code>WH.tif</code>) and <code>envoi.json</code> in <code>sorties/&lt;machine&gt;/</code>.</td></tr></tbody></table></div>
+<h2 id="in-the-rip"><a class="ancre" href="#in-the-rip" aria-hidden="true">#</a>In the RIP</h2>
+<p><strong>SNMP (media width)</strong> = the Epson's IP (width and number of the loaded media, inks, alerts), also in <code>EKO_RIP_EPSON_SNMP</code> for the loaded media screen; <strong>Print origin X / Y</strong> set on a paper test; <strong>Speed (m²/h)</strong> measured in the workshop; media catalogue and modes (System &gt; Epson media), with the <strong>media number</strong> stored in the printer.</p>
+<h2 id="on-the-epson"><a class="ancre" href="#on-the-epson" aria-hidden="true">#</a>On the Epson</h2>
+<p>Store each media under a number and copy that number into the RIP's catalogue; it is what makes the loaded media recognised.</p>
+<h2 id="check"><a class="ancre" href="#check" aria-hidden="true">#</a>Check</h2>
+<p><code>nc -vz &lt;ip&gt; 9100</code> from the server; System &gt; Media loaded in the Epson should show the roll width, the roll left and the inks.</p>
+<h2 id="common-trouble"><a class="ancre" href="#common-trouble" aria-hidden="true">#</a>Common trouble</h2>
+<ul><li><em>"Cannot send to the printer"</em>: a spot colour has no ink on the Epson (rename it <code>White</code> or <code>Metallic</code>, convert it to CMYK, or add it to the spot colour table), or the page has both white and silver. White and silver do not go through the direct driver yet: use a <strong>Folder</strong> machine meanwhile.</li><li><em>"The printer reports an alert: printing stopped"</em>: blocking alert read over SNMP (cover open…). Clear it, then <strong>Redo</strong>.</li><li><em>Output waiting "Other media"</em>: the loaded media is not the job's; load the right one, or pick the loaded media by hand.</li><li><em>No media width</em>: SNMP address, Epson on and on the same network, community (<code>EKO_RIP_EPSON_COMMUNAUTE</code>, <code>public</code> by default).</li></ul>
+<p>See: <a href="/documentation/en/usage/#direct-epson-driver">direct Epson driver</a>, <a href="/documentation/en/usage/#media-and-print-modes">media and print modes</a>, <a href="/documentation/en/usage/#media-loaded-in-the-epson">loaded media</a>, <a href="/documentation/en/usage/#ink-and-cost">ink and cost</a>.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/machines/"><span>Previous</span>All machines</a><a class="doc-suiv" href="/documentation/en/machines/roland-versacamm/"><span>Next</span>Roland VersaCAMM VP-300 / VP-540</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/en/machines/epson-sc-s80600.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#what-the-rip-does">What the RIP does</a></li><li class="niveau-2"><a href="#connect">Connect</a></li><li class="niveau-2"><a href="#in-the-rip">In the RIP</a></li><li class="niveau-2"><a href="#on-the-epson">On the Epson</a></li><li class="niveau-2"><a href="#check">Check</a></li><li class="niveau-2"><a href="#common-trouble">Common trouble</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

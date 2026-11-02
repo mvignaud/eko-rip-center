@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
 Sitemap: https://e-ko.rip/sitemap.xml
+Sitemap: https://e-ko.rip/documentation/sitemap.xml

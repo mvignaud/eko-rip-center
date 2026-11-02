@@ -12,12 +12,13 @@ Sur le serveur de test (`mathieu@eko-rip`, 192.168.10.109), une fois les `.deb` 
 ```bash
 ~/eko-depot/outils/publier-depot.sh \
   eko-rip-serveur_<version>-1_amd64.deb \
-  "E-KO RIP Center_<version>_amd64.deb"
+  e-ko-rip-center_<version>-1_amd64.deb
 ```
 
 - **Les deux paquets à chaque release** : le serveur (`eko-rip-serveur`, via cargo-deb) et le
-  client Linux (`e-ko-rip-center`, via `npx @tauri-apps/cli@2 build --bundles deb` dans
-  `client/`). La CI ne construit plus le client Linux, il se construit sur le serveur de test.
+  client Linux natif (`e-ko-rip-center`, GTK 4, via cargo-deb dans `clients/linux/`, qui a
+  remplacé le client Tauri de `client/` depuis la 0.29). La CI ne construit plus le client
+  Linux, il se construit sur le serveur de test.
 - Le script signe avec la clé GPG `depot@e-ko.fr` du trousseau du serveur de test et envoie par
   rsync au VPS OVH (`Host apt.e-ko.fr` dans `~/.ssh/config`, clé `~/.ssh/eko_depot`, compte
   `depot` limité à `/srv/depot`). Ne jamais régénérer cette clé : les postes refuseraient les
@@ -27,3 +28,25 @@ Sur le serveur de test (`mathieu@eko-rip`, 192.168.10.109), une fois les `.deb` 
 - Vérification : `curl -s https://apt.e-ko.fr/rip/Packages | grep -A1 '^Package:'` doit lister
   les nouvelles versions.
 - Le VPS est décrit dans eko-infra (`ansible/depot.yml`).
+
+## Documentation publique : à jour à chaque changement (obligatoire)
+
+La documentation utilisateur est publiée sur `https://e-ko.rip/documentation/` (FR) et
+`/documentation/en/` (EN). Source : `docs/guide/fr|en/` + références `docs/fr|en/`
+(utilisation, machines, glossaire) ; pages générées dans `site/documentation/`.
+
+- Toute PR qui change ce que voit ou fait un utilisateur (serveur, interface, clients Mac,
+  Linux, Windows, app mobile, Cloud, installation) met à jour la doc **dans la même PR**, en
+  français et en anglais, refait les captures touchées (`docs/guide/images/`), puis lance
+  `python3 outils/generer-documentation.py` et commite `site/documentation/`.
+- `python3 outils/generer-documentation.py --verifier` (dans `outils/verifier.sh`, la CI et
+  `outils/publier-site.sh`) échoue si la doc générée est en retard.
+- Une release n'est finie que quand le site est republié (`outils/publier-site.sh` depuis le
+  Mac) : c'est lui qui met la doc en ligne.
+- Rubrique Machines : un modèle ajouté au RIP (enum `Modele` de `serveur/src/machines.rs`) a
+  sa page `docs/fr|en/machines/<modele>.md`, rangée sous sa famille dans les deux
+  `sommaire.tsv` (Imprimantes, Plotters de découpe, Tables de découpe) ; le générateur échoue
+  sinon. Détail dans `docs/guide/README.md`.
+- Liens « Aide » câblés dans les logiciels : tableau de `docs/guide/README.md`. Ne pas
+  renommer une page ou un titre cité sans les mettre à jour.
+- Jamais de nom de RIP concurrent ni de détail d'hébergement interne dans la doc.

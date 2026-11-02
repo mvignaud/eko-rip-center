@@ -50,6 +50,10 @@ assets = [
 ]
 conf-files = ["/etc/default/eko-rip-serveur"]
 
+# Fuseau horaire local (sauvegarde de nuit du cloud).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 libc = "0.2"
 

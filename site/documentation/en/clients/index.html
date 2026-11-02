@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install the clients · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Install and connect the E-KO RIP Center client on Mac, Linux and Windows.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/clients/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/clients/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/clients/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/clients.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a class="nav-mobile" href="/#installer">Install</a>
+      <a href="/documentation/clients/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/" aria-current="page">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Install</p>
+    <h1>Install the clients</h1>
+    <p class="doc-chapo">Install and connect the E-KO RIP Center client on Mac, Linux and Windows.</p>
+<p>The E-KO RIP Center client is the software for the workstations: you use it to send files, follow the jobs and the queue, and start printing and cutting. It exists for Mac, Linux and Windows; all of them talk to the same server and see the same queue.</p>
+<h2 id="what-the-client-does"><a class="ancre" href="#what-the-client-does" aria-hidden="true">#</a>What the client does</h2>
+<p>The window has three panes:</p>
+<ul><li>on the left, the <strong>sidebar</strong>: <strong>Jobs</strong>, <strong>Machines</strong>, <strong>System</strong> (<em>Travaux</em>, <em>Machines</em>, <em>Système</em>);</li><li>in the centre, the <strong>job table</strong> (name, folder, pages, status, date), with a search box;</li><li>on the right, the <strong>inspector</strong> for the chosen job: preview, job ticket, ink plates, alerts and the actions <strong>Print</strong> (<em>Imprimer</em>), <strong>Retry</strong> (<em>Relancer</em>), <strong>TIFF proof</strong> (<em>Épreuve TIFF</em>) and <strong>Delete</strong> (<em>Supprimer</em>).</li></ul>
+<figure><a href="/documentation/images/client-linux.png"><img src="/documentation/images/client-linux.png" alt="Client window: the job list and the inspector" loading="lazy"></a><figcaption>The client window (here on Linux, interface in French): sidebar, job table, inspector of the chosen job</figcaption></figure>
+<p>You send a file by <strong>dragging it onto the window</strong> (or onto the Dock icon on Mac), or with the <strong>+ Send</strong> (<em>+ Envoyer</em>) button: the client asks which preset to apply and, optionally, the customer, the order and the quantity. Accepted formats: PDF, PDF-compatible AI, SVG, TIFF, PNG and JPEG. A notification tells you when the render is ready.</p>
+<figure><a href="/documentation/images/client-linux-envoi.png"><img src="/documentation/images/client-linux-envoi.png" alt="Job upload window" loading="lazy"></a><figcaption>Send to the RIP (Envoyer au RIP): the file, the preset to apply and the optional job ticket</figcaption></figure>
+<p>The full settings screens (machines, media, colour, cutting, accounts, backup, Cloud) open from the <strong>Administration…</strong> menu. How to use them is explained in the <a href="/documentation/en/usage/">user guide</a>.</p>
+<h2 id="mac-client"><a class="ancre" href="#mac-client" aria-hidden="true">#</a>Mac client</h2>
+<figure><a href="/documentation/images/client-mac.png"><img src="/documentation/images/client-mac.png" alt="Mac client window" loading="lazy"></a><figcaption>The Mac client: sidebar, jobs and inspector</figcaption></figure>
+<p><strong>Requirements</strong>: macOS 14 (Sonoma) or later, Apple Silicon or Intel Mac.</p>
+<ol><li>Download the client: <a href="https://e-ko.rip/telecharger/mac" rel="noopener">e-ko.rip/telecharger/mac</a> (<code>.dmg</code> file of the latest version).</li><li>Open the <code>.dmg</code> and drag <strong>E-KO RIP Center</strong> into <strong>Applications</strong>.</li><li>Launch the application. It is signed and checked by Apple: it opens with no warning.</li><li>At first launch, macOS asks for access to the <strong>local network</strong>: accept, otherwise the server is not found.</li></ol>
+<p><strong>Updates</strong>: download the new version and replace the application. The server and the client are updated separately; a client slightly older than the server keeps working.</p>
+<p><strong>Useful menus</strong>: <strong>Server › Change server…</strong> (<em>Serveur › Changer de serveur…</em>), <strong>Server › Administration…</strong>, <strong>Server › Sign out</strong> (<em>Serveur › Se déconnecter</em>), <strong>Help › Report a problem…</strong> (<em>Aide › Signaler un problème…</em>).</p>
+<h2 id="linux-client"><a class="ancre" href="#linux-client" aria-hidden="true">#</a>Linux client</h2>
+<figure><a href="/documentation/images/client-linux-machines.png"><img src="/documentation/images/client-linux-machines.png" alt="Machines view of the Linux client" loading="lazy"></a><figcaption>The Linux client (GTK 4), Machines view: the queue of each printer and cutter</figcaption></figure>
+<p><strong>Requirements</strong>: Ubuntu 24.04 or later, or Debian 13 (GNOME desktop recommended), 64-bit PC.</p>
+<p>Install with a single command; the E-KO repository is added to the system:</p>
+<pre class="langue-bash"><code>wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh</code></pre>
+<p>The client appears in the applications as <strong>E-KO RIP Center</strong>. It is then updated along with the rest of the system:</p>
+<pre class="langue-bash"><code>sudo apt update &amp;&amp; sudo apt upgrade</code></pre>
+<p><strong>Main menu</strong> (☰ button at the top right): <strong>Administration…</strong>, <strong>Report a problem…</strong> (<em>Signaler un problème…</em>), <strong>Change server…</strong> (<em>Changer de serveur…</em>), <strong>Sign out</strong> (<em>Se déconnecter</em>), <strong>About E-KO RIP Center</strong> (<em>À propos d'E-KO RIP Center</em>).</p>
+<h2 id="windows-client"><a class="ancre" href="#windows-client" aria-hidden="true">#</a>Windows client</h2>
+<figure><a href="/documentation/images/client-windows.png"><img src="/documentation/images/client-windows.png" alt="Mock-up of the native Windows client" loading="lazy"></a><figcaption>The native Windows client, in preparation (preview of the planned interface)</figcaption></figure>
+<p><strong>Requirements</strong>: Windows 10 or 11, 64-bit.</p>
+<ol><li>Download the installer: <a href="https://e-ko.rip/telecharger/windows" rel="noopener">e-ko.rip/telecharger/windows</a>.</li><li>Run the <code>…_x64-setup.exe</code> file and follow the wizard.</li><li>The client is not signed yet: if Windows shows "Windows protected your PC", click <strong>More info</strong> then <strong>Run anyway</strong> (once per workstation).</li></ol>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>A native Windows client, along the lines of the Mac and Linux clients, is in preparation. In the meantime, the Windows client opens the server's interface in its window: all the features are there, with a different layout.</p></aside>
+<h2 id="connecting-to-the-server"><a class="ancre" href="#connecting-to-the-server" aria-hidden="true">#</a>Connecting to the server</h2>
+<p>At first launch, the connection screen looks for E-KO RIP servers on the local network by itself and lists them under <strong>Servers found on the network</strong> (<em>Serveurs trouvés sur le réseau</em>; name, address, version): one click is enough.</p>
+<ul><li><strong>Search again</strong> (<em>Rechercher à nouveau</em>) repeats the search (about 3 seconds).</li><li>If nothing appears, enter the address under <strong>Enter an address</strong> (<em>Saisir une adresse</em>), for example <code>192.168.1.20:8640</code>. Discovery does not cross routers or VPNs.</li><li>If the server has accounts, the client then asks for the name and password. The session lasts 12 hours.</li></ul>
+<p>The client remembers the server. To change it: <strong>Change server…</strong> (<kbd>Cmd</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> on Mac).</p>
+<h3 id="from-outside-the-shop"><a class="ancre" href="#from-outside-the-shop" aria-hidden="true">#</a>From outside the shop</h3>
+<p>If the server is linked to <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>, enter the site's address, for example <code>https://atelier.platform.e-ko.rip</code>, then sign in with your server account. With the <strong>Sign in to the cloud</strong> button (<em>Se connecter au cloud</em>; Mac and Linux clients), the client opens the browser so you can sign in to your Cloud account, then lists your sites: one click is enough.</p>
+<h2 id="several-servers"><a class="ancre" href="#several-servers" aria-hidden="true">#</a>Several servers</h2>
+<p>A client talks to only one server at a time. To switch from one shop to another (or from the local network to the Cloud), use <strong>Change server…</strong>: the list offers the servers found and the address entered last time.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/server/"><span>Previous</span>Install the server</a><a class="doc-suiv" href="/documentation/en/mobile-app/"><span>Next</span>Mobile app</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/clients.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#what-the-client-does">What the client does</a></li><li class="niveau-2"><a href="#mac-client">Mac client</a></li><li class="niveau-2"><a href="#linux-client">Linux client</a></li><li class="niveau-2"><a href="#windows-client">Windows client</a></li><li class="niveau-2"><a href="#connecting-to-the-server">Connecting to the server</a></li><li class="niveau-3"><a href="#from-outside-the-shop">From outside the shop</a></li><li class="niveau-2"><a href="#several-servers">Several servers</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

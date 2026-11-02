@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Administrer le serveur · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Comptes, sauvegardes, mises à jour, dossiers partagés, réglages avancés et données du serveur.">
+<link rel="canonical" href="https://e-ko.rip/documentation/administration/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/administration/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/administration/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/fr/administration.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a class="nav-mobile" href="/#installer">Installer</a>
+      <a href="/documentation/en/administration/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/" aria-current="page">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Administrer</p>
+    <h1>Administrer le serveur</h1>
+    <p class="doc-chapo">Comptes, sauvegardes, mises à jour, dossiers partagés, réglages avancés et données du serveur.</p>
+<p>Cette page s'adresse à la personne qui fait vivre le serveur : comptes, sauvegardes, mises à jour, dossiers partagés et réglages avancés. Les commandes se tapent sur le serveur, dans un terminal ou par SSH.</p>
+<h2 id="au-quotidien"><a class="ancre" href="#au-quotidien" aria-hidden="true">#</a>Au quotidien</h2>
+<pre class="langue-bash"><code>systemctl status eko-rip-serveur        # le service tourne-t-il ?
+journalctl -u eko-rip-serveur -f        # journal en direct
+sudo systemctl restart eko-rip-serveur  # redémarrer</code></pre>
+<p>Le journal note chaque rendu raté et chaque sortie échouée, avec la machine, le travail et la raison. Dans le client, la vue <strong>Système</strong> montre la version, la place libre sur le disque et la durée de conservation des travaux.</p>
+<p>Un redémarrage coupe le rendu en cours : le travail passe en échec « interrompu », à relancer avec <strong>Relancer</strong>. Les sorties en file restent dans la file ; chacun se reconnecte.</p>
+<h2 id="comptes"><a class="ancre" href="#comptes" aria-hidden="true">#</a>Comptes</h2>
+<div class="tableau"><table><thead><tr><th>Action</th><th>Commande</th></tr></thead><tbody><tr><td>Ajouter un administrateur</td><td><code>sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter &lt;nom&gt; admin</code></td></tr><tr><td>Ajouter un opérateur</td><td><code>… utilisateur ajouter &lt;nom&gt; operateur</code></td></tr><tr><td>Lister les comptes</td><td><code>… utilisateur liste</code></td></tr><tr><td>Supprimer un compte</td><td><code>… utilisateur supprimer &lt;nom&gt;</code></td></tr></tbody></table></div>
+<ul><li><strong>Mot de passe oublié</strong> ou <strong>changement de rôle</strong> : redéclarer le compte avec <code>utilisateur ajouter</code> ; le nouveau mot de passe et le rôle remplacent les anciens.</li><li><strong>5 mots de passe faux</strong> bloquent le nom 5 minutes.</li><li>Supprimer un compte ferme aussitôt ses sessions. Aucun redémarrage n'est nécessaire.</li></ul>
+<h2 id="sauvegarder"><a class="ancre" href="#sauvegarder" aria-hidden="true">#</a>Sauvegarder</h2>
+<p><strong>La configuration</strong> (machines, supports, tarifs, réglages enregistrés, découpe, tons directs, profils ICC) : dans le client, <strong>Administration… › Système › Sauvegarde de la configuration › Télécharger la sauvegarde</strong>. Garder le fichier hors du serveur, et refaire la sauvegarde après chaque changement de réglages.</p>
+<p><strong>Tout, comptes compris</strong> : copier le dossier <code>/var/lib/eko-rip</code>, service arrêté. Les travaux sont volumineux et se refont depuis leurs fichiers sources : la configuration et le fichier des comptes (<code>utilisateurs.json</code>) suffisent souvent.</p>
+<p><strong>Avant chaque mise à jour</strong>, le paquet copie seul la configuration dans <code>/var/lib/eko-rip/sauvegardes/</code> (les 10 dernières sont gardées).</p>
+<h3 id="remonter-un-serveur"><a class="ancre" href="#remonter-un-serveur" aria-hidden="true">#</a>Remonter un serveur</h3>
+<ol><li>Installer le serveur sur le nouveau PC (<a href="/documentation/serveur/">Installer le serveur</a>).</li><li>Créer le compte administrateur.</li><li>Dans le client : <strong>Système › Sauvegarde de la configuration › Restaurer…</strong> et choisir le fichier. Tout est vérifié avant d'écrire : un fichier abîmé ne change rien.</li><li>Recréer les comptes opérateurs.</li></ol>
+<h2 id="mettre-à-jour"><a class="ancre" href="#mettre-à-jour" aria-hidden="true">#</a>Mettre à jour</h2>
+<p>Par le dépôt APT (serveur installé comme conseillé) :</p>
+<pre class="langue-bash"><code>sudo apt update &amp;&amp; sudo apt upgrade</code></pre>
+<p>Les données restent en place. L'interface d'administration vient du serveur : les nouveautés y apparaissent dès sa mise à jour. Les clients se mettent à jour à part (voir <a href="/documentation/clients/">Installer les clients</a>).</p>
+<p>Les nouveautés de chaque version sont dans le <a href="https://e-ko.rip/changelog/" rel="noopener">journal des versions</a>, avec un abonnement par e-mail.</p>
+<h2 id="partager-les-dossiers-surveillés"><a class="ancre" href="#partager-les-dossiers-surveillés" aria-hidden="true">#</a>Partager les dossiers surveillés</h2>
+<p>Chaque réglage enregistré a un dossier <code>/var/lib/eko-rip/entrees/&lt;réglage&gt;/</code> : un fichier déposé dedans part au RIP avec ce réglage. Pour y déposer depuis les postes :</p>
+<figure><a href="/documentation/images/interface-reglages.png"><img src="/documentation/images/interface-reglages.png" alt="Réglages enregistrés" loading="lazy"></a><figcaption>Les réglages enregistrés : chacun a son dossier surveillé</figcaption></figure>
+<pre class="langue-bash"><code>sudo apt install samba</code></pre>
+<p>Ajouter à la fin de <code>/etc/samba/smb.conf</code> :</p>
+<pre class="langue-ini"><code>[eko-rip]
+   path = /var/lib/eko-rip/entrees
+   writable = yes
+   force user = eko-rip
+   valid users = eko</code></pre>
+<p>Puis <code>sudo smbpasswd -a eko</code> et <code>sudo systemctl restart smbd</code>. Les postes ouvrent <code>smb://&lt;serveur&gt;/eko-rip</code> (Mac, Linux) ou <code>\\&lt;serveur&gt;\eko-rip</code> (Windows).</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Les dossiers surveillés ne demandent pas de compte du RIP : leur accès se règle par le partage Samba.</p></aside>
+<h2 id="réglages-avancés"><a class="ancre" href="#réglages-avancés" aria-hidden="true">#</a>Réglages avancés</h2>
+<p>Dans <code>/etc/default/eko-rip-serveur</code>, puis <code>sudo systemctl restart eko-rip-serveur</code>.</p>
+<div class="tableau"><table><thead><tr><th>Réglage</th><th>Par défaut</th><th>Rôle</th></tr></thead><tbody><tr><td><code>EKO_RIP_ADDR</code></td><td><code>0.0.0.0:8640</code></td><td>adresse et port d'écoute</td></tr><tr><td><code>EKO_RIP_DATA</code></td><td><code>/var/lib/eko-rip</code></td><td>dossier des données</td></tr><tr><td><code>EKO_RIP_MAX_MO</code></td><td><code>8192</code></td><td>taille maximale d'un fichier reçu, en Mo</td></tr><tr><td><code>EKO_RIP_DELAI_S</code></td><td><code>1800</code></td><td>durée maximale d'un rendu, en secondes</td></tr><tr><td><code>EKO_RIP_RENDUS</code></td><td>un par cœur, 4 au plus</td><td>rendus menés en même temps (1 à 16)</td></tr><tr><td><code>EKO_RIP_CONSERVATION_JOURS</code></td><td><code>30</code></td><td>travaux effacés après ce nombre de jours (0 : jamais)</td></tr><tr><td><code>EKO_RIP_SEUIL_LIBRE_MO</code></td><td><code>5120</code></td><td>espace libre gardé ; en dessous, purge des vieux travaux</td></tr><tr><td><code>EKO_RIP_SEUIL_ALERTE_MO</code></td><td><code>20480</code></td><td>seuil de l'alerte « disque presque plein »</td></tr><tr><td><code>EKO_RIP_PLOTTER</code></td><td><code>/dev/kona</code></td><td>port de la découpeuse en USB</td></tr><tr><td><code>EKO_RIP_EPSON_SNMP</code></td><td>(vide)</td><td>adresse de l'Epson pour lire le média chargé</td></tr><tr><td><code>EKO_RIP_ANNONCE</code></td><td><code>1</code></td><td><code>0</code> : ne pas s'annoncer sur le réseau (adresse à saisir dans les clients)</td></tr><tr><td><code>EKO_RIP_CLOUD_NOM</code></td><td>nom du PC</td><td>nom proposé pour le site sur le Cloud</td></tr></tbody></table></div>
+<p>La référence complète (tous les réglages, l'emplacement de chaque fichier de données) est dans la <a href="https://github.com/mvignaud/eko-rip-center/blob/main/docs/fr/installation-serveur.md#réglages" rel="noopener">documentation technique</a>.</p>
+<h2 id="où-sont-les-données"><a class="ancre" href="#où-sont-les-données" aria-hidden="true">#</a>Où sont les données</h2>
+<p>Tout est dans <code>/var/lib/eko-rip</code> : un dossier par travail (<code>travaux/</code>), la file (<code>file.json</code>), le catalogue des machines (<code>machines.json</code>), les supports, les réglages, les comptes (mots de passe hachés), les profils ICC et les dossiers surveillés (<code>entrees/</code>). Chaque fichier de réglage garde sa version précédente (<code>.prec</code>) : après une coupure de courant, le serveur la reprend seul et le signale dans <strong>Système</strong>.</p>
+<h2 id="statistiques-et-rapports-de-bug"><a class="ancre" href="#statistiques-et-rapports-de-bug" aria-hidden="true">#</a>Statistiques et rapports de bug</h2>
+<p><strong>Statistiques anonymes</strong> : le serveur et les clients envoient un signal d'installation (version, système), sans aucune donnée de l'atelier ni des fichiers. Pour l'arrêter : décocher <strong>Système › Statistiques anonymes</strong> (serveur), <strong>Système › Confidentialité</strong> (Mac) ou <strong>Système › Ce poste</strong> (Linux) ; ou <code>EKO_TELEMETRIE=0</code> dans <code>/etc/default/eko-rip-serveur</code>.</p>
+<p><strong>Signaler un problème</strong> : menu <strong>Aide</strong> (Mac), menu principal (Linux) ou <strong>Système › Rapports de bug</strong> dans l'administration. Le titre et la description sont publiés sur GitHub : n'y mettre rien de confidentiel. Le journal du serveur joint et l'e-mail restent privés. Les rapports d'erreur automatiques ne partent qu'après accord, demandé à la première ouverture de l'administration.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/machines/tables-de-decoupe/"><span>Précédent</span>Tables de découpe</a><a class="doc-suiv" href="/documentation/depannage/"><span>Suivant</span>Dépannage</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/fr/administration.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#au-quotidien">Au quotidien</a></li><li class="niveau-2"><a href="#comptes">Comptes</a></li><li class="niveau-2"><a href="#sauvegarder">Sauvegarder</a></li><li class="niveau-3"><a href="#remonter-un-serveur">Remonter un serveur</a></li><li class="niveau-2"><a href="#mettre-à-jour">Mettre à jour</a></li><li class="niveau-2"><a href="#partager-les-dossiers-surveillés">Partager les dossiers surveillés</a></li><li class="niveau-2"><a href="#réglages-avancés">Réglages avancés</a></li><li class="niveau-2"><a href="#où-sont-les-données">Où sont les données</a></li><li class="niveau-2"><a href="#statistiques-et-rapports-de-bug">Statistiques et rapports de bug</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

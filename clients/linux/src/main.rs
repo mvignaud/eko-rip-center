@@ -1,6 +1,7 @@
 //! E-KO RIP Center, client Linux natif (GTK 4 et libadwaita) : parle à l'API JSON du serveur.
 
 mod api;
+mod cloud;
 mod commande;
 mod config;
 mod connexion;
@@ -13,6 +14,7 @@ mod inspecteur;
 mod libelles;
 mod machines;
 mod modele;
+mod notifications_cloud;
 mod rapport;
 mod systeme;
 mod telemetrie;
@@ -64,6 +66,10 @@ fn main() -> glib::ExitCode {
             let (montrer, f2) = (gio::SimpleAction::new("montrer", None), f.clone());
             montrer.connect_activate(move |_, _| f2.presenter());
             app.add_action(&montrer);
+            // Clic sur une notification du cloud : paramètre « site\nlien ».
+            let (ouvrir, f3) = (gio::SimpleAction::new("ouvrir-notification-cloud", Some(glib::VariantTy::STRING)), f.clone());
+            ouvrir.connect_activate(move |_, p| f3.ouvrir_notification_cloud(p.and_then(|v| v.str()).unwrap_or_default()));
+            app.add_action(&ouvrir);
             f.demarrer();
             *fenetre.borrow_mut() = Some(f.clone());
             f

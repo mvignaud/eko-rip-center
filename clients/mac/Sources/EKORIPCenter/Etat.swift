@@ -9,6 +9,14 @@ import UserNotifications
 /// Clés de UserDefaults (et d'@AppStorage), hors de tout acteur.
 enum Cles {
     static let adresse = "adresseServeur"
+    /// Identifiant du dernier site cloud ouvert (absent si le dernier choix est un serveur local).
+    static let siteCloud = "dernierSiteCloud"
+    /// Dernier onglet de l'écran de connexion : « local » ou « cloud ».
+    static let modeConnexion = "modeConnexion"
+    /// Id de la dernière notification du cloud traitée (absent : rien de mémorisé).
+    static let dernierNotificationCloud = "dernierNotificationCloud"
+    /// L'autorisation des notifications a déjà été demandée à la première connexion au cloud.
+    static let autorisationNotificationsCloud = "autorisationNotificationsCloudDemandee"
 }
 
 enum Rubrique: String, CaseIterable, Identifiable {
@@ -79,6 +87,13 @@ final class Etat {
     var erreurConnexion: String?
     var session: InfoSession?
     var adresse = ""
+    /// Compte et sites du cloud (rempli quand un jeton est dans le trousseau et valide).
+    var cloudCompte: CompteCloud?
+    var cloudSites: [SiteCloud] = []
+    /// Site cloud ouvert ; nil sur un serveur local.
+    var siteCloud: SiteCloud?
+    /// Vrai pendant la lecture de `/api/moi`.
+    var cloudEnLecture = false
 
     // Données du serveur
     var travaux: [Travail] = []
@@ -103,8 +118,10 @@ final class Etat {
     var envois: [EnvoiEnCours] = []
 
     private(set) var api: Api?
+    @ObservationIgnored private let autorisationCloud = AutorisationCloud()
 
     @ObservationIgnored private var boucle: Task<Void, Never>?
+    @ObservationIgnored private var boucleNotificationsCloud: Task<Void, Never>?
     @ObservationIgnored private var annonceTache: Task<Void, Never>?
     @ObservationIgnored private var statutsVus: [String: StatutTravail] = [:]
     @ObservationIgnored private var etatsVus: [String: EtatSortie] = [:]
@@ -164,6 +181,12 @@ final class Etat {
     func demarrer() async {
         guard phase == .demarrage else { return }
         Notifier.demander()
+        lancerNotificationsCloud()
+        // Dernier choix : un site du cloud (jeton dans le trousseau), sinon le serveur local.
+        if let site = UserDefaults.standard.string(forKey: Cles.siteCloud), !site.isEmpty, Trousseau.lire() != nil {
+            await rouvrirCloud(siteId: site)
+            return
+        }
         let retenue = UserDefaults.standard.string(forKey: Cles.adresse) ?? ""
         if retenue.isEmpty {
             phase = .adresse
@@ -184,6 +207,7 @@ final class Etat {
         api?.session.invalidateAndCancel()
         let nouvelle = Api(racine: racine)
         api = nouvelle
+        siteCloud = nil
         adresse = Api.affichable(racine)
         erreurConnexion = nil
         occupe = true
@@ -191,6 +215,8 @@ final class Etat {
         do {
             let s = try await nouvelle.infoSession()
             UserDefaults.standard.set(adresse, forKey: Cles.adresse)
+            UserDefaults.standard.removeObject(forKey: Cles.siteCloud)
+            UserDefaults.standard.set("local", forKey: Cles.modeConnexion)
             session = s
             if s.accesLibre == true || s.utilisateur != nil {
                 await entrer()
@@ -218,6 +244,7 @@ final class Etat {
     }
 
     func deconnecter() async {
+        guard siteCloud == nil else { return }
         arreterBoucle()
         try? await api?.fermerSession()
         vider()
@@ -230,6 +257,10 @@ final class Etat {
     func changerServeur() {
         arreterBoucle()
         vider()
+        if siteCloud != nil {
+            siteCloud = nil
+            adresse = ""
+        }
         erreurConnexion = nil
         phase = .adresse
     }
@@ -245,6 +276,13 @@ final class Etat {
         guard phase == .connecte else { return }
         arreterBoucle()
         vider()
+        if siteCloud != nil {
+            // Jeton révoqué ou expiré : on l'oublie, retour à l'écran de connexion (onglet cloud).
+            oublierCloud()
+            erreurConnexion = Libelles.erreur("jeton_invalide", nil)
+            phase = .adresse
+            return
+        }
         erreurConnexion = "Session expirée : reconnectez-vous."
         phase = .connexion
     }
@@ -269,6 +307,220 @@ final class Etat {
         guard let api else { return }
         if let m = try? await api.machines() { machines = m }
         if let r = try? await api.reglages() { reglages = r }
+    }
+
+    // MARK: Cloud
+
+    /// Vrai si un jeton est gardé dans le trousseau.
+    var jetonCloudPresent: Bool { Trousseau.lire() != nil }
+
+    /// Oublie le jeton (trousseau) et tout ce qui en dépend, sans appel réseau.
+    /// Oublie le jeton du cloud. La connexion en cours n'est fermée que si elle passe par le
+    /// cloud (ou si `fermerConnexion` le demande) : un serveur RIP local ouvert reste utilisable.
+    private func oublierCloud(fermerConnexion: Bool? = nil) {
+        let fermer = fermerConnexion ?? (siteCloud != nil)
+        Trousseau.oublier()
+        arreterNotificationsCloud()
+        UserDefaults.standard.removeObject(forKey: Cles.dernierNotificationCloud)
+        cloudCompte = nil
+        cloudSites = []
+        siteCloud = nil
+        if fermer {
+            api?.session.invalidateAndCancel()
+            api = nil
+            session = nil
+        }
+        UserDefaults.standard.removeObject(forKey: Cles.siteCloud)
+    }
+
+    /// Relit `/api/moi`. 401 : le jeton est oublié.
+    func actualiserCloud() async {
+        guard let jeton = Trousseau.lire() else {
+            cloudCompte = nil
+            cloudSites = []
+            return
+        }
+        cloudEnLecture = true
+        defer { cloudEnLecture = false }
+        do {
+            let moi = try await ClientCloud().moi(jeton: jeton)
+            cloudCompte = moi.compte
+            cloudSites = moi.sites
+        } catch let e as ErreurApi where e.statut == 401 {
+            oublierCloud()
+            erreurConnexion = Libelles.erreur("jeton_invalide", nil)
+        } catch is CancellationError {
+        } catch {
+            erreurConnexion = texte(de: error)
+        }
+    }
+
+    /// Bouton « Se connecter au cloud » : navigateur, autorisation, jeton au trousseau, sites.
+    func connecterAuCloud() async {
+        guard !occupe else { return }
+        erreurConnexion = nil
+        occupe = true
+        defer { occupe = false }
+        do {
+            let jeton = try await autorisationCloud.autoriser()
+            try Trousseau.ecrire(jeton)
+            // Un autre compte a pu se connecter : le curseur repart de zéro.
+            UserDefaults.standard.removeObject(forKey: Cles.dernierNotificationCloud)
+            Notifier.demanderPourLeCloud()
+            lancerNotificationsCloud()
+            await actualiserCloud()
+        } catch let e as ErreurApi where e.code == "cloud_annule" {
+            // Fenêtre fermée par l'opérateur : rien à dire.
+        } catch is CancellationError {
+        } catch {
+            erreurConnexion = texte(de: error)
+        }
+    }
+
+    /// Au lancement : rouvre directement le dernier site s'il est en ligne ; sinon la liste.
+    private func rouvrirCloud(siteId: String) async {
+        await actualiserCloud()
+        if let site = cloudSites.first(where: { $0.id == siteId }), site.enLigne {
+            await ouvrirSite(site)
+        } else {
+            phase = .adresse
+        }
+    }
+
+    /// Un clic sur un site : l'API vise son adresse, avec le jeton sur chaque requête.
+    func ouvrirSite(_ site: SiteCloud) async {
+        guard let jeton = Trousseau.lire() else {
+            phase = .adresse
+            return
+        }
+        guard site.enLigne else {
+            erreurConnexion = Libelles.erreur("site_hors_ligne", nil)
+            phase = .adresse
+            return
+        }
+        guard let racine = Api.normaliser(site.adresse) else {
+            erreurConnexion = Libelles.erreur("adresse_invalide", nil)
+            phase = .adresse
+            return
+        }
+        arreterBoucle()
+        vider()
+        api?.session.invalidateAndCancel()
+        let nouvelle = Api(racine: racine, jeton: jeton)
+        api = nouvelle
+        erreurConnexion = nil
+        occupe = true
+        defer { occupe = false }
+        do {
+            let s = try await nouvelle.infoSession()
+            // Via le cloud il n'y a pas de mot de passe du RIP : le site doit rendre l'utilisateur.
+            guard s.utilisateur != nil else {
+                throw ErreurApi(statut: 0, code: "cloud_session_inattendue", detail: nil)
+            }
+            session = s
+            siteCloud = site
+            adresse = site.nom
+            UserDefaults.standard.set(site.id, forKey: Cles.siteCloud)
+            UserDefaults.standard.set("cloud", forKey: Cles.modeConnexion)
+            await entrer()
+        } catch let e as ErreurApi where e.statut == 401 {
+            oublierCloud(fermerConnexion: true)
+            erreurConnexion = Libelles.erreur("jeton_invalide", nil)
+            phase = .adresse
+        } catch {
+            api?.session.invalidateAndCancel()
+            api = nil
+            siteCloud = nil
+            erreurConnexion = texte(de: error)
+            phase = .adresse
+        }
+    }
+
+    /// « Se déconnecter du cloud » : révoque le jeton côté plate-forme (au mieux), puis l'oublie.
+    func deconnecterCloud() async {
+        arreterBoucle()
+        vider()
+        let jeton = Trousseau.lire()
+        oublierCloud(fermerConnexion: true)
+        erreurConnexion = nil
+        phase = .adresse
+        if let jeton { try? await ClientCloud().deconnecter(jeton: jeton) }
+    }
+
+    // MARK: Notifications du cloud
+
+    /// Intervalle entre deux interrogations de la plate-forme.
+    private static let periodeNotificationsCloud: Duration = .seconds(60)
+    /// Relances immédiates au plus, par tour, quand la plate-forme a plus de 50 notifications.
+    private static let relancesMax = 10
+
+    /// Interroge la plate-forme toutes les 60 s tant qu'un jeton est au trousseau, quel que
+    /// soit le serveur ouvert (local ou site du cloud).
+    private func lancerNotificationsCloud() {
+        boucleNotificationsCloud?.cancel()
+        guard Trousseau.lire() != nil else { return }
+        boucleNotificationsCloud = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.interrogerNotificationsCloud()
+                try? await Task.sleep(for: Etat.periodeNotificationsCloud)
+            }
+        }
+    }
+
+    private func arreterNotificationsCloud() {
+        boucleNotificationsCloud?.cancel()
+        boucleNotificationsCloud = nil
+    }
+
+    /// Un tour. Erreur réseau : silence, au tour suivant. 401 : comme une connexion expirée.
+    private func interrogerNotificationsCloud() async {
+        let defauts = UserDefaults.standard
+        for _ in 0..<Etat.relancesMax {
+            guard !Task.isCancelled, let jeton = Trousseau.lire() else { return }
+            var suivi = SuiviNotifications(apres: defauts.object(forKey: Cles.dernierNotificationCloud) as? Int)
+            let reponse: ReponseNotifications
+            do {
+                reponse = try await ClientCloud().notifications(jeton: jeton, apres: suivi.apres)
+            } catch let e as ErreurApi where e.statut == 401 {
+                jetonCloudInvalide()
+                return
+            } catch {
+                return
+            }
+            // Déconnecté (ou autre compte) pendant l'appel : la réponse ne compte plus.
+            guard !Task.isCancelled, Trousseau.lire() == jeton else { return }
+            let suite = suivi.absorber(reponse)
+            if let apres = suivi.apres { defauts.set(apres, forKey: Cles.dernierNotificationCloud) }
+            for n in suite.aAfficher { Notifier.envoyerCloud(n) }
+            if !suite.relancer { return }
+        }
+    }
+
+    /// 401 sur la plate-forme hors d'un site cloud ouvert : jeton oublié, comme `actualiserCloud`.
+    private func jetonCloudInvalide() {
+        if phase == .connecte, siteCloud != nil {
+            retourConnexion()
+        } else {
+            oublierCloud()
+            erreurConnexion = Libelles.erreur("jeton_invalide", nil)
+        }
+    }
+
+    /// Clic sur une notification du cloud : le site s'il est dans le compte, sinon le lien.
+    func ouvrirNotificationCloud(site: String?, lien: String?) async {
+        NSApp.activate(ignoringOtherApps: true)
+        if cloudSites.isEmpty, site?.isEmpty == false, Trousseau.lire() != nil {
+            await actualiserCloud()
+        }
+        switch CibleNotification.choisir(site: site, lien: lien, sites: cloudSites) {
+        case .site(let id):
+            if let s = cloudSites.first(where: { $0.id == id }) { await ouvrirSite(s) }
+        case .lien(let url):
+            NSWorkspace.shared.open(url)
+        case nil:
+            break
+        }
     }
 
     // MARK: Actualisation
@@ -573,6 +825,26 @@ enum Notifier {
     static func demander() {
         guard disponible else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Première connexion au cloud : demande l'autorisation, une seule fois (drapeau UserDefaults).
+    static func demanderPourLeCloud() {
+        let defauts = UserDefaults.standard
+        guard disponible, !defauts.bool(forKey: Cles.autorisationNotificationsCloud) else { return }
+        defauts.set(true, forKey: Cles.autorisationNotificationsCloud)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Notification du cloud : `userInfo` porte le site et le lien pour le clic (DelegueApp).
+    static func envoyerCloud(_ n: NotificationCloud) {
+        guard disponible else { return }
+        let contenu = UNMutableNotificationContent()
+        contenu.title = n.titre
+        contenu.body = n.corps
+        contenu.sound = .default
+        contenu.userInfo = ["site": n.site ?? "", "lien": n.lien]
+        let requete = UNNotificationRequest(identifier: "cloud-\(n.id)", content: contenu, trigger: nil)
+        UNUserNotificationCenter.current().add(requete)
     }
 
     static func envoyer(titre: String, texte: String) {

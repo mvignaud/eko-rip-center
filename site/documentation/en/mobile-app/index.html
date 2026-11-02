@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobile app · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Follow production from an iOS or Android phone and get machine alerts.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/mobile-app/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/mobile-app/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/application-mobile/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/mobile-app.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a class="nav-mobile" href="/#installer">Install</a>
+      <a href="/documentation/application-mobile/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/" aria-current="page">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Install</p>
+    <h1>Mobile app</h1>
+    <p class="doc-chapo">Follow production from an iOS or Android phone and get machine alerts.</p>
+<p>The <strong>E-KO RIP</strong> app lets you follow the shop from a phone: print queue, machine status, ink levels and alerts. It warns you as soon as a machine stops with an error, even when the phone is in your pocket. It works on iPhone and Android.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>The app is for <strong>monitoring</strong>. It sends no files and does not set up printing or cutting: those operations are still done from a workstation (see <a href="/documentation/en/clients/#mac-client">Clients</a>).</p></aside>
+<h2 id="what-the-app-does"><a class="ancre" href="#what-the-app-does" aria-hidden="true">#</a>What the app does</h2>
+<ul><li>See the print queue of each machine, with the outputs in progress first.</li><li>Start, pause, stop, retry or move an output to the front.</li><li>Check the status of each machine: printing, cutting, idle, unreachable.</li><li>Check the level of each ink and the length of media left on the roll.</li><li>Read the history of the latest alerts.</li><li>Receive notifications for errors, nearly empty ink or failed outputs.</li></ul>
+<h2 id="installing-the-app"><a class="ancre" href="#installing-the-app" aria-hidden="true">#</a>Installing the app</h2>
+<p>The app will soon be available on the App Store and on Google Play. The download link and the news are announced on the app page: <a href="https://e-ko.rip/app/">https://e-ko.rip/app/</a>.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>You do not need an E-KO account to install the app. It connects only to the shop's RIP server.</p></aside>
+<h2 id="connecting-to-a-server"><a class="ancre" href="#connecting-to-a-server" aria-hidden="true">#</a>Connecting to a server</h2>
+<p>The app asks which RIP server to connect to. There are two cases: in the shop with the local address, or remotely with E-KO RIP Cloud.</p>
+<h3 id="in-the-shop-local-address"><a class="ancre" href="#in-the-shop-local-address" aria-hidden="true">#</a>In the shop: local address</h3>
+<p>The phone must be on the shop's Wi-Fi network.</p>
+<ol><li>Open the app.</li><li>In the <strong>Server</strong> field (<em>Serveur</em>), enter the address of the RIP server, for example <code>http://192.168.1.20:8640</code>. This is the address used in the desktop clients (see <a href="/documentation/en/server/">Install the server</a>).</li><li>Tap <strong>Continue</strong> (<em>Continuer</em>).</li><li>If the server asks for an account, enter the user name and password, then tap <strong>Sign in</strong> (<em>Se connecter</em>).</li></ol>
+<p>An <strong>Operator</strong> (<em>Opérateur</em>) account is enough to follow the queue and act on outputs. Accounts are managed in the server administration (see <a href="/documentation/en/administration/#accounts">Run the server</a>).</p>
+<p>The name and password are kept in the phone's secure storage. The app reuses them to reopen the session when it expires, after 12 hours or after a server restart.</p>
+<h3 id="away-from-the-shop-e-ko-rip-cloud"><a class="ancre" href="#away-from-the-shop-e-ko-rip-cloud" aria-hidden="true">#</a>Away from the shop: E-KO RIP Cloud</h3>
+<p>The Cloud lets you reach the shop's server from outside, with no VPN. The server must already be linked to the platform (see <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>).</p>
+<p>There are two ways to do it:</p>
+<ul><li>Enter the site's remote address in <strong>Server</strong>, in the form <code>https://&lt;site&gt;.platform.e-ko.rip</code>, then an account of the RIP server.</li><li>Tap <strong>Sign in to the cloud</strong> (<em>Se connecter au cloud</em>) under the "away from the shop" note. Entering <code>platform.e-ko.rip</code> in <strong>Server</strong> does the same.</li></ul>
+<p>With <strong>Sign in to the cloud</strong>:</p>
+<ol><li>Tap <strong>Sign in to the cloud</strong>. The phone's browser opens on the platform.</li><li>Sign in with the platform account, then authorise the app.</li><li>The app opens on the <strong>Your sites</strong> screen (<em>Vos sites</em>), which lists the account's sites, online or not.</li><li>Tap the site you want. No second password is requested.</li></ol>
+<p>The role shown in the app comes from the one given to the account on the site. Access stays valid for about 180 days.</p>
+<p>To sign out of the cloud, tap <strong>Sign out of the cloud</strong> (<em>Se déconnecter du cloud</em>) on the <strong>Your sites</strong> screen. You can also disconnect the apps from <strong>My account</strong> (<em>Mon compte</em>) on the portal (see <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>).</p>
+<h2 id="the-apps-tabs"><a class="ancre" href="#the-apps-tabs" aria-hidden="true">#</a>The app's tabs</h2>
+<p>The app has four tabs: <strong>Queue</strong>, <strong>Machines</strong>, <strong>Alerts</strong> and <strong>Settings</strong> (<em>File</em>, <em>Machines</em>, <em>Alertes</em>, <em>Réglages</em>).</p>
+<h3 id="queue"><a class="ancre" href="#queue" aria-hidden="true">#</a>Queue</h3>
+<figure><a href="/documentation/images/mobile-file.png"><img src="/documentation/images/mobile-file.png" alt="Queue tab: outputs in progress and waiting for each machine" loading="lazy"></a><figcaption>The Queue tab</figcaption></figure>
+<p>The <strong>Queue</strong> tab lists the outputs of each machine. Outputs in progress and waiting come first, then the recently finished outputs.</p>
+<p>Each output has a status: <strong>In progress</strong> (<em>En cours</em>), <strong>Waiting</strong> (<em>En attente</em>), <strong>Suspended</strong> (<em>Suspendue</em>), <strong>Finished</strong> (<em>Terminée</em>), <strong>Failed</strong> (<em>Échec</em>) or <strong>Cancelled</strong> (<em>Annulée</em>). If an output fails, the error message is shown under it. The elapsed time and the estimated time are shown when they are known.</p>
+<p>To act on an output:</p>
+<ol><li>Tap the output.</li><li>Choose the action you want in the list.</li><li>Confirm if the app asks you to.</li></ol>
+<p>The actions offered depend on the output's status:</p>
+<div class="tableau"><table><thead><tr><th>Output status</th><th>Possible actions</th></tr></thead><tbody><tr><td>Waiting</td><td><strong>Pause</strong>, <strong>Move to front</strong> (<em>Passer en tête</em>), <strong>Stop</strong></td></tr><tr><td>Suspended</td><td><strong>Start</strong> (<em>Lancer</em>) or <strong>Resume</strong> (<em>Reprendre</em>), <strong>Move to front</strong>, <strong>Stop</strong></td></tr><tr><td>Finished or failed</td><td><strong>Retry</strong> (<em>Relancer</em>; creates a new, identical output)</td></tr><tr><td>Nested in a sheet</td><td>No action</td></tr></tbody></table></div>
+<aside class="encadre encadre-attention"><p class="encadre-titre">Warning</p><p><strong>Pause</strong> and <strong>Stop</strong> only act on an output that has not yet been sent to the machine. A print already sent to the machine cannot be stopped from the app. To interrupt it, use the machine itself.</p></aside>
+<h3 id="machines"><a class="ancre" href="#machines" aria-hidden="true">#</a>Machines</h3>
+<figure><a href="/documentation/images/mobile-machines.png"><img src="/documentation/images/mobile-machines.png" alt="Machines tab: status, inks and roll of each machine" loading="lazy"></a><figcaption>The Machines tab</figcaption></figure>
+<p>The <strong>Machines</strong> tab shows one card per machine:</p>
+<ul><li>the status: <strong>Printing</strong> (<em>En impression</em>), <strong>Cutting</strong> (<em>En découpe</em>), <strong>Idle</strong> (<em>En attente</em>) or <strong>Unreachable</strong> (<em>Injoignable</em>);</li><li>the current output;</li><li>the level of each ink, with low levels highlighted;</li><li>the length of media left on the roll;</li><li>the current alerts (cover open, end of roll…);</li><li>the time of the last reading.</li></ul>
+<p>The server polls the Epson machines about once a minute. The values shown are therefore at most a few moments old.</p>
+<h3 id="alerts"><a class="ancre" href="#alerts" aria-hidden="true">#</a>Alerts</h3>
+<figure><a href="/documentation/images/mobile-alertes.png"><img src="/documentation/images/mobile-alertes.png" alt="Alerts tab: history of the latest events" loading="lazy"></a><figcaption>The Alerts tab</figcaption></figure>
+<p>The <strong>Alerts</strong> tab keeps the last 200 events: machine alerts, nearly empty ink, failed outputs, unreachable machine. A badge marks events not yet seen.</p>
+<h3 id="settings"><a class="ancre" href="#settings" aria-hidden="true">#</a>Settings</h3>
+<p>The <strong>Settings</strong> tab shows:</p>
+<ul><li>the server, the user and the role (<strong>Administrator</strong> or <strong>Operator</strong>; <em>Administrateur</em>, <em>Opérateur</em>);</li><li>the notification switches;</li><li>the <strong>Send a test notification</strong> button (<em>Envoyer une notification d'essai</em>);</li><li>the <strong>Sign out</strong> button (<em>Se déconnecter</em>) and the app's version number;</li><li>the <strong>Help / Documentation</strong> link (<em>Aide / Documentation</em>), which opens this page.</li></ul>
+<h2 id="notifications"><a class="ancre" href="#notifications" aria-hidden="true">#</a>Notifications</h2>
+<p>Notifications reach you even when the app is closed.</p>
+<h3 id="turning-notifications-on"><a class="ancre" href="#turning-notifications-on" aria-hidden="true">#</a>Turning notifications on</h3>
+<ol><li>Accept the permission requested by the phone at first sign-in.</li><li>Open the <strong>Settings</strong> tab and check that <strong>Notifications</strong> is on.</li><li>Tap <strong>Send a test notification</strong>: it should arrive within a few seconds.</li></ol>
+<p>In <strong>Settings</strong>, two switches define what you receive:</p>
+<ul><li><strong>Machine errors</strong> (<em>Erreurs machine</em>): alerts, ink, failures, unreachable machine.</li><li><strong>Print finished</strong> (<em>Fins d'impression</em>): a notification for every finished print. This option is off by default.</li></ul>
+<h3 id="events-that-notify"><a class="ancre" href="#events-that-notify" aria-hidden="true">#</a>Events that notify</h3>
+<div class="tableau"><table><thead><tr><th>Event</th><th>When</th></tr></thead><tbody><tr><td>Machine alert</td><td>A new alert appears (cover open, media used up…). Ordinary states (ready, printing, warming up, standby) do not notify.</td></tr><tr><td>Nearly empty ink</td><td>An ink drops to 5% or less.</td></tr><tr><td>Empty cartridge</td><td>An ink reaches 0%.</td></tr><tr><td>Machine unreachable</td><td>Three readings in a row without an answer, then a notification when it answers again.</td></tr><tr><td>Failed output</td><td>A print or a cut fails.</td></tr><tr><td>Failed render</td><td>The render of a job fails.</td></tr><tr><td>Print finished</td><td>Only if <strong>Print finished</strong> is on.</td></tr></tbody></table></div>
+<p>After a server restart, no burst of notifications is sent: the server simply picks up the current state.</p>
+<h3 id="cloud-notifications"><a class="ancre" href="#cloud-notifications" aria-hidden="true">#</a>Cloud notifications</h3>
+<p>When the app is connected to the cloud, it asks for notification permission right after the first sign-in. It then also receives the platform's notifications: site offline, site back online, new app connected to the account. These notifications follow the <strong>Receive alerts</strong> box (<em>Recevoir les alertes</em>) in <strong>My account</strong> on the portal (see <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>).</p>
+<p>A phone stays registered as long as the app is opened at least once every 30 days.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Tip</p><p>If no notification arrives, check the permission in the phone's settings, then the <strong>Notifications</strong> switch in the app. Signing out then back in renews the phone's registration with the server.</p></aside>
+<aside class="encadre encadre-note"><p class="encadre-titre">Note</p><p>Machine notifications are sent by the RIP server. It must therefore have Internet access.</p></aside>
+<h2 id="demo-mode"><a class="ancre" href="#demo-mode" aria-hidden="true">#</a>Demo mode</h2>
+<p>Demo mode shows the app with made-up data, with no server and no connection.</p>
+<ol><li>On the sign-in screen, tap <strong>Try demo mode</strong> (<em>Essayer le mode démo</em>).</li><li>Browse the tabs: nothing is saved and nothing is sent.</li><li>To leave, open <strong>Settings</strong> and tap <strong>Leave demo mode</strong> (<em>Quitter le mode démo</em>).</li></ol>
+<h2 id="privacy"><a class="ancre" href="#privacy" aria-hidden="true">#</a>Privacy</h2>
+<p>The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The publisher receives no account, no advertising and no audience measurement.</p>
+<ul><li>Credentials are kept in the phone's secure storage and sent only to the server you chose.</li><li>For notifications, a phone token is passed to the server; the messages then go through the Expo notification service, then through Apple or Google.</li><li>Signing out deletes the credentials from the phone and removes the phone from the notification list.</li></ul>
+<p>The full policy is published at <a href="https://e-ko.rip/app/confidentialite/">https://e-ko.rip/app/confidentialite/</a>.</p>
+<h2 id="frequently-asked-questions"><a class="ancre" href="#frequently-asked-questions" aria-hidden="true">#</a>Frequently asked questions</h2>
+<h3 id="which-address-should-i-enter-to-connect"><a class="ancre" href="#which-address-should-i-enter-to-connect" aria-hidden="true">#</a>Which address should I enter to connect?</h3>
+<p>In the shop, the server's local address (for example <code>http://192.168.1.20:8640</code>). Away from the shop, the site's address on the cloud (<code>https://&lt;site&gt;.platform.e-ko.rip</code>) or the <strong>Sign in to the cloud</strong> button. See <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>.</p>
+<h3 id="the-app-cannot-reach-the-server"><a class="ancre" href="#the-app-cannot-reach-the-server" aria-hidden="true">#</a>The app cannot reach the server</h3>
+<ol><li>Check that the phone is on the shop's Wi-Fi, if you are using the local address.</li><li>Check the address you entered, with no spaces.</li><li>Away from the shop, use the cloud: the local address can only be reached on site.</li></ol>
+<p>If the problem persists, see <a href="/documentation/en/troubleshooting/">Troubleshooting</a>.</p>
+<h3 id="the-site-is-offline-in-the-list"><a class="ancre" href="#the-site-is-offline-in-the-list" aria-hidden="true">#</a>The site is "offline" in the list</h3>
+<p>The shop's RIP server is not linked to the platform: it is switched off or has no Internet. Check the server on site (see <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>).</p>
+<h3 id="i-do-not-receive-notifications"><a class="ancre" href="#i-do-not-receive-notifications" aria-hidden="true">#</a>I do not receive notifications</h3>
+<p>Check the permission in the phone's settings, the <strong>Notifications</strong> switch in <strong>Settings</strong>, then that the RIP server is up to date. Signing out and back in renews the registration.</p>
+<h3 id="can-i-send-a-file-to-print-from-the-phone"><a class="ancre" href="#can-i-send-a-file-to-print-from-the-phone" aria-hidden="true">#</a>Can I send a file to print from the phone?</h3>
+<p>No. Files are sent from a workstation or from the browser (see <a href="/documentation/en/clients/#mac-client">Install the clients</a>).</p>
+<h3 id="why-does-printing-carry-on-after-stop"><a class="ancre" href="#why-does-printing-carry-on-after-stop" aria-hidden="true">#</a>Why does printing carry on after <strong>Stop</strong>?</h3>
+<p><strong>Stop</strong> cancels a waiting or suspended output. A print that has already gone to the machine cannot be interrupted from the app.</p>
+<h3 id="a-question-a-problem"><a class="ancre" href="#a-question-a-problem" aria-hidden="true">#</a>A question, a problem?</h3>
+<p>Write to contact@e-ko.rip.</p>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/clients/"><span>Previous</span>Install the clients</a><a class="doc-suiv" href="/documentation/en/cloud/"><span>Next</span>E-KO RIP Cloud</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/mobile-app.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#what-the-app-does">What the app does</a></li><li class="niveau-2"><a href="#installing-the-app">Installing the app</a></li><li class="niveau-2"><a href="#connecting-to-a-server">Connecting to a server</a></li><li class="niveau-3"><a href="#in-the-shop-local-address">In the shop: local address</a></li><li class="niveau-3"><a href="#away-from-the-shop-e-ko-rip-cloud">Away from the shop: E-KO RIP Cloud</a></li><li class="niveau-2"><a href="#the-apps-tabs">The app&#x27;s tabs</a></li><li class="niveau-3"><a href="#queue">Queue</a></li><li class="niveau-3"><a href="#machines">Machines</a></li><li class="niveau-3"><a href="#alerts">Alerts</a></li><li class="niveau-3"><a href="#settings">Settings</a></li><li class="niveau-2"><a href="#notifications">Notifications</a></li><li class="niveau-3"><a href="#turning-notifications-on">Turning notifications on</a></li><li class="niveau-3"><a href="#events-that-notify">Events that notify</a></li><li class="niveau-3"><a href="#cloud-notifications">Cloud notifications</a></li><li class="niveau-2"><a href="#demo-mode">Demo mode</a></li><li class="niveau-2"><a href="#privacy">Privacy</a></li><li class="niveau-2"><a href="#frequently-asked-questions">Frequently asked questions</a></li><li class="niveau-3"><a href="#which-address-should-i-enter-to-connect">Which address should I enter to connect?</a></li><li class="niveau-3"><a href="#the-app-cannot-reach-the-server">The app cannot reach the server</a></li><li class="niveau-3"><a href="#the-site-is-offline-in-the-list">The site is &quot;offline&quot; in the list</a></li><li class="niveau-3"><a href="#i-do-not-receive-notifications">I do not receive notifications</a></li><li class="niveau-3"><a href="#can-i-send-a-file-to-print-from-the-phone">Can I send a file to print from the phone?</a></li><li class="niveau-3"><a href="#why-does-printing-carry-on-after-stop">Why does printing carry on after Stop?</a></li><li class="niveau-3"><a href="#a-question-a-problem">A question, a problem?</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

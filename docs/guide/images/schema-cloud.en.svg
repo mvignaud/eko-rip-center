@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360" font-family="-apple-system, 'Segoe UI', Ubuntu, Roboto, Arial, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">How E-KO RIP Cloud works</title>
+  <desc id="d">The shop's RIP server, behind the router, itself opens an encrypted outgoing connection to platform.e-ko.rip. Workstations and phones away from the shop use the site's address, https://site-name.platform.e-ko.rip, and the platform relays their requests through that connection. No port is opened on the router.</desc>
+  <defs><marker id="f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#4a505c"/></marker></defs>
+  <rect width="960" height="360" rx="22" fill="#f6f7f9"/>
+  <rect x="24" y="40" width="300" height="280" rx="18" fill="#fff" stroke="#d6dae2" stroke-dasharray="6 6"/>
+  <text x="44" y="72" font-size="14" font-weight="700" fill="#4a505c">SHOP</text>
+  <rect x="54" y="110" width="170" height="110" rx="16" fill="#0a84ff"/>
+  <text x="139" y="156" font-size="17" font-weight="700" fill="#fff" text-anchor="middle">RIP server</text>
+  <text x="139" y="180" font-size="12" fill="#e6f1ff" text-anchor="middle">linked with a</text>
+  <text x="139" y="198" font-size="12" fill="#e6f1ff" text-anchor="middle">one-time code</text>
+  <rect x="250" y="130" width="56" height="70" rx="10" fill="#eceef2"/>
+  <text x="278" y="170" font-size="12" font-weight="700" fill="#14161a" text-anchor="middle">Router</text>
+  <text x="139" y="268" font-size="12" fill="#4a505c" text-anchor="middle">no open port</text>
+  <text x="139" y="286" font-size="12" fill="#4a505c" text-anchor="middle">no VPN</text>
+  <rect x="390" y="100" width="220" height="130" rx="18" fill="#fff" stroke="#d6dae2"/>
+  <text x="500" y="146" font-size="17" font-weight="700" fill="#14161a" text-anchor="middle">platform.e-ko.rip</text>
+  <text x="500" y="170" font-size="12" fill="#4a505c" text-anchor="middle">portal: accounts, sites</text>
+  <text x="500" y="190" font-size="12" fill="#4a505c" text-anchor="middle">encrypted relay (HTTPS)</text>
+  <text x="500" y="210" font-size="12" fill="#4a505c" text-anchor="middle">alerts and notifications</text>
+  <g stroke="#ec008c" stroke-width="2.6" fill="none" marker-end="url(#f)" stroke-dasharray="8 5"><path d="M306 165 L388 165"/></g>
+  <text x="347" y="150" font-size="11" fill="#ec008c" font-weight="600" text-anchor="middle">outgoing</text>
+  <line x1="224" y1="165" x2="250" y2="165" stroke="#ec008c" stroke-width="2.6" stroke-dasharray="8 5"/>
+  <g font-size="14" fill="#14161a">
+    <rect x="690" y="40" width="246" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="708" y="70" font-weight="700">Mac, Linux, Windows client</text><text x="708" y="92" font-size="12" fill="#4a505c">site address as the server</text>
+    <rect x="690" y="130" width="246" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="708" y="160" font-weight="700">Browser</text><text x="708" y="182" font-size="12" fill="#4a505c">administration interface</text>
+    <rect x="690" y="220" width="246" height="70" rx="12" fill="#fff" stroke="#d6dae2"/><text x="708" y="250" font-weight="700">Mobile app</text><text x="708" y="272" font-size="12" fill="#4a505c">monitoring and alerts, on 4G or 5G</text>
+  </g>
+  <g stroke="#4a505c" stroke-width="2" fill="none" marker-end="url(#f)">
+    <path d="M688 75 C650 75 640 140 612 150"/>
+    <path d="M688 165 L612 165"/>
+    <path d="M688 255 C650 255 640 190 612 180"/>
+  </g>
+  <rect x="380" y="262" width="240" height="56" rx="12" fill="#fff" stroke="#0a84ff"/>
+  <text x="500" y="287" font-size="12" font-weight="700" fill="#0066d6" text-anchor="middle">https://atelier.platform.e-ko.rip</text>
+  <text x="500" y="306" font-size="11" fill="#4a505c" text-anchor="middle">one address per linked server</text>
+</svg>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Common messages, their cause and what to do.">
+<link rel="canonical" href="https://e-ko.rip/documentation/en/troubleshooting/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/troubleshooting/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/depannage/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="en">
+<a class="lien-evitement" href="#contenu">Skip to content</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/en/troubleshooting.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Features</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/en/" aria-current="page">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a class="nav-mobile" href="/#installer">Install</a>
+      <a href="/documentation/depannage/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Documentation contents">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Contents</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Search the documentation</span><input type="search" placeholder="Search…" data-doc-filtre data-doc-aucun="No results."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Getting started</p><ul><li><a href="/documentation/en/">Documentation</a></li><li><a href="/documentation/en/getting-started/">Getting started</a></li></ul><p class="doc-rubrique">Install</p><ul><li><a href="/documentation/en/server/">Install the server</a></li><li><a href="/documentation/en/clients/">Install the clients</a></li><li><a href="/documentation/en/mobile-app/">Mobile app</a></li><li><a href="/documentation/en/cloud/">E-KO RIP Cloud</a></li></ul><p class="doc-rubrique">Use</p><ul><li><a href="/documentation/en/usage/">User guide</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/en/machines/">All machines</a></li><li class="doc-groupe">Printers</li><li><a href="/documentation/en/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/en/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Cutting plotters</li><li><a href="/documentation/en/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/en/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Cutting tables</li><li><a href="/documentation/en/machines/cutting-tables/">Cutting tables</a></li></ul><p class="doc-rubrique">Administer</p><ul><li><a href="/documentation/en/administration/">Run the server</a></li><li><a href="/documentation/en/troubleshooting/" aria-current="page">Troubleshooting</a></li><li><a href="/documentation/en/glossary/">Glossary</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/en/">Documentation</a> › Administer</p>
+    <h1>Troubleshooting</h1>
+    <p class="doc-chapo">Common messages, their cause and what to do.</p>
+<p>The most common situations, from connection to printing, with their cause and what to do. The exact message shown by the client or the interface is quoted in bold.</p>
+<h2 id="connection"><a class="ancre" href="#connection" aria-hidden="true">#</a>Connection</h2>
+<h3 id="the-client-cannot-find-the-server"><a class="ancre" href="#the-client-cannot-find-the-server" aria-hidden="true">#</a>The client cannot find the server</h3>
+<ol><li>Check that the server is running: <code>systemctl status eko-rip-serveur</code> on the server, or open <code>http://&lt;address&gt;:8640</code> in a browser: the status page should appear.</li><li>On Mac, allow <strong>local network</strong> access (System Settings › Privacy &amp; Security › Local Network).</li><li>Automatic discovery does not cross routers, VPNs or some guest Wi-Fi networks: enter the address under <strong>Enter an address</strong> (<code>192.168.1.20:8640</code>).</li><li>A firewall on the server must let TCP port 8640 through (and UDP 5353 for discovery).</li></ol>
+<h3 id="the-browser-only-shows-a-status-page"><a class="ancre" href="#the-browser-only-shows-a-status-page" aria-hidden="true">#</a>The browser only shows a status page</h3>
+<p>This is intended: inside the shop, the full interface is reserved for the clients. Use the client (<strong>Administration…</strong> menu) or the site's address on the <a href="/documentation/en/cloud/">Cloud</a>.</p>
+<h3 id="open-access-in-red"><a class="ancre" href="#open-access-in-red" aria-hidden="true">#</a>"Open access" in red</h3>
+<p>No account is declared: any computer on the network can do everything. Create an administrator account (<a href="/documentation/en/server/#creating-the-accounts">Creating the accounts</a>).</p>
+<h3 id="too-many-attempts-for-this-user-try-again-in-5-minutes"><a class="ancre" href="#too-many-attempts-for-this-user-try-again-in-5-minutes" aria-hidden="true">#</a>"Too many attempts for this user: try again in 5 minutes."</h3>
+<p>Five wrong passwords: this name is blocked for 5 minutes. Wait, or restart the service (which closes all sessions). Forgotten password: see <a href="/documentation/en/administration/#accounts">Accounts</a>.</p>
+<h3 id="reserved-for-the-rip-administrator"><a class="ancre" href="#reserved-for-the-rip-administrator" aria-hidden="true">#</a>"Reserved for the RIP administrator."</h3>
+<p>The account is an <strong>operator</strong>: machines, media, prices, profiles, saved presets and backup are reserved for the administrator.</p>
+<h2 id="sending-and-rendering"><a class="ancre" href="#sending-and-rendering" aria-hidden="true">#</a>Sending and rendering</h2>
+<h3 id="file-too-large-for-the-server"><a class="ancre" href="#file-too-large-for-the-server" aria-hidden="true">#</a>"File too large for the server."</h3>
+<p>The file exceeds the limit (8 GB by default). Raise it with <code>EKO_RIP_MAX_MO</code> in <code>/etc/default/eko-rip-serveur</code>, then restart.</p>
+<h3 id="a-render-fails"><a class="ancre" href="#a-render-fails" aria-hidden="true">#</a>A render fails</h3>
+<p>The message is in the job details (inspector) and in the server log. Common causes:</p>
+<ul><li>password-protected or damaged PDF: save it again from the layout software;</li><li>very large file that exceeds the render time limit (30 min by default, <code>EKO_RIP_DELAI_S</code>);</li><li>full disk: see the free space in <strong>System</strong>;</li><li><strong>Permission denied</strong> on every render under Ubuntu 26.04: update the server (0.31.0 or later).</li></ul>
+<p>Fonts that are not embedded and images with too little resolution are flagged as soon as the file is sent, in the job's alerts.</p>
+<h3 id="a-very-large-format-takes-a-long-time"><a class="ancre" href="#a-very-large-format-takes-a-long-time" aria-hidden="true">#</a>A very large format takes a long time</h3>
+<p>A page whose render would exceed 3 GB (for example a 1.6 × 3 m banner at 720 dpi) is rendered in strips then stitched back together: it takes longer, but there is nothing to set. Allow for the disk space.</p>
+<h3 id="disk-almost-full"><a class="ancre" href="#disk-almost-full" aria-hidden="true">#</a>"Disk almost full"</h3>
+<p>Less than 20 GB is left. Delete old jobs, shorten the retention time (<code>EKO_RIP_CONSERVATION_JOURS</code>) or enlarge the data disk. Below 5 GB, the server itself deletes the oldest inactive jobs and refuses those that would not fit.</p>
+<h2 id="printing-and-cutting"><a class="ancre" href="#printing-and-cutting" aria-hidden="true">#</a>Printing and cutting</h2>
+<h3 id="output-to-the-machine-failed"><a class="ancre" href="#output-to-the-machine-failed" aria-hidden="true">#</a>"Output to the machine failed."</h3>
+<p>The reason is shown under the output, in the queue: machine switched off or unreachable, USB port missing, permission denied. Fix it, then <strong>Redo</strong> the output from the history.</p>
+<h3 id="the-printer-reports-an-alert-printing-stopped"><a class="ancre" href="#the-printer-reports-an-alert-printing-stopped" aria-hidden="true">#</a>"The printer reports an alert: printing stopped."</h3>
+<p>The printer has reported a blocking alert (cover open, empty cartridge…). Clear it on the machine, then <strong>Redo</strong> the output.</p>
+<h3 id="cannot-send-to-the-printer-epson"><a class="ancre" href="#cannot-send-to-the-printer-epson" aria-hidden="true">#</a>"Cannot send to the printer." (Epson)</h3>
+<p>A spot colour in the file has no ink on the machine: rename it <code>White</code> or <code>Metallic</code>, convert it to CMYK or add it to the spot colour table (<strong>System › Spot colours</strong>), then restart the job. With a direct network connection, white and silver currently go through a machine with a Folder connection.</p>
+<h3 id="the-cut-is-offset-from-the-print"><a class="ancre" href="#the-cut-is-offset-from-the-print" aria-hidden="true">#</a>The cut is offset from the print</h3>
+<p>Make a test cut, measure the gap and enter it as the cutter's <strong>Offset X / Y</strong> (<strong>System › Machines</strong>). See also <a href="/documentation/en/usage/#kona-registration">Kona registration</a>.</p>
+<h3 id="a-machine-cannot-be-removed"><a class="ancre" href="#a-machine-cannot-be-removed" aria-hidden="true">#</a>A machine cannot be removed</h3>
+<p><strong>An output is still waiting for this machine in the queue.</strong> Move it on or cancel it first.</p>
+<h3 id="the-estimated-time-is-wrong"><a class="ancre" href="#the-estimated-time-is-wrong" aria-hidden="true">#</a>The estimated time is wrong</h3>
+<p>Measure the real speed (m² per hour at the roll width) and enter it as the machine's <strong>Speed</strong>.</p>
+<h2 id="mobile-app-and-cloud"><a class="ancre" href="#mobile-app-and-cloud" aria-hidden="true">#</a>Mobile app and Cloud</h2>
+<h3 id="the-app-does-not-receive-alerts"><a class="ancre" href="#the-app-does-not-receive-alerts" aria-hidden="true">#</a>The app does not receive alerts</h3>
+<p>Check that notifications are allowed in the phone's settings, then the app's alert settings. Details: <a href="/documentation/en/mobile-app/">Mobile app</a>.</p>
+<h3 id="the-site-is-offline-on-the-cloud"><a class="ancre" href="#the-site-is-offline-on-the-cloud" aria-hidden="true">#</a>The site is "offline" on the Cloud</h3>
+<p>The server can no longer reach the platform: check that it is switched on and has Internet access (outgoing HTTPS). It reconnects by itself within a minute of the network coming back. Details: <a href="/documentation/en/cloud/">E-KO RIP Cloud</a>.</p>
+<h2 id="still-stuck"><a class="ancre" href="#still-stuck" aria-hidden="true">#</a>Still stuck?</h2>
+<p>Use <strong>Report a problem…</strong> (<em>Signaler un problème…</em>) in the client: the report goes with the server log (masked) and a reference is shown. Or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>, giving the server version (<strong>System</strong> view) and the exact message.</p>
+<figure><a href="/documentation/images/client-linux-systeme.png"><img src="/documentation/images/client-linux-systeme.png" alt="System view of the client" loading="lazy"></a><figcaption>The System view (Système): server and client versions, free disk space, renders in progress</figcaption></figure>
+    <nav class="doc-suite" aria-label="Neighbouring pages"><a class="doc-prec" href="/documentation/en/administration/"><span>Previous</span>Run the server</a><a class="doc-suiv" href="/documentation/en/glossary/"><span>Next</span>Glossary</a></nav>
+    <p class="doc-source">Found a mistake or something missing? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/en/troubleshooting.md" rel="noopener">Suggest a fix</a> or write to <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="On this page"><p>On this page</p><ul><li class="niveau-2"><a href="#connection">Connection</a></li><li class="niveau-3"><a href="#the-client-cannot-find-the-server">The client cannot find the server</a></li><li class="niveau-3"><a href="#the-browser-only-shows-a-status-page">The browser only shows a status page</a></li><li class="niveau-3"><a href="#open-access-in-red">&quot;Open access&quot; in red</a></li><li class="niveau-3"><a href="#too-many-attempts-for-this-user-try-again-in-5-minutes">&quot;Too many attempts for this user: try again in 5 minutes.&quot;</a></li><li class="niveau-3"><a href="#reserved-for-the-rip-administrator">&quot;Reserved for the RIP administrator.&quot;</a></li><li class="niveau-2"><a href="#sending-and-rendering">Sending and rendering</a></li><li class="niveau-3"><a href="#file-too-large-for-the-server">&quot;File too large for the server.&quot;</a></li><li class="niveau-3"><a href="#a-render-fails">A render fails</a></li><li class="niveau-3"><a href="#a-very-large-format-takes-a-long-time">A very large format takes a long time</a></li><li class="niveau-3"><a href="#disk-almost-full">&quot;Disk almost full&quot;</a></li><li class="niveau-2"><a href="#printing-and-cutting">Printing and cutting</a></li><li class="niveau-3"><a href="#output-to-the-machine-failed">&quot;Output to the machine failed.&quot;</a></li><li class="niveau-3"><a href="#the-printer-reports-an-alert-printing-stopped">&quot;The printer reports an alert: printing stopped.&quot;</a></li><li class="niveau-3"><a href="#cannot-send-to-the-printer-epson">&quot;Cannot send to the printer.&quot; (Epson)</a></li><li class="niveau-3"><a href="#the-cut-is-offset-from-the-print">The cut is offset from the print</a></li><li class="niveau-3"><a href="#a-machine-cannot-be-removed">A machine cannot be removed</a></li><li class="niveau-3"><a href="#the-estimated-time-is-wrong">The estimated time is wrong</a></li><li class="niveau-2"><a href="#mobile-app-and-cloud">Mobile app and Cloud</a></li><li class="niveau-3"><a href="#the-app-does-not-receive-alerts">The app does not receive alerts</a></li><li class="niveau-3"><a href="#the-site-is-offline-on-the-cloud">The site is &quot;offline&quot; on the Cloud</a></li><li class="niveau-2"><a href="#still-stuck">Still stuck?</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/en/">Documentation</a>
+      <a href="/changelog/">What&#x27;s new</a>
+      <a href="/prerequis/">Requirements</a>
+      <a href="/app/">Mobile app</a>
+      <a href="/mentions-legales/">Legal notice</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

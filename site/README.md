@@ -10,11 +10,19 @@ Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
 | Compatibilité machines et demande de pilote | `compatibilite/index.html`, `compatibilite/demande.php` |
 | Journal des versions | `changelog/index.html` |
 | Application mobile, confidentialité | `app/index.html`, `app/confidentialite/index.html` |
+| Cloud E-KO RIP : présentation, tarifs des offres, liens vers platform.e-ko.rip | `cloud/index.html` |
 | Mentions légales | `mentions-legales/index.html` |
+| Documentation (FR, EN) : générée, ne pas modifier à la main | `documentation/`, `assets/documentation.css`, `assets/documentation.js` |
 | Page 404 | `404.html` |
 
 Styles dans `assets/style.css` (couleurs CMJN de l'icône, mode sombre automatique),
 comportements dans `assets/site.js`, journal dans `assets/journal.js`.
+
+## Documentation
+
+`documentation/` est générée depuis `docs/guide/` (et `docs/fr|en/`) par
+`python3 outils/generer-documentation.py` : voir `docs/guide/README.md`. `publier-site.sh` refuse de
+publier si elle est en retard sur sa source.
 
 ## Journal des versions
 
@@ -61,3 +69,11 @@ L'accès SSH d'o2switch n'est ouvert qu'aux adresses IP déclarées dans cPanel
 
 Captures : `assets/img/*.webp`, tirées des captures réelles du logiciel. Pour en ajouter
 une, la convertir en WebP (qualité 85) et lui donner `width`, `height` et un `alt`.
+
+## Téléchargement direct des clients
+
+`/telecharger/mac` et `/telecharger/windows` (règle dans `.htaccess`, script
+`telecharger/telecharger.php`) renvoient vers le fichier de la dernière release GitHub qui en a
+un : `.dmg` pour Mac, `.exe` (sinon `.msi`) pour Windows. La liste des releases est gardée
+10 minutes en cache dans `~/eko-rip-cache` (hors du dossier public, pas dans le `/tmp` commun) ; sans réponse de GitHub, on renvoie vers la page des versions. Rien à
+changer à chaque version : il suffit de joindre le fichier à la release.

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prise en main · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Comprendre comment s&#x27;articulent le serveur, les clients, l&#x27;application mobile et le Cloud, puis installer un atelier en cinq étapes.">
+<link rel="canonical" href="https://e-ko.rip/documentation/demarrage/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/demarrage/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/getting-started/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/guide/fr/demarrage.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a class="nav-mobile" href="/#installer">Installer</a>
+      <a href="/documentation/en/getting-started/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/" aria-current="page">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Bien démarrer</p>
+    <h1>Prise en main</h1>
+    <p class="doc-chapo">Comprendre comment s&#x27;articulent le serveur, les clients, l&#x27;application mobile et le Cloud, puis installer un atelier en cinq étapes.</p>
+<p>Cette page présente les pièces d'E-KO RIP Center et l'ordre dans lequel les installer. Compter une heure pour un atelier simple : un serveur, un ou deux postes, une imprimante et une découpeuse.</p>
+<h2 id="les-pièces-du-rip"><a class="ancre" href="#les-pièces-du-rip" aria-hidden="true">#</a>Les pièces du RIP</h2>
+<div class="tableau"><table><thead><tr><th>Pièce</th><th>Où</th><th>Rôle</th></tr></thead><tbody><tr><td><strong>Serveur RIP</strong></td><td>un PC Linux de l'atelier, allumé en permanence</td><td>reçoit les fichiers, calcule les rendus, tient la file d'attente, pilote les machines</td></tr><tr><td><strong>Client E-KO RIP Center</strong></td><td>chaque poste de travail (Mac, Linux, Windows)</td><td>envoie les fichiers, suit les travaux, lance les impressions et les découpes</td></tr><tr><td><strong>Application mobile</strong></td><td>téléphone iOS ou Android</td><td>suit la file et les machines, reçoit les alertes (cartouche vide, machine injoignable…)</td></tr><tr><td><strong>Cloud E-KO RIP</strong></td><td>service en ligne, <code>platform.e-ko.rip</code></td><td>donne accès au serveur depuis l'extérieur, sans VPN ni port ouvert</td></tr><tr><td><strong>Interface d'administration</strong></td><td>dans le client (<strong>Administration…</strong>) ou par le Cloud dans un navigateur</td><td>réglages des machines, supports, couleur, comptes, sauvegarde</td></tr></tbody></table></div>
+<figure><a href="/documentation/images/schema-architecture.svg"><img src="/documentation/images/schema-architecture.svg" alt="Schéma d&#x27;ensemble" loading="lazy"></a><figcaption>Les clients et l'application parlent au serveur ; le serveur parle aux machines</figcaption></figure>
+<p>Un navigateur ouvert sur l'adresse du serveur dans l'atelier n'affiche qu'une <strong>page d'état</strong> (version, machines, adresse à saisir dans le client) : l'interface complète est réservée aux clients.</p>
+<figure><a href="/documentation/images/serveur-page-etat.png"><img src="/documentation/images/serveur-page-etat.png" alt="Page d&#x27;état du serveur vue dans un navigateur" loading="lazy"></a><figcaption>La page d'état du serveur, ouverte dans un navigateur</figcaption></figure>
+<h2 id="installer-un-atelier-en-cinq-étapes"><a class="ancre" href="#installer-un-atelier-en-cinq-étapes" aria-hidden="true">#</a>Installer un atelier en cinq étapes</h2>
+<h3 id="1-préparer-le-serveur"><a class="ancre" href="#1-préparer-le-serveur" aria-hidden="true">#</a>1. Préparer le serveur</h3>
+<p>Choisir un PC 64 bits (x86) qui restera allumé, de préférence avec un SSD réservé aux données, branché en câble et sur onduleur. Lui donner une <strong>adresse IP fixe</strong> sur le routeur. Détail : <a href="/documentation/serveur/#choisir-le-poste-serveur">choisir le poste serveur</a>.</p>
+<h3 id="2-installer-le-serveur"><a class="ancre" href="#2-installer-le-serveur" aria-hidden="true">#</a>2. Installer le serveur</h3>
+<p>Sur Ubuntu 24.04 ou 26.04 LTS, ajouter le dépôt E-KO puis installer le paquet <code>eko-rip-serveur</code>. Le service démarre seul et redémarre avec le PC. Détail : <a href="/documentation/serveur/#installer-par-le-dépôt-apt">installer par le dépôt APT</a>.</p>
+<h3 id="3-créer-les-comptes"><a class="ancre" href="#3-créer-les-comptes" aria-hidden="true">#</a>3. Créer les comptes</h3>
+<p>Tant qu'aucun compte n'existe, n'importe quel poste du réseau peut tout faire et l'écran le signale en rouge. Créer au moins un compte <strong>administrateur</strong>, puis un compte <strong>opérateur</strong> par personne. Détail : <a href="/documentation/serveur/#créer-les-comptes">comptes et rôles</a>.</p>
+<h3 id="4-installer-les-clients"><a class="ancre" href="#4-installer-les-clients" aria-hidden="true">#</a>4. Installer les clients</h3>
+<p>Sur chaque poste, installer le client puis choisir le serveur dans la liste <strong>Serveurs trouvés sur le réseau</strong>. Détail : <a href="/documentation/clients/">installer les clients</a>.</p>
+<h3 id="5-déclarer-les-machines"><a class="ancre" href="#5-déclarer-les-machines" aria-hidden="true">#</a>5. Déclarer les machines</h3>
+<p>Dans le client, menu <strong>Administration…</strong>, vue <strong>Système › Machines</strong> : ajouter chaque imprimante et chaque découpeuse, sa connexion (réseau, USB, dossier) et ses supports. Chaque modèle a sa page dans la rubrique <a href="/documentation/machines/">Machines</a>.</p>
+<aside class="encadre encadre-astuce"><p class="encadre-titre">Astuce</p><p>Avant la première vraie production, envoyer un petit PDF d'essai, vérifier son aperçu et ses plaques dans l'inspecteur, puis l'imprimer sur une chute.</p></aside>
+<h2 id="et-ensuite"><a class="ancre" href="#et-ensuite" aria-hidden="true">#</a>Et ensuite</h2>
+<ul><li><a href="/documentation/utilisation/#envoyer-un-travail">Envoyer un premier travail</a> et apprendre la file.</li><li>Installer l'<a href="/documentation/application-mobile/">application mobile</a> pour être prévenu d'une panne.</li><li>Rattacher le serveur au <a href="/documentation/cloud/">Cloud E-KO RIP</a> pour y accéder de l'extérieur.</li><li>Programmer une <a href="/documentation/administration/#sauvegarder">sauvegarde de la configuration</a>.</li></ul>
+<h2 id="ce-dont-le-serveur-a-besoin-sur-le-réseau"><a class="ancre" href="#ce-dont-le-serveur-a-besoin-sur-le-réseau" aria-hidden="true">#</a>Ce dont le serveur a besoin sur le réseau</h2>
+<figure><a href="/documentation/images/schema-reseau.svg"><img src="/documentation/images/schema-reseau.svg" alt="Ports utilisés par le serveur" loading="lazy"></a><figcaption>Ce que le serveur écoute et ce qu'il joint ; seul le port 8640 sert aux clients</figcaption></figure>
+<div class="tableau"><table><thead><tr><th>Sens</th><th>Port</th><th>Pour</th></tr></thead><tbody><tr><td>Postes → serveur</td><td>TCP <strong>8640</strong></td><td>clients, application mobile dans l'atelier, renvoi entre RIP</td></tr><tr><td>Postes ↔ serveur</td><td>UDP 5353 (mDNS)</td><td>découverte automatique du serveur par les clients</td></tr><tr><td>Postes → serveur</td><td>TCP 445</td><td>dossiers surveillés partagés (Samba), si on les partage</td></tr><tr><td>Serveur → imprimantes</td><td>TCP 9100, 631 (IPP), UDP 161 (SNMP)</td><td>envoi des travaux, niveaux d'encre, média chargé</td></tr><tr><td>Serveur → Internet</td><td>TCP 443 (HTTPS, sortant)</td><td>mises à jour, Cloud E-KO RIP, ERP</td></tr></tbody></table></div>
+<aside class="encadre encadre-attention"><p class="encadre-titre">Attention</p><p>Ne jamais ouvrir le port 8640 sur Internet : la connexion n'est pas chiffrée. Pour travailler à distance, utiliser le <a href="/documentation/cloud/">Cloud E-KO RIP</a>.</p></aside>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/"><span>Précédent</span>Documentation</a><a class="doc-suiv" href="/documentation/serveur/"><span>Suivant</span>Installer le serveur</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/guide/fr/demarrage.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#les-pièces-du-rip">Les pièces du RIP</a></li><li class="niveau-2"><a href="#installer-un-atelier-en-cinq-étapes">Installer un atelier en cinq étapes</a></li><li class="niveau-3"><a href="#1-préparer-le-serveur">1. Préparer le serveur</a></li><li class="niveau-3"><a href="#2-installer-le-serveur">2. Installer le serveur</a></li><li class="niveau-3"><a href="#3-créer-les-comptes">3. Créer les comptes</a></li><li class="niveau-3"><a href="#4-installer-les-clients">4. Installer les clients</a></li><li class="niveau-3"><a href="#5-déclarer-les-machines">5. Déclarer les machines</a></li><li class="niveau-2"><a href="#et-ensuite">Et ensuite</a></li><li class="niveau-2"><a href="#ce-dont-le-serveur-a-besoin-sur-le-réseau">Ce dont le serveur a besoin sur le réseau</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graphtec FC7000 · Documentation · E-KO RIP Center</title>
+<meta name="description" content="Brancher la Graphtec FC7000 et lui envoyer la découpe en HP-GL.">
+<link rel="canonical" href="https://e-ko.rip/documentation/machines/graphtec-fc7000/">
+<link rel="alternate" hreflang="fr" href="https://e-ko.rip/documentation/machines/graphtec-fc7000/">
+<link rel="alternate" hreflang="en" href="https://e-ko.rip/documentation/en/machines/graphtec-fc7000/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0a84ff">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+</head>
+<body class="doc" data-doc-langue="fr">
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-documentation.py depuis docs/fr/machines/graphtec-fc7000.md : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <a href="/#fonctionnalites">Fonctionnalités</a>
+      <a href="/compatibilite/">Machines</a>
+      <a href="/cloud/">Cloud</a>
+      <a href="/documentation/" aria-current="page">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a class="nav-mobile" href="/#installer">Installer</a>
+      <a href="/documentation/en/machines/graphtec-fc7000/" hreflang="en" lang="en" class="doc-langue">EN</a>
+    </nav>
+    <a class="bouton bouton-plein bouton-petit" href="/#installer">Installer</a>
+  </div>
+</header>
+
+<div class="conteneur doc-grille">
+  <aside class="doc-menu" aria-label="Sommaire de la documentation">
+    <button class="doc-menu-bouton" type="button" aria-expanded="false" data-doc-menu>Sommaire</button>
+    <label class="doc-filtre"><span class="visuellement-cache">Chercher dans la documentation</span><input type="search" placeholder="Chercher…" data-doc-filtre data-doc-aucun="Aucun résultat."></label>
+    <nav data-doc-nav><p class="doc-rubrique">Bien démarrer</p><ul><li><a href="/documentation/">Documentation</a></li><li><a href="/documentation/demarrage/">Prise en main</a></li></ul><p class="doc-rubrique">Installer</p><ul><li><a href="/documentation/serveur/">Installer le serveur</a></li><li><a href="/documentation/clients/">Installer les clients</a></li><li><a href="/documentation/application-mobile/">Application mobile</a></li><li><a href="/documentation/cloud/">Cloud E-KO RIP</a></li></ul><p class="doc-rubrique">Utiliser</p><ul><li><a href="/documentation/utilisation/">Guide d&#x27;utilisation</a></li></ul><p class="doc-rubrique">Machines</p><ul><li><a href="/documentation/machines/">Toutes les machines</a></li><li class="doc-groupe">Imprimantes</li><li><a href="/documentation/machines/epson-sc-s80600/">Epson SureColor SC-S80600</a></li><li><a href="/documentation/machines/roland-versacamm/">Roland VersaCAMM VP-300 / VP-540</a></li><li class="doc-groupe">Plotters de découpe</li><li><a href="/documentation/machines/mutoh-kona/">Mutoh Kona 1650</a></li><li><a href="/documentation/machines/graphtec-fc7000/" aria-current="page">Graphtec FC7000</a></li><li class="doc-groupe">Tables de découpe</li><li><a href="/documentation/machines/tables-de-decoupe/">Tables de découpe</a></li></ul><p class="doc-rubrique">Administrer</p><ul><li><a href="/documentation/administration/">Administrer le serveur</a></li><li><a href="/documentation/depannage/">Dépannage</a></li><li><a href="/documentation/glossaire/">Glossaire</a></li></ul></nav>
+    <ul class="doc-resultats" data-doc-resultats hidden></ul>
+  </aside>
+  <main id="contenu" class="doc-article">
+    <p class="doc-fil"><a href="/documentation/">Documentation</a> › Machines › Plotters de découpe</p>
+    <h1>Graphtec FC7000</h1>
+    <p class="doc-chapo">Brancher la Graphtec FC7000 et lui envoyer la découpe en HP-GL.</p>
+<h2 id="ce-que-fait-le-rip"><a class="ancre" href="#ce-que-fait-le-rip" aria-hidden="true">#</a>Ce que fait le RIP</h2>
+<p>Il envoie la découpe en HP-GL, au pas de 0,025 mm.</p>
+<h2 id="brancher"><a class="ancre" href="#brancher" aria-hidden="true">#</a>Brancher</h2>
+<p>Réseau (IP fixe) en connexion <strong>Réseau (TCP)</strong>, ou série / USB-série.</p>
+<h2 id="sur-la-graphtec"><a class="ancre" href="#sur-la-graphtec" aria-hidden="true">#</a>Sur la Graphtec</h2>
+<p>Commandes en <strong>HP-GL</strong> (Menu &gt; Interface &gt; Command) ; le repérage <strong>ARMS</strong> se règle au panneau de la machine.</p>
+<h2 id="dans-le-rip"><a class="ancre" href="#dans-le-rip" aria-hidden="true">#</a>Dans le RIP</h2>
+<p>Pas de <strong>0,025 mm</strong> ; réglages de coupe ; <strong>Décalage X / Y</strong>.</p>
+<h2 id="vérifier"><a class="ancre" href="#vérifier" aria-hidden="true">#</a>Vérifier</h2>
+<p><code>nc -vz &lt;ip&gt; &lt;port&gt;</code> depuis le serveur.</p>
+<h2 id="ennuis-courants"><a class="ancre" href="#ennuis-courants" aria-hidden="true">#</a>Ennuis courants</h2>
+<ul><li><em>Rien ne coupe</em> : l'interface n'est pas en HP-GL.</li><li><em>Sortie en échec, machine injoignable</em> : vérifier l'adresse, le port et le câble.</li></ul>
+<p>Voir : <a href="/documentation/utilisation/#découpe">découpe</a>, <a href="/documentation/utilisation/#machines">machines</a>.</p>
+    <nav class="doc-suite" aria-label="Pages voisines"><a class="doc-prec" href="/documentation/machines/mutoh-kona/"><span>Précédent</span>Mutoh Kona 1650</a><a class="doc-suiv" href="/documentation/machines/tables-de-decoupe/"><span>Suivant</span>Tables de découpe</a></nav>
+    <p class="doc-source">Une erreur, un manque ? <a href="https://github.com/mvignaud/eko-rip-center/edit/main/docs/fr/machines/graphtec-fc7000.md" rel="noopener">Proposer une correction</a> ou écrire à <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>.</p>
+  </main>
+  <nav class="doc-toc" aria-label="Sur cette page"><p>Sur cette page</p><ul><li class="niveau-2"><a href="#ce-que-fait-le-rip">Ce que fait le RIP</a></li><li class="niveau-2"><a href="#brancher">Brancher</a></li><li class="niveau-2"><a href="#sur-la-graphtec">Sur la Graphtec</a></li><li class="niveau-2"><a href="#dans-le-rip">Dans le RIP</a></li><li class="niveau-2"><a href="#vérifier">Vérifier</a></li><li class="niveau-2"><a href="#ennuis-courants">Ennuis courants</a></li></ul></nav>
+</div>
+
+<footer class="pied">
+  <div class="conteneur">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
+    <nav>
+      <a href="/documentation/">Documentation</a>
+      <a href="/changelog/">Nouveautés</a>
+      <a href="/prerequis/">Pré-requis</a>
+      <a href="/app/">Application mobile</a>
+      <a href="/mentions-legales/">Mentions légales</a>
+      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
+      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
+      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+<script src="/assets/documentation.js" defer></script>
+</body>
+</html>
