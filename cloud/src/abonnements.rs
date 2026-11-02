@@ -2059,7 +2059,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
         r#"<div class="carte"><h2>Facturation (E-KO)</h2>
 <p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view. Webhook à déclarer dans l'ERP : <code>{url}/api/erp/webhooks</code>.</p>
 <form method="post" action="/admin/facturation">{csrf}
-<label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://webapp.e-ko.fr/api/v1" autocomplete="off"></label>
+<label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://app.e-ko.fr/api/v1" autocomplete="off"></label>
 <label>Jeton d'API ({j})<input type="password" name="erp_jeton" autocomplete="new-password"></label>
 <label>Secret des webhooks ({w})<input type="password" name="erp_webhook_secret" autocomplete="new-password"></label>
 <h2>Codes des plans d'abonnement</h2>{plans}
