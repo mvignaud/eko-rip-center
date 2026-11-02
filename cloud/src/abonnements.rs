@@ -287,19 +287,51 @@ pub fn appliquer(c: &Connection, compte: i64, sub: &Value) -> rusqlite::Result<(
 /// Crée l'abonnement dans l'ERP d'après le brouillon (offre, cycle, codes) ; `paiement` :
 /// `{provider: "stancer_sepa", mandate_code}` pour un mandat signé. Un abonnement précédent
 /// (changement d'offre) est résilié aussitôt après. Bloquant.
+/// Comptes dont une souscription est en cours d'envoi à l'ERP : deux souscriptions
+/// simultanées d'un même compte se verraient sinon offrir chacune l'essai de la première.
+static SOUSCRIPTIONS_EN_COURS: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
+
+/// Réserve le compte pour une souscription ; la réservation tombe avec la garde.
+struct Reservation(i64);
+
+impl Reservation {
+    fn prendre(id: i64) -> Option<Reservation> {
+        let mut en_cours = SOUSCRIPTIONS_EN_COURS.lock().unwrap_or_else(|e| e.into_inner());
+        if en_cours.contains(&id) {
+            return None;
+        }
+        en_cours.push(id);
+        Some(Reservation(id))
+    }
+}
+
+impl Drop for Reservation {
+    fn drop(&mut self) {
+        SOUSCRIPTIONS_EN_COURS.lock().unwrap_or_else(|e| e.into_inner()).retain(|&c| c != self.0);
+    }
+}
+
 pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result<(), String> {
+    let _reservation = Reservation::prendre(id).ok_or("Une souscription est déjà en cours pour ce compte, patientez quelques secondes.")?;
     let (erp, ab, p, plan) = {
         let c = r.base();
         let ab = lire(&c, id).map_err(|e| e.to_string())?;
         let offre = Offre::depuis(&ab.texte_brouillon("offre")).filter(|o| o.payante()).ok_or("Choisissez d'abord une offre.")?;
         let cycle = Cycle::depuis(&ab.texte_brouillon("cycle")).unwrap_or(Cycle::Mensuel);
         let plan = offres::code_plan(&c, Some(offre), cycle).ok_or("Cette offre n'est pas encore ouverte à la souscription.")?;
-        (Erp::depuis(&c).ok_or("Facturation indisponible pour le moment.")?, ab, parc(&c, id).map_err(|e| e.to_string())?, (offre, cycle, plan))
+        let essai = essai_offert(&c, id, offre);
+        (Erp::depuis(&c).ok_or("Facturation indisponible pour le moment.")?, ab, parc(&c, id).map_err(|e| e.to_string())?, (offre, cycle, plan, essai))
     };
-    let (offre, cycle, plan) = plan;
+    let (offre, cycle, plan, essai) = plan;
     let tier = ab.tier_code.clone().ok_or("Renseignez d'abord les informations de facturation.")?;
     let (principal, _) = offres::sieges(offre, &p);
-    let mut corps = json!({ "tier_code": tier, "plan_code": plan, "customer_notifications": false, "bill_now": true });
+    // Essai (Atelier, première souscription) : pas de facture tout de suite, la première
+    // tombe à la fin de l'essai. Sinon, la première période est facturée aussitôt.
+    let mut corps = if essai {
+        json!({ "tier_code": tier, "plan_code": plan, "customer_notifications": false, "trial_days": ESSAI_ATELIER_JOURS })
+    } else {
+        json!({ "tier_code": tier, "plan_code": plan, "customer_notifications": false, "bill_now": true })
+    };
     if let Some(n) = principal {
         corps["seats"] = json!(n);
     }
@@ -425,7 +457,12 @@ pub fn recalculer_sieges(r: &Partage, id: i64, t: u64) -> Result<bool, String> {
         let rep = match (&ab.supplement_code, n) {
             (None, 0) => None,
             (None, n) => {
-                let mut corps = json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "bill_now": true });
+                // Pendant l'essai de l'abonnement principal, le supplément suit le même essai
+                // (même fin) : aucune facture ni prélèvement avant la fin de l'essai.
+                let mut corps = match jours_d_essai_restants(&ab, crate::maintenant()) {
+                    Some(j) => json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "trial_days": j }),
+                    None => json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "bill_now": true }),
+                };
                 if let Some(rum) = &ab.rum {
                     corps["payment_method"] = json!({ "provider": "stancer_sepa", "mandate_code": rum });
                 }
@@ -890,6 +927,21 @@ fn statut_cycle(s: &str) -> String {
     }
 }
 
+/// Jours d'essai restants de l'abonnement principal (arrondis au jour supérieur), `None` hors essai.
+pub fn jours_d_essai_restants(ab: &Abonnement, maintenant: u64) -> Option<i64> {
+    let fin = ab.essai_fin.filter(|&f| f > maintenant)?;
+    (ab.statut == "trial").then(|| (fin - maintenant).div_ceil(86_400) as i64)
+}
+
+/// Durée de l'essai de l'offre Atelier, offert à la première souscription payante du compte.
+pub const ESSAI_ATELIER_JOURS: i64 = 30;
+
+/// L'essai n'est offert que pour l'offre Atelier, et seulement si le compte n'a encore jamais
+/// eu d'abonnement payant (ni principal ni supplément), même résilié depuis.
+pub fn essai_offert(c: &Connection, compte: i64, offre: Offre) -> bool {
+    offre == Offre::Atelier && historique(c, compte).map(|h| h.is_empty()).unwrap_or(false)
+}
+
 /// Codes de tous les abonnements ERP qu'a eus le compte, du plus ancien au plus récent.
 pub fn historique(c: &Connection, compte: i64) -> rusqlite::Result<Vec<String>> {
     c.prepare("SELECT code FROM abonnements_historique WHERE compte = ?1 ORDER BY cree_le, rowid")?.query_map([compte], |l| l.get(0))?.collect()
@@ -1073,10 +1125,10 @@ impl Saisie {
     }
 }
 
-fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, cycle: Cycle) -> String {
+fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, cycle: Cycle, essai: bool) -> String {
     let v = |t: &str| echapper(t);
     format!(
-        r#"<h1>Souscrire</h1><div class="carte"><h2>Offre {nom} · facturation {cyl}</h2><p><strong>{prix}</strong></p><p class="meta">{desc} 30 jours d'essai à la première souscription.</p></div>{err}
+        r#"<h1>Souscrire</h1><div class="carte"><h2>Offre {nom} · facturation {cyl}</h2><p><strong>{prix}</strong></p><p class="meta">{desc}{mention_essai}</p></div>{err}
 <form method="post" action="/abonnement/souscrire" id="souscription" data-csrf="{csrf_brut}">{csrf}<input type="hidden" name="offre" value="{o}"><input type="hidden" name="cycle" value="{cy}">
 <div class="carte"><h2>Entreprise</h2>
 <label>Pays<select name="pays"><option value="FR"{fr}>France</option><option value="AUTRE"{autre}>Autre pays (saisie manuelle)</option></select></label>
@@ -1098,6 +1150,7 @@ fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, 
         nom = offre.nom(),
         cyl = cycle.libelle(),
         prix = echapper(&libelle_prix(offre, cycle, 1)),
+        mention_essai = if essai { format!(" {ESSAI_ATELIER_JOURS} jours d'essai offerts : première facture à la fin de l'essai.") } else { String::new() },
         desc = echapper(offre.description()),
         err = if erreur.is_empty() { String::new() } else { format!(r#"<p class="erreur">{}</p>"#, echapper(erreur)) },
         csrf_brut = echapper(&s.csrf),
@@ -1142,7 +1195,7 @@ pub async fn souscription(State(r): State<Partage>, h: HeaderMap, Query(q): Quer
     let b = &ab.brouillon;
     let t = |k: &str| b.get(k).and_then(Value::as_str).unwrap_or("").to_string();
     let x = Saisie { pays: if t("pays").is_empty() { "FR".into() } else { t("pays") }, siren: t("siren"), raison_sociale: t("raison_sociale"), siret: t("siret"), tva: t("tva"), contact: if t("contact").is_empty() { s.compte.nom.clone() } else { t("contact") }, email: if t("email").is_empty() { s.compte.email.clone() } else { t("email") }, telephone: t("telephone"), adresse: t("adresse"), code_postal: t("code_postal"), ville: t("ville"), bon_commande: t("bon_commande"), code: t("code_saisi"), moyen: t("moyen"), ..Default::default() };
-    page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, "", offre, cycle)).into_response()
+    page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, "", offre, cycle, essai_offert(&r.base(), s.compte.id, offre))).into_response()
 }
 
 /// Ce qu'est un code saisi : coupon (remise) ou code partenaire.
@@ -1354,7 +1407,7 @@ pub async fn souscrire(State(r): State<Partage>, h: HeaderMap, axum::Form(f): Ch
         ""
     };
     if !erreur.is_empty() {
-        return (StatusCode::BAD_REQUEST, page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, erreur, offre, cycle))).into_response();
+        return (StatusCode::BAD_REQUEST, page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, erreur, offre, cycle, essai_offert(&r.base(), s.compte.id, offre)))).into_response();
     }
     let id = s.compte.id;
     let code_saisi = x.code.clone();
@@ -1374,7 +1427,7 @@ pub async fn souscrire(State(r): State<Partage>, h: HeaderMap, axum::Form(f): Ch
     .unwrap_or_else(|_| Err("Service momentanément indisponible.".into()));
     let (tier, code) = match resultat {
         Ok(v) => v,
-        Err(e) => return (StatusCode::BAD_REQUEST, page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, &e, offre, cycle))).into_response(),
+        Err(e) => return (StatusCode::BAD_REQUEST, page("Abonnement", Some(&s), &formulaire_souscription(&s, &x, &e, offre, cycle, essai_offert(&r.base(), s.compte.id, offre)))).into_response(),
     };
     let enregistre = {
         let c = r.base();
@@ -1503,7 +1556,7 @@ pub async fn page_paiement(State(r): State<Partage>, h: HeaderMap, Query(q): Que
         offre.nom(),
         cycle.libelle(),
         echapper(&libelle_prix(offre, cycle, ab.seats.max(1))),
-        if ab.actif() { "" } else { " · 30 jours d'essai avant la première échéance" },
+        if !ab.actif() && essai_offert(&r.base(), id, offre) { format!(" · {ESSAI_ATELIER_JOURS} jours d'essai avant la première échéance") } else { String::new() },
         echapper(&libelle_moyen(&ab)),
     );
     avec_csp_paiement(page("Abonnement", Some(&s), &corps).into_response())
@@ -2059,7 +2112,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
         r#"<div class="carte"><h2>Facturation (E-KO)</h2>
 <p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view. Webhook à déclarer dans l'ERP : <code>{url}/api/erp/webhooks</code>.</p>
 <form method="post" action="/admin/facturation">{csrf}
-<label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://webapp.e-ko.fr/api/v1" autocomplete="off"></label>
+<label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://app.e-ko.fr/api/v1" autocomplete="off"></label>
 <label>Jeton d'API ({j})<input type="password" name="erp_jeton" autocomplete="new-password"></label>
 <label>Secret des webhooks ({w})<input type="password" name="erp_webhook_secret" autocomplete="new-password"></label>
 <h2>Codes des plans d'abonnement</h2>{plans}
@@ -2188,6 +2241,28 @@ pub async fn essai_facturation(State(r): State<Partage>, h: HeaderMap, axum::For
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn une_seule_souscription_a_la_fois_par_compte() {
+        let premiere = Reservation::prendre(-42).expect("libre");
+        assert!(Reservation::prendre(-42).is_none());
+        assert!(Reservation::prendre(-43).is_some());
+        drop(premiere);
+        assert!(Reservation::prendre(-42).is_some());
+    }
+
+    #[test]
+    fn essai_du_supplement_aligne_sur_le_principal() {
+        let mut ab = Abonnement::gratuit(1);
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), None);
+        ab.statut = "trial".into();
+        ab.essai_fin = Some(1_000 + 10 * 86_400 + 1);
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), Some(11), "arrondi au jour supérieur");
+        ab.statut = "active".into();
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), None, "essai terminé côté ERP");
+        ab.statut = "trial".into();
+        assert_eq!(jours_d_essai_restants(&ab, 1_000 + 20 * 86_400), None, "fin d'essai passée");
+    }
 
     #[test]
     fn fiche_et_coupons() {

@@ -5,6 +5,7 @@ use axum::body::Bytes;
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
+use eko_rip_cloud::offres::Offre;
 use eko_rip_cloud::{abonnements, base, client, erp, relais, sauvegardes, sites};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -422,15 +423,18 @@ async fn souscription_par_prelevement_sepa() {
         assert_eq!(sub.corps["tier_code"], "CLI-1");
         assert_eq!(sub.corps["partner_code"], "PARTENAIRE");
         assert_eq!(sub.corps["customer_notifications"], false);
-        assert_eq!(sub.corps["bill_now"], true);
+        // Atelier, première souscription du compte : 30 jours d'essai, pas de facture tout de suite.
+        assert_eq!(sub.corps["trial_days"], 30);
+        assert!(sub.corps.get("bill_now").is_none(), "pas de facturation immédiate pendant l'essai");
         assert_eq!(sub.corps["payment_method"], json!({ "provider": "stancer_sepa", "mandate_code": "RUM-1" }));
+        assert!(!abonnements::essai_offert(&b.r.base(), id, Offre::Atelier), "l'essai n'est offert qu'une fois");
         let ab = abonnements::lire(&b.r.base(), id).unwrap();
         assert_eq!((ab.subscription_code.as_deref(), ab.offre.code(), ab.statut.as_str(), ab.rum.as_deref(), ab.bon_commande.as_str()), (Some("SUB-1"), "atelier", "trial", Some("RUM-1"), "BC-42"));
         let s = sujets(&b);
         assert!(s.iter().any(|x| x.contains("Bienvenue dans l'offre E-KO RIP Cloud « Atelier »")), "{s:?}");
         assert!(s.iter().any(|x| x.contains("mandat de prélèvement SEPA")), "{s:?}");
         assert!(b.boite.lock().unwrap().iter().filter(|m| m.sujet.contains("Bienvenue dans l'offre")).all(|m| m.a == "compta@atelier.fr"), "e-mails de facturation au contact de facturation");
-        assert!(b.boite.lock().unwrap().iter().any(|m| m.sujet.contains("Bienvenue dans l'offre") && m.texte.contains("première facture est émise")), "first_cycle de l'ERP (bill_now)");
+        assert!(b.boite.lock().unwrap().iter().any(|m| m.sujet.contains("Bienvenue dans l'offre") && m.texte.contains("Essai gratuit jusqu'au") && !m.texte.contains("première facture est émise")), "essai : pas de première facture");
         // Page Abonnement : offre, moyen de paiement, factures (PDF relayé, seulement les siennes).
         let page = appel(&b, "GET", "/abonnement", &[("Cookie", &c)], Corps::Rien);
         assert!(page.corps.contains("Offre Atelier") && page.corps.contains("Prélèvement SEPA (IBAN se terminant par 0189)") && page.corps.contains("REF-FA-1") && page.corps.contains("/abonnement/factures/FA-1.pdf"), "{}", page.corps);
@@ -478,6 +482,7 @@ async fn souscription_par_carte_puis_sieges() {
         assert_eq!((r.statut, r.json()["payment_id"].as_str(), r.json()["redirect_url"].as_str()), (200, Some("paym_1"), Some("https://3ds.stancer.test/auth/paym_1")), "{}", r.corps);
         let sub = &appels(&b, "POST", "/subscriptions")[0];
         assert!(sub.corps.get("payment_method").is_none() && sub.corps["plan_code"] == "MACH-M" && sub.corps["seats"] == 1 && sub.corps["tier_code"] == "CLI-EXISTANT");
+        assert!(sub.corps["bill_now"] == true && sub.corps.get("trial_days").is_none(), "pas d'essai hors offre Atelier");
         assert_eq!(appels(&b, "PUT", "/subscriptions/SUB-1/payment-method")[0].corps, json!({ "provider": "stancer_card", "card_id": "card_abc" }));
         assert_eq!(appels(&b, "POST", "/subscriptions/SUB-1/card-authentication")[0].corps["return_url"], format!("{URL}/abonnement/3ds-retour"));
         let retour = appel(&b, "GET", "/abonnement/3ds-retour", &[], Corps::Rien);
