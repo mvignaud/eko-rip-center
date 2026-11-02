@@ -432,7 +432,12 @@ pub fn recalculer_sieges(r: &Partage, id: i64, t: u64) -> Result<bool, String> {
         let rep = match (&ab.supplement_code, n) {
             (None, 0) => None,
             (None, n) => {
-                let mut corps = json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "bill_now": true });
+                // Pendant l'essai de l'abonnement principal, le supplément suit le même essai
+                // (même fin) : aucune facture ni prélèvement avant la fin de l'essai.
+                let mut corps = match jours_d_essai_restants(&ab, crate::maintenant()) {
+                    Some(j) => json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "trial_days": j }),
+                    None => json!({ "tier_code": ab.tier_code, "plan_code": plan, "seats": n, "customer_notifications": false, "bill_now": true }),
+                };
                 if let Some(rum) = &ab.rum {
                     corps["payment_method"] = json!({ "provider": "stancer_sepa", "mandate_code": rum });
                 }
@@ -895,6 +900,12 @@ fn statut_cycle(s: &str) -> String {
         "" => "—".into(),
         autre => autre.to_string(),
     }
+}
+
+/// Jours d'essai restants de l'abonnement principal (arrondis au jour supérieur), `None` hors essai.
+pub fn jours_d_essai_restants(ab: &Abonnement, maintenant: u64) -> Option<i64> {
+    let fin = ab.essai_fin.filter(|&f| f > maintenant)?;
+    (ab.statut == "trial").then(|| (fin - maintenant).div_ceil(86_400) as i64)
 }
 
 /// Durée de l'essai de l'offre Atelier, offert à la première souscription payante du compte.
@@ -2205,6 +2216,19 @@ pub async fn essai_facturation(State(r): State<Partage>, h: HeaderMap, axum::For
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn essai_du_supplement_aligne_sur_le_principal() {
+        let mut ab = Abonnement::gratuit(1);
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), None);
+        ab.statut = "trial".into();
+        ab.essai_fin = Some(1_000 + 10 * 86_400 + 1);
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), Some(11), "arrondi au jour supérieur");
+        ab.statut = "active".into();
+        assert_eq!(jours_d_essai_restants(&ab, 1_000), None, "essai terminé côté ERP");
+        ab.statut = "trial".into();
+        assert_eq!(jours_d_essai_restants(&ab, 1_000 + 20 * 86_400), None, "fin d'essai passée");
+    }
 
     #[test]
     fn fiche_et_coupons() {
