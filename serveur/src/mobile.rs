@@ -266,7 +266,7 @@ fn alerte_ordinaire(a: &str) -> bool {
 /// Libellés français des alertes de la Printer-MIB, que les machines donnent en anglais
 /// (`prtAlertDescription`). Comparés en minuscules, en contenu, dans l'ordre : les plus
 /// précis d'abord.
-const ALERTES_FR: [(&str, &str); 44] = [
+const ALERTES_FR: [(&str, &str); 46] = [
     ("printer cover open", "capot ouvert"),
     ("front cover open", "capot avant ouvert"),
     ("rear cover open", "capot arrière ouvert"),
@@ -307,6 +307,9 @@ const ALERTES_FR: [(&str, &str); 44] = [
     ("service required", "intervention de maintenance requise"),
     ("maintenance", "maintenance requise"),
     ("temperature", "température hors plage"),
+    // « heater warm up » (S80600, relevé du 25/10) : chauffe normale, avant les erreurs.
+    ("warm up", "chauffe en cours"),
+    ("warming", "chauffe en cours"),
     ("heater", "erreur de chauffage"),
     ("offline", "hors ligne"),
     ("paused", "en pause"),
@@ -558,6 +561,8 @@ mod tests {
         assert_eq!(alerte_en_francais("ink low"), "encre presque vide");
         assert_eq!(alerte_en_francais("media empty"), "support épuisé");
         assert_eq!(alerte_en_francais("code 0x1234"), "code 0x1234");
+        assert_eq!(alerte_en_francais("heater warm up"), "chauffe en cours");
+        assert_eq!(alerte_en_francais("heater error"), "erreur de chauffage");
         // Le démarrage est un état ordinaire : pas de notification.
         assert!(alerte_ordinaire("printer initializing"));
     }
