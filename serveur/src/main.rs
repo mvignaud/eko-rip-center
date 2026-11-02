@@ -3151,7 +3151,7 @@ async fn etat_mobile(State(etat): State<Partage>) -> Json<serde_json::Value> {
                 "releve_le": releve.releve_le,
                 "encres": releve.encres.iter().map(|(e, pc)| serde_json::json!({ "encre": e, "pourcent": pc })).collect::<Vec<_>>(),
                 "longueur_restante_m": releve.longueur_m,
-                "alertes": releve.alertes,
+                "alertes": releve.alertes.iter().map(|a| mobile::alerte_en_francais(a)).collect::<Vec<_>>(),
                 "en_cours": en_cours,
                 "en_attente": a_elle().filter(|s| s.etat == file::Etat::EnAttente).count(),
                 "suspendues": a_elle().filter(|s| s.etat == file::Etat::Suspendue).count(),

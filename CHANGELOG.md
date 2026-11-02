@@ -28,6 +28,12 @@ parité ; d'ici là, 0.Y.Z.
   alertes de quota et d'échec, restauration depuis le portail.
 - **CGV** de la plate-forme, CGU et politique de confidentialité mises à jour.
 
+### Corrigé
+- **App mobile : alertes des machines en français.** Les messages de l'imprimante (« printer
+  initializing », « pause », « ink low »…) arrivaient en anglais dans les notifications et
+  l'onglet Machines : le serveur les traduit. Le démarrage de l'imprimante ne notifie plus.
+  *Mobile app: printer alerts now shown in French; printer start-up no longer notifies.*
+
 ## [0.33.0] — 2026-11-01
 
 ### Ajouté

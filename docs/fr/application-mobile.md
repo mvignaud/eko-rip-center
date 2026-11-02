@@ -42,7 +42,7 @@ ouverture de l'app) au moins une fois tous les 30 jours.
 
 | Événement | Quand |
 |---|---|
-| Alerte de la machine | une alerte nouvelle de la Printer-MIB (capot ouvert, support épuisé…), hors états ordinaires (prête, impression, chauffe, veille) |
+| Alerte de la machine | une alerte nouvelle de la Printer-MIB (capot ouvert, support épuisé…), hors états ordinaires (prête, impression, chauffe, démarrage, veille). Les textes anglais de la machine sont traduits en français (`ALERTES_FR` de `serveur/src/mobile.rs`) ; un texte inconnu reste tel quel |
 | Encre presque vide | une encre passe à 5 % ou moins |
 | Cartouche vide | une encre passe à 0 % |
 | Machine injoignable | 3 relevés SNMP manqués de suite ; puis « répond de nouveau » |

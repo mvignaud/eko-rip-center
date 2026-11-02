@@ -136,7 +136,7 @@ In **Settings**, two switches define what you receive:
 
 | Event | When |
 |---|---|
-| Machine alert | A new alert appears (cover open, media used up…). Ordinary states (ready, printing, warming up, standby) do not notify. |
+| Machine alert | A new alert appears (cover open, media used up…). Ordinary states (ready, printing, warming up, starting up, standby) do not notify. The app shows the alert in French; a message the RIP does not know yet stays in the machine's own wording. |
 | Nearly empty ink | An ink drops to 5% or less. |
 | Empty cartridge | An ink reaches 0%. |
 | Machine unreachable | Three readings in a row without an answer, then a notification when it answers again. |
