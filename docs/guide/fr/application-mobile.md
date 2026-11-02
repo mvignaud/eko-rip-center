@@ -136,7 +136,7 @@ Dans **Réglages**, deux interrupteurs précisent ce qui est reçu :
 
 | Événement | Quand |
 |---|---|
-| Alerte de la machine | Une nouvelle alerte apparaît (capot ouvert, support épuisé…). Les états ordinaires (prête, impression, chauffe, veille) ne notifient pas. |
+| Alerte de la machine | Une nouvelle alerte apparaît (capot ouvert, support épuisé…). Les états ordinaires (prête, impression, chauffe, démarrage, veille) ne notifient pas. L'alerte est affichée en français ; un message que le RIP ne connaît pas encore reste dans la langue de la machine. |
 | Encre presque vide | Une encre passe à 5 % ou moins. |
 | Cartouche vide | Une encre atteint 0 %. |
 | Machine injoignable | Trois relevés de suite sans réponse, puis une notification quand elle répond de nouveau. |
