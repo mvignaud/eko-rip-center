@@ -357,6 +357,7 @@ Regarder dans les courriers indésirables. Vérifier l'adresse du compte dans **
 ## Informations légales
 
 - Conditions générales d'utilisation : <https://platform.e-ko.rip/cgu>
+- Conditions générales de vente (offres payantes) : <https://platform.e-ko.rip/cgv>
 - Politique de confidentialité : <https://platform.e-ko.rip/confidentialite>
 - Mentions légales : <https://platform.e-ko.rip/mentions-legales>
 

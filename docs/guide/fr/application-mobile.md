@@ -168,10 +168,10 @@ Le mode démo montre l'application avec des données fictives, sans serveur et s
 
 ## Confidentialité
 
-L'application parle uniquement au serveur RIP de l'atelier et, si elle est utilisée, à la plate-forme E-KO RIP Cloud. L'éditeur ne reçoit ni compte, ni publicité, ni mesure d'audience.
+L'application parle uniquement au serveur RIP de l'atelier et, si elle est utilisée, à la plate-forme E-KO RIP Cloud. L'application ne contient ni publicité ni mesure d'audience. Sans connexion par le Cloud, l'éditeur ne reçoit rien ; avec elle, la plate-forme connaît votre compte, le nom du téléphone et, si les notifications sont actives, son jeton de notification.
 
 - Les identifiants sont gardés dans l'espace sécurisé du téléphone et envoyés uniquement au serveur choisi.
-- Pour les notifications, un jeton du téléphone est transmis au serveur ; les messages transitent ensuite par le service de notifications d'Expo, puis par Apple ou Google.
+- Pour les notifications, un jeton du téléphone est transmis au serveur (ou à la plate-forme E-KO RIP Cloud si vous vous y connectez) ; les messages transitent ensuite par le service de notifications d'Expo, puis par Apple ou Google.
 - Se déconnecter supprime les identifiants du téléphone et retire le téléphone de la liste des notifications.
 
 La politique complète est publiée à l'adresse <https://e-ko.rip/app/confidentialite/>.
