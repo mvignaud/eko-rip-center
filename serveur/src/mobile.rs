@@ -260,7 +260,7 @@ fn publier(donnees: &Path, nouveaux: Vec<Nouveau>) {
 /// Alertes de la Printer-MIB qui ne disent qu'un état normal : pas de notification.
 fn alerte_ordinaire(a: &str) -> bool {
     let a = a.to_ascii_lowercase();
-    ["ready", "printing", "warm up", "warming", "initializ", "sleep", "standby", "power sav", "energy sav", "idle", "online"].iter().any(|o| a.contains(o))
+    ["ready", "printing", "warm up", "warming", "initializing", "sleep", "standby", "power sav", "energy sav", "idle", "online"].iter().any(|o| a.contains(o))
 }
 
 /// Libellés français des alertes de la Printer-MIB, que les machines donnent en anglais
@@ -565,6 +565,8 @@ mod tests {
         assert_eq!(alerte_en_francais("heater error"), "erreur de chauffage");
         // Le démarrage est un état ordinaire : pas de notification.
         assert!(alerte_ordinaire("printer initializing"));
+        // Un échec de démarrage, lui, reste une alerte.
+        assert!(!alerte_ordinaire("initialization error"));
     }
 
     #[test]
