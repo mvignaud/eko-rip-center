@@ -357,6 +357,7 @@ Look in the spam folder. Check the account's address in **My account** and the b
 ## Legal information
 
 - Terms of use: <https://platform.e-ko.rip/cgu>
+- Terms of sale (paid plans): <https://platform.e-ko.rip/cgv>
 - Privacy policy: <https://platform.e-ko.rip/confidentialite>
 - Legal notice: <https://platform.e-ko.rip/mentions-legales>
 

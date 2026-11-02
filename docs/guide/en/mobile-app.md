@@ -171,7 +171,7 @@ Demo mode shows the app with made-up data, with no server and no connection.
 The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The publisher receives no account, no advertising and no audience measurement.
 
 - Credentials are kept in the phone's secure storage and sent only to the server you chose.
-- For notifications, a phone token is passed to the server; the messages then go through the Expo notification service, then through Apple or Google.
+- For notifications, a phone token is passed to the server (or to the E-KO RIP Cloud platform if you sign in with it); the messages then go through the Expo notification service, then through Apple or Google.
 - Signing out deletes the credentials from the phone and removes the phone from the notification list.
 
 The full policy is published at <https://e-ko.rip/app/confidentialite/>.
