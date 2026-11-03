@@ -2110,7 +2110,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
     }
     format!(
         r#"<div class="carte"><h2>Facturation (E-KO)</h2>
-<p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view. Webhook à déclarer dans l'ERP : <code>{url}/api/erp/webhooks</code>.</p>
+<p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view, et webhooks.manage pour la configuration automatique. « Enregistrer et configurer depuis l'ERP » remplit les codes des plans <code>RIP-…</code> et crée le webhook vers <code>{url}/api/erp/webhooks</code> avec son secret (il remplace l'ancien). Sans webhooks.manage, déclarer le webhook à la main et coller son secret.</p>
 <form method="post" action="/admin/facturation">{csrf}
 <label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://app.e-ko.fr/api/v1" autocomplete="off"></label>
 <label>Jeton d'API ({j})<input type="password" name="erp_jeton" autocomplete="new-password"></label>
@@ -2118,7 +2118,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
 <h2>Codes des plans d'abonnement</h2>{plans}
 <label>Clé publique Stancer (pk_…)<input type="text" name="stancer_cle_publique" value="{pk}" autocomplete="off"></label>
 <label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer le jeton et le secret enregistrés</span></label>
-<button type="submit">Enregistrer</button></form>
+<button type="submit">Enregistrer</button> <button type="submit" name="action" value="configurer">Enregistrer et configurer depuis l'ERP</button></form>
 <form method="post" action="/admin/facturation/essai">{csrf}<button class="discret" type="submit">Tester la connexion</button> <span class="meta">liste les plans de l'ERP</span></form></div>"#,
         url = echapper(url),
         csrf = hidden_csrf(s),
@@ -2178,6 +2178,7 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
     if !pk.is_empty() && (!pk.starts_with("pk_") || !pk.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
         return erreur_page(&r, Some(&s), "Clé publique Stancer invalide (pk_…).");
     }
+    let configurer = champ(&f, "action") == "configurer";
     let mut cles: Vec<(String, String)> = vec![("erp_url".into(), url.trim_end_matches('/').to_string()), ("stancer_cle_publique".into(), pk)];
     for (o, _) in PLANS {
         for cy in [Cycle::Mensuel, Cycle::Annuel] {
@@ -2186,27 +2187,159 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
             if v.chars().any(|c| c.is_control()) || v.len() > 64 {
                 return erreur_page(&r, Some(&s), "Code de plan invalide.");
             }
-            cles.push((k, v));
+            // Avec « configurer », les codes viennent de l'ERP : ceux du formulaire ne sont pas écrits.
+            if !configurer {
+                cles.push((k, v));
+            }
         }
     }
-    let b = r.base();
-    let mut ok = true;
-    for (k, v) in &cles {
-        ok &= base::regler(&b, k, v).is_ok();
-    }
-    for cle in ["erp_jeton", "erp_webhook_secret"] {
-        let v = champ(&f, cle);
-        if champ(&f, "effacer") == "1" {
-            ok &= base::regler(&b, cle, "").is_ok();
-        } else if !v.is_empty() {
-            ok &= base::regler(&b, cle, &v).is_ok();
+    let ok = {
+        let _verrou = match verrou_configuration(&r) {
+            Ok(v) => v,
+            Err(e) => return erreur_page(&r, Some(&s), &e),
+        };
+        let b = r.base();
+        let mut ok = true;
+        for (k, v) in &cles {
+            ok &= base::regler(&b, k, v).is_ok();
         }
-    }
-    drop(b);
+        for cle in ["erp_jeton", "erp_webhook_secret"] {
+            let v = champ(&f, cle);
+            if champ(&f, "effacer") == "1" {
+                ok &= base::regler(&b, cle, "").is_ok();
+            } else if !v.is_empty() {
+                ok &= base::regler(&b, cle, &v).is_ok();
+            }
+        }
+        ok
+    };
     if !ok {
         return erreur_page(&r, Some(&s), "Enregistrement impossible.");
     }
-    Redirect::to("/admin?ok=facturation").into_response()
+    if !configurer {
+        return Redirect::to("/admin?ok=facturation").into_response();
+    }
+    let resultat = reponse_bloquante(&r, configurer_depuis_erp).await.unwrap_or_else(|_| Err("Service momentanément indisponible.".into()));
+    let corps = match resultat {
+        Ok(bilan) => {
+            let lignes: String = bilan.lignes.iter().map(|l| format!("<li>{}</li>", echapper(l))).collect();
+            let classe = if bilan.complet { "ok" } else { "erreur" };
+            let titre = if bilan.complet { "Facturation configurée depuis l'ERP" } else { "Configuration incomplète" };
+            format!(r#"<div class="carte"><h2>{titre}</h2><p class="{classe}">{}</p><ul>{lignes}</ul><p><a href="/admin">Retour</a></p></div>"#, echapper(&bilan.resume))
+        }
+        Err(e) => format!(r#"<div class="carte"><h2>Configuration depuis l'ERP impossible</h2><p class="erreur">{}</p><p>Les autres réglages sont enregistrés.</p><p><a href="/admin">Retour</a></p></div>"#, echapper(&e)),
+    };
+    page("Administration", Some(&s), &format!("<h1>Administration</h1>{corps}")).into_response()
+}
+
+/// Une seule configuration depuis l'ERP à la fois, et pas d'enregistrement du formulaire
+/// pendant qu'elle tourne : deux passes croisées pourraient laisser actif le webhook de l'une
+/// avec le secret de l'autre, ou effacer les codes de plans qu'elle vient de remplir.
+static CONFIGURATION_ERP: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Verrou de configuration d'une plate-forme (clé : son dossier de données), rendu à la sortie.
+struct VerrouConfiguration(std::path::PathBuf);
+
+impl Drop for VerrouConfiguration {
+    fn drop(&mut self) {
+        CONFIGURATION_ERP.lock().unwrap_or_else(std::sync::PoisonError::into_inner).retain(|d| d != &self.0);
+    }
+}
+
+fn verrou_configuration(r: &Partage) -> Result<VerrouConfiguration, String> {
+    let mut en_cours = CONFIGURATION_ERP.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if en_cours.contains(&r.config.donnees) {
+        return Err("Une configuration depuis l'ERP est en cours : réessaie dans un instant.".into());
+    }
+    en_cours.push(r.config.donnees.clone());
+    Ok(VerrouConfiguration(r.config.donnees.clone()))
+}
+
+/// Code de plan attendu dans l'ERP pour une offre et un cycle (`RIP-ATELIER-M`, `RIP-SUPP-A`…).
+pub fn code_plan_attendu(offre: Option<Offre>, cycle: Cycle) -> String {
+    let o = offre.map_or("SUPP".to_string(), |o| o.code().to_ascii_uppercase());
+    format!("RIP-{o}-{}", if cycle == Cycle::Mensuel { "M" } else { "A" })
+}
+
+/// Bilan de « Configurer depuis l'ERP ».
+#[derive(Debug, Default)]
+pub struct Bilan {
+    pub complet: bool,
+    pub resume: String,
+    pub lignes: Vec<String>,
+}
+
+/// Remplit les codes des plans d'après l'ERP et (re)crée le webhook de la plate-forme, avec
+/// tous les événements écoutés et un seul secret, gardé ici sans être affiché. L'ancien
+/// webhook vers la même adresse est supprimé après coup, une fois le nouveau secret enregistré.
+pub fn configurer_depuis_erp(r: &Partage) -> Result<Bilan, String> {
+    let _verrou = verrou_configuration(r)?;
+    let erp = Erp::depuis(&r.base()).ok_or("Adresse ou jeton de l'API non renseigné.")?;
+    let mut bilan = Bilan::default();
+
+    // 1. Plans.
+    let rep = erp.get("/subscription-plans")?;
+    if !rep.ok() {
+        return Err(format!("Lecture des plans refusée par l'ERP : {}", rep.erreur()));
+    }
+    let existants: HashSet<String> = rep.donnees().as_array().cloned().unwrap_or_default().iter().filter_map(|p| texte_json(&p["code"])).collect();
+    let mut manquants = Vec::new();
+    let mut trouves = 0;
+    for (o, nom) in PLANS {
+        for cy in [Cycle::Mensuel, Cycle::Annuel] {
+            let code = code_plan_attendu(o, cy);
+            if existants.contains(&code) {
+                base::regler(&r.base(), &offres::cle_plan(o, cy), &code).map_err(|e| e.to_string())?;
+                trouves += 1;
+            } else {
+                manquants.push(format!("{code} ({nom}, {})", cy.libelle()));
+            }
+        }
+    }
+    bilan.lignes.push(format!("Plans : {trouves} sur 8 trouvés et enregistrés."));
+    if !manquants.is_empty() {
+        bilan.lignes.push(format!("Plans absents de l'ERP (réglage inchangé) : {}.", manquants.join(", ")));
+    }
+
+    // 2. Webhook : un seul point d'arrivée, tous les événements, un seul secret.
+    let cible = format!("{}/api/erp/webhooks", r.config.url_publique.trim_end_matches('/'));
+    let liste = erp.get("/webhook-subscriptions")?;
+    if liste.statut == 403 {
+        return Err("Le jeton n'a pas le droit webhooks.manage : ajoute-le au jeton dans l'ERP, ou déclare le webhook à la main. Les codes des plans sont enregistrés.".into());
+    }
+    if !liste.ok() {
+        return Err(format!("Lecture des webhooks refusée par l'ERP : {}", liste.erreur()));
+    }
+    let anciens: Vec<i64> = liste.donnees().as_array().cloned().unwrap_or_default().iter().filter(|w| w["target_url"].as_str() == Some(cible.as_str())).filter_map(|w| w["id"].as_i64()).collect();
+    let cree = erp.post("/webhook-subscriptions", &json!({ "target_url": cible, "events": erp::EVENEMENTS_WEBHOOK }), None)?;
+    let secret = cree.corps["secret"].as_str().unwrap_or("").to_string();
+    let couverts = cree.corps["events"].as_array().map_or(0, Vec::len);
+    if !cree.ok() || secret.is_empty() || couverts != erp::EVENEMENTS_WEBHOOK.len() {
+        if cree.ok()
+            && let Some(id) = cree.corps["id"].as_i64()
+        {
+            // ERP trop ancien (un seul événement retenu) : on ne garde pas ce webhook incomplet.
+            let _ = erp.supprimer(&format!("/webhook-subscriptions/{id}"));
+        }
+        return Err(format!("Création du webhook refusée par l'ERP ({}). Il faut l'ERP 1.95.510 ou plus récent. Les codes des plans sont enregistrés.", if cree.ok() { "un seul événement retenu".to_string() } else { cree.erreur() }));
+    }
+    base::regler(&r.base(), "erp_webhook_secret", &secret).map_err(|e| format!("Webhook créé dans l'ERP mais secret non enregistré ({e}) : relance la configuration."))?;
+    bilan.lignes.push(format!("Webhook créé vers {cible} ({} événements), secret enregistré.", erp::EVENEMENTS_WEBHOOK.len()));
+    let mut supprimes = 0;
+    for id in &anciens {
+        match erp.supprimer(&format!("/webhook-subscriptions/{id}")) {
+            Ok(rep) if rep.ok() => supprimes += 1,
+            Ok(rep) => bilan.lignes.push(format!("Ancien webhook n°{id} non supprimé : {}. À supprimer dans l'ERP.", rep.erreur())),
+            Err(e) => bilan.lignes.push(format!("Ancien webhook n°{id} non supprimé : {e}. À supprimer dans l'ERP.")),
+        }
+    }
+    if supprimes > 0 {
+        bilan.lignes.push(format!("{supprimes} ancien(s) webhook(s) vers la même adresse supprimé(s)."));
+    }
+    bilan.complet = manquants.is_empty() && supprimes == anciens.len();
+    bilan.resume = if bilan.complet { "Codes des plans, webhook et secret sont en place.".into() } else { "Une partie est à reprendre, voir ci-dessous.".into() };
+    eprintln!("facturation configurée depuis l'ERP : {trouves} plan(s), webhook recréé, {supprimes} ancien(s) supprimé(s)");
+    Ok(bilan)
 }
 
 /// `POST /admin/facturation/essai` : `GET /subscription-plans`.
