@@ -565,7 +565,7 @@ section { padding: 96px 0; }
 @media (max-width: 640px) { .grille-billets { grid-template-columns: 1fr; } }
 .carte-billet { display: flex; flex-direction: column; background: var(--fond-2); border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; box-shadow: var(--ombre); transition: transform .2s, box-shadow .2s; }
 .carte-billet:hover { transform: translateY(-3px); box-shadow: var(--ombre-forte); }
-.carte-billet-image img, .carte-billet-vide { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; background: var(--fond-3); }
+.carte-billet-image img, .carte-billet-vide { width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: contain; background: var(--fond-3); }
 .carte-billet-vide { display: block; background: linear-gradient(135deg, var(--cyan), var(--magenta) 60%, var(--jaune)); opacity: .5; }
 .carte-billet-corps { padding: 18px 20px 22px; display: grid; gap: 8px; }
 .carte-billet h2, .carte-billet h3 { font-size: 20px; line-height: 1.3; margin: 0; letter-spacing: -.01em; }
@@ -580,7 +580,7 @@ section { padding: 96px 0; }
 .cat-comparatifs { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: #007aa8; }
 @media (prefers-color-scheme: dark) { .cat-atelier { color: #ffc35a; } .cat-logiciel { color: #5fe08a; } .cat-comparatifs { color: #5fd0ff; } }
 .billet-une { display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center; margin-bottom: 40px; padding: 22px; background: var(--fond-2); border: 1px solid var(--trait); border-radius: var(--rayon); box-shadow: var(--ombre); }
-.billet-une img { border-radius: 12px; aspect-ratio: 16 / 10; object-fit: contain; background: var(--fond-3); width: 100%; }
+.billet-une img { border-radius: 12px; aspect-ratio: 16 / 10; object-fit: contain; background: var(--fond-3); width: 100%; height: auto; }
 .billet-une h2 { font-size: clamp(24px, 3vw, 32px); line-height: 1.2; margin: 10px 0; }
 .billet-une h2 a { color: var(--texte); }
 .billet-une p { color: var(--texte-2); }
@@ -591,7 +591,7 @@ section { padding: 96px 0; }
 .billet-tete h1 { font-size: clamp(32px, 5vw, 50px); line-height: 1.12; letter-spacing: -.02em; margin: 12px 0; }
 .billet-meta { color: var(--texte-3); font-size: 15px; }
 .billet-image { margin: 28px 0 0; }
-.billet-image img { width: 100%; border-radius: var(--rayon); border: 1px solid var(--trait); box-shadow: var(--ombre); }
+.billet-image img { width: auto; max-width: 100%; height: auto; max-height: 560px; margin: 0 auto; border-radius: var(--rayon); border: 1px solid var(--trait); box-shadow: var(--ombre); }
 .billet-grille { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 48px; padding: 32px 0 72px; max-width: 1080px; }
 .billet-cote { position: sticky; top: 84px; align-self: start; display: grid; gap: 20px; }
 .billet-toc { font-size: 14px; }
@@ -658,3 +658,7 @@ section { padding: 96px 0; }
 .contact-cote h2 { font-size: 18px; margin: 0 0 6px; }
 .contact-cote p { margin: 0 0 6px; }
 @media (max-width: 900px) { .contact-grille { grid-template-columns: 1fr; } }
+
+/* Le fond animé du héros déborde sous la section suivante : celle-ci passe au-dessus (sinon le
+   héros, positionné, se peint par-dessus les formulaires et les cartes qui ne le sont pas). */
+main > .heros ~ section { position: relative; }

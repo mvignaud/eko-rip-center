@@ -64,6 +64,28 @@ def erreur(msg):
     sys.exit(f"generer-site : {msg}")
 
 
+def taille_image(chemin_web):
+    """(largeur, hauteur) réelles d'une image WebP de site/ (en-tête lu sans dépendance)."""
+    data = (SITE / chemin_web.lstrip("/")).read_bytes()[:40]
+    if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        erreur(f"{chemin_web} : seules les images WebP sont prises en charge")
+    bloc = data[12:16]
+    if bloc == b"VP8X":
+        return 1 + int.from_bytes(data[24:27], "little"), 1 + int.from_bytes(data[27:30], "little")
+    if bloc == b"VP8L":
+        b = int.from_bytes(data[21:25], "little")
+        return (b & 0x3FFF) + 1, ((b >> 14) & 0x3FFF) + 1
+    if bloc == b"VP8 ":
+        return int.from_bytes(data[26:28], "little") & 0x3FFF, int.from_bytes(data[28:30], "little") & 0x3FFF
+    erreur(f"{chemin_web} : en-tête WebP inconnu")
+
+
+def img(src, alt="", charge=""):
+    l, h = taille_image(src)
+    paresseux = ' loading="lazy"' if charge == "lazy" else ""
+    return f'<img src="{e(src)}" alt="{e(alt)}"{paresseux} width="{l}" height="{h}">'
+
+
 # ---------------------------------------------------------------- lecture
 
 def lire_markdown(chemin, obligatoires):
@@ -180,7 +202,7 @@ def fil_ariane(elements):
 
 
 def carte(a, titre_niveau="h3"):
-    image = (f'<img src="{e(a["image"])}" alt="" loading="lazy" width="640" height="400">' if a["image"]
+    image = (img(a["image"], charge="lazy") if a["image"]
              else '<span class="carte-billet-vide" aria-hidden="true"></span>')
     return f"""<article class="carte-billet apparait">
         <a href="{a["url"]}" class="carte-billet-image" tabindex="-1" aria-hidden="true">{image}</a>
@@ -229,7 +251,7 @@ def page_article(a, articles):
         objets.append({"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
             {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": r}} for q, r in a["faq"]]})
     maj = (f' · mis à jour le <time datetime="{a["maj"].isoformat()}">{date_fr(a["maj"])}</time>' if a["maj"] != a["date"] else "")
-    image = (f'<figure class="billet-image"><img src="{e(a["image"])}" alt="{e(a["alt"])}" width="1280" height="800"></figure>' if a["image"] else "")
+    image = (f'<figure class="billet-image">{img(a["image"], a["alt"])}</figure>' if a["image"] else "")
     return tete(f'{a["titre"]} · Blog E-KO RIP', a["description"], a["url"],
                 extra=ld(*objets) + f'<meta property="article:published_time" content="{a["date"].isoformat()}">\n',
                 image=a["image"] or "/assets/img/linux-travaux.webp", type_og="article", prose=True) + f"""
@@ -290,7 +312,7 @@ def liste_billets(articles, tous, titre_page, chapo, chemin, surtitre, cat_activ
     bloc_une = ""
     if une:
         bloc_une = f"""<article class="billet-une apparait">
-      <a href="{une["url"]}" class="billet-une-image" tabindex="-1" aria-hidden="true"><img src="{e(une["image"] or "/assets/img/linux-travaux.webp")}" alt="" width="1280" height="800"></a>
+      <a href="{une["url"]}" class="billet-une-image" tabindex="-1" aria-hidden="true">{img(une["image"] or "/assets/img/linux-travaux.webp")}</a>
       <div>
         <p class="carte-billet-meta"><span class="pastille-cat cat-{CATEGORIES[une["categorie"]]}">{e(une["categorie"])}</span> <time datetime="{une["date"].isoformat()}">{date_fr(une["date"])}</time> · {une["lecture"]} min</p>
         <h2><a href="{une["url"]}">{e(une["titre"])}</a></h2>
