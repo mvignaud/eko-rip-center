@@ -1144,7 +1144,7 @@ fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, 
 <div class="carte"><h2>Contact de facturation</h2>
 <label>Nom<input type="text" name="contact" value="{contact}" required maxlength="80"></label>
 <label>E-mail de facturation<input type="email" name="email" value="{email}" required></label>
-<label>Téléphone<input type="text" name="telephone" value="{tel}" maxlength="20" autocomplete="tel"></label>
+<label>Téléphone<input type="tel" name="telephone" value="{tel}" maxlength="20" autocomplete="tel" placeholder="+33 6 12 34 56 78"></label>
 <label>N° de bon de commande (facultatif)<input type="text" name="bon_commande" value="{bc}" maxlength="60"></label></div>
 <div class="carte"><h2>Code promo ou partenaire</h2><label>Code (facultatif)<input type="text" name="code" value="{code}" maxlength="40" autocomplete="off"></label><p id="etat-code" class="meta"></p></div>
 <div class="carte"><h2>Moyen de paiement</h2><label class="case"><input type="radio" name="moyen" value="cb"{cb}> <span>Carte bancaire (saisie sécurisée Stancer, 3-D Secure)</span></label><label class="case"><input type="radio" name="moyen" value="sepa"{sepa}> <span>Prélèvement SEPA (mandat signé en ligne par code SMS)</span></label>
@@ -1586,7 +1586,7 @@ fn panneau_sepa(s: &Session, ab: &Abonnement) -> String {
 <label>IBAN<input type="text" name="iban" required maxlength="42" autocomplete="off" placeholder="FR76 …"></label>
 <label>BIC (facultatif)<input type="text" name="bic" maxlength="11" autocomplete="off"></label>
 <span class="ligne"><label>Prénom du titulaire<input type="text" name="prenom" required maxlength="60" value="{prenom}"></label><label>Nom du titulaire<input type="text" name="nom" required maxlength="60" value="{nom}"></label></span>
-<label>Téléphone mobile (pour le code SMS)<input type="text" name="telephone" required maxlength="20" value="{tel}" autocomplete="tel"></label>
+<label>Téléphone mobile (pour le code SMS)<input type="tel" name="telephone" required maxlength="20" value="{tel}" autocomplete="tel" placeholder="+33 6 12 34 56 78"></label>
 <label>Adresse<input type="text" name="adresse" maxlength="160" value="{adr}"></label>
 <span class="ligne"><label>Code postal<input type="text" name="code_postal" maxlength="12" value="{cp}"></label><label>Ville<input type="text" name="ville" maxlength="80" value="{ville}"></label></span>
 <button type="submit">Créer le mandat</button></form></div>"#,
