@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impression puis découpe : repérage et contours de découpe · Blog E-KO RIP</title>
+<meta name="description" content="Comment faire coïncider impression et découpe : tracés CutContour, cadre et code-barres, ARMS, planches de stickers, plotters et tables. Le guide d&#x27;atelier.">
+<link rel="canonical" href="https://e-ko.rip/blog/impression-decoupe-reperage/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="E-KO RIP Center">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Impression puis découpe : repérage et contours de découpe · Blog E-KO RIP">
+<meta property="og:description" content="Comment faire coïncider impression et découpe : tracés CutContour, cadre et code-barres, ARMS, planches de stickers, plotters et tables. Le guide d&#x27;atelier.">
+<meta property="og:url" content="https://e-ko.rip/blog/impression-decoupe-reperage/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/linux-envoi.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Impression puis découpe : repérage et contours de découpe","description":"Comment faire coïncider impression et découpe : tracés CutContour, cadre et code-barres, ARMS, planches de stickers, plotters et tables. Le guide d'atelier.","datePublished":"2026-11-03","dateModified":"2026-11-03","inLanguage":"fr-FR","mainEntityOfPage":"https://e-ko.rip/blog/impression-decoupe-reperage/","articleSection":"Atelier","wordCount":1381,"author":{"@type":"Organization","name":"E-KO RIP Center","url":"https://e-ko.rip/"},"publisher":{"@type":"Organization","name":"GOLDEN PRINT","url":"https://e-ko.rip/","logo":{"@type":"ImageObject","url":"https://e-ko.rip/assets/img/icone.svg"}},"image":"https://e-ko.rip/assets/img/linux-envoi.webp"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://e-ko.rip/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://e-ko.rip/blog/"},{"@type":"ListItem","position":3,"name":"Atelier","item":"https://e-ko.rip/blog/categorie/atelier/"},{"@type":"ListItem","position":4,"name":"Impression puis découpe : repérage et contours de découpe","item":"https://e-ko.rip/blog/impression-decoupe-reperage/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Quel nom donner au ton de découpe dans mon PDF ?","acceptedAnswer":{"@type":"Answer","text":"Un nom qui commence par l'un des préfixes reconnus, par exemple CutContour. La liste est modifiable dans Système > Découpe, et un changement vaut pour les rendus suivants."}},{"@type":"Question","name":"Le RIP imprime-t-il les tracés de découpe ?","acceptedAnswer":{"@type":"Answer","text":"Non. Les tons de découpe ne partent jamais à l'imprimante : ils sont convertis en HP-GL pour la découpeuse. Le fichier .plt reste téléchargeable."}},{"@type":"Question","name":"Mon Kona doit-il lire un code-barres ?","acceptedAnswer":{"@type":"Answer","text":"Pour la lecture automatique, oui : prenez le cadre avec code-barres. Un cadre sans code-barres n'est pas lu seul par le Kona, qui s'arrête sur une erreur."}},{"@type":"Question","name":"Peut-on imbriquer des stickers selon leur forme ?","acceptedAnswer":{"@type":"Answer","text":"Oui, avec l'option d'imbrication sur la forme des contours de découpe. Un élément sans contour fermé garde son rectangle."}}]}</script>
+<meta property="article:published_time" content="2026-11-03">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-site.py : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
+    </nav>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
+  </div>
+</header>
+
+<main id="contenu">
+<article class="billet">
+  <header class="billet-tete">
+    <div class="conteneur">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="/">Accueil</a> › <a href="/blog/">Blog</a> › <a href="/blog/categorie/atelier/">Atelier</a> › <span aria-current="page">Impression puis découpe : repérage et contours de découpe</span></nav>
+      <p><a class="pastille-cat cat-atelier" href="/blog/categorie/atelier/">Atelier</a></p>
+      <h1>Impression puis découpe : repérage et contours de découpe</h1>
+      <p class="billet-meta">Par l'équipe E-KO RIP · <time datetime="2026-11-03">3 novembre 2026</time> · 6 min de lecture</p>
+      <figure class="billet-image"><img src="/assets/img/linux-envoi.webp" alt="Écran d&#x27;envoi d&#x27;un travail au RIP avec le réglage de découpe et la fiche du travail" width="1280" height="800"></figure>
+    </div>
+  </header>
+  <div class="conteneur billet-grille">
+    <div class="billet-corps doc-article">
+<p>Pour qu'une découpe tombe pile sur l'impression, le RIP doit faire trois choses : transformer les tracés de découpe du fichier en vecteurs pour la découpeuse, imprimer des repères que la machine sait lire, et n'envoyer la découpe qu'une fois la page entièrement imprimée. Dans E-KO RIP Center, ces trois étapes sont réglées au même endroit, dans le panneau d'envoi du travail.</p>
+<h2 id="quest-ce-quun-contour-de-découpe-pour-un-rip"><a class="ancre" href="#quest-ce-quun-contour-de-découpe-pour-un-rip" aria-hidden="true">#</a>Qu'est-ce qu'un contour de découpe pour un RIP ?</h2>
+<p>Un contour de découpe est un tracé vectoriel peint dans un <strong>ton direct</strong> dont le nom signale la découpe : il n'est jamais imprimé, il est converti en vecteurs HP-GL envoyés à la découpeuse. Cette séparation est le principe du flux « impression puis découpe » : le même PDF contient l'image et le chemin de la lame.</p>
+<p>E-KO RIP Center reconnaît un ton de découpe par le début de son nom. Les préfixes par défaut sont <code>CutContour</code>, <code>Thrucut</code>, <code>Kisscut</code>, <code>InsideCut</code>, <code>Perforation</code>, <code>Creasing</code>, <code>Score</code> et <code>VCut</code>. Les majuscules, les espaces et les tirets sont indifférents : <code>CutContour1</code> est reconnu, <code>1CutContour</code> ne l'est pas. La liste se modifie dans <strong>Système &gt; Découpe</strong>.</p>
+<p>Quelques règles à retenir côté fichier :</p>
+<ul><li>le tracé de découpe est un <strong>filet seul</strong>, sans fond ;</li><li>le ton est défini en <strong>CMJN, en ton direct</strong>, pas en RVB ;</li><li>le filet est aligné <strong>au centre</strong> du tracé, pas à l'intérieur ni à l'extérieur ;</li><li>le tracé se trouve sur le calque du dessus, pour ne pas être recouvert par l'image ;</li><li>un ton à 0 % n'est pas découpé.</li></ul>
+<h2 id="comment-le-rip-contrôle-t-il-la-découpe-avant-de-couper"><a class="ancre" href="#comment-le-rip-contrôle-t-il-la-découpe-avant-de-couper" aria-hidden="true">#</a>Comment le RIP contrôle-t-il la découpe avant de couper ?</h2>
+<p>Au rendu, le RIP passe les tracés en revue et affiche des alertes sur le travail : ton défini en RVB, tracé avec un fond, tracé qui touche le bord de la page ou qui sort du plan de travail, contour vectorisé qui serait coupé deux fois, tracé recouvert par l'image, découpeuse choisie alors que le fichier ne contient aucun ton de découpe reconnu. Mieux vaut lire ces alertes avant de lancer l'impression que découvrir le problème sur le vinyle.</p>
+<p>Le RIP rogne aussi les tracés à la page : la lame ne sort jamais du support. Le tri des tracés, actif par défaut, coupe les intérieurs d'abord.</p>
+<h2 id="comment-ordonner-plusieurs-types-de-coupe"><a class="ancre" href="#comment-ordonner-plusieurs-types-de-coupe" aria-hidden="true">#</a>Comment ordonner plusieurs types de coupe ?</h2>
+<p>Le panneau <strong>Couches de découpe</strong> crée une couche par nom de ton. L'ordre des couches est l'ordre de coupe : le rainage et la perforation passent avant la coupe à travers, quand la matière tient encore. Chaque couche peut recevoir son propre réglage de coupe (vitesse, force, accélération). Par défaut, le réglage de la découpeuse qui porte le nom de la couche s'applique seul, sinon le premier de la machine. Une case décochée désactive la couche.</p>
+<h2 id="comment-éviter-le-liseré-blanc-au-bord-de-la-découpe"><a class="ancre" href="#comment-éviter-le-liseré-blanc-au-bord-de-la-découpe" aria-hidden="true">#</a>Comment éviter le liseré blanc au bord de la découpe ?</h2>
+<p>Avec <strong>Étendre l'image près des tracés</strong>, l'encre qui s'arrête à moins du seuil de proximité d'un contour fermé est prolongée jusqu'au contour, puis au-delà sur une largeur réglable de 0,1 à 10 mm. La coupe ne laisse alors pas de liseré blanc. Elle ne remplace pas l'étalonnage de la découpeuse : gardez des valeurs prudentes et mesurez sur un tirage.</p>
+<p>Pour les travaux dont le fichier n'a pas de contour, le <strong>détourage automatique</strong> analyse le rendu, retire le blanc autour de l'image et propose un contour <code>CutContour</code>. Un aperçu précède l'acceptation.</p>
+<h2 id="comment-le-repérage-fait-il-coïncider-impression-et-découpe"><a class="ancre" href="#comment-le-repérage-fait-il-coïncider-impression-et-découpe" aria-hidden="true">#</a>Comment le repérage fait-il coïncider impression et découpe ?</h2>
+<p>Le repérage consiste à imprimer, autour de l'image, des marques que la découpeuse lit pour recaler sa lame sur l'impression. E-KO RIP Center propose pour le Mutoh Kona 1650 plusieurs formes, à choisir dans le panneau d'envoi :</p>
+<div class="tableau"><table><thead><tr><th>Repérage</th><th>Contenu</th><th>Usage</th></tr></thead><tbody><tr><td>Croix P1 à P4</td><td>Quatre croix aux angles, à 10 mm de l'image</td><td>Pointage manuel sur le Kona</td></tr><tr><td>Cadre Mutoh (type 1)</td><td>Cadre noir de 5 mm</td><td>Cadre sans code-barres, lecture non automatique</td></tr><tr><td>Cadre + code-barres (type 2)</td><td>Cadre et deux codes POSTNET avec le numéro en clair</td><td>Lecture automatique, découpe « Single Frame »</td></tr><tr><td>Cadre multi-segments (type 3)</td><td>Repères tous les 500 mm au plus</td><td>Grandes longueurs coupées par segments</td></tr></tbody></table></div>
+<p>Le type 2 a été éprouvé à l'atelier : impression, lecture du cadre et des codes, puis coupe. Le type 3 suit les tableaux du guide d'application du Kona et reste à éprouver. Avec le type 2, une page de 1,5 m et plus dans le sens d'avance prend automatiquement le cadre multi-segments. Le fichier de découpe porte le nom attendu par le logiciel de la machine, du type <code>Nom_SF_&lt;numéro&gt;.plt</code>.</p>
+<p>Sur un support sombre, transparent ou réfléchissant, l'option <strong>Imprimer un fond sous les repères</strong> pose une bande de blanc ou de CMJN sous chaque repère pour que la machine les lise.</p>
+<p>Pour la Graphtec FC7000, le repérage ARMS se règle au panneau de la machine ; le RIP envoie la découpe en HP-GL au pas de 0,025 mm.</p>
+<h2 id="quelles-machines-pour-quelle-découpe"><a class="ancre" href="#quelles-machines-pour-quelle-découpe" aria-hidden="true">#</a>Quelles machines pour quelle découpe ?</h2>
+<div class="tableau"><table><thead><tr><th>Machine</th><th>Famille</th><th>Ce que fait le RIP</th></tr></thead><tbody><tr><td>Mutoh Kona 1650</td><td>Plotter de découpe</td><td>Découpe HP-GL au pas de 0,01 mm, repérage par cadre et code-barres</td></tr><tr><td>Graphtec FC7000</td><td>Plotter de découpe</td><td>Découpe HP-GL au pas de 0,025 mm, décalage X/Y</td></tr><tr><td>Roland VersaCAMM VP-300 / VP-540</td><td>Imprimante-découpeuse</td><td>Découpe par le réseau, en essai ; impression pas encore pilotée</td></tr></tbody></table></div>
+<p>Aucune table de découpe n'est prise en charge pour l'instant. Une machine absente de la liste peut déjà passer par la connexion <strong>Dossier</strong> ou <strong>IPP</strong> ; la <a href="/compatibilite/">liste de compatibilité</a> permet de demander un pilote.</p>
+<h2 id="comment-préparer-une-planche-de-stickers"><a class="ancre" href="#comment-préparer-une-planche-de-stickers" aria-hidden="true">#</a>Comment préparer une planche de stickers ?</h2>
+<p>Une planche de stickers regroupe plusieurs motifs sur un même rouleau pour limiter les chutes. Dans E-KO RIP Center, on coche <strong>Ajouter à la planche</strong> sur chaque page avec son nombre de copies, on règle la laize et l'espacement, puis on crée la planche. Le panneau dessine l'imposition avant création, avec la longueur de rouleau et la part de surface utilisée.</p>
+<p>Les options utiles pour les stickers :</p>
+<ul><li><strong>Imbriquer sur la forme des contours de découpe</strong> : chaque élément occupe la place de son contour plutôt que de son rectangle, avec des ronds en quinconce ou des triangles tête-bêche ;</li><li><strong>Contour de toute la planche</strong> (couche <code>NestTrimBox</code>) : un rectangle de découpe coupé en dernier, avec marges haute et basse pour la table de découpe ;</li><li><strong>Step &amp; repeat</strong> : une page répétée en grille.</li></ul>
+<p>La planche est un travail à part entière, avec la découpe de tous les contours. L'imbrication peut aussi se faire dans la file, pour les travaux de même support, même mode et même découpeuse.</p>
+<h2 id="quelle-règle-dor-pour-ne-pas-gâcher-de-support"><a class="ancre" href="#quelle-règle-dor-pour-ne-pas-gâcher-de-support" aria-hidden="true">#</a>Quelle règle d'or pour ne pas gâcher de support ?</h2>
+<p>Le RIP applique deux protections. Une découpe attend que l'impression de sa page soit finie à 100 %. Et si la découpeuse n'est pas utilisable (absente, hors ligne, mal connectée), l'impression elle-même attend : rien ne part, ni encre ni support gâchés.</p>
+<p>Le détail de chaque réglage est dans <a href="/documentation/utilisation/">la documentation d'utilisation</a>, et la page <a href="/documentation/machines/mutoh-kona/">du Mutoh Kona</a> dit comment le brancher.</p>
+<p>Pour aller plus loin sur le blanc et les supports, lisez <a href="/blog/imprimer-blanc-argent-vinyle/">imprimer en blanc, argent et vinyle</a>.</p>
+<p><strong>Essayez gratuitement</strong> : <a href="/telecharger/">téléchargez E-KO RIP Center</a> et testez votre propre flux d'impression et de découpe. Une question sur votre machine ? <a href="/contact/">Écrivez-nous</a>.</p>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="quel-nom-donner-au-ton-de-découpe-dans-mon-pdf"><a class="ancre" href="#quel-nom-donner-au-ton-de-découpe-dans-mon-pdf" aria-hidden="true">#</a>Quel nom donner au ton de découpe dans mon PDF ?</h3>
+<p>Un nom qui commence par l'un des préfixes reconnus, par exemple <code>CutContour</code>. La liste est modifiable dans Système &gt; Découpe, et un changement vaut pour les rendus suivants.</p>
+<h3 id="le-rip-imprime-t-il-les-tracés-de-découpe"><a class="ancre" href="#le-rip-imprime-t-il-les-tracés-de-découpe" aria-hidden="true">#</a>Le RIP imprime-t-il les tracés de découpe ?</h3>
+<p>Non. Les tons de découpe ne partent jamais à l'imprimante : ils sont convertis en HP-GL pour la découpeuse. Le fichier .plt reste téléchargeable.</p>
+<h3 id="mon-kona-doit-il-lire-un-code-barres"><a class="ancre" href="#mon-kona-doit-il-lire-un-code-barres" aria-hidden="true">#</a>Mon Kona doit-il lire un code-barres ?</h3>
+<p>Pour la lecture automatique, oui : prenez le cadre avec code-barres. Un cadre sans code-barres n'est pas lu seul par le Kona, qui s'arrête sur une erreur.</p>
+<h3 id="peut-on-imbriquer-des-stickers-selon-leur-forme"><a class="ancre" href="#peut-on-imbriquer-des-stickers-selon-leur-forme" aria-hidden="true">#</a>Peut-on imbriquer des stickers selon leur forme ?</h3>
+<p>Oui, avec l'option d'imbrication sur la forme des contours de découpe. Un élément sans contour fermé garde son rectangle.</p>
+    </div>
+    <aside class="billet-cote">
+      <nav class="billet-toc" aria-label="Dans cet article"><p>Dans cet article</p><ol><li><a href="#quest-ce-quun-contour-de-découpe-pour-un-rip">Qu&#x27;est-ce qu&#x27;un contour de découpe pour un RIP ?</a></li><li><a href="#comment-le-rip-contrôle-t-il-la-découpe-avant-de-couper">Comment le RIP contrôle-t-il la découpe avant de couper ?</a></li><li><a href="#comment-ordonner-plusieurs-types-de-coupe">Comment ordonner plusieurs types de coupe ?</a></li><li><a href="#comment-éviter-le-liseré-blanc-au-bord-de-la-découpe">Comment éviter le liseré blanc au bord de la découpe ?</a></li><li><a href="#comment-le-repérage-fait-il-coïncider-impression-et-découpe">Comment le repérage fait-il coïncider impression et découpe ?</a></li><li><a href="#quelles-machines-pour-quelle-découpe">Quelles machines pour quelle découpe ?</a></li><li><a href="#comment-préparer-une-planche-de-stickers">Comment préparer une planche de stickers ?</a></li><li><a href="#quelle-règle-dor-pour-ne-pas-gâcher-de-support">Quelle règle d&#x27;or pour ne pas gâcher de support ?</a></li><li><a href="#questions-fréquentes">Questions fréquentes</a></li></ol></nav>
+      <div class="billet-cta">
+        <p><strong>E-KO RIP Center</strong></p>
+        <p>Le RIP grand format libre et gratuit qui pilote tout l'atelier.</p>
+        <a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a>
+        <a class="bouton bouton-clair bouton-petit" href="/contact/">Poser une question</a>
+      </div>
+    </aside>
+  </div>
+</article>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">À lire aussi</span><h2>Dans la même veine</h2></div>
+    <div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/piloter-atelier-a-distance/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/cloud-mobile.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-atelier">Atelier</span> <time datetime="2026-11-03">3 novembre 2026</time> · 5 min</p>
+          <h3><a href="/blog/piloter-atelier-a-distance/">Piloter son atelier d&#x27;impression à distance, sans VPN</a></h3>
+          <p>Suivez la file, l&#x27;encre et les alertes machine de votre atelier depuis un poste ou un téléphone, sans VPN ni port ouvert. Offre gratuite et tarifs du Cloud.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/etalonnage-g7-linearisation/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/reglage-epreuve.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-couleur">Couleur</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/etalonnage-g7-linearisation/">Étalonnage G7 et linéarisation : guide d&#x27;atelier</a></h3>
+          <p>Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/relier-rip-et-erp/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-logiciel">Logiciel</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/relier-rip-et-erp/">Relier son RIP à son ERP : du dossier à la machine</a></h3>
+          <p>Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Essayez E-KO RIP Center dans votre atelier.</h2>
+        <p>Gratuit, open source, installé en quelques minutes sur un serveur Ubuntu ou Debian. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

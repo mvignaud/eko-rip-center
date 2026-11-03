@@ -1,0 +1,52 @@
+# E-KO RIP Center
+
+> E-KO RIP Center est un RIP d'impression grand format libre et gratuit (licence AGPL-3.0), édité par GOLDEN PRINT (France). Un serveur Linux (Ubuntu ou Debian) rend les PDF en plaques d'encre CMJN, blanc, argent et tons directs, prépare l'impression et la découpe, et pilote les machines de l'atelier. Clients natifs macOS, Linux et Windows, application mobile, et Cloud E-KO RIP pour l'accès à distance sans VPN.
+
+Points clés :
+
+- Prix : logiciel gratuit, sans licence par poste, sans clé matérielle ni serveur d'activation. Le Cloud est gratuit pour un petit atelier, puis facturé à la machine (https://e-ko.rip/cloud/).
+- Code source : https://github.com/mvignaud/eko-rip-center
+- Contact : contact@e-ko.rip, formulaire https://e-ko.rip/contact/
+- Langue : site et blog en français, documentation en français et en anglais.
+
+## Pages principales
+
+- [Accueil](https://e-ko.rip/) : présentation, fonctionnalités, fonctionnement, installation
+- [Télécharger](https://e-ko.rip/telecharger/) : serveur, clients Mac, Linux et Windows, application mobile
+- [Machines compatibles](https://e-ko.rip/compatibilite/) : imprimantes et découpeuses pilotées, demande de pilote
+- [Pré-requis](https://e-ko.rip/prerequis/) : serveur, postes, réseau
+- [Cloud et tarifs](https://e-ko.rip/cloud/)
+- [Feuille de route](https://e-ko.rip/feuille-de-route/) : fait, en cours, planifié
+- [Nouveautés](https://e-ko.rip/changelog/) : journal des versions
+- [Documentation (FR)](https://e-ko.rip/documentation/) et [documentation (EN)](https://e-ko.rip/documentation/en/)
+- [Contact](https://e-ko.rip/contact/)
+
+## Blog
+
+### Couleur
+
+- [Étalonnage G7 et linéarisation : guide d'atelier](https://e-ko.rip/blog/etalonnage-g7-linearisation/) : Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.
+- [Imprimer en blanc et argent : préparer ses fichiers](https://e-ko.rip/blog/imprimer-blanc-argent-vinyle/) : Sous-couche, sur-couche, tons directs White et Silver, rétraction : comment préparer vos fichiers et régler le RIP pour imprimer du blanc et de l'argent.
+
+### Logiciel
+
+- [Relier son RIP à son ERP : du dossier à la machine](https://e-ko.rip/blog/relier-rip-et-erp/) : Comment un ERP envoie un dossier au RIP et en suit l'état jusqu'à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.
+- [Pourquoi un RIP open source sous licence AGPL-3.0 ?](https://e-ko.rip/blog/rip-open-source-agpl/) : Un RIP libre sous AGPL-3.0, qu'est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d'activation, contribution.
+
+### Guides
+
+- [Qu'est-ce qu'un RIP d'impression grand format ?](https://e-ko.rip/blog/qu-est-ce-qu-un-rip/) : Un RIP traduit votre PDF en plaques d'encre que la tête d'impression comprend. Rendu, tramage, couleur, file d'attente et pilotes : le guide complet.
+- [Comment choisir son RIP grand format : les critères](https://e-ko.rip/blog/choisir-son-rip-grand-format/) : Machines pilotées, couleur ICC, blanc, découpe, multiposte, accès distant, licence et ERP : la grille de critères pour choisir un RIP grand format.
+
+### Atelier
+
+- [Piloter son atelier d'impression à distance, sans VPN](https://e-ko.rip/blog/piloter-atelier-a-distance/) : Suivez la file, l'encre et les alertes machine de votre atelier depuis un poste ou un téléphone, sans VPN ni port ouvert. Offre gratuite et tarifs du Cloud.
+- [Impression puis découpe : repérage et contours de découpe](https://e-ko.rip/blog/impression-decoupe-reperage/) : Comment faire coïncider impression et découpe : tracés CutContour, cadre et code-barres, ARMS, planches de stickers, plotters et tables. Le guide d'atelier.
+
+### Comparatifs
+
+- [Fiery XF ou E-KO RIP Center : lequel pour un atelier ?](https://e-ko.rip/blog/fiery-xf-ou-e-ko-rip/) : Fiery XF (serveur Windows) ou E-KO RIP Center (serveur Linux, libre) ? Différences, serveurs Fiery des presses feuille, et profils d'ateliers grand format.
+- [Comparatif des RIP grand format en 2026](https://e-ko.rip/blog/comparatif-rip-grand-format/) : Caldera, ONYX, Fiery XF, Flexi (SAi) et E-KO RIP Center : système du serveur, clients, licence, code ouvert, accès distant, machines. Tableau daté et sourcé.
+- [Alternative à ONYX RIP : ce qu'il faut savoir](https://e-ko.rip/blog/alternative-onyx/) : ONYX (Thrive, RIPCenter) tourne sous Windows ; E-KO RIP Center a son serveur sous Linux. Licence, accès distant, parc de machines : comparatif sourcé.
+- [Alternative à Flexi (SAi) : E-KO RIP Center](https://e-ko.rip/blog/alternative-flexi-sai/) : Flexi (SAi) réunit conception, RIP et découpe sous Windows, par abonnement. E-KO RIP Center est libre, sur serveur Linux. Comparatif sourcé du 3 novembre 2026.
+- [Alternative à Caldera : E-KO RIP Center](https://e-ko.rip/blog/alternative-caldera/) : Caldera et E-KO RIP Center tournent tous deux sous Linux. Comparaison honnête : licence, code ouvert, accès distant, machines, et quand préférer Caldera.

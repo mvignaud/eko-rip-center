@@ -19,18 +19,44 @@
 
 <header class="entete">
   <div class="conteneur">
-    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <a class="marque" href="/" aria-label="E-KO RIP Center, home"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
     <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <nav class="nav" id="nav">
-      <a href="/#fonctionnalites">Features</a>
-      <a href="/compatibilite/">Machines</a>
-      <a href="/cloud/">Cloud</a>
-      <a href="/documentation/en/" aria-current="page">Documentation</a>
-      <a href="/changelog/">What&#x27;s new</a>
-      <a class="nav-mobile" href="/#installer">Install</a>
-      <a href="/documentation/glossaire/" hreflang="fr" lang="fr" class="doc-langue">FR</a>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Software<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Features</strong><small>Rendering, colour, white, cutting, queue</small></a>
+          <a href="/#fonctionnement"><strong>How it works</strong><small>A file&#x27;s journey, step by step</small></a>
+          <a href="/#captures"><strong>Screenshots</strong><small>Mac, Linux and Windows clients</small></a>
+          <a href="/app/"><strong>Mobile app</strong><small>Queue and alerts in your pocket</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Open code under the AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Roadmap</strong><small>Done, in progress, planned</small></a>
+          <a href="/changelog/"><strong>What&#x27;s new</strong><small>Release notes</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Supported machines</strong><small>Printers and cutters driven</small></a>
+          <a href="/compatibilite/#demande"><strong>Request a driver</strong><small>Your machine is not listed</small></a>
+          <a href="/prerequis/"><strong>Requirements</strong><small>Server, workstations and network</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud and pricing</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Resources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/en/" aria-current="page"><strong>Documentation</strong><small>Install, set up, troubleshoot</small></a>
+          <a href="/blog/"><strong>Blog (French)</strong><small>Shop guides and comparisons</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Source code and issues</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>A question, a demo</small></a>
+        </div>
+      </div>
+      <a class="nav-langue" href="/documentation/glossaire/" hreflang="fr" lang="fr">FR</a>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Download</a>
     </nav>
-    <a class="bouton bouton-plein bouton-petit" href="/#installer">Install</a>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Download</a>
   </div>
 </header>
 
@@ -63,18 +89,19 @@
 </div>
 
 <footer class="pied">
-  <div class="conteneur">
-    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
-    <nav>
-      <a href="/documentation/en/">Documentation</a>
-      <a href="/changelog/">What&#x27;s new</a>
-      <a href="/prerequis/">Requirements</a>
-      <a href="/app/">Mobile app</a>
-      <a href="/mentions-legales/">Legal notice</a>
-      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
-      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
-      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
-    </nav>
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>The open-source wide-format RIP that runs the whole print shop: rendering, colour, white ink, cutting and machines. Designed and proven in a print shop in south-west France.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Download</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Software"><h2>Software</h2><a href="/#fonctionnalites">Features</a><a href="/telecharger/">Download</a><a href="/app/">Mobile app</a><a href="/cloud/">Cloud and pricing</a><a href="/feuille-de-route/">Roadmap</a><a href="/changelog/">What&#x27;s new</a></nav>
+      <nav aria-label="Resources"><h2>Resources</h2><a href="/documentation/en/">Documentation</a><a href="/blog/">Blog (French)</a><a href="/compatibilite/">Supported machines</a><a href="/prerequis/">Requirements</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Legal notice</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Free software under the AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
   </div>
 </footer>
 

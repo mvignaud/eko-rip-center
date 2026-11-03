@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relier son RIP à son ERP : du dossier à la machine · Blog E-KO RIP</title>
+<meta name="description" content="Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.">
+<link rel="canonical" href="https://e-ko.rip/blog/relier-rip-et-erp/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="E-KO RIP Center">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Relier son RIP à son ERP : du dossier à la machine · Blog E-KO RIP">
+<meta property="og:description" content="Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.">
+<meta property="og:url" content="https://e-ko.rip/blog/relier-rip-et-erp/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/linux-travaux.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Relier son RIP à son ERP : du dossier à la machine","description":"Comment un ERP envoie un dossier au RIP et en suit l'état jusqu'à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.","datePublished":"2026-11-03","dateModified":"2026-11-03","inLanguage":"fr-FR","mainEntityOfPage":"https://e-ko.rip/blog/relier-rip-et-erp/","articleSection":"Logiciel","wordCount":1294,"author":{"@type":"Organization","name":"E-KO RIP Center","url":"https://e-ko.rip/"},"publisher":{"@type":"Organization","name":"GOLDEN PRINT","url":"https://e-ko.rip/","logo":{"@type":"ImageObject","url":"https://e-ko.rip/assets/img/icone.svg"}},"image":"https://e-ko.rip/assets/img/linux-travaux.webp"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://e-ko.rip/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://e-ko.rip/blog/"},{"@type":"ListItem","position":3,"name":"Logiciel","item":"https://e-ko.rip/blog/categorie/logiciel/"},{"@type":"ListItem","position":4,"name":"Relier son RIP à son ERP : du dossier à la machine","item":"https://e-ko.rip/blog/relier-rip-et-erp/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Le RIP envoie-t-il des prix à l'ERP ?","acceptedAnswer":{"@type":"Answer","text":"Non. Aucun montant ne transite, ni coût d'encre ni coût de support. Le RIP envoie des quantités physiques, l'ERP valorise."}},{"@type":"Question","name":"Faut-il ouvrir un port sur la box de l'atelier ?","acceptedAnswer":{"@type":"Answer","text":"Non. Le RIP appelle l'ERP en HTTPS sortant. Seules les routes /api/erp/ sont appelables en entrée, avec le jeton de l'ERP, quand le réseau le permet."}},{"@type":"Question","name":"Que se passe-t-il si l'ERP est indisponible ?","acceptedAnswer":{"@type":"Answer","text":"Les événements restent dans le journal du RIP jusqu'à leur accusé, quelle que soit la durée de la panne. Le RIP réessaie après 60 secondes, puis toutes les cinq minutes, sans jamais sauter un événement."}},{"@type":"Question","name":"Mon ERP maison peut-il se brancher ?","acceptedAnswer":{"@type":"Answer","text":"Oui, le contrat eko-rip-erp/1 est public. Il suffit de gérer le jeton, la signature HMAC et les échanges décrits dans la documentation du contrat."}}]}</script>
+<meta property="article:published_time" content="2026-11-03">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-site.py : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
+    </nav>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
+  </div>
+</header>
+
+<main id="contenu">
+<article class="billet">
+  <header class="billet-tete">
+    <div class="conteneur">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="/">Accueil</a> › <a href="/blog/">Blog</a> › <a href="/blog/categorie/logiciel/">Logiciel</a> › <span aria-current="page">Relier son RIP à son ERP : du dossier à la machine</span></nav>
+      <p><a class="pastille-cat cat-logiciel" href="/blog/categorie/logiciel/">Logiciel</a></p>
+      <h1>Relier son RIP à son ERP : du dossier à la machine</h1>
+      <p class="billet-meta">Par l'équipe E-KO RIP · <time datetime="2026-11-03">3 novembre 2026</time> · 6 min de lecture</p>
+      <figure class="billet-image"><img src="/assets/img/linux-travaux.webp" alt="Liste des travaux du client E-KO RIP Center avec la référence de dossier et le statut de chaque travail" width="1280" height="800"></figure>
+    </div>
+  </header>
+  <div class="conteneur billet-grille">
+    <div class="billet-corps doc-article">
+<p>Relier un RIP à un ERP consiste à faire circuler, sans ressaisie, le dossier de fabrication vers la machine puis l'état et les quantités consommées vers la gestion. Avec E-KO RIP Center, l'ERP envoie un fichier accompagné d'une référence de dossier ; le RIP le rend, l'imprime ou le découpe, et renvoie à l'ERP des événements signés et numérotés. Aucun montant ne transite : le RIP donne des quantités, l'ERP calcule les prix.</p>
+<h2 id="que-signifie--relier-son-rip-à-son-erp-"><a class="ancre" href="#que-signifie--relier-son-rip-à-son-erp-" aria-hidden="true">#</a>Que signifie « relier son RIP à son ERP » ?</h2>
+<p>L'ERP porte la commande, le client, le devis et la facturation. Le RIP porte le fichier, la couleur, la file et la machine. Sans lien, quelqu'un recopie le numéro de commande dans le RIP, puis relève à la main l'encre et le support consommés. Le pont ERP supprime ces deux ressaisies.</p>
+<p>Le pont d'E-KO RIP Center repose sur un contrat public, <code>eko-rip-erp/1</code>. Il est documenté, donc n'importe quel ERP ou outil maison peut s'y brancher. Il est aussi évolutif : un ajout compatible (nouveau champ, nouveau type d'événement) garde la même version, l'ERP ignore ce qu'il ne connaît pas, et un changement incompatible passerait à <code>/2</code> après annonce dans le journal des versions.</p>
+<h2 id="comment-les-échanges-sont-ils-protégés"><a class="ancre" href="#comment-les-échanges-sont-ils-protégés" aria-hidden="true">#</a>Comment les échanges sont-ils protégés ?</h2>
+<p>Deux principes de sécurité guident le pont.</p>
+<ul><li><strong>Le RIP sort vers l'ERP en HTTPS</strong> : aucun port n'est ouvert à l'atelier. Les seules routes que l'ERP appelle sur le RIP sont celles du préfixe <code>/api/erp/</code>, quand le réseau le permet.</li><li><strong>Un jeton dédié et une signature</strong>. Un administrateur crée le jeton de l'ERP sur le serveur ; il s'affiche une seule fois, le serveur n'en garde que l'empreinte, et il n'ouvre que les routes du pont. Chaque événement envoyé porte une signature HMAC-SHA256 calculée avec un secret partagé, et l'ERP refuse une signature fausse ou un horodatage trop ancien (plus de cinq minutes), ce qui bloque le rejeu.</li></ul>
+<p>Le réglage se fait dans le client, rubrique Système, vue Pont ERP, par un administrateur : adresse de l'ERP (en HTTPS), secret, activation.</p>
+<h2 id="comment-un-dossier-de-fabrication-arrive-t-il-au-rip"><a class="ancre" href="#comment-un-dossier-de-fabrication-arrive-t-il-au-rip" aria-hidden="true">#</a>Comment un dossier de fabrication arrive-t-il au RIP ?</h2>
+<p>L'ERP dépose un envoi qui contient le fichier, la <strong>référence de dossier</strong> (<code>ref_erp</code>, par exemple <code>PROD-2026-00123</code>), un nom, le réglage enregistré à utiliser, le nombre de copies et une échéance éventuelle. Le RIP télécharge le fichier, vérifie son empreinte SHA-256 quand l'ERP la fournit, puis crée un travail. La fiche du travail reprend la référence comme commande, la quantité et l'échéance.</p>
+<p>Les réglages, machines, supports et modes d'impression portent chacun un identifiant unique attribué par le serveur et immuable. L'ERP s'appuie sur cet identifiant, jamais sur un nom, qui peut changer. Le RIP publie son catalogue complet à l'ERP au démarrage du pont et à chaque modification.</p>
+<p>Pour un dossier de plusieurs pièces, les travaux liés (un groupe et un rang) passent ensemble et dans l'ordre dans la file, même si les rendus finissent dans le désordre. Un envoi mal formé ou un fichier illisible est refusé avec un code stable et un détail, et jamais perdu en silence.</p>
+<h2 id="quels-statuts-le-rip-remonte-t-il-à-lerp"><a class="ancre" href="#quels-statuts-le-rip-remonte-t-il-à-lerp" aria-hidden="true">#</a>Quels statuts le RIP remonte-t-il à l'ERP ?</h2>
+<p>Le RIP envoie un événement à chaque changement d'état, avec la référence du dossier. Deux niveaux existent.</p>
+<div class="tableau"><table><thead><tr><th>Niveau</th><th>États</th></tr></thead><tbody><tr><td>Travail (le rendu)</td><td>en attente, en cours, terminé (prêt à sortir), échec</td></tr><tr><td>Sortie (l'envoi à une machine)</td><td>en attente, suspendue, en cours, terminée, échec, annulée, imbriquée</td></tr></tbody></table></div>
+<p>Une sortie est imbriquée quand elle est posée sur une planche d'imbrication. Après une coupure, un travail ou une sortie en cours passe en échec avec le code <code>interrompu</code> ; il se relance volontairement, car une découpe ne se reprend pas au milieu.</p>
+<p>Une correspondance simple côté ERP : travail terminé = « prêt à imprimer » ; sortie terminée d'une imprimante = « en impression » ; sortie terminée d'une découpeuse = « découpé » ; échec = « bloqué », avec le code. Précision importante : « terminée » signifie aujourd'hui « confiée à la machine », pas « sortie de la machine ».</p>
+<p>Le RIP publie aussi l'état relevé des imprimantes (niveaux d'encre, longueur de rouleau restante, support chargé, alertes), seulement quand il change.</p>
+<h2 id="que-contient-le-journal-des-événements"><a class="ancre" href="#que-contient-le-journal-des-événements" aria-hidden="true">#</a>Que contient le journal des événements ?</h2>
+<p>Avant tout envoi, chaque événement est écrit dans un journal sur disque, avec un numéro de séquence croissant et sans trou. Le RIP envoie par lots de 100 événements au plus, une requête par seconde au maximum, et attend l'accusé de l'ERP. Cela donne trois garanties :</p>
+<ol><li><strong>Aucun événement perdu</strong> : après une panne de courant, au plus une ligne coupée est retirée, rien n'est renuméroté. Un événement non accusé reste dans le journal, quelle que soit la durée de la panne.</li><li><strong>Aucun doublon</strong> : l'ERP dédoublonne sur l'instance et le numéro de séquence.</li><li><strong>Pas de renumérotation silencieuse</strong> : si l'ERP et le RIP ne s'accordent pas, le RIP s'arrête et le signale dans l'écran Système.</li></ol>
+<p>Les événements accusés sont purgés après 30 jours. L'écran du pont affiche l'état (actif, en erreur, remplacé, anomalie), le dernier événement accusé, le dernier contact et la dernière erreur.</p>
+<h2 id="quelles-quantités-reviennent-pour-la-valorisation"><a class="ancre" href="#quelles-quantités-reviennent-pour-la-valorisation" aria-hidden="true">#</a>Quelles quantités reviennent pour la valorisation ?</h2>
+<p>À la fin d'une impression puis d'une découpe, le RIP envoie un événement de consommation : surface, longueur de support, gâche, encre par couleur, durée, machine, support et mode. Rien n'est inventé : sans relevé de la machine, l'encre, la longueur et la gâche sont absentes, et l'événement précise si l'encre est mesurée ou estimée. L'ERP applique ses propres prix, puisque aucun montant ne circule.</p>
+<p>Le RIP peut aussi estimer un dossier avant fabrication : surface, encre, durée et longueur de rouleau, utiles pour un devis. Là encore, sans prix.</p>
+<h2 id="lerp-peut-il-piloter-la-file"><a class="ancre" href="#lerp-peut-il-piloter-la-file" aria-hidden="true">#</a>L'ERP peut-il piloter la file ?</h2>
+<p>Oui, dans des limites claires. L'ERP peut suspendre, reprendre, annuler un dossier, le passer en tête, modifier l'échéance ou l'opérateur, ou demander une réimpression. Ces actions visent les travaux nés d'un envoi de l'ERP avec cette référence, et seulement leurs sorties encore en file. Un travail créé au RIP n'est jamais touché, et une sortie déjà lancée est laissée telle quelle. Le RIP accuse chaque action en indiquant ce qui a été modifié et ce qui ne l'a pas pu.</p>
+<p>Pour la partie machines, la <a href="/compatibilite/">liste des machines prises en charge</a> précise ce que le RIP pilote. Le <a href="/documentation/glossaire/">glossaire de la documentation</a> définit les termes du pont. Côté logiciel libre, le contrat public découle de la démarche expliquée dans <a href="/blog/rip-open-source-agpl/">pourquoi un RIP open source</a>.</p>
+<p><strong>Essayez gratuitement</strong> : <a href="/telecharger/">téléchargez E-KO RIP Center</a> et testez le flux sur votre propre atelier. Un ERP à brancher ou une question sur le contrat ? <a href="/contact/">Écrivez-nous</a>.</p>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="le-rip-envoie-t-il-des-prix-à-lerp"><a class="ancre" href="#le-rip-envoie-t-il-des-prix-à-lerp" aria-hidden="true">#</a>Le RIP envoie-t-il des prix à l'ERP ?</h3>
+<p>Non. Aucun montant ne transite, ni coût d'encre ni coût de support. Le RIP envoie des quantités physiques, l'ERP valorise.</p>
+<h3 id="faut-il-ouvrir-un-port-sur-la-box-de-latelier"><a class="ancre" href="#faut-il-ouvrir-un-port-sur-la-box-de-latelier" aria-hidden="true">#</a>Faut-il ouvrir un port sur la box de l'atelier ?</h3>
+<p>Non. Le RIP appelle l'ERP en HTTPS sortant. Seules les routes <code>/api/erp/</code> sont appelables en entrée, avec le jeton de l'ERP, quand le réseau le permet.</p>
+<h3 id="que-se-passe-t-il-si-lerp-est-indisponible"><a class="ancre" href="#que-se-passe-t-il-si-lerp-est-indisponible" aria-hidden="true">#</a>Que se passe-t-il si l'ERP est indisponible ?</h3>
+<p>Les événements restent dans le journal du RIP jusqu'à leur accusé, quelle que soit la durée de la panne. Le RIP réessaie après 60 secondes, puis toutes les cinq minutes, sans jamais sauter un événement.</p>
+<h3 id="mon-erp-maison-peut-il-se-brancher"><a class="ancre" href="#mon-erp-maison-peut-il-se-brancher" aria-hidden="true">#</a>Mon ERP maison peut-il se brancher ?</h3>
+<p>Oui, le contrat <code>eko-rip-erp/1</code> est public. Il suffit de gérer le jeton, la signature HMAC et les échanges décrits dans la documentation du contrat.</p>
+    </div>
+    <aside class="billet-cote">
+      <nav class="billet-toc" aria-label="Dans cet article"><p>Dans cet article</p><ol><li><a href="#que-signifie--relier-son-rip-à-son-erp-">Que signifie « relier son RIP à son ERP » ?</a></li><li><a href="#comment-les-échanges-sont-ils-protégés">Comment les échanges sont-ils protégés ?</a></li><li><a href="#comment-un-dossier-de-fabrication-arrive-t-il-au-rip">Comment un dossier de fabrication arrive-t-il au RIP ?</a></li><li><a href="#quels-statuts-le-rip-remonte-t-il-à-lerp">Quels statuts le RIP remonte-t-il à l&#x27;ERP ?</a></li><li><a href="#que-contient-le-journal-des-événements">Que contient le journal des événements ?</a></li><li><a href="#quelles-quantités-reviennent-pour-la-valorisation">Quelles quantités reviennent pour la valorisation ?</a></li><li><a href="#lerp-peut-il-piloter-la-file">L&#x27;ERP peut-il piloter la file ?</a></li><li><a href="#questions-fréquentes">Questions fréquentes</a></li></ol></nav>
+      <div class="billet-cta">
+        <p><strong>E-KO RIP Center</strong></p>
+        <p>Le RIP grand format libre et gratuit qui pilote tout l'atelier.</p>
+        <a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a>
+        <a class="bouton bouton-clair bouton-petit" href="/contact/">Poser une question</a>
+      </div>
+    </aside>
+  </div>
+</article>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">À lire aussi</span><h2>Dans la même veine</h2></div>
+    <div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/rip-open-source-agpl/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-logiciel">Logiciel</span> <time datetime="2026-11-03">3 novembre 2026</time> · 5 min</p>
+          <h3><a href="/blog/rip-open-source-agpl/">Pourquoi un RIP open source sous licence AGPL-3.0 ?</a></h3>
+          <p>Un RIP libre sous AGPL-3.0, qu&#x27;est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d&#x27;activation, contribution.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/etalonnage-g7-linearisation/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/reglage-epreuve.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-couleur">Couleur</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/etalonnage-g7-linearisation/">Étalonnage G7 et linéarisation : guide d&#x27;atelier</a></h3>
+          <p>Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/qu-est-ce-qu-un-rip/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-guides">Guides</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/qu-est-ce-qu-un-rip/">Qu&#x27;est-ce qu&#x27;un RIP d&#x27;impression grand format ?</a></h3>
+          <p>Un RIP traduit votre PDF en plaques d&#x27;encre que la tête d&#x27;impression comprend. Rendu, tramage, couleur, file d&#x27;attente et pilotes : le guide complet.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Essayez E-KO RIP Center dans votre atelier.</h2>
+        <p>Gratuit, open source, installé en quelques minutes sur un serveur Ubuntu ou Debian. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

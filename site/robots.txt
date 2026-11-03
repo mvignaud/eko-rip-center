@@ -1,4 +1,26 @@
+# e-ko.rip : tout le site est public, moteurs de recherche et assistants d'IA compris.
+# Résumé pour les IA : https://e-ko.rip/llms.txt
 User-agent: *
 Allow: /
+Disallow: /inc/
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://e-ko.rip/sitemap.xml
 Sitemap: https://e-ko.rip/documentation/sitemap.xml

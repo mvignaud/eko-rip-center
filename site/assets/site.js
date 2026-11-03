@@ -15,16 +15,41 @@
     cibles.forEach(function (c) { c.classList.add('visible'); });
   }
 
-  // Menu mobile.
+  // Menu : bouton du téléphone, et rubriques déroulantes (clic, clavier, Échap, clic ailleurs).
   var bouton = document.querySelector('.nav-bouton');
   var nav = document.getElementById('nav');
+  var titres = document.querySelectorAll('.nav-groupe > button.nav-titre');
+  function fermerRubriques(sauf) {
+    titres.forEach(function (t) { if (t !== sauf) t.setAttribute('aria-expanded', 'false'); });
+  }
+  titres.forEach(function (t) {
+    t.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var ouvert = t.getAttribute('aria-expanded') === 'true';
+      fermerRubriques(t);
+      t.setAttribute('aria-expanded', ouvert ? 'false' : 'true');
+    });
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest || !e.target.closest('.nav-groupe')) fermerRubriques(null);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var ouvert = document.querySelector('.nav-groupe > button[aria-expanded="true"]');
+    fermerRubriques(null);
+    if (ouvert) ouvert.focus();
+  });
   if (bouton && nav) {
     bouton.addEventListener('click', function () {
       var ouvert = nav.classList.toggle('ouverte');
       bouton.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
     });
     nav.addEventListener('click', function (e) {
-      if (e.target.tagName === 'A') { nav.classList.remove('ouverte'); bouton.setAttribute('aria-expanded', 'false'); }
+      if (e.target.closest && e.target.closest('a')) {
+        nav.classList.remove('ouverte');
+        bouton.setAttribute('aria-expanded', 'false');
+        fermerRubriques(null);
+      }
     });
   }
 
@@ -33,7 +58,7 @@
   var legende = document.getElementById('legende-os');
   var legendes = {
     mac: 'Client macOS en SwiftUI, natif, universel Apple Silicon et Intel.',
-    windows: 'Client Windows en WinUI 3, en préparation : aperçu de l\'interface prévue.',
+    windows: 'Client Windows natif en WinUI 3, pour Windows 10 et 11.',
     linux: 'Client Linux en GTK 4 et libadwaita, installé et mis à jour par APT.'
   };
   var systeme = 'mac';
@@ -104,30 +129,57 @@
     });
   });
 
-  // Demande de pilote (/compatibilite/) : envoi sans recharger la page ; sans JavaScript,
-  // le formulaire part quand même et le script renvoie sur #demande-envoyee ou #demande-erreur.
-  var demande = document.getElementById('demande-pilote');
-  if (demande) {
-    var retour = demande.querySelector('.message');
-    demande.addEventListener('submit', function (e) {
+  // Formulaires (demande de pilote, contact) : envoi sans recharger la page ; sans JavaScript,
+  // le formulaire part quand même et le script renvoie sur l'ancre du message (affiché par :target).
+  document.querySelectorAll('#demande-pilote, .formulaire-envoi').forEach(function (formulaire) {
+    var retour = formulaire.querySelector('.message');
+    var repli = 'Le message n\'est pas parti. Écrivez-nous à contact@e-ko.rip.';
+    formulaire.addEventListener('submit', function (e) {
       if (!window.fetch) return;
       e.preventDefault();
-      var bouton = demande.querySelector('button[type="submit"]');
-      bouton.disabled = true;
+      var envoi = formulaire.querySelector('button[type="submit"]');
+      envoi.disabled = true;
       retour.textContent = 'Envoi…';
-      fetch(demande.action, {
+      fetch(formulaire.action, {
         method: 'POST',
-        body: new URLSearchParams(new FormData(demande)),
+        body: new URLSearchParams(new FormData(formulaire)),
         headers: { Accept: 'application/json' }
       }).then(function (r) {
         return r.json().catch(function () { return {}; });
       }).then(function (j) {
-        retour.textContent = j.message || 'La demande n\'est pas partie. Écrivez-nous à contact@e-ko.rip.';
-        if (j.ok) demande.reset();
+        retour.textContent = j.message || repli;
+        if (j.ok) formulaire.reset();
       }).catch(function () {
-        retour.textContent = 'La demande n\'est pas partie. Écrivez-nous à contact@e-ko.rip.';
-      }).then(function () { bouton.disabled = false; });
+        retour.textContent = repli;
+      }).then(function () { envoi.disabled = false; });
     });
+  });
+
+  // Page Télécharger : version, taille et empreinte SHA-256 des fichiers de la dernière release.
+  var fiches = document.querySelectorAll('[data-fichier]');
+  if (fiches.length && window.fetch) {
+    fetch('/telecharger/infos.json', { headers: { Accept: 'application/json' } }).then(function (r) {
+      return r.ok ? r.json() : {};
+    }).then(function (infos) {
+      fiches.forEach(function (fiche) {
+        var i = infos[fiche.getAttribute('data-fichier')];
+        if (!i) return;
+        function champ(nom, valeur) {
+          var n = fiche.querySelector('[data-champ="' + nom + '"]');
+          if (n && valeur) n.textContent = valeur;
+        }
+        champ('version', i.version + (i.date ? ' du ' + i.date.split('-').reverse().join('/') : ''));
+        champ('fichier', i.fichier);
+        champ('taille', i.taille ? (i.taille / 1048576).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' Mo' : '');
+        if (i.sha256) {
+          var n = fiche.querySelector('[data-champ="sha256"]');
+          n.textContent = '';
+          var c = document.createElement('code');
+          c.textContent = i.sha256;
+          n.appendChild(c);
+        }
+      });
+    }).catch(function () {});
   }
 
   document.querySelectorAll('[data-annee]').forEach(function (n) { n.textContent = String(new Date().getFullYear()); });

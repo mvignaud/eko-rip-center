@@ -50,3 +50,24 @@ La documentation utilisateur est publiée sur `https://e-ko.rip/documentation/` 
 - Liens « Aide » câblés dans les logiciels : tableau de `docs/guide/README.md`. Ne pas
   renommer une page ou un titre cité sans les mettre à jour.
 - Jamais de nom de RIP concurrent ni de détail d'hébergement interne dans la doc.
+
+## Feuille de route publique : on s'y tient (obligatoire)
+
+La feuille de route publique est en ligne sur `https://e-ko.rip/feuille-de-route/`. Source :
+`pages/feuille-de-route.md`, page générée par `python3 outils/generer-site.py`.
+
+- Trois colonnes : « Fait », « En cours », « Planifié ». C'est l'engagement public du projet :
+  on développe dans son ordre (« En cours » d'abord, puis « Planifié »). Toute fonction ajoutée
+  ou abandonnée l'est d'abord dans ce fichier, avec l'accord de Mathieu.
+- À chaque déploiement : faire avancer les points (Planifié → En cours → Fait) sans changer leur
+  nom, mettre à jour `maj:`, régénérer et republier le site (comme la documentation).
+- Ce qu'ont les RIP concurrents et pas encore E-KO RIP est « En cours » sur la feuille de route,
+  et s'écrit « En cours… » dans les comparatifs du blog (jamais « non » ni « absent »).
+- Jamais de nom de RIP concurrent ni de date promise dans la feuille de route. Les noms de
+  concurrents ne sont permis que dans les comparatifs factuels et sourcés de `blog/`.
+
+## Blog et pages du site
+
+Articles du blog : `blog/fr/<adresse>.md` (format dans `blog/README.md`), générés dans
+`site/blog/` par `python3 outils/generer-site.py`, qui pose aussi le menu et le pied communs sur
+toutes les pages du site et écrit `sitemap.xml`. `--verifier` échoue si le site est en retard.
