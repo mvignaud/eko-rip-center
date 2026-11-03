@@ -157,7 +157,9 @@ def tete(titre, description, chemin, extra="", image="/assets/img/linux-travaux.
 <title>{e(titre)}</title>
 <meta name="description" content="{e(description)}">
 <link rel="canonical" href="{URL}{chemin}">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
 <meta name="theme-color" content="#0a84ff">
 <meta property="og:type" content="{type_og}">
@@ -242,7 +244,7 @@ def page_article(a, articles):
         "datePublished": a["date"].isoformat(), "dateModified": a["maj"].isoformat(), "inLanguage": "fr-FR",
         "mainEntityOfPage": URL + a["url"], "articleSection": cat, "wordCount": len(re.findall(r"\w+", a["corps"])),
         "author": {"@type": "Organization", "name": "E-KO RIP Center", "url": URL + "/"},
-        "publisher": {"@type": "Organization", "name": "GOLDEN PRINT", "url": URL + "/", "logo": {"@type": "ImageObject", "url": URL + "/assets/img/icone.svg"}},
+        "publisher": {"@type": "Organization", "name": "GOLDEN PRINT", "url": URL + "/", "logo": {"@type": "ImageObject", "url": URL + "/assets/img/icone-512.png"}},
     }
     if a["image"]:
         billet["image"] = URL + a["image"]

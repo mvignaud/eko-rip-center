@@ -402,7 +402,9 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
 <meta name="description" content="{html.escape(p["description"])}">
 <link rel="canonical" href="https://e-ko.rip{p["url"]}">
 {hreflang}
+<link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#0a84ff">
 <link rel="stylesheet" href="/assets/style.css">
 <link rel="stylesheet" href="/assets/documentation.css">
