@@ -407,11 +407,22 @@ pub fn enregistrer_demande(c: &Connection, compte: i64, t: &Value) {
     }
     let maintenant = crate::maintenant() as i64;
     let statut = t["status"].as_str().unwrap_or("open");
+    let ouverte = date_json(&t["opened_at"]).unwrap_or(maintenant);
+    let resolue = date_json(&t["resolved_at"]);
+    // La date de mise à jour ne bouge qu'avec un changement de statut ou un message (voir `toucher`).
     let _ = c.execute(
         "INSERT INTO support_demandes (code, compte, sujet, categorie, statut, ouverte_le, maj_le, resolue_le, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-         ON CONFLICT(code) DO UPDATE SET sujet = CASE WHEN excluded.sujet = '' THEN sujet ELSE excluded.sujet END, categorie = CASE WHEN excluded.categorie = '' THEN categorie ELSE excluded.categorie END, statut = excluded.statut, maj_le = excluded.maj_le, resolue_le = excluded.resolue_le, note = COALESCE(excluded.note, note)
+         ON CONFLICT(code) DO UPDATE SET sujet = CASE WHEN excluded.sujet = '' THEN sujet ELSE excluded.sujet END, categorie = CASE WHEN excluded.categorie = '' THEN categorie ELSE excluded.categorie END, maj_le = CASE WHEN statut != excluded.statut THEN ?10 ELSE maj_le END, statut = excluded.statut, resolue_le = excluded.resolue_le, note = COALESCE(excluded.note, note)
          WHERE compte = excluded.compte",
-        params![code, compte, texte(&t["label"]), t["category"]["label"].as_str().or(t["category"]["code"].as_str()).unwrap_or(""), statut, date_json(&t["opened_at"]).unwrap_or(maintenant), maintenant, date_json(&t["resolved_at"]), note_json(t)],
+        params![code, compte, texte(&t["label"]), t["category"]["label"].as_str().or(t["category"]["code"].as_str()).unwrap_or(""), statut, ouverte, resolue.unwrap_or(ouverte), resolue, note_json(t), maintenant],
+    );
+}
+
+/// Date de mise à jour de la demande : maintenant (un message vient d'arriver ou de partir).
+fn toucher(c: &Connection, code: &str) {
+    let _ = c.execute(
+        "UPDATE support_demandes SET maj_le = ?1 WHERE code = ?2",
+        params![crate::maintenant() as i64, code],
     );
 }
 
@@ -693,6 +704,7 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
             let ticket = &data["ticket"];
             let code = texte(&ticket["code"]);
             enregistrer_demande(&r.base(), id, ticket);
+            toucher(&r.base(), &code);
             let commentaire = &data["comment"];
             if commentaire["from_customer"].as_bool() != Some(true) {
                 let message = html_en_texte(commentaire["body"].as_str().unwrap_or(""));

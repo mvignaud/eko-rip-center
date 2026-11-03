@@ -103,6 +103,9 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 - **Plusieurs serveurs dans un même client** : une seule fenêtre, les files de tous vos sites, un envoi vers le serveur de votre choix.
 - **Réglages récents dans les clients** : lissage des images agrandies, empilement de couches et rappel de recalibration par machine.
 
+### Cloud et accès à distance
+- **Support et discussion en direct dans le Cloud** : vous ouvrez une demande au support d'E-KO ou vous discutez en direct avec l'équipe depuis le portail, et les réponses arrivent par e-mail comme dans le portail.
+
 ### Rapports et coûts
 - **Consommation réelle éprouvée à l'atelier** : la gâche et les millilitres relevés sont comparés à des impressions mesurées à la main.
 

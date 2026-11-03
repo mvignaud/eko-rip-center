@@ -80,6 +80,40 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
 
 Full details (installation on a VPS or on o2switch, Caddy, protocol) in the French page: [docs/fr/cloud.md](../fr/cloud.md).
 
+## Support and live chat
+
+Cloud customers open support requests and chat live with the E-KO team. **Everything is stored
+and handled in the ERP** through its API (`/api/v1/support`); the platform keeps only a local
+index. **The ERP never writes to Cloud customers**: the platform sends its own e-mails, in E-KO
+RIP Cloud colours.
+
+- **Setting up**: nothing beyond the **Facturation (E-KO)** card in Administration. The same API
+  address and token, which also needs `support.view` and `support.create`. **Enregistrer et
+  configurer depuis l'ERP** subscribes the existing webhook (one webhook, one secret) to
+  `support.ticket.created`, `support.ticket.replied`, `support.ticket.status_changed`,
+  `support.discussion.message` and `support.discussion.converted`, besides the billing events.
+- **The customer in the ERP**: each account is `account_reference` = `cloud-<account id>`, linked
+  on first write to a third party by `tier_code` (the subscription's customer code) or else by
+  `tier_email` (the account's address); the person writing is a contact of that third party.
+- **Pages** (sidebar **Support**): the list of requests, a new request (queue from
+  `GET /categories`, up to 5 attachments of 10 MB, a form `Idempotency-Key` so a resubmission
+  creates nothing more), the thread, a reply, and a 1 to 5 rating once resolved. The ERP's HTML
+  is reduced to text before display.
+- **Live chat bubble**: loaded on every signed-in page. No WebSocket (the hosting front end keeps
+  the upstream direction): the browser polls the platform's local store every **3 seconds while
+  the bubble is open** (every 20 seconds closed, while a chat is running). Writes are JSON with
+  an `X-CSRF-Token` header. One chat at a time per account. The **Open / Closed** indicator is the
+  ERP's `open_now`, which it only returns inside a chat: the last known value is kept for an hour.
+- **Webhooks** (same `/api/erp/webhooks` endpoint, same signature and replay protection): a
+  created request e-mails **Request received** (when opened here); a reply from the team e-mails
+  **Support reply** (never for internal notes, never for the customer's own messages); a
+  resolution e-mails **Request resolved** with the rating link, once per resolution; a chat
+  message is stored for the browser, with no e-mail; a chat turned into a request e-mails **Chat
+  turned into a request** with the transcript. The portal's notification journal and pushes carry
+  the same events. These e-mails do not follow the **Receive alerts** box.
+- **Preview**: `eko-rip-cloud apercu-courriels <folder>` writes `support-demande-recue`,
+  `support-reponse`, `support-resolue` and `support-discussion-convertie`.
+
 ## Per-machine subscription and online backups
 
 The plan is priced **per machine** (free: 1 site, 1 printer and 1 cutter). So that the
