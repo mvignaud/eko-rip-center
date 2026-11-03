@@ -2242,6 +2242,14 @@ pub struct Bilan {
 /// tous les événements écoutés et un seul secret, gardé ici sans être affiché. L'ancien
 /// webhook vers la même adresse est supprimé après coup, une fois le nouveau secret enregistré.
 pub fn configurer_depuis_erp(r: &Partage) -> Result<Bilan, String> {
+    // Une seule configuration à la fois : deux passes croisées pourraient laisser actif le
+    // webhook de l'une avec le secret de l'autre.
+    static EN_COURS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _verrou = match EN_COURS.try_lock() {
+        Ok(v) => v,
+        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
+        Err(std::sync::TryLockError::WouldBlock) => return Err("Une configuration depuis l'ERP est déjà en cours : réessaie dans un instant.".into()),
+    };
     let erp = Erp::depuis(&r.base()).ok_or("Adresse ou jeton de l'API non renseigné.")?;
     let mut bilan = Bilan::default();
 
