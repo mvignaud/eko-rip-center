@@ -61,7 +61,7 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   1 year (Pro). Full quota or no nightly backup for two days: e-mail. After going back to Free,
   existing versions are kept 90 days.
 - **Administration**: billing (billing tool API address and token, webhook secret, payment
-  provider public key, plan codes per plan and cycle; webhook URL
+  provider public key (`pprod_…`, or `ptest_…` for testing; the secret `sprod_…` key is refused), plan codes per plan and cycle; webhook URL
   `https://platform.e-ko.rip/api/erp/webhooks`) and storage (S3 endpoint, region, bucket, keys,
   server-side encryption, separate bucket for the daily portal database copy) are set in the
   admin page only; secrets are never shown again. Each card has a **Test** button.

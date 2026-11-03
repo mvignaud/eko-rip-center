@@ -325,7 +325,7 @@ carte a un bouton **Tester**.
 
 - **Facturation** : adresse de l'API de l'outil de facturation et son jeton (droits tiers,
   abonnements, plans, codes partenaires, mandats SEPA et factures en lecture), secret de
-  signature des webhooks, clé publique du prestataire de paiement (`pk_…`), et le code de plan
+  signature des webhooks, clé publique du prestataire de paiement (`pprod_…`, ou `ptest_…` en test ; la clé secrète `sprod_…` est refusée), et le code de plan
   de chaque offre et périodicité (À la machine, Atelier, Pro, machines supplémentaires ×
   mensuel / annuel). Une offre sans code de plan n'est pas proposée. Les plans se créent sans
   essai : la plate-forme demande elle-même les 30 jours de l'offre Atelier à la première
