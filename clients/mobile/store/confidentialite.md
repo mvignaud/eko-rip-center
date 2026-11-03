@@ -1,6 +1,6 @@
 # Politique de confidentialité — E-KO RIP (application mobile)
 
-Dernière mise à jour : 3 novembre 2026
+Dernière mise à jour : 2 novembre 2026
 
 **Éditeur** : SAS GOLDEN PRINT — contact : contact@e-ko.rip
 
@@ -31,7 +31,7 @@ Le mode démo utilise des données fictives générées dans l'application. Il n
 ## Destinataires
 
 - Votre serveur RIP, administré par votre entreprise : c'est lui qui décide de la conservation des données qu'il reçoit (notamment le jeton de notification).
-- La plate-forme E-KO RIP Cloud (GOLDEN PRINT), uniquement si vous vous y connectez, ainsi que Cloudflare, Inc. (États-Unis), par le réseau duquel passent les échanges avec la plate-forme (voir sa [politique de confidentialité](https://platform.e-ko.rip/confidentialite)).
+- La plate-forme E-KO RIP Cloud (GOLDEN PRINT), uniquement si vous vous y connectez.
 - Expo (650 Industries, Inc., États-Unis), Apple et Google, uniquement pour l'acheminement des notifications : ils reçoivent le jeton de l'appareil et le texte de la notification. Ces prestataires pouvant traiter les données hors de l'Union européenne, vous pouvez l'éviter en laissant les notifications désactivées.
 
 ## Durée de conservation et suppression
