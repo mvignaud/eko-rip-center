@@ -95,12 +95,13 @@ jobs:
           for base in ~/eko-cloud-data/*.sqlite; do
               [ -f "$base" ] || continue
               cible="$sauvegarde/$(basename "$base")"
-              if command -v python3 >/dev/null; then
-                  python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$base" "$cible"
-              elif command -v sqlite3 >/dev/null; then
+              # sqlite3 d'abord : le python3 du mutualisé est un 3.6, sans Connection.backup (3.7+).
+              if command -v sqlite3 >/dev/null; then
                   sqlite3 "$base" ".backup '$cible'"
+              elif python3 -c 'import sqlite3; sqlite3.Connection.backup' 2>/dev/null; then
+                  python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$base" "$cible"
               else
-                  echo "Ni python3 ni sqlite3 sur l'hébergement : sauvegarde de $base impossible." >&2; exit 1
+                  echo "Ni sqlite3 ni python3 ≥ 3.7 sur l'hébergement : sauvegarde de $base impossible." >&2; exit 1
               fi
           done
           cp -p ~/eko-cloud-data/*.json "$sauvegarde"/ 2>/dev/null || true
