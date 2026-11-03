@@ -239,7 +239,7 @@ The Cloud stays **free for a small shop** (1 site, 1 printer and 1 cutter). Paid
 | Enterprise | on quote | | | | |
 
 - **Annual subscription**: 10 months paid for 12 months of service.
-- **Trial**: the first subscription to a paid plan may include a 30-day trial of the Atelier plan, where offered; it is shown when you subscribe.
+- **Trial**: if your first paid subscription is the Atelier plan, you get a 30-day trial, with no invoice before it ends (a card is only checked, not charged). The trial is offered once per account; it is shown when you subscribe.
 - **Machines counted**: those your RIP server declares to the platform itself. There is nothing to type in; the **Subscription** page lists them site by site.
 - **Enterprise**: for larger needs, write to contact@e-ko.rip.
 - Full terms are in the [terms of sale](https://platform.e-ko.rip/cgv) (in French).
@@ -357,6 +357,7 @@ Look in the spam folder. Check the account's address in **My account** and the b
 ## Legal information
 
 - Terms of use: <https://platform.e-ko.rip/cgu>
+- Terms of sale (paid plans): <https://platform.e-ko.rip/cgv>
 - Privacy policy: <https://platform.e-ko.rip/confidentialite>
 - Legal notice: <https://platform.e-ko.rip/mentions-legales>
 

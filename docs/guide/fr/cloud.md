@@ -239,7 +239,7 @@ Le cloud reste **gratuit pour un petit atelier** (1 site, 1 imprimante et 1 déc
 | Entreprise | sur devis | | | | |
 
 - **Abonnement annuel** : 10 mois payés pour 12 mois de service.
-- **Essai** : la première souscription d'une offre payante peut ouvrir droit à 30 jours d'essai de l'offre Atelier, quand il est proposé ; il est indiqué au moment de souscrire.
+- **Essai** : si votre première souscription payante est l'offre Atelier, vous avez 30 jours d'essai, sans facture avant la fin de l'essai (une carte est seulement vérifiée, sans débit). L'essai n'est offert qu'une fois par compte ; il est indiqué au moment de souscrire.
 - **Machines comptées** : ce sont celles que votre serveur RIP déclare lui-même à la plate-forme. Il n'y a rien à saisir à la main ; la page **Abonnement** les liste site par site.
 - **Entreprise** : pour un besoin plus large, écrire à contact@e-ko.rip.
 - Les conditions complètes sont dans les [CGV](https://platform.e-ko.rip/cgv).
@@ -357,6 +357,7 @@ Regarder dans les courriers indésirables. Vérifier l'adresse du compte dans **
 ## Informations légales
 
 - Conditions générales d'utilisation : <https://platform.e-ko.rip/cgu>
+- Conditions générales de vente (offres payantes) : <https://platform.e-ko.rip/cgv>
 - Politique de confidentialité : <https://platform.e-ko.rip/confidentialite>
 - Mentions légales : <https://platform.e-ko.rip/mentions-legales>
 

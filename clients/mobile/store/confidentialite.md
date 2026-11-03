@@ -1,11 +1,11 @@
 # Politique de confidentialité — E-KO RIP (application mobile)
 
-Dernière mise à jour : 31 octobre 2026
+Dernière mise à jour : 2 novembre 2026
 
 **Éditeur** : SAS GOLDEN PRINT — contact : contact@e-ko.rip
 
 E-KO RIP est une application de suivi pour le serveur d'impression (RIP) E-KO de votre entreprise.
-Elle ne collecte aucune donnée pour le compte de l'éditeur : il n'y a ni compte E-KO, ni publicité, ni outil de mesure d'audience, ni pistage.
+Elle se connecte directement à ce serveur ou, si vous le choisissez, à travers la plate-forme E-KO RIP Cloud. Elle ne contient ni publicité, ni outil de mesure d'audience, ni pistage.
 
 ## Données traitées
 
@@ -14,9 +14,15 @@ Elle ne collecte aucune donnée pour le compte de l'éditeur : il n'y a ni compt
 - **Jeton de notification (push) et nom de l'appareil** : si vous activez les notifications, l'application obtient un jeton auprès du service de notifications d'Expo, puis l'envoie à votre serveur RIP avec le nom et le système (iOS ou Android) de l'appareil, afin que le serveur puisse vous notifier. Le serveur transmet ensuite les notifications au service Expo (exp.host), qui les achemine via Apple (APNs) ou Google (FCM).
 - **Préférences** (notifications actives, dernière alerte vue) : stockées sur votre téléphone.
 
+## Connexion par E-KO RIP Cloud
+
+Si vous choisissez de vous connecter avec votre compte E-KO RIP Cloud, vous vous identifiez dans une page de la plate-forme platform.e-ko.rip, éditée par GOLDEN PRINT. L'application reçoit un jeton d'accès, conservé dans le stockage sécurisé du téléphone, et accède à vos serveurs RIP à travers la plate-forme, qui relaie les échanges en flux chiffré sans les conserver.
+
+La plate-forme enregistre alors le nom de l'appareil et, si vous activez les notifications, son jeton de notification et son système (iOS ou Android), pour vous prévenir des événements de vos sites (site hors ligne, de retour en ligne…). Ces données sont traitées par GOLDEN PRINT selon la politique de confidentialité d'E-KO RIP Cloud : https://platform.e-ko.rip/confidentialite.
+
 ## Ce que nous ne faisons pas
 
-Aucune donnée n'est envoyée à l'éditeur. Aucune donnée n'est vendue ni partagée à des fins publicitaires. L'application n'utilise ni publicité, ni traceur, ni identifiant publicitaire, ni localisation, ni contacts, ni photos.
+Sans connexion par E-KO RIP Cloud, aucune donnée n'est envoyée à l'éditeur. Aucune donnée n'est vendue ni partagée à des fins publicitaires. L'application n'utilise ni publicité, ni traceur, ni identifiant publicitaire, ni localisation, ni contacts, ni photos.
 
 ## Mode démo
 
@@ -25,11 +31,12 @@ Le mode démo utilise des données fictives générées dans l'application. Il n
 ## Destinataires
 
 - Votre serveur RIP, administré par votre entreprise : c'est lui qui décide de la conservation des données qu'il reçoit (notamment le jeton de notification).
-- Expo (service de notifications push), Apple et Google, uniquement pour l'acheminement des notifications.
+- La plate-forme E-KO RIP Cloud (GOLDEN PRINT), uniquement si vous vous y connectez.
+- Expo (650 Industries, Inc., États-Unis), Apple et Google, uniquement pour l'acheminement des notifications : ils reçoivent le jeton de l'appareil et le texte de la notification. Ces prestataires pouvant traiter les données hors de l'Union européenne, vous pouvez l'éviter en laissant les notifications désactivées.
 
 ## Durée de conservation et suppression
 
-Les données stockées sur le téléphone sont supprimées lorsque vous vous déconnectez (identifiants) ou désinstallez l'application. En vous déconnectant ou en coupant les notifications, l'application demande aussi à votre serveur de retirer le jeton de votre appareil.
+Les données stockées sur le téléphone sont supprimées lorsque vous vous déconnectez (identifiants) ou désinstallez l'application. En vous déconnectant ou en coupant les notifications, l'application demande aussi à votre serveur, ou à la plate-forme E-KO RIP Cloud, de retirer le jeton de votre appareil.
 
 ## Vos droits
 

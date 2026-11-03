@@ -1,5 +1,5 @@
 <h1>Politique de confidentialité</h1>
-<p class="meta">Dernière mise à jour : 1er novembre 2026</p>
+<p class="meta">Dernière mise à jour : 2 novembre 2026</p>
 
 <p>Cette politique explique quelles données personnelles sont traitées par le service « E-KO RIP Cloud » (<a href="https://platform.e-ko.rip">https://platform.e-ko.rip</a>), pourquoi, pendant combien de temps, et quels sont vos droits, conformément au règlement (UE) 2016/679 (RGPD) et à la loi « Informatique et Libertés ».</p>
 
@@ -15,14 +15,18 @@
   <li><strong>Journaux techniques</strong> : adresse IP, date et action effectuée, à des fins de sécurité.</li>
   <li><strong>Données de facturation</strong> (offres payantes) : raison sociale, SIREN ou SIRET, numéro de TVA, nom, e-mail et téléphone du contact de facturation, adresse, numéro de bon de commande, offre, factures ; pour un mandat SEPA, nom du titulaire, IBAN, téléphone, adresse IP et navigateur au moment de la signature.</li>
   <li><strong>Inventaire et sauvegardes</strong> : liste des machines (nom, modèle) déclarées par chaque serveur RIP, et sauvegardes de ses réglages.</li>
+  <li><strong>Applications connectées</strong> : pour chaque poste ou téléphone autorisé à accéder à votre compte (applications Mac, Linux, Windows ou mobile), le nom de l'appareil, la date de connexion et une empreinte du jeton d'accès.</li>
+  <li><strong>Notifications</strong> : le journal des notifications de votre compte (30 jours) ; si vous les activez, le jeton de notification de votre téléphone et son système (iOS ou Android), et l'adresse d'abonnement Web Push de chaque navigateur inscrit depuis « Mon compte ».</li>
 </ul>
 <p>Si vous vous connectez avec Google ou Facebook, nous recevons de leur part l'identifiant de votre compte, votre adresse e-mail et votre nom.</p>
 <p>Le contenu qui transite entre un serveur RIP et les utilisateurs (fichiers d'impression, états des travaux) est relayé en flux chiffré, par TLS jusqu'à la plate-forme, et n'est pas conservé par celle-ci.</p>
+<p>Pour retrouver les coordonnées d'une entreprise à partir de son numéro SIREN lors d'une souscription, la plate-forme interroge l'outil de facturation de l'éditeur, qui consulte les données publiques du répertoire SIRENE (INSEE).</p>
 <p>Aucune donnée n'est vendue ni utilisée à des fins publicitaires. Les numéros de carte bancaire sont saisis directement chez le prestataire de paiement et ne sont jamais connus de la plate-forme.</p>
 
 <h2>3. Finalités et bases légales</h2>
 <ul>
   <li>Création et gestion de votre compte, gestion des sites, des membres et de leurs droits, fourniture du service d'accès à distance : exécution du contrat constitué par les <a href="/cgu">conditions générales d'utilisation</a> (article 6.1.b du RGPD).</li>
+  <li>Envoi des e-mails et notifications liés au service (site hors ligne, nouvelle application connectée, facturation…) : exécution du contrat ; les notifications push et Web Push ne sont envoyées que si vous les activez.</li>
   <li>Sécurité du service, prévention des abus et des intrusions, via les journaux techniques : intérêt légitime de l'éditeur (article 6.1.f du RGPD).</li>
   <li>Souscription, facturation, paiement et recouvrement des offres payantes, sauvegardes en ligne : exécution du contrat constitué par les <a href="/cgv">conditions générales de vente</a> (article 6.1.b) ; conservation des factures : obligation légale (article 6.1.c).</li>
 </ul>
@@ -31,6 +35,7 @@
 <ul>
   <li>Données de compte : conservées tant que le compte est actif, et supprimées sur demande.</li>
   <li>Journaux techniques : 12 mois.</li>
+  <li>Journal des notifications : 30 jours. Jetons des applications connectées et jetons de notification : jusqu'à la déconnexion de l'appareil, la désactivation des notifications ou la suppression du compte.</li>
   <li>Site sans connexion depuis 90 jours : déconnecté de la plate-forme ; il peut se reconnecter ensuite.</li>
   <li>Factures et pièces comptables : 10 ans (code de commerce), dans l'outil de facturation de l'éditeur ; mandat SEPA : durée du mandat, puis 13 mois après le dernier prélèvement.</li>
   <li>Sauvegardes en ligne : selon l'offre (dernière version, 30 versions, 90 jours ou 1 an) ; 90 jours après un retour à l'offre Gratuite ou la suppression du site, seule la dernière version est gardée, puis supprimée.</li>
@@ -39,14 +44,22 @@
 <h2>5. Destinataires</h2>
 <p>Les données sont destinées à l'éditeur et, pour ce qui concerne un site, aux membres de ce site dans la limite de leurs droits. Nos sous-traitants sont :</p>
 <ul>
-  <li><strong>OVH SAS</strong> (2 rue Kellermann, 59100 Roubaix, France), qui assure l'hébergement du service sur un serveur situé en France, ainsi que le stockage objet (S3) des sauvegardes en ligne et de la copie quotidienne de la base, en France ;</li>
+  <li><strong>o2switch SAS</strong> (222-224 boulevard Gustave Flaubert, 63000 Clermont-Ferrand, France), qui héberge la plate-forme et sa base de données sur des serveurs situés en France, et achemine les e-mails qu'elle envoie ;</li>
+  <li><strong>OVH SAS</strong> (2 rue Kellermann, 59100 Roubaix, France), qui assure le stockage objet (S3) des sauvegardes en ligne et de la copie quotidienne de la base, en France ;</li>
   <li>l'<strong>outil de facturation de la SAS GOLDEN PRINT</strong>, hébergé en France, qui reçoit les données de facturation pour établir les factures, gérer les abonnements, les mandats SEPA et les relances ;</li>
-  <li><strong>Stancer</strong> (prestataire de services de paiement établi en France), qui traite les paiements par carte bancaire et les prélèvements SEPA.</li>
+  <li><strong>Stancer</strong> (prestataire de services de paiement établi en France), qui traite les paiements par carte bancaire et les prélèvements SEPA ;</li>
+  <li>pour les notifications que vous avez activées : <strong>Expo</strong> (650 Industries, Inc., États-Unis), qui achemine les notifications de l'application mobile vers <strong>Apple</strong> (APNs) ou <strong>Google</strong> (Firebase Cloud Messaging) ; pour le Web Push, le service de notification de votre navigateur (Google, Mozilla, Apple ou Microsoft selon le navigateur), qui ne reçoit que des messages chiffrés.</li>
 </ul>
 <p>Google et Facebook (Meta) n'interviennent que si vous choisissez de vous connecter avec leur service ; ils agissent alors selon leurs propres politiques de confidentialité.</p>
 
 <h2>6. Transferts hors de l'Union européenne</h2>
-<p>Les données de la plate-forme sont hébergées en France. Toutefois, Google et Facebook peuvent traiter des données en dehors de l'Union européenne, y compris lorsque vous utilisez leur connexion. Ce point ne concerne que les utilisateurs qui choisissent ces modes de connexion ; il vous est possible de les éviter en créant un compte avec une adresse e-mail et un mot de passe.</p>
+<p>Les données de la plate-forme sont hébergées en France. Toutefois, certaines données peuvent être traitées en dehors de l'Union européenne, notamment aux États-Unis :</p>
+<ul>
+  <li>par Google et Facebook, uniquement si vous choisissez de vous connecter avec leur service ; vous pouvez l'éviter en créant un compte avec une adresse e-mail et un mot de passe ;</li>
+  <li>par Expo, Apple, Google et les services de notification des navigateurs, uniquement si vous activez les notifications : ils reçoivent le jeton de l'appareil et, pour l'application mobile, le texte de la notification (par exemple le nom d'un site et l'événement) ; vous pouvez les éviter en laissant les notifications désactivées ;</li>
+  <li>par GitHub, pour la seule publication des rapports de bug décrite plus bas.</li>
+</ul>
+<p>Ces transferts sont encadrés par le cadre de protection des données UE–États-Unis lorsque le prestataire y adhère, ou à défaut par les clauses contractuelles types de la Commission européenne.</p>
 
 <h2>7. Cookies</h2>
 <p>Le service utilise uniquement des cookies strictement nécessaires à son fonctionnement :</p>

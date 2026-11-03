@@ -254,8 +254,10 @@ liste site par site.
      un code est envoyé par SMS, puis on signe en tapant son nom. Le mandat signé reste
      téléchargeable depuis la page Abonnement. Un mandat vaut pour l'entreprise renseignée : si
      elle change avant la signature, il faut en créer un nouveau.
-4. La première souscription d'une offre payante ouvre droit à **30 jours d'essai** quand l'offre
-   le prévoit. Un e-mail confirme l'abonnement, puis chaque facture émise.
+4. La première souscription payante du compte, si c'est l'offre **Atelier**, ouvre droit à
+   **30 jours d'essai** : aucune facture avant la fin de l'essai (la carte est seulement
+   vérifiée, sans débit). L'essai n'est offert qu'une fois par compte, même après une
+   résiliation. Un e-mail confirme l'abonnement, puis chaque facture émise.
 
 Tous les e-mails (confirmation, factures, relances, fin d'essai) viennent de la plate-forme,
 au contact de facturation ; les factures sont émises au début de chaque période.
@@ -325,7 +327,9 @@ carte a un bouton **Tester**.
   abonnements, plans, codes partenaires, mandats SEPA et factures en lecture), secret de
   signature des webhooks, clé publique du prestataire de paiement (`pk_…`), et le code de plan
   de chaque offre et périodicité (À la machine, Atelier, Pro, machines supplémentaires ×
-  mensuel / annuel). Une offre sans code de plan n'est pas proposée. Le webhook à déclarer dans
+  mensuel / annuel). Une offre sans code de plan n'est pas proposée. Les plans se créent sans
+  essai : la plate-forme demande elle-même les 30 jours de l'offre Atelier à la première
+  souscription. Le webhook à déclarer dans
   l'outil de facturation est `https://platform.e-ko.rip/api/erp/webhooks` (événements abonnement,
   cycle de facturation, relance, mandat SEPA) ; les e-mails aux clients de l'outil de
   facturation restent désactivés, la plate-forme les envoie elle-même.

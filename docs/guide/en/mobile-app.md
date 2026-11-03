@@ -136,7 +136,7 @@ In **Settings**, two switches define what you receive:
 
 | Event | When |
 |---|---|
-| Machine alert | A new alert appears (cover open, media used up…). Ordinary states (ready, printing, warming up, standby) do not notify. |
+| Machine alert | A new alert appears (cover open, media used up…). Ordinary states (ready, printing, warming up, starting up, standby) do not notify. The app shows the alert in French; a message the RIP does not know yet stays in the machine's own wording. |
 | Nearly empty ink | An ink drops to 5% or less. |
 | Empty cartridge | An ink reaches 0%. |
 | Machine unreachable | Three readings in a row without an answer, then a notification when it answers again. |
@@ -168,10 +168,10 @@ Demo mode shows the app with made-up data, with no server and no connection.
 
 ## Privacy
 
-The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The publisher receives no account, no advertising and no audience measurement.
+The app talks only to the shop's RIP server and, if it is used, to the E-KO RIP Cloud platform. The app has no advertising and no audience measurement. Without the Cloud, the publisher receives nothing; with it, the platform knows your account, the phone's name and, if notifications are on, its notification token.
 
 - Credentials are kept in the phone's secure storage and sent only to the server you chose.
-- For notifications, a phone token is passed to the server; the messages then go through the Expo notification service, then through Apple or Google.
+- For notifications, a phone token is passed to the server (or to the E-KO RIP Cloud platform if you sign in with it); the messages then go through the Expo notification service, then through Apple or Google.
 - Signing out deletes the credentials from the phone and removes the phone from the notification list.
 
 The full policy is published at <https://e-ko.rip/app/confidentialite/>.

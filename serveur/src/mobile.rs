@@ -260,7 +260,66 @@ fn publier(donnees: &Path, nouveaux: Vec<Nouveau>) {
 /// Alertes de la Printer-MIB qui ne disent qu'un état normal : pas de notification.
 fn alerte_ordinaire(a: &str) -> bool {
     let a = a.to_ascii_lowercase();
-    ["ready", "printing", "warm up", "warming", "sleep", "standby", "power sav", "energy sav", "idle", "online"].iter().any(|o| a.contains(o))
+    ["ready", "printing", "warm up", "warming", "initializing", "sleep", "standby", "power sav", "energy sav", "idle", "online"].iter().any(|o| a.contains(o))
+}
+
+/// Libellés français des alertes de la Printer-MIB, que les machines donnent en anglais
+/// (`prtAlertDescription`). Comparés en minuscules, en contenu, dans l'ordre : les plus
+/// précis d'abord.
+const ALERTES_FR: [(&str, &str); 46] = [
+    ("printer cover open", "capot ouvert"),
+    ("front cover open", "capot avant ouvert"),
+    ("rear cover open", "capot arrière ouvert"),
+    ("maintenance cover open", "capot de maintenance ouvert"),
+    ("ink cover open", "capot des encres ouvert"),
+    ("cover open", "capot ouvert"),
+    ("door open", "porte ouverte"),
+    ("printer initializing", "démarrage de l'imprimante"),
+    ("initializing", "démarrage en cours"),
+    ("ink cartridge missing", "cartouche absente"),
+    ("cartridge missing", "cartouche absente"),
+    ("ink cartridge error", "erreur de cartouche"),
+    ("cartridge error", "erreur de cartouche"),
+    ("ink low", "encre presque vide"),
+    ("ink end", "cartouche vide"),
+    ("ink out", "cartouche vide"),
+    ("ink empty", "cartouche vide"),
+    ("maintenance box near full", "bac de maintenance presque plein"),
+    ("maintenance box full", "bac de maintenance plein"),
+    ("maintenance box missing", "bac de maintenance absent"),
+    ("waste ink", "bac d'encre usagée à vérifier"),
+    ("media jam", "bourrage du support"),
+    ("paper jam", "bourrage du support"),
+    ("jam", "bourrage"),
+    ("media low", "fin de rouleau proche"),
+    ("paper low", "fin de rouleau proche"),
+    ("media empty", "support épuisé"),
+    ("media out", "support épuisé"),
+    ("paper out", "support épuisé"),
+    ("paper end", "support épuisé"),
+    ("media size", "format du support incorrect"),
+    ("media skew", "support de travers"),
+    ("take-up", "erreur de l'enrouleur"),
+    ("lever", "levier du support relevé"),
+    ("head cleaning", "nettoyage des têtes"),
+    ("cleaning", "nettoyage en cours"),
+    ("service call", "appel de maintenance (technicien)"),
+    ("service required", "intervention de maintenance requise"),
+    ("maintenance", "maintenance requise"),
+    ("temperature", "température hors plage"),
+    // « heater warm up » (S80600, relevé du 25/10) : chauffe normale, avant les erreurs.
+    ("warm up", "chauffe en cours"),
+    ("warming", "chauffe en cours"),
+    ("heater", "erreur de chauffage"),
+    ("offline", "hors ligne"),
+    ("paused", "en pause"),
+    ("pause", "en pause"),
+];
+
+/// Alerte de la Printer-MIB en français ; texte d'origine si on ne le connaît pas.
+pub fn alerte_en_francais(a: &str) -> String {
+    let bas = a.to_lowercase();
+    ALERTES_FR.iter().find(|(en, _)| bas.contains(en)).map_or_else(|| a.to_string(), |(_, fr)| fr.to_string())
 }
 
 /// Ce qui a changé entre deux relevés d'une machine. `avant` absent : premier relevé
@@ -297,7 +356,11 @@ pub fn noter_releve(donnees: &Path, machine: &str, nom: &str, encres: &[(String,
     }
     for (genre, detail) in changements {
         let (titre, texte) = match genre {
-            Genre::AlerteMachine => (format!("{nom} : {detail}"), format!("Alerte de la machine : {detail}.")),
+            Genre::AlerteMachine => {
+                let fr = alerte_en_francais(&detail);
+                let texte = if fr == detail { format!("Alerte de la machine : {detail}.") } else { format!("Alerte de la machine : {fr} (« {detail} »).") };
+                (format!("{nom} : {fr}"), texte)
+            }
             Genre::EncreVide => (format!("{nom} : cartouche {detail} vide"), format!("L'encre {detail} est à 0 % : changer la cartouche.")),
             _ => {
                 let (encre, pc) = detail.split_once(':').unwrap_or((&detail, "?"));
@@ -488,6 +551,22 @@ mod tests {
         // Rien ne change : rien à dire ; une cartouche changée (hausse) non plus.
         assert!(comparer_releves(Some(&apres), &apres).is_empty());
         assert!(comparer_releves(Some(&apres), &releve(&[("C", 40), ("M", 100), ("Y", 2), ("BK", 100)], &["ready"])).is_empty());
+    }
+
+    #[test]
+    fn alertes_traduites() {
+        assert_eq!(alerte_en_francais("printer initializing"), "démarrage de l'imprimante");
+        assert_eq!(alerte_en_francais("pause"), "en pause");
+        assert_eq!(alerte_en_francais("Printer Cover Open"), "capot ouvert");
+        assert_eq!(alerte_en_francais("ink low"), "encre presque vide");
+        assert_eq!(alerte_en_francais("media empty"), "support épuisé");
+        assert_eq!(alerte_en_francais("code 0x1234"), "code 0x1234");
+        assert_eq!(alerte_en_francais("heater warm up"), "chauffe en cours");
+        assert_eq!(alerte_en_francais("heater error"), "erreur de chauffage");
+        // Le démarrage est un état ordinaire : pas de notification.
+        assert!(alerte_ordinaire("printer initializing"));
+        // Un échec de démarrage, lui, reste une alerte.
+        assert!(!alerte_ordinaire("initialization error"));
     }
 
     #[test]
