@@ -254,6 +254,13 @@ pub const INDICATIFS: &[(&str, &str, &str)] = &[
     ("PF", "Polynésie française", "689"),
 ];
 
+/// Pays où le 0 de tête fait partie du numéro, même en international (Italie, Côte d'Ivoire).
+const ZERO_CONSERVE: &[&str] = &["39", "225"];
+/// Pays dont le numéro national commence par un 0 qui tombe en international (préfixe interurbain).
+const PREFIXE_ZERO: &[&str] = &[
+    "33", "32", "41", "49", "43", "31", "44", "353", "46", "358", "48", "420", "40", "212", "213", "216", "262", "590", "596", "594",
+];
+
 /// Drapeau emoji d'un code pays ISO (deux lettres).
 pub fn drapeau(iso: &str) -> String {
     iso.chars()
@@ -275,8 +282,8 @@ pub fn telephone_avec_pays(pays: &str, saisie: &str) -> Option<String> {
         .find(|(iso, _, _)| iso.eq_ignore_ascii_case(pays))
         .map_or("33", |(_, _, i)| *i);
     let chiffres: String = t.chars().filter(char::is_ascii_digit).collect();
-    // Le 0 de tête du numéro national tombe (sauf en Italie, où il fait partie du numéro).
-    let national = if indicatif == "39" {
+    // Le 0 de tête du numéro national tombe, sauf là où il fait partie du numéro.
+    let national = if ZERO_CONSERVE.contains(&indicatif) {
         chiffres.as_str()
     } else {
         chiffres.strip_prefix('0').unwrap_or(&chiffres)
@@ -300,10 +307,10 @@ pub fn pays_du_telephone(numero: &str) -> (&'static str, String) {
             let reste = &r[i.len()..];
             return (
                 iso,
-                if *i == "39" {
-                    reste.to_string()
-                } else {
+                if PREFIXE_ZERO.contains(i) {
                     format!("0{reste}")
+                } else {
+                    reste.to_string()
                 },
             );
         }
@@ -371,12 +378,18 @@ mod tests {
         );
         assert_eq!(
             pays_du_telephone("+352621123456"),
-            ("LU", "0621123456".to_string())
+            ("LU", "621123456".to_string())
         );
         assert_eq!(
             pays_du_telephone("+390612345678"),
             ("IT", "0612345678".to_string())
         );
+        // Côte d'Ivoire : le 0 reste dans le numéro international, dans les deux sens.
+        assert_eq!(telephone_avec_pays("CI", "07 12 34 56 78").as_deref(), Some("+2250712345678"));
+        assert_eq!(pays_du_telephone("+2250712345678"), ("CI", "0712345678".to_string()));
+        // Pays sans préfixe 0 : le numéro se réaffiche tel quel et revient identique.
+        assert_eq!(pays_du_telephone("+34612345678"), ("ES", "612345678".to_string()));
+        assert_eq!(telephone_avec_pays("ES", "612 34 56 78").as_deref(), Some("+34612345678"));
         assert_eq!(drapeau("FR"), "\u{1F1EB}\u{1F1F7}");
     }
 
