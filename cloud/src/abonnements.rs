@@ -2119,7 +2119,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
 <label>Jeton d'API ({j})<input type="password" name="erp_jeton" autocomplete="new-password"></label>
 <label>Secret des webhooks ({w})<input type="password" name="erp_webhook_secret" autocomplete="new-password"></label>
 <h2>Codes des plans d'abonnement</h2>{plans}
-<label>Clé publique Stancer (pk_…)<input type="text" name="stancer_cle_publique" value="{pk}" autocomplete="off"></label>
+<label>Clé publique Stancer (pprod_… ou ptest_…)<input type="text" name="stancer_cle_publique" value="{pk}" autocomplete="off"></label>
 <label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer le jeton et le secret enregistrés</span></label>
 <button type="submit">Enregistrer</button> <button type="submit" name="action" value="configurer">Enregistrer et configurer depuis l'ERP</button></form>
 <form method="post" action="/admin/facturation/essai">{csrf}<button class="discret" type="submit">Tester la connexion</button> <span class="meta">liste les plans de l'ERP</span></form></div>"#,
@@ -2161,6 +2161,22 @@ pub fn carte_vue_admin(b: &Connection, tous: &[sites::Site]) -> String {
     format!(r#"<div class="carte"><h2>Abonnements</h2><p class="meta">Comptes ayant souscrit ou en dépassement d'offre (les autres sont au Gratuit). Sites à l'accès à distance suspendu : {liste}.</p><div class="tableau"><table><thead><tr><th>Compte</th><th>Offre</th><th>État</th><th>Parc</th><th>Dépassement</th></tr></thead><tbody>{html}</tbody></table></div></div>"#)
 }
 
+/// Clé publique Stancer : `pprod_…` (production) ou `ptest_…` (test) ; `pk_…` accepté pour les
+/// anciens comptes. Une clé secrète (`sprod_`, `stest_`, `sk_`) est refusée : elle n'a rien à
+/// faire dans une page web.
+pub fn cle_publique_stancer_valide(pk: &str) -> Result<(), &'static str> {
+    if pk.is_empty() {
+        return Ok(());
+    }
+    if ["sprod_", "stest_", "sk_"].iter().any(|p| pk.starts_with(p)) {
+        return Err("C'est la clé secrète Stancer : colle la clé publique (pprod_… en production, ptest_… en test).");
+    }
+    if !["pprod_", "ptest_", "pk_"].iter().any(|p| pk.starts_with(p)) || pk.len() > 128 || !pk.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err("Clé publique Stancer invalide (pprod_… en production, ptest_… en test).");
+    }
+    Ok(())
+}
+
 /// `POST /admin/facturation`.
 pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Form(f): Champs) -> Response {
     if !origine_ok(&r, &h) {
@@ -2178,8 +2194,8 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
         return erreur_page(&r, Some(&s), "Adresse de l'API invalide (https://…).");
     }
     let pk = champ(&f, "stancer_cle_publique");
-    if !pk.is_empty() && (!pk.starts_with("pk_") || !pk.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
-        return erreur_page(&r, Some(&s), "Clé publique Stancer invalide (pk_…).");
+    if let Err(e) = cle_publique_stancer_valide(&pk) {
+        return erreur_page(&r, Some(&s), e);
     }
     let configurer = champ(&f, "action") == "configurer";
     let mut cles: Vec<(String, String)> = vec![("erp_url".into(), url.trim_end_matches('/').to_string()), ("stancer_cle_publique".into(), pk)];
@@ -2377,6 +2393,19 @@ pub async fn essai_facturation(State(r): State<Partage>, h: HeaderMap, axum::For
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cle_publique_stancer() {
+        for ok in ["", "pprod_AbC123", "ptest_xyz", "pk_test_123"] {
+            assert!(cle_publique_stancer_valide(ok).is_ok(), "{ok}");
+        }
+        for secrete in ["sprod_AbC123", "stest_xyz", "sk_live_1"] {
+            assert!(cle_publique_stancer_valide(secrete).unwrap_err().contains("secrète"), "{secrete}");
+        }
+        for ko in ["prod_1", "pprod_a b", "<script>"] {
+            assert!(cle_publique_stancer_valide(ko).is_err(), "{ko}");
+        }
+    }
 
     #[test]
     fn une_seule_souscription_a_la_fois_par_compte() {
