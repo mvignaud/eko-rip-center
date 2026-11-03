@@ -289,30 +289,33 @@ pub fn appliquer(c: &Connection, compte: i64, sub: &Value) -> rusqlite::Result<(
 /// (changement d'offre) est résilié aussitôt après. Bloquant.
 /// Comptes dont une souscription est en cours d'envoi à l'ERP : deux souscriptions
 /// simultanées d'un même compte se verraient sinon offrir chacune l'essai de la première.
-static SOUSCRIPTIONS_EN_COURS: std::sync::Mutex<Vec<i64>> = std::sync::Mutex::new(Vec::new());
+// Clé : dossier de données + compte. Un seul dossier en production ; les tests d'un même
+// binaire tournent en parallèle, chacun avec son dossier et des comptes numérotés depuis 1.
+static SOUSCRIPTIONS_EN_COURS: std::sync::Mutex<Vec<(std::path::PathBuf, i64)>> = std::sync::Mutex::new(Vec::new());
 
 /// Réserve le compte pour une souscription ; la réservation tombe avec la garde.
-struct Reservation(i64);
+struct Reservation((std::path::PathBuf, i64));
 
 impl Reservation {
-    fn prendre(id: i64) -> Option<Reservation> {
+    fn prendre(donnees: &std::path::Path, id: i64) -> Option<Reservation> {
+        let cle = (donnees.to_path_buf(), id);
         let mut en_cours = SOUSCRIPTIONS_EN_COURS.lock().unwrap_or_else(|e| e.into_inner());
-        if en_cours.contains(&id) {
+        if en_cours.contains(&cle) {
             return None;
         }
-        en_cours.push(id);
-        Some(Reservation(id))
+        en_cours.push(cle.clone());
+        Some(Reservation(cle))
     }
 }
 
 impl Drop for Reservation {
     fn drop(&mut self) {
-        SOUSCRIPTIONS_EN_COURS.lock().unwrap_or_else(|e| e.into_inner()).retain(|&c| c != self.0);
+        SOUSCRIPTIONS_EN_COURS.lock().unwrap_or_else(|e| e.into_inner()).retain(|c| *c != self.0);
     }
 }
 
 pub fn creer_abonnement(r: &Partage, id: i64, paiement: Option<Value>) -> Result<(), String> {
-    let _reservation = Reservation::prendre(id).ok_or("Une souscription est déjà en cours pour ce compte, patientez quelques secondes.")?;
+    let _reservation = Reservation::prendre(&r.config.donnees, id).ok_or("Une souscription est déjà en cours pour ce compte, patientez quelques secondes.")?;
     let (erp, ab, p, plan) = {
         let c = r.base();
         let ab = lire(&c, id).map_err(|e| e.to_string())?;
@@ -2377,11 +2380,13 @@ mod tests {
 
     #[test]
     fn une_seule_souscription_a_la_fois_par_compte() {
-        let premiere = Reservation::prendre(-42).expect("libre");
-        assert!(Reservation::prendre(-42).is_none());
-        assert!(Reservation::prendre(-43).is_some());
+        let d = std::path::Path::new("/essai/reservation");
+        let premiere = Reservation::prendre(d, -42).expect("libre");
+        assert!(Reservation::prendre(d, -42).is_none());
+        assert!(Reservation::prendre(d, -43).is_some());
+        assert!(Reservation::prendre(std::path::Path::new("/essai/autre"), -42).is_some(), "autre dossier, autre compte");
         drop(premiere);
-        assert!(Reservation::prendre(-42).is_some());
+        assert!(Reservation::prendre(d, -42).is_some());
     }
 
     #[test]
