@@ -1,38 +1,82 @@
 name: CI
 
-# Lancement manuel seulement : le compte n'a plus de minutes GitHub Actions.
-# Remettre les déclencheurs d'origine quand les crédits reviennent.
-# Déclencheur d'origine : push sur main.
+# Sur le serveur CI dédié (runner `eko-ci-rip`, voir .github/runner/installer-runner.sh)
+# depuis le 2026-11-03 : plus de minutes GitHub Actions.
+#
+# Dépôt PUBLIC, runner auto-hébergé : une PR venue d'un fork ne tourne JAMAIS ici
+# (condition `if` de chaque job). Seuls `main`, les PR ouvertes depuis ce dépôt et le
+# lancement à la main passent.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
 
 jobs:
   serveur:
-    runs-on: ubuntu-22.04 # même base que les paquets de release
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: clippy }
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y ghostscript
-      - name: Syntaxe JavaScript des pages (le test de traduction ne voit pas une chaîne cassée)
+      - name: Outillage
         run: |
-          for f in serveur/static/index.html client/ui/index.html; do
-            python3 -c "import re,sys; print(re.search(r'<script>(.*)</script>', open(sys.argv[1]).read(), re.S).group(1))" "$f" > /tmp/page.js
-            node --check /tmp/page.js || { echo "erreur de syntaxe dans $f"; exit 1; }
-          done
-      - name: Documentation publique à jour (docs/guide et docs/fr|en → site/documentation)
-        run: python3 outils/generer-documentation.py --verifier
-      - name: Site à jour (blog, pages, menu commun)
-        run: python3 outils/generer-site.py --verifier
-      - name: Clés de traduction en double (la dernière écrase l'autre sans erreur)
-        run: node outils/doublons-traductions.js serveur/static/index.html
-      - run: cargo clippy -p eko-rip-serveur -p eko-rip-cloud --all-targets --locked -- -D warnings
-      - run: cargo test -p eko-rip-serveur -p eko-rip-cloud --locked
-      - run: cargo install cargo-deb --locked
-      - run: cargo deb -p eko-rip-serveur --locked --output dist/
-      - uses: actions/upload-artifact@v7
-        with: { name: serveur-deb, path: dist/*.deb, retention-days: 14 }
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config \
+              ghostscript nodejs python3
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rip-serveur-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rip-serveur-
+      # Les mêmes contrôles qu'en local : syntaxe des pages, doc générée à jour,
+      # traductions en double, clippy, tests (serveur + cloud).
+      - run: outils/verifier.sh
+
+  client-linux:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:26.04 # libadwaita 1.4+ et webkitgtk 6, comme les postes
+    steps:
+      - name: Outillage
+        run: |
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config \
+              libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            clients/linux/target
+          key: rip-client-linux-${{ hashFiles('clients/linux/Cargo.lock') }}
+          restore-keys: rip-client-linux-
+      - working-directory: clients/linux
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked

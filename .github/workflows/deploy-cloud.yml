@@ -1,0 +1,131 @@
+name: Déployer le Cloud
+
+# Met à jour la plate-forme https://platform.e-ko.rip (o2switch, compte sc3nihe1770) depuis
+# le serveur CI dédié (2026-11-03), sur ordre de Mathieu dans le chat. Lancé par Claude via
+# l'API GitHub (workflow_dispatch sur main).
+#
+# Même procédure qu'à la main (docs/fr/cloud.md) : binaire musl statique (la glibc du
+# mutualisé est ancienne), copie en .nouveau, sauvegarde du binaire et des données,
+# bascule, puis arrêt du relais (le lanceur app.js le relance avec le nouveau binaire) et
+# redémarrage de l'app Node. Si /sante ne répond pas « ok », retour au binaire précédent.
+#
+# Prérequis : l'IP du serveur CI (15.235.86.71) déclarée dans cPanel → « Autorisation SSH ».
+# Secrets de l'environnement `production` : O2SWITCH_SSH_KEY, O2SWITCH_KNOWN_HOSTS.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cloud
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+  HOTE: sc3nihe1770@fleur.o2switch.net
+  URL_SANTE: https://platform.e-ko.rip/sante
+
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cloud:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:24.04
+    environment: production
+    steps:
+      - name: Outillage
+        run: |
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config \
+              musl-tools openssh-client
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --target x86_64-unknown-linux-musl
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rip-cloud-musl-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rip-cloud-musl-
+      - name: Binaire musl
+        run: |
+          cargo build --release --locked --target x86_64-unknown-linux-musl -p eko-rip-cloud --bin eko-rip-cloud
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          ls -la target/x86_64-unknown-linux-musl/release/eko-rip-cloud
+
+      - name: Clé SSH o2switch
+        env:
+          O2SWITCH_SSH_KEY: ${{ secrets.O2SWITCH_SSH_KEY }}
+          O2SWITCH_KNOWN_HOSTS: ${{ secrets.O2SWITCH_KNOWN_HOSTS }}
+        run: |
+          [ -n "$O2SWITCH_SSH_KEY" ] && [ -n "$O2SWITCH_KNOWN_HOSTS" ] || { echo "::error::Secrets O2SWITCH_* absents de l'environnement production."; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$O2SWITCH_SSH_KEY" > ~/.ssh/o2switch && chmod 600 ~/.ssh/o2switch
+          printf '%s\n' "$O2SWITCH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host fleur.o2switch.net\n  IdentityFile ~/.ssh/o2switch\n  IdentitiesOnly yes\n' > ~/.ssh/config
+
+      - name: Envoi et bascule
+        id: bascule
+        run: |
+          set -euo pipefail
+          scp target/x86_64-unknown-linux-musl/release/eko-rip-cloud "$HOTE:eko-rip-cloud/eko-rip-cloud.nouveau"
+          scp cloud/o2switch/app.js "$HOTE:eko-rip-cloud/app.js.nouveau"
+          ssh "$HOTE" VERSION="$VERSION" bash -s <<'DISTANT'
+          set -euo pipefail
+          cd ~/eko-rip-cloud
+          chmod 755 eko-rip-cloud.nouveau
+          cp -p eko-rip-cloud eko-rip-cloud.precedent
+          cp -p app.js app.js.precedent
+          sauvegarde=~/eko-cloud-data/avant-$VERSION-$(date +%Y%m%d%H%M%S)
+          mkdir -p "$sauvegarde"
+          # Base en WAL, service en marche : copie cohérente par l'API de sauvegarde
+          # de SQLite (comme sauvegarder_base), jamais un cp des fichiers.
+          for base in ~/eko-cloud-data/*.sqlite; do
+              [ -f "$base" ] || continue
+              cible="$sauvegarde/$(basename "$base")"
+              if command -v python3 >/dev/null; then
+                  python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$base" "$cible"
+              elif command -v sqlite3 >/dev/null; then
+                  sqlite3 "$base" ".backup '$cible'"
+              else
+                  echo "Ni python3 ni sqlite3 sur l'hébergement : sauvegarde de $base impossible." >&2; exit 1
+              fi
+          done
+          cp -p ~/eko-cloud-data/*.json "$sauvegarde"/ 2>/dev/null || true
+          # Bascule AVANT d'arrêter le relais : sinon app.js relance l'ancien binaire.
+          mv eko-rip-cloud.nouveau eko-rip-cloud
+          mv app.js.nouveau app.js
+          [ -f relais.pid ] && kill "$(cat relais.pid)" 2>/dev/null || true
+          cloudlinux-selector restart --json --interpreter nodejs --app-root eko-rip-cloud
+          echo "Sauvegarde : $sauvegarde"
+          DISTANT
+
+      # Aussi quand la bascule a échoué en cours de route (redémarrage raté…).
+      - name: Santé, retour arrière sinon
+        if: always() && steps.bascule.conclusion != 'skipped'
+        run: |
+          for essai in 1 2 3 4 5 6 7 8 9; do
+              reponse=$(curl -s --max-time 10 "$URL_SANTE" || true)
+              echo "Essai $essai : $URL_SANTE → ${reponse:-pas de réponse}"
+              [ "$reponse" = ok ] && exit 0
+              sleep 10
+          done
+          echo "::error::$URL_SANTE ne répond pas « ok » : retour au binaire précédent."
+          ssh "$HOTE" 'cd ~/eko-rip-cloud && mv eko-rip-cloud.precedent eko-rip-cloud && mv app.js.precedent app.js \
+              && { [ -f relais.pid ] && kill "$(cat relais.pid)" 2>/dev/null || true; } \
+              && cloudlinux-selector restart --json --interpreter nodejs --app-root eko-rip-cloud'
+          exit 1
+
+      - name: Oublier la clé
+        if: always()
+        run: rm -rf ~/.ssh

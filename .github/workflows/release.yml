@@ -1,128 +1,215 @@
 name: Release
 
+# Release du RIP depuis le serveur CI dédié (2026-11-03), sur ordre de Mathieu dans le
+# chat (« Déploie le RIP ») : Claude la lance par l'API GitHub
+# (POST /repos/mvignaud/eko-rip-center/actions/workflows/release.yml/dispatches
+# {"ref":"main"}).
+#
+# Elle construit, depuis `main` :
+#   - eko-rip-serveur (.deb + archive), dans Ubuntu 22.04 : glibc ancienne, le paquet
+#     tourne sur Debian 12/13 et Ubuntu 22.04+ ;
+#   - eko-rip-cloud (.deb), même base ;
+#   - le client Linux natif e-ko-rip-center (.deb), dans Ubuntu 26.04 (GTK 4,
+#     libadwaita 1.4) ;
+# puis crée le tag vX.Y.Z et la release GitHub (notes tirées de CHANGELOG.md) et publie
+# les .deb sur le dépôt APT https://apt.e-ko.fr/rip/.
+#
+# Restent hors d'ici : le client Mac signé et notarisé (Xcode, sur le Mac), le client
+# Windows, et le journal /changelog-rip de l'ERP (PR eko-source). Ils se joignent à la
+# release après coup (gh release upload).
+#
+# Secrets de l'environnement `production` :
+#   DEPOT_GPG_KEY      clé privée depot@e-ko.fr, exportée UNE fois du serveur de test
+#                      (gpg --export-secret-keys --armor depot@e-ko.fr). Jamais en régénérer
+#                      une : les postes refuseraient les mises à jour.
+#   DEPOT_SSH_KEY      clé SSH du compte depot@apt.e-ko.fr (rrsync, /srv/depot).
+#   DEPOT_KNOWN_HOSTS  ligne known_hosts d'apt.e-ko.fr.
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-rip
+  cancel-in-progress: false
 
 permissions:
   contents: write
-  packages: write
 
 env:
   CARGO_TERM_COLOR: always
+  DEBIAN_FRONTEND: noninteractive
+
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  tests:
-    runs-on: ubuntu-24.04
+  controle:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - name: La version du tag correspond à Cargo.toml
+      - name: Outillage
         run: |
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config \
+              ghostscript nodejs python3
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: version
+        name: Version, changelog, tag libre
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          test "v$VERSION" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME ≠ version $VERSION"; exit 1; }
-          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "CHANGELOG.md n'a pas de section $VERSION"; exit 1; }
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y ghostscript
-      - run: cargo test -p eko-rip-serveur --locked
+          LINUX=$(sed -n 's/^version = "\(.*\)"/\1/p' clients/linux/Cargo.toml | head -1)
+          test "$VERSION" = "$LINUX" || { echo "::error::client Linux en $LINUX, workspace en $VERSION"; exit 1; }
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "::error::CHANGELOG.md n'a pas de section $VERSION"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+              echo "::error::Le tag v$VERSION existe déjà : monter la version avant de publier."; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: rip-serveur-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rip-serveur-
+      - run: outils/verifier.sh
 
-  serveur:
-    needs: tests
-    runs-on: ubuntu-22.04 # glibc ancienne : le binaire tourne aussi sur Debian 12/13 et Ubuntu 22.04+
+  serveur-et-cloud:
+    needs: controle
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:22.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo install cargo-deb --locked
-      - name: Paquet Debian
-        run: cargo deb -p eko-rip-serveur --locked --output dist/
-      - name: Archive du binaire
+      - name: Outillage
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-deb
+            target
+          key: rip-release-2204-${{ hashFiles('Cargo.lock') }}
+          restore-keys: rip-release-2204-
+      - run: command -v cargo-deb || cargo install cargo-deb --locked
+      - name: Paquets Debian
+        run: |
+          cargo deb -p eko-rip-serveur --locked --output dist/
+          cargo deb -p eko-rip-cloud --locked --output dist/
+      - name: Archive du binaire serveur
+        run: |
+          VERSION=${{ needs.controle.outputs.version }}
           mkdir -p "pack/eko-rip-serveur-$VERSION"
           cp target/release/eko-rip-serveur README.md CHANGELOG.md "pack/eko-rip-serveur-$VERSION/"
           tar -C pack -czf "dist/eko-rip-serveur-$VERSION-linux-x86_64.tar.gz" "eko-rip-serveur-$VERSION"
-      - uses: actions/upload-artifact@v7
-        with: { name: serveur, path: dist/* }
-
-  image:
-    needs: tests
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
-        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
-      - id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
-          labels: |
-            org.opencontainers.image.title=E-KO RIP Center (serveur)
-      - uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  client:
-    needs: tests
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            args: --target universal-apple-darwin
-            cibles: aarch64-apple-darwin,x86_64-apple-darwin
-          - os: windows-latest
-            args: ""
-            cibles: ""
-          - os: ubuntu-22.04
-            args: ""
-            cibles: ""
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: "${{ matrix.cibles }}" }
-      - uses: Swatinem/rust-cache@v2
-      - if: startsWith(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - uses: actions/setup-node@v7
-        with: { node-version: 22 }
-      - name: Construction du client
-        working-directory: client
-        run: npx --yes @tauri-apps/cli@2 build ${{ matrix.args }}
-      - name: Paquets produits
-        shell: bash
-        run: |
-          mkdir dist
-          find target -path '*/release/bundle/*' -type f \
-            \( -name '*.dmg' -o -name '*.msi' -o -name '*-setup.exe' -o -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' \) \
-            -exec cp {} dist/ \;
           ls -la dist
-          test -n "$(ls dist)"
-      - uses: actions/upload-artifact@v7
-        with: { name: "client-${{ matrix.os }}", path: dist/* }
+      - uses: actions/upload-artifact@v4
+        with: { name: serveur-et-cloud, path: dist/* }
 
-  release:
-    needs: [serveur, image, client]
-    runs-on: ubuntu-24.04
+  client-linux:
+    needs: controle
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        # Seulement nos paquets : build-push-action dépose aussi un artefact *.dockerbuild.
-        with: { path: dist, merge-multiple: true, pattern: "{serveur,client-*}" }
-      - name: Notes tirées du changelog
+      - name: Outillage
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
-          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md) · image `ghcr.io/%s:%s`\n- PC dédié (Ubuntu 24.04, ⚠️ efface le disque) : image d’installation en un seul fichier, lien de chaque version dans [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md#0-pc-dédié--image-dinstallation-ubuntu)\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n' "$GITHUB_REPOSITORY" "$VERSION" >> notes.md
-          cat notes.md
-      - name: Publication
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git build-essential pkg-config \
+              libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-deb
+            clients/linux/target
+          key: rip-release-2604-${{ hashFiles('clients/linux/Cargo.lock') }}
+          restore-keys: rip-release-2604-
+      - run: command -v cargo-deb || cargo install cargo-deb --locked
+      - working-directory: clients/linux
+        run: cargo deb --locked --output ../../dist/ && ls -la ../../dist
+      - uses: actions/upload-artifact@v4
+        with: { name: client-linux, path: dist/* }
+
+  publier:
+    needs: [controle, serveur-et-cloud, client-linux]
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:24.04
+    environment: production
+    env:
+      VERSION: ${{ needs.controle.outputs.version }}
+    steps:
+      - name: Outillage
+        run: |
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates curl git gh gnupg rsync apt-utils openssh-client
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+
+      - name: Release GitHub v${{ env.VERSION }}
         env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "E-KO RIP Center $GITHUB_REF_NAME" --notes-file notes.md
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
+          printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md)\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n- Linux (serveur et client) : `sudo apt update && sudo apt upgrade` sur un poste déjà relié au dépôt, sinon `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`\n' >> notes.md
+          mapfile -t fichiers < <(find dist -maxdepth 1 -type f | sort)
+          printf 'Fichiers joints : %s\n' "${fichiers[@]}"
+          gh release create "v$VERSION" "${fichiers[@]}" --target "$GITHUB_SHA" \
+              --title "E-KO RIP Center v$VERSION" --notes-file notes.md
+
+      - name: Dépôt APT
+        env:
+          DEPOT_GPG_KEY: ${{ secrets.DEPOT_GPG_KEY }}
+          DEPOT_SSH_KEY: ${{ secrets.DEPOT_SSH_KEY }}
+          DEPOT_KNOWN_HOSTS: ${{ secrets.DEPOT_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for s in DEPOT_GPG_KEY DEPOT_SSH_KEY DEPOT_KNOWN_HOSTS; do
+              [ -n "${!s}" ] || { echo "::error::Secret $s absent de l'environnement production."; exit 1; }
+          done
+          export GNUPGHOME="$RUNNER_TEMP/gnupg" && install -d -m 700 "$GNUPGHOME"
+          gpg --batch --import <<< "$DEPOT_GPG_KEY"
+          # publier-depot.sh CRÉE une clé neuve s'il n'en trouve pas : jamais ici.
+          [ "$(gpg --batch --with-colons --list-secret-keys depot@e-ko.fr 2>/dev/null | grep -c "^sec")" -gt 0 ] || { echo "::error::Clé depot@e-ko.fr non importée."; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPOT_SSH_KEY" > ~/.ssh/eko_depot && chmod 600 ~/.ssh/eko_depot
+          printf '%s\n' "$DEPOT_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf 'Host apt.e-ko.fr\n  User depot\n  IdentityFile ~/.ssh/eko_depot\n  IdentitiesOnly yes\n' > ~/.ssh/config
+          # Le dossier local du dépôt part vide ici : on y remet d'abord les paquets en
+          # ligne, sinon l'envoi (--delete-after) les retirerait du dépôt.
+          export EKO_DEPOT_LOCAL="$RUNNER_TEMP/depot/rip" && mkdir -p "$EKO_DEPOT_LOCAL"
+          curl -fsSL https://apt.e-ko.fr/rip/Packages | sed -n 's/^Filename: \.\{0,1\}\/\{0,1\}//p' | while read -r f; do
+              curl -fsSL -o "$EKO_DEPOT_LOCAL/$(basename "$f")" "https://apt.e-ko.fr/rip/$f"
+          done
+          echo "Paquets déjà en ligne : $(ls "$EKO_DEPOT_LOCAL" | wc -l)"
+          outils/publier-depot.sh dist/*.deb
+
+      - name: Vérification du dépôt
+        run: |
+          curl -fsSL https://apt.e-ko.fr/rip/Packages -o Packages
+          grep -E '^(Package|Version):' Packages
+          for p in eko-rip-serveur e-ko-rip-center eko-rip-cloud; do
+              awk -v p="$p" -v v="$VERSION" 'BEGIN { RS = "" } $0 ~ ("(^|\n)Package: " p "\n") && $0 ~ ("\nVersion: " v "(-|\n)") { ok = 1 } END { exit !ok }' Packages \
+                  || { echo "::error::$p $VERSION absent du dépôt"; exit 1; }
+          done
+
+      - name: Oublier les clés
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/gnupg" ~/.ssh "$RUNNER_TEMP/depot"

@@ -106,6 +106,9 @@ fn refus(statut: StatusCode, erreur: &str) -> Response {
 }
 
 /// Site authentifié par `Authorization: Bearer <site>.<clé>` (mêmes identifiants que le tunnel).
+// La réponse d'erreur axum est renvoyée telle quelle au client : la mettre en Box
+// n'apporterait rien (clippy 1.99, result_large_err).
+#[allow(clippy::result_large_err)]
 async fn site_authentifie(r: &Partage, h: &HeaderMap) -> Result<sites::Site, Response> {
     let v = h.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).and_then(|v| v.split_once('.')).map(|(s, c)| (s.to_string(), c.to_string()));
     let Some((id, cle)) = v else { return Err(refus(StatusCode::UNAUTHORIZED, "cle_absente")) };
