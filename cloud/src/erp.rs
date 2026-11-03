@@ -215,6 +215,47 @@ pub fn telephone_e164(saisie: &str) -> Option<String> {
     (n.len() >= 9 && n.len() <= 16 && n[1..].chars().all(|x| x.is_ascii_digit())).then_some(n)
 }
 
+/// Pays proposés devant le numéro : (code ISO, indicatif, nom). France en tête (valeur par défaut).
+pub const INDICATIFS: &[(&str, &str, &str)] = &[
+    ("FR", "33", "France"), ("BE", "32", "Belgique"), ("CH", "41", "Suisse"), ("LU", "352", "Luxembourg"), ("MC", "377", "Monaco"),
+    ("DE", "49", "Allemagne"), ("AT", "43", "Autriche"), ("ES", "34", "Espagne"), ("IT", "39", "Italie"), ("PT", "351", "Portugal"),
+    ("NL", "31", "Pays-Bas"), ("GB", "44", "Royaume-Uni"), ("IE", "353", "Irlande"), ("DK", "45", "Danemark"), ("SE", "46", "Suède"),
+    ("NO", "47", "Norvège"), ("FI", "358", "Finlande"), ("PL", "48", "Pologne"), ("CZ", "420", "Tchéquie"), ("GR", "30", "Grèce"),
+    ("RO", "40", "Roumanie"), ("US", "1", "États-Unis / Canada"), ("MA", "212", "Maroc"), ("DZ", "213", "Algérie"), ("TN", "216", "Tunisie"),
+    ("SN", "221", "Sénégal"), ("CI", "225", "Côte d'Ivoire"), ("CM", "237", "Cameroun"), ("RE", "262", "La Réunion / Mayotte"),
+    ("GP", "590", "Guadeloupe"), ("MQ", "596", "Martinique"), ("GF", "594", "Guyane"), ("PM", "508", "Saint-Pierre-et-Miquelon"),
+    ("NC", "687", "Nouvelle-Calédonie"), ("PF", "689", "Polynésie française"),
+];
+
+/// Drapeau emoji d'un code ISO à deux lettres (indicateurs régionaux Unicode).
+pub fn drapeau(iso: &str) -> String {
+    iso.chars().filter_map(|c| char::from_u32(0x1F1E6 + (c.to_ascii_uppercase() as u32).checked_sub('A' as u32)?)).collect()
+}
+
+/// Numéro saisi avec le pays choisi devant : un numéro commençant par `+` ou `00` garde son
+/// indicatif, sinon celui du pays (0 national retiré, sauf en Italie). À valider par `telephone_e164`.
+pub fn telephone_avec_pays(iso: &str, numero: &str) -> String {
+    let n = numero.trim();
+    if n.is_empty() || n.starts_with('+') || n.starts_with("00") {
+        return n.to_string();
+    }
+    let ind = INDICATIFS.iter().find(|p| p.0 == iso).map_or("33", |p| p.1);
+    let chiffres: String = n.chars().filter(char::is_ascii_digit).collect();
+    let national = if ind == "39" { chiffres.as_str() } else { chiffres.trim_start_matches('0') };
+    format!("+{ind}{national}")
+}
+
+/// Inverse pour l'affichage : (code ISO, numéro sans indicatif). France si l'indicatif est inconnu.
+pub fn pays_du_telephone(tel: &str) -> (&'static str, String) {
+    let Some(e) = telephone_e164(tel) else { return ("FR", tel.to_string()) };
+    let mut tri: Vec<_> = INDICATIFS.iter().collect();
+    tri.sort_by_key(|p| std::cmp::Reverse(p.1.len()));
+    match tri.into_iter().find(|p| e[1..].starts_with(p.1)) {
+        Some(p) => (p.0, e[1 + p.1.len()..].to_string()),
+        None => ("FR", e),
+    }
+}
+
 /// IBAN plausible (clé modulo 97), sans espaces, en majuscules.
 pub fn iban_valide(saisie: &str) -> Option<String> {
     let i: String = saisie.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_uppercase();
@@ -257,6 +298,14 @@ mod tests {
         assert_eq!(telephone_e164("06 12 34 56 78").as_deref(), Some("+33612345678"));
         assert_eq!(telephone_e164("+32 470 12 34 56").as_deref(), Some("+32470123456"));
         assert_eq!(telephone_e164("12"), None);
+        assert_eq!(telephone_avec_pays("FR", "06 12 34 56 78"), "+33612345678");
+        assert_eq!(telephone_avec_pays("BE", "0470 12 34 56"), "+32470123456");
+        assert_eq!(telephone_avec_pays("IT", "06 1234 5678"), "+390612345678");
+        assert_eq!(telephone_avec_pays("BE", "+33 6 12 34 56 78"), "+33 6 12 34 56 78");
+        assert_eq!(telephone_avec_pays("XX", "612345678"), "+33612345678");
+        assert_eq!(pays_du_telephone("+352621123456"), ("LU", "621123456".into()));
+        assert_eq!(pays_du_telephone("+33612345678"), ("FR", "612345678".into()));
+        assert_eq!(drapeau("FR"), "\u{1F1EB}\u{1F1F7}");
         assert_eq!(iban_valide("FR76 3000 6000 0112 3456 7890 189").as_deref(), Some("FR7630006000011234567890189"));
         assert_eq!(iban_valide("FR76 3000 6000 0112 3456 7890 188"), None);
         assert_eq!(chemin(CHEMIN_PDF_FACTURE, "FA 1"), "/invoices/FA%201/pdf");

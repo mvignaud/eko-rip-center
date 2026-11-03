@@ -1124,8 +1124,22 @@ struct Saisie {
 impl Saisie {
     fn depuis(f: &HashMap<String, String>) -> Saisie {
         let c = |n: &str| champ(f, n);
-        Saisie { offre: c("offre"), cycle: c("cycle"), pays: c("pays").to_ascii_uppercase(), siren: c("siren"), raison_sociale: c("raison_sociale"), siret: c("siret"), tva: c("tva"), contact: c("contact"), email: c("email"), telephone: c("telephone"), adresse: c("adresse"), code_postal: c("code_postal"), ville: c("ville"), bon_commande: c("bon_commande"), code: c("code"), moyen: c("moyen") }
+        Saisie { offre: c("offre"), cycle: c("cycle"), pays: c("pays").to_ascii_uppercase(), siren: c("siren"), raison_sociale: c("raison_sociale"), siret: c("siret"), tva: c("tva"), contact: c("contact"), email: c("email"), telephone: erp::telephone_avec_pays(&c("indicatif"), &c("telephone")), adresse: c("adresse"), code_postal: c("code_postal"), ville: c("ville"), bon_commande: c("bon_commande"), code: c("code"), moyen: c("moyen") }
     }
+}
+
+/// Pays (drapeau + indicatif) et numéro, côte à côte ; relu par `erp::telephone_avec_pays`.
+fn champ_telephone(tel: &str, requis: bool) -> String {
+    let (iso, numero) = erp::pays_du_telephone(tel);
+    let options: String = erp::INDICATIFS
+        .iter()
+        .map(|(c, ind, nom)| format!(r#"<option value="{c}" title="{nom}"{sel}>{d} +{ind}</option>"#, nom = echapper(nom), sel = if *c == iso { " selected" } else { "" }, d = erp::drapeau(c)))
+        .collect();
+    format!(
+        r#"<span class="ligne"><select name="indicatif" aria-label="Pays de l'indicatif" style="width: auto; flex: 0 0 auto">{options}</select><input type="tel" name="telephone" value="{n}" maxlength="20" autocomplete="tel-national" placeholder="6 12 34 56 78" style="flex: 1; min-width: 10rem"{r}></span>"#,
+        n = echapper(&numero),
+        r = if requis { " required" } else { "" },
+    )
 }
 
 fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, cycle: Cycle, essai: bool) -> String {
@@ -1144,7 +1158,7 @@ fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, 
 <div class="carte"><h2>Contact de facturation</h2>
 <label>Nom<input type="text" name="contact" value="{contact}" required maxlength="80"></label>
 <label>E-mail de facturation<input type="email" name="email" value="{email}" required></label>
-<label>Téléphone<input type="tel" name="telephone" value="{tel}" maxlength="20" autocomplete="tel" placeholder="+33 6 12 34 56 78"></label>
+<label>Téléphone{tel}</label>
 <label>N° de bon de commande (facultatif)<input type="text" name="bon_commande" value="{bc}" maxlength="60"></label></div>
 <div class="carte"><h2>Code promo ou partenaire</h2><label>Code (facultatif)<input type="text" name="code" value="{code}" maxlength="40" autocomplete="off"></label><p id="etat-code" class="meta"></p></div>
 <div class="carte"><h2>Moyen de paiement</h2><label class="case"><input type="radio" name="moyen" value="cb"{cb}> <span>Carte bancaire (saisie sécurisée Stancer, 3-D Secure)</span></label><label class="case"><input type="radio" name="moyen" value="sepa"{sepa}> <span>Prélèvement SEPA (mandat signé en ligne par code SMS)</span></label>
@@ -1171,7 +1185,7 @@ fn formulaire_souscription(s: &Session, x: &Saisie, erreur: &str, offre: Offre, 
         ville = v(&x.ville),
         contact = v(&x.contact),
         email = v(&x.email),
-        tel = v(&x.telephone),
+        tel = champ_telephone(&x.telephone, false),
         bc = v(&x.bon_commande),
         code = v(&x.code),
         cb = if x.moyen != "sepa" { " checked" } else { "" },
@@ -1586,12 +1600,12 @@ fn panneau_sepa(s: &Session, ab: &Abonnement) -> String {
 <label>IBAN<input type="text" name="iban" required maxlength="42" autocomplete="off" placeholder="FR76 …"></label>
 <label>BIC (facultatif)<input type="text" name="bic" maxlength="11" autocomplete="off"></label>
 <span class="ligne"><label>Prénom du titulaire<input type="text" name="prenom" required maxlength="60" value="{prenom}"></label><label>Nom du titulaire<input type="text" name="nom" required maxlength="60" value="{nom}"></label></span>
-<label>Téléphone mobile (pour le code SMS)<input type="tel" name="telephone" required maxlength="20" value="{tel}" autocomplete="tel" placeholder="+33 6 12 34 56 78"></label>
+<label>Téléphone mobile (pour le code SMS){tel}</label>
 <label>Adresse<input type="text" name="adresse" maxlength="160" value="{adr}"></label>
 <span class="ligne"><label>Code postal<input type="text" name="code_postal" maxlength="12" value="{cp}"></label><label>Ville<input type="text" name="ville" maxlength="80" value="{ville}"></label></span>
 <button type="submit">Créer le mandat</button></form></div>"#,
                 csrf = hidden_csrf(s),
-                tel = t("telephone"),
+                tel = champ_telephone(&ab.texte_brouillon("telephone"), true),
                 adr = t("adresse"),
                 cp = t("code_postal"),
                 ville = t("ville"),
@@ -1772,7 +1786,7 @@ pub async fn creer_mandat(State(r): State<Partage>, h: HeaderMap, axum::Form(f):
         return vers_paiement_sepa(Some("Trop d'essais : réessayer dans une heure."));
     }
     let Some(iban) = erp::iban_valide(&champ(&f, "iban")) else { return vers_paiement_sepa(Some("IBAN invalide.")) };
-    let Some(tel) = erp::telephone_e164(&champ(&f, "telephone")) else { return vers_paiement_sepa(Some("Téléphone mobile invalide (il reçoit le code de signature).")) };
+    let Some(tel) = erp::telephone_e164(&erp::telephone_avec_pays(&champ(&f, "indicatif"), &champ(&f, "telephone"))) else { return vers_paiement_sepa(Some("Téléphone mobile invalide (il reçoit le code de signature).")) };
     let (prenom, nom) = (champ(&f, "prenom"), champ(&f, "nom"));
     if !base::nom_valide(&prenom) || !base::nom_valide(&nom) {
         return vers_paiement_sepa(Some("Prénom et nom du titulaire requis."));
