@@ -75,6 +75,7 @@ jobs:
           printf 'Host fleur.o2switch.net\n  IdentityFile ~/.ssh/o2switch\n  IdentitiesOnly yes\n' > ~/.ssh/config
 
       - name: Envoi et bascule
+        id: bascule
         run: |
           set -euo pipefail
           scp target/x86_64-unknown-linux-musl/release/eko-rip-cloud "$HOTE:eko-rip-cloud/eko-rip-cloud.nouveau"
@@ -109,7 +110,9 @@ jobs:
           echo "Sauvegarde : $sauvegarde"
           DISTANT
 
+      # Aussi quand la bascule a échoué en cours de route (redémarrage raté…).
       - name: Santé, retour arrière sinon
+        if: always() && steps.bascule.conclusion != 'skipped'
         run: |
           for essai in 1 2 3 4 5 6 7 8 9; do
               reponse=$(curl -s --max-time 10 "$URL_SANTE" || true)

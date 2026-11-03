@@ -169,7 +169,9 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {garder=1; next} /^## \[/ {garder=0} garder' CHANGELOG.md > notes.md
           printf '\n## Installation\n\n- Serveur : [docs/fr/installation-serveur.md](docs/fr/installation-serveur.md)\n- Client : [docs/fr/installation-client.md](docs/fr/installation-client.md)\n- Linux (serveur et client) : `sudo apt update && sudo apt upgrade` sur un poste déjà relié au dépôt, sinon `wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`\n' >> notes.md
-          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" \
+          mapfile -t fichiers < <(find dist -maxdepth 1 -type f | sort)
+          printf 'Fichiers joints : %s\n' "${fichiers[@]}"
+          gh release create "v$VERSION" "${fichiers[@]}" --target "$GITHUB_SHA" \
               --title "E-KO RIP Center v$VERSION" --notes-file notes.md
 
       - name: Dépôt APT
@@ -185,7 +187,7 @@ jobs:
           export GNUPGHOME="$RUNNER_TEMP/gnupg" && install -d -m 700 "$GNUPGHOME"
           gpg --batch --import <<< "$DEPOT_GPG_KEY"
           # publier-depot.sh CRÉE une clé neuve s'il n'en trouve pas : jamais ici.
-          gpg --batch --list-secret-keys depot@e-ko.fr >/dev/null || { echo "::error::Clé depot@e-ko.fr non importée."; exit 1; }
+          [ "$(gpg --batch --with-colons --list-secret-keys depot@e-ko.fr 2>/dev/null | grep -c "^sec")" -gt 0 ] || { echo "::error::Clé depot@e-ko.fr non importée."; exit 1; }
           install -d -m 700 ~/.ssh
           printf '%s\n' "$DEPOT_SSH_KEY" > ~/.ssh/eko_depot && chmod 600 ~/.ssh/eko_depot
           printf '%s\n' "$DEPOT_KNOWN_HOSTS" > ~/.ssh/known_hosts
