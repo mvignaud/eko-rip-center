@@ -20,6 +20,7 @@ RACINE=$(cd "$(dirname "$0")/.." && pwd)
 # La documentation (site/documentation/) est générée depuis docs/ : ne jamais publier une
 # version en retard sur sa source.
 python3 "$RACINE/outils/generer-documentation.py" --verifier
+python3 "$RACINE/outils/generer-site.py" --verifier
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

@@ -73,8 +73,10 @@ problème…**, **Changer de serveur…**, **Se déconnecter**, **À propos d'E-
 
 **Pré-requis** : Windows 10 ou 11, 64 bits.
 
-1. Télécharger l'installateur : [e-ko.rip/telecharger/windows](https://e-ko.rip/telecharger/windows).
-2. Lancer le fichier `…_x64-setup.exe` et suivre l'assistant.
+1. Ouvrir la page [e-ko.rip/telecharger](https://e-ko.rip/telecharger/#windows) : elle donne la version, la taille et
+   l'empreinte SHA-256 de l'installateur, puis mène à la release GitHub, où se trouve le fichier
+   `…_x64-setup.exe`.
+2. Télécharger ce fichier, le lancer et suivre l'assistant.
 3. Le client n'est pas encore signé : si Windows affiche « Windows a protégé votre ordinateur »,
    cliquer **Informations complémentaires** puis **Exécuter quand même** (une seule fois par
    poste).

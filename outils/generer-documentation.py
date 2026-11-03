@@ -24,6 +24,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import site_commun  # noqa: E402  menu et pied communs du site
+
 RACINE = Path(__file__).resolve().parent.parent
 DOCS = RACINE / "docs"
 IMAGES = DOCS / "guide" / "images"
@@ -35,20 +38,12 @@ LANGUES = {
                  "chercher_long": "Chercher dans la documentation", "sommaire": "Sommaire de la documentation", "sommaire_court": "Sommaire",
                  "page": "Sur cette page", "prec": "Précédent", "suiv": "Suivant", "voisines": "Pages voisines",
                  "erreur": "Une erreur, un manque ?", "corriger": "Proposer une correction", "ecrire": "ou écrire à",
-                 "nav": [("/#fonctionnalites", "Fonctionnalités"), ("/compatibilite/", "Machines"), ("/cloud/", "Cloud"), ("/documentation/", "Documentation"),
-                         ("/changelog/", "Nouveautés")],
-                 "installer": "Installer", "pied": [("/changelog/", "Nouveautés"), ("/prerequis/", "Pré-requis"), ("/app/", "Application mobile"),
-                                                     ("/mentions-legales/", "Mentions légales")],
                  "aucun": "Aucun résultat.", "genres": {"NOTE": "À savoir", "TIP": "Astuce", "IMPORTANT": "Important", "WARNING": "Attention", "CAUTION": "Attention"}}},
     "en": {"url": "/documentation/en/", "autre": "fr", "nom": "English",
            "t": {"doc": "Documentation", "evitement": "Skip to content", "menu": "Menu", "chercher": "Search…",
                  "chercher_long": "Search the documentation", "sommaire": "Documentation contents", "sommaire_court": "Contents",
                  "page": "On this page", "prec": "Previous", "suiv": "Next", "voisines": "Neighbouring pages",
                  "erreur": "Found a mistake or something missing?", "corriger": "Suggest a fix", "ecrire": "or write to",
-                 "nav": [("/#fonctionnalites", "Features"), ("/compatibilite/", "Machines"), ("/cloud/", "Cloud"), ("/documentation/en/", "Documentation"),
-                         ("/changelog/", "What's new")],
-                 "installer": "Install", "pied": [("/changelog/", "What's new"), ("/prerequis/", "Requirements"), ("/app/", "Mobile app"),
-                                                   ("/mentions-legales/", "Legal notice")],
                  "aucun": "No results.", "genres": {"NOTE": "Note", "TIP": "Tip", "IMPORTANT": "Important", "WARNING": "Warning", "CAUTION": "Caution"}}},
 }
 GITHUB = "https://github.com/mvignaud/eko-rip-center/blob/main/"
@@ -397,9 +392,6 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
     hreflang = f'<link rel="alternate" hreflang="{p["langue"]}" href="https://e-ko.rip{p["url"]}">'
     if traduction:
         hreflang += f'\n<link rel="alternate" hreflang="{L["autre"]}" href="https://e-ko.rip{traduction["url"]}">'
-    courant = ' aria-current="page"'
-    nav_site = "\n      ".join(f'<a href="{u}"{courant if u == L["url"] else ""}>{html.escape(n)}</a>' for u, n in t["nav"])
-    pied = "\n      ".join(f'<a href="{u}">{html.escape(n)}</a>' for u, n in t["pied"])
     fil = "" if p["page"] == "index" else " › " + " › ".join(html.escape(x) for x in (p["rubrique"], p["groupe"]) if x)
     return f"""<!doctype html>
 <html lang="{p["langue"]}">
@@ -419,18 +411,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
 <a class="lien-evitement" href="#contenu">{t["evitement"]}</a>
 <!-- Page générée par outils/generer-documentation.py depuis {source} : ne pas modifier ici. -->
 
-<header class="entete">
-  <div class="conteneur">
-    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
-    <button class="nav-bouton" aria-label="{t["menu"]}" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-    <nav class="nav" id="nav">
-      {nav_site}
-      <a class="nav-mobile" href="/#installer">{t["installer"]}</a>
-      <a href="{lien_autre}" hreflang="{L["autre"]}" lang="{L["autre"]}" class="doc-langue">{L["autre"].upper()}</a>
-    </nav>
-    <a class="bouton bouton-plein bouton-petit" href="/#installer">{t["installer"]}</a>
-  </div>
-</header>
+{site_commun.entete(p["langue"], L["url"], (L["autre"], lien_autre))}
 
 <div class="conteneur doc-grille">
   <aside class="doc-menu" aria-label="{t["sommaire"]}">
@@ -450,18 +431,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
   {toc_bloc}
 </div>
 
-<footer class="pied">
-  <div class="conteneur">
-    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
-    <nav>
-      <a href="{L["url"]}">{t["doc"]}</a>
-      {pied}
-      <a href="https://platform.e-ko.rip">Cloud E-KO RIP</a>
-      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
-      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
-    </nav>
-  </div>
-</footer>
+{site_commun.pied(p["langue"])}
 
 <script src="/assets/site.js" defer></script>
 <script src="/assets/documentation.js" defer></script>

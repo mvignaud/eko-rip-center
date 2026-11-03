@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pourquoi un RIP open source sous licence AGPL-3.0 ? · Blog E-KO RIP</title>
+<meta name="description" content="Un RIP libre sous AGPL-3.0, qu&#x27;est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d&#x27;activation, contribution.">
+<link rel="canonical" href="https://e-ko.rip/blog/rip-open-source-agpl/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="E-KO RIP Center">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Pourquoi un RIP open source sous licence AGPL-3.0 ? · Blog E-KO RIP">
+<meta property="og:description" content="Un RIP libre sous AGPL-3.0, qu&#x27;est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d&#x27;activation, contribution.">
+<meta property="og:url" content="https://e-ko.rip/blog/rip-open-source-agpl/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/linux-travaux.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Pourquoi un RIP open source sous licence AGPL-3.0 ?","description":"Un RIP libre sous AGPL-3.0, qu'est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d'activation, contribution.","datePublished":"2026-11-03","dateModified":"2026-11-03","inLanguage":"fr-FR","mainEntityOfPage":"https://e-ko.rip/blog/rip-open-source-agpl/","articleSection":"Logiciel","wordCount":1095,"author":{"@type":"Organization","name":"E-KO RIP Center","url":"https://e-ko.rip/"},"publisher":{"@type":"Organization","name":"GOLDEN PRINT","url":"https://e-ko.rip/","logo":{"@type":"ImageObject","url":"https://e-ko.rip/assets/img/icone.svg"}},"image":"https://e-ko.rip/assets/img/linux-travaux.webp"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://e-ko.rip/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://e-ko.rip/blog/"},{"@type":"ListItem","position":3,"name":"Logiciel","item":"https://e-ko.rip/blog/categorie/logiciel/"},{"@type":"ListItem","position":4,"name":"Pourquoi un RIP open source sous licence AGPL-3.0 ?","item":"https://e-ko.rip/blog/rip-open-source-agpl/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Puis-je utiliser E-KO RIP Center dans un atelier commercial ?","acceptedAnswer":{"@type":"Answer","text":"Oui. L'AGPL-3.0 autorise tous les usages, y compris professionnels. Elle n'impose de publier les sources que si vous diffusez une version modifiée ou la proposez à d'autres par le réseau."}},{"@type":"Question","name":"Y a-t-il un dongle ou une clé d'activation ?","acceptedAnswer":{"@type":"Answer","text":"Non. Pas de clé matérielle, pas de licence à renouveler, pas de serveur d'activation. Le RIP fonctionne sans connexion Internet."}},{"@type":"Question","name":"Que se passe-t-il si l'éditeur s'arrête ?","acceptedAnswer":{"@type":"Answer","text":"Le logiciel continue de tourner dans votre atelier, et le code public peut être repris par d'autres."}},{"@type":"Question","name":"Le Cloud est-il aussi libre ?","acceptedAnswer":{"@type":"Answer","text":"Le code du Cloud est dans le même dépôt public. Son usage est un service facultatif, avec une offre gratuite et des offres payantes."}}]}</script>
+<meta property="article:published_time" content="2026-11-03">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-site.py : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
+    </nav>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
+  </div>
+</header>
+
+<main id="contenu">
+<article class="billet">
+  <header class="billet-tete">
+    <div class="conteneur">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="/">Accueil</a> › <a href="/blog/">Blog</a> › <a href="/blog/categorie/logiciel/">Logiciel</a> › <span aria-current="page">Pourquoi un RIP open source sous licence AGPL-3.0 ?</span></nav>
+      <p><a class="pastille-cat cat-logiciel" href="/blog/categorie/logiciel/">Logiciel</a></p>
+      <h1>Pourquoi un RIP open source sous licence AGPL-3.0 ?</h1>
+      <p class="billet-meta">Par l'équipe E-KO RIP · <time datetime="2026-11-03">3 novembre 2026</time> · 5 min de lecture</p>
+      <figure class="billet-image"><img src="/assets/img/linux-travaux.webp" alt="Client Linux E-KO RIP Center affichant la liste des travaux et leur statut" width="1280" height="800"></figure>
+    </div>
+  </header>
+  <div class="conteneur billet-grille">
+    <div class="billet-corps doc-article">
+<p>Un RIP open source sous AGPL-3.0 est un logiciel dont le code est public, que vous pouvez utiliser, étudier, modifier et redistribuer, à condition que toute version modifiée diffusée ou proposée en ligne reste ouverte sous la même licence. Pour un atelier, cela veut dire une production qui ne dépend ni d'un abonnement, ni d'une clé matérielle, ni d'un serveur d'activation. E-KO RIP Center est publié ainsi.</p>
+<h2 id="quest-ce-que-la-licence-agpl-30"><a class="ancre" href="#quest-ce-que-la-licence-agpl-30" aria-hidden="true">#</a>Qu'est-ce que la licence AGPL-3.0 ?</h2>
+<p>L'AGPL-3.0 (GNU Affero General Public License, version 3) est une licence libre dite « copyleft », conçue pour les logiciels qui tournent sur un serveur. E-KO RIP Center est publié sous la version 3.0 ou ultérieure. Concrètement :</p>
+<ul><li><strong>utiliser</strong> le logiciel, pour n'importe quel usage, y compris professionnel et commercial ;</li><li><strong>étudier</strong> son fonctionnement, car le code source est lisible ;</li><li><strong>modifier</strong> le code pour l'adapter à vos besoins ;</li><li><strong>redistribuer</strong> le logiciel, modifié ou non.</li></ul>
+<p>La contrepartie est la réciprocité : une version modifiée qui est distribuée, ou proposée à d'autres par le réseau, doit publier ses sources sous la même licence. C'est la particularité de l'AGPL par rapport à la GPL, qui ne couvre pas l'usage par le réseau. Les noms et logos E-KO ne sont pas couverts par la licence du code. Et Ghostscript, que le serveur lance comme programme séparé, garde sa propre licence.</p>
+<p>Cette licence n'oblige en rien un atelier qui utilise le logiciel tel quel. Elle concerne ceux qui le modifient puis le diffusent.</p>
+<h2 id="que-change-un-rip-libre-pour-la-pérennité-de-latelier"><a class="ancre" href="#que-change-un-rip-libre-pour-la-pérennité-de-latelier" aria-hidden="true">#</a>Que change un RIP libre pour la pérennité de l'atelier ?</h2>
+<p>Un RIP est l'outil qui fait tourner vos machines. S'il s'arrête, la production s'arrête. Avec E-KO RIP Center, il n'y a pas de licence à renouveler, pas de clé matérielle et pas de serveur d'activation : le RIP s'installe et fonctionne entièrement dans l'atelier, sans compte, sans abonnement et sans connexion Internet. Rendu, impression, découpe, files d'attente et clients du réseau local n'en dépendent pas.</p>
+<p>Si l'éditeur disparaissait, le logiciel continuerait de tourner, et n'importe qui pourrait reprendre le code. C'est la garantie la plus concrète du modèle libre : votre outil de production n'a pas de point de défaillance commercial.</p>
+<p>Le Cloud E-KO RIP, qui apporte l'accès à distance et la sauvegarde en ligne, est un service facultatif. Vous pouvez le quitter à tout moment, le RIP continue comme avant. Les offres sont décrites dans <a href="/blog/piloter-atelier-a-distance/">l'article sur le pilotage à distance</a>.</p>
+<h2 id="faut-il-payer-une-licence-par-poste"><a class="ancre" href="#faut-il-payer-une-licence-par-poste" aria-hidden="true">#</a>Faut-il payer une licence par poste ?</h2>
+<p>Non. Le RIP est gratuit, et le dépôt public contient le serveur, les clients Mac, Linux et Windows, le Cloud et la documentation. Il n'y a pas de licence par poste ni de dongle à brancher. Le nombre de postes qui se connectent au serveur de l'atelier n'est pas un critère de facturation, puisqu'il n'y a pas de facturation du logiciel.</p>
+<p>Seul le Cloud a des tarifs, pour l'accès à distance et la sauvegarde ; l'offre gratuite couvre un site, une imprimante et un découpeur, et les utilisateurs sont illimités dans toutes les offres.</p>
+<h2 id="que-peut-on-vérifier-quand-le-code-est-ouvert"><a class="ancre" href="#que-peut-on-vérifier-quand-le-code-est-ouvert" aria-hidden="true">#</a>Que peut-on vérifier quand le code est ouvert ?</h2>
+<p>Le rendu, la séparation des encres, le tramage et la découpe sont lisibles. Quand une couleur sort mal, on peut aller voir pourquoi au lieu d'attendre une réponse du support. C'est aussi vrai de ce qui concerne vos données.</p>
+<div class="tableau"><table><thead><tr><th>Question</th><th>Ce que le code permet de vérifier</th></tr></thead><tbody><tr><td>Où vont mes fichiers ?</td><td>Tout se passe sur le serveur de l'atelier</td></tr><tr><td>Que remonte le logiciel ?</td><td>Les statistiques d'installation sont anonymes, détaillées et désactivables</td></tr><tr><td>Comment est fait le rendu ?</td><td>Le rendu passe par Ghostscript, lancé en mode isolé</td></tr><tr><td>Comment l'ERP est-il relié ?</td><td>Le contrat du pont <code>eko-rip-erp/1</code> est public</td></tr></tbody></table></div>
+<p>Un contrat public signifie que n'importe quel ERP ou outil maison peut se brancher au RIP. L'<a href="/blog/relier-rip-et-erp/">article sur le lien RIP et ERP</a> détaille ce qui circule.</p>
+<h2 id="comment-un-atelier-peut-il-contribuer"><a class="ancre" href="#comment-un-atelier-peut-il-contribuer" aria-hidden="true">#</a>Comment un atelier peut-il contribuer ?</h2>
+<p>Il n'est pas nécessaire de savoir programmer. Les contributions utiles sont de plusieurs ordres :</p>
+<ul><li><strong>signaler un problème</strong> : les problèmes signalés depuis le logiciel deviennent des tickets publics ;</li><li><strong>demander un pilote de machine</strong> : le formulaire de la page <a href="/compatibilite/">compatibilité machines</a> indique marque, modèle et branchement ; une capture du flux envoyé par le logiciel actuel de la machine accélère beaucoup le travail ;</li><li><strong>proposer une correction ou un pilote</strong> : le dépôt public accepte les propositions, et le guide de contribution du dépôt explique la marche à suivre ;</li><li><strong>améliorer la documentation</strong>, publiée en français et en anglais.</li></ul>
+<p>Chaque atelier a ses machines. Un pilote ouvert, d'autres peuvent l'étendre à leur imprimante ou à leur découpeuse, et tout le monde en profite. C'est ainsi que la liste des machines prises en charge s'allonge.</p>
+<h2 id="open-source-veut-il-dire-sans-support"><a class="ancre" href="#open-source-veut-il-dire-sans-support" aria-hidden="true">#</a>Open source veut-il dire sans support ?</h2>
+<p>Non. Libre ne signifie ni abandonné ni sans interlocuteur : le logiciel est édité par GOLDEN PRINT, qui publie une version presque chaque semaine avec un journal des changements en français et en anglais. Pour une question, l'adresse <a href="/contact/">contact</a> est faite pour cela. Le code ouvert ajoute une garantie : si le support disparaît, vous gardez l'outil.</p>
+<p>Pour comprendre ce que fait concrètement ce logiciel, lisez <a href="/blog/qu-est-ce-qu-un-rip/">qu'est-ce qu'un RIP</a>, ou consultez la <a href="/compatibilite/">compatibilité des machines</a> avant de l'installer.</p>
+<p><strong>Essayez gratuitement</strong> : <a href="/telecharger/">téléchargez E-KO RIP Center</a>, installez-le sur un PC de l'atelier et jugez sur pièces. Une question sur la licence ou une contribution ? <a href="/contact/">Écrivez-nous</a>.</p>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="puis-je-utiliser-e-ko-rip-center-dans-un-atelier-commercial"><a class="ancre" href="#puis-je-utiliser-e-ko-rip-center-dans-un-atelier-commercial" aria-hidden="true">#</a>Puis-je utiliser E-KO RIP Center dans un atelier commercial ?</h3>
+<p>Oui. L'AGPL-3.0 autorise tous les usages, y compris professionnels. Elle n'impose de publier les sources que si vous diffusez une version modifiée ou la proposez à d'autres par le réseau.</p>
+<h3 id="y-a-t-il-un-dongle-ou-une-clé-dactivation"><a class="ancre" href="#y-a-t-il-un-dongle-ou-une-clé-dactivation" aria-hidden="true">#</a>Y a-t-il un dongle ou une clé d'activation ?</h3>
+<p>Non. Pas de clé matérielle, pas de licence à renouveler, pas de serveur d'activation. Le RIP fonctionne sans connexion Internet.</p>
+<h3 id="que-se-passe-t-il-si-léditeur-sarrête"><a class="ancre" href="#que-se-passe-t-il-si-léditeur-sarrête" aria-hidden="true">#</a>Que se passe-t-il si l'éditeur s'arrête ?</h3>
+<p>Le logiciel continue de tourner dans votre atelier, et le code public peut être repris par d'autres.</p>
+<h3 id="le-cloud-est-il-aussi-libre"><a class="ancre" href="#le-cloud-est-il-aussi-libre" aria-hidden="true">#</a>Le Cloud est-il aussi libre ?</h3>
+<p>Le code du Cloud est dans le même dépôt public. Son usage est un service facultatif, avec une offre gratuite et des offres payantes.</p>
+    </div>
+    <aside class="billet-cote">
+      <nav class="billet-toc" aria-label="Dans cet article"><p>Dans cet article</p><ol><li><a href="#quest-ce-que-la-licence-agpl-30">Qu&#x27;est-ce que la licence AGPL-3.0 ?</a></li><li><a href="#que-change-un-rip-libre-pour-la-pérennité-de-latelier">Que change un RIP libre pour la pérennité de l&#x27;atelier ?</a></li><li><a href="#faut-il-payer-une-licence-par-poste">Faut-il payer une licence par poste ?</a></li><li><a href="#que-peut-on-vérifier-quand-le-code-est-ouvert">Que peut-on vérifier quand le code est ouvert ?</a></li><li><a href="#comment-un-atelier-peut-il-contribuer">Comment un atelier peut-il contribuer ?</a></li><li><a href="#open-source-veut-il-dire-sans-support">Open source veut-il dire sans support ?</a></li><li><a href="#questions-fréquentes">Questions fréquentes</a></li></ol></nav>
+      <div class="billet-cta">
+        <p><strong>E-KO RIP Center</strong></p>
+        <p>Le RIP grand format libre et gratuit qui pilote tout l'atelier.</p>
+        <a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a>
+        <a class="bouton bouton-clair bouton-petit" href="/contact/">Poser une question</a>
+      </div>
+    </aside>
+  </div>
+</article>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">À lire aussi</span><h2>Dans la même veine</h2></div>
+    <div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/relier-rip-et-erp/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-logiciel">Logiciel</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/relier-rip-et-erp/">Relier son RIP à son ERP : du dossier à la machine</a></h3>
+          <p>Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/etalonnage-g7-linearisation/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/reglage-epreuve.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-couleur">Couleur</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/etalonnage-g7-linearisation/">Étalonnage G7 et linéarisation : guide d&#x27;atelier</a></h3>
+          <p>Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/qu-est-ce-qu-un-rip/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-guides">Guides</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/qu-est-ce-qu-un-rip/">Qu&#x27;est-ce qu&#x27;un RIP d&#x27;impression grand format ?</a></h3>
+          <p>Un RIP traduit votre PDF en plaques d&#x27;encre que la tête d&#x27;impression comprend. Rendu, tramage, couleur, file d&#x27;attente et pilotes : le guide complet.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Essayez E-KO RIP Center dans votre atelier.</h2>
+        <p>Gratuit, open source, installé en quelques minutes sur un serveur Ubuntu ou Debian. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

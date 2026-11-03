@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>Blog E-KO RIP Center</title>
+  <link>https://e-ko.rip/blog/</link>
+  <atom:link href="https://e-ko.rip/blog/rss.xml" rel="self" type="application/rss+xml"/>
+  <description>Guides d'atelier, couleur, découpe et comparatifs autour du RIP grand format libre E-KO RIP Center.</description>
+  <language>fr-FR</language>
+  <lastBuildDate>Tue, 03 Nov 2026 00:00:00 +0000</lastBuildDate>
+  <item>
+    <title>Étalonnage G7 et linéarisation : guide d&#x27;atelier</title>
+    <link>https://e-ko.rip/blog/etalonnage-g7-linearisation/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/etalonnage-g7-linearisation/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Couleur</category>
+    <description>Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.</description>
+  </item>
+  <item>
+    <title>Relier son RIP à son ERP : du dossier à la machine</title>
+    <link>https://e-ko.rip/blog/relier-rip-et-erp/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/relier-rip-et-erp/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Logiciel</category>
+    <description>Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.</description>
+  </item>
+  <item>
+    <title>Qu&#x27;est-ce qu&#x27;un RIP d&#x27;impression grand format ?</title>
+    <link>https://e-ko.rip/blog/qu-est-ce-qu-un-rip/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/qu-est-ce-qu-un-rip/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Guides</category>
+    <description>Un RIP traduit votre PDF en plaques d&#x27;encre que la tête d&#x27;impression comprend. Rendu, tramage, couleur, file d&#x27;attente et pilotes : le guide complet.</description>
+  </item>
+  <item>
+    <title>Pourquoi un RIP open source sous licence AGPL-3.0 ?</title>
+    <link>https://e-ko.rip/blog/rip-open-source-agpl/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/rip-open-source-agpl/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Logiciel</category>
+    <description>Un RIP libre sous AGPL-3.0, qu&#x27;est-ce que cela change pour un atelier ? Pérennité, transparence, pas de clé matérielle ni d&#x27;activation, contribution.</description>
+  </item>
+  <item>
+    <title>Piloter son atelier d&#x27;impression à distance, sans VPN</title>
+    <link>https://e-ko.rip/blog/piloter-atelier-a-distance/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/piloter-atelier-a-distance/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Atelier</category>
+    <description>Suivez la file, l&#x27;encre et les alertes machine de votre atelier depuis un poste ou un téléphone, sans VPN ni port ouvert. Offre gratuite et tarifs du Cloud.</description>
+  </item>
+  <item>
+    <title>Imprimer en blanc et argent : préparer ses fichiers</title>
+    <link>https://e-ko.rip/blog/imprimer-blanc-argent-vinyle/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/imprimer-blanc-argent-vinyle/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Couleur</category>
+    <description>Sous-couche, sur-couche, tons directs White et Silver, rétraction : comment préparer vos fichiers et régler le RIP pour imprimer du blanc et de l&#x27;argent.</description>
+  </item>
+  <item>
+    <title>Impression puis découpe : repérage et contours de découpe</title>
+    <link>https://e-ko.rip/blog/impression-decoupe-reperage/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/impression-decoupe-reperage/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Atelier</category>
+    <description>Comment faire coïncider impression et découpe : tracés CutContour, cadre et code-barres, ARMS, planches de stickers, plotters et tables. Le guide d&#x27;atelier.</description>
+  </item>
+  <item>
+    <title>Fiery XF ou E-KO RIP Center : lequel pour un atelier ?</title>
+    <link>https://e-ko.rip/blog/fiery-xf-ou-e-ko-rip/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/fiery-xf-ou-e-ko-rip/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Comparatifs</category>
+    <description>Fiery XF (serveur Windows) ou E-KO RIP Center (serveur Linux, libre) ? Différences, serveurs Fiery des presses feuille, et profils d&#x27;ateliers grand format.</description>
+  </item>
+  <item>
+    <title>Comparatif des RIP grand format en 2026</title>
+    <link>https://e-ko.rip/blog/comparatif-rip-grand-format/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/comparatif-rip-grand-format/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Comparatifs</category>
+    <description>Caldera, ONYX, Fiery XF, Flexi (SAi) et E-KO RIP Center : système du serveur, clients, licence, code ouvert, accès distant, machines. Tableau daté et sourcé.</description>
+  </item>
+  <item>
+    <title>Comment choisir son RIP grand format : les critères</title>
+    <link>https://e-ko.rip/blog/choisir-son-rip-grand-format/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/choisir-son-rip-grand-format/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Guides</category>
+    <description>Machines pilotées, couleur ICC, blanc, découpe, multiposte, accès distant, licence et ERP : la grille de critères pour choisir un RIP grand format.</description>
+  </item>
+  <item>
+    <title>Alternative à ONYX RIP : ce qu&#x27;il faut savoir</title>
+    <link>https://e-ko.rip/blog/alternative-onyx/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/alternative-onyx/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Comparatifs</category>
+    <description>ONYX (Thrive, RIPCenter) tourne sous Windows ; E-KO RIP Center a son serveur sous Linux. Licence, accès distant, parc de machines : comparatif sourcé.</description>
+  </item>
+  <item>
+    <title>Alternative à Flexi (SAi) : E-KO RIP Center</title>
+    <link>https://e-ko.rip/blog/alternative-flexi-sai/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/alternative-flexi-sai/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Comparatifs</category>
+    <description>Flexi (SAi) réunit conception, RIP et découpe sous Windows, par abonnement. E-KO RIP Center est libre, sur serveur Linux. Comparatif sourcé du 3 novembre 2026.</description>
+  </item>
+  <item>
+    <title>Alternative à Caldera : E-KO RIP Center</title>
+    <link>https://e-ko.rip/blog/alternative-caldera/</link>
+    <guid isPermaLink="true">https://e-ko.rip/blog/alternative-caldera/</guid>
+    <pubDate>Tue, 03 Nov 2026 00:00:00 +0000</pubDate>
+    <category>Comparatifs</category>
+    <description>Caldera et E-KO RIP Center tournent tous deux sous Linux. Comparaison honnête : licence, code ouvert, accès distant, machines, et quand préférer Caldera.</description>
+  </item>
+</channel>
+</rss>

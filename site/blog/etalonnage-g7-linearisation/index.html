@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Étalonnage G7 et linéarisation : guide d&#x27;atelier · Blog E-KO RIP</title>
+<meta name="description" content="Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.">
+<link rel="canonical" href="https://e-ko.rip/blog/etalonnage-g7-linearisation/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="E-KO RIP Center">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Étalonnage G7 et linéarisation : guide d&#x27;atelier · Blog E-KO RIP">
+<meta property="og:description" content="Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.">
+<meta property="og:url" content="https://e-ko.rip/blog/etalonnage-g7-linearisation/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/reglage-epreuve.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Étalonnage G7 et linéarisation : guide d'atelier","description":"Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.","datePublished":"2026-11-03","dateModified":"2026-11-03","inLanguage":"fr-FR","mainEntityOfPage":"https://e-ko.rip/blog/etalonnage-g7-linearisation/","articleSection":"Couleur","wordCount":1280,"author":{"@type":"Organization","name":"E-KO RIP Center","url":"https://e-ko.rip/"},"publisher":{"@type":"Organization","name":"GOLDEN PRINT","url":"https://e-ko.rip/","logo":{"@type":"ImageObject","url":"https://e-ko.rip/assets/img/icone.svg"}},"image":"https://e-ko.rip/assets/img/reglage-epreuve.webp"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://e-ko.rip/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://e-ko.rip/blog/"},{"@type":"ListItem","position":3,"name":"Couleur","item":"https://e-ko.rip/blog/categorie/couleur/"},{"@type":"ListItem","position":4,"name":"Étalonnage G7 et linéarisation : guide d'atelier","item":"https://e-ko.rip/blog/etalonnage-g7-linearisation/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Quelle différence entre linéarisation et profil ICC ?","acceptedAnswer":{"@type":"Answer","text":"La linéarisation règle la réponse de chaque encre pour que la machine soit régulière. Le profil ICC décrit les couleurs que le support peut reproduire pour les convertir. On linéarise d'abord, on profile ensuite."}},{"@type":"Question","name":"L'étalonnage d'E-KO RIP Center est-il une certification G7 ?","acceptedAnswer":{"@type":"Answer","text":"Non. La méthode et les seuils sont ceux d'E-KO RIP Center, inspirés de l'approche G7 par équilibre des gris. Ce n'est pas une certification."}},{"@type":"Question","name":"À quelle fréquence faut-il étalonner ?","acceptedAnswer":{"@type":"Answer","text":"Cela dépend de la machine et du volume. Refaites au minimum une vérification après un changement de lot d'encre, de tête ou de support, puis à intervalle régulier selon vos tolérances."}},{"@type":"Question","name":"Faut-il un spectrophotomètre ?","acceptedAnswer":{"@type":"Answer","text":"Oui : les mesures Lab des plages sont indispensables pour la limite d'encre, la linéarisation et l'étalonnage du gris."}}]}</script>
+<meta property="article:published_time" content="2026-11-03">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-site.py : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
+    </nav>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
+  </div>
+</header>
+
+<main id="contenu">
+<article class="billet">
+  <header class="billet-tete">
+    <div class="conteneur">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="/">Accueil</a> › <a href="/blog/">Blog</a> › <a href="/blog/categorie/couleur/">Couleur</a> › <span aria-current="page">Étalonnage G7 et linéarisation : guide d&#x27;atelier</span></nav>
+      <p><a class="pastille-cat cat-couleur" href="/blog/categorie/couleur/">Couleur</a></p>
+      <h1>Étalonnage G7 et linéarisation : guide d&#x27;atelier</h1>
+      <p class="billet-meta">Par l'équipe E-KO RIP · <time datetime="2026-11-03">3 novembre 2026</time> · 6 min de lecture</p>
+      <figure class="billet-image"><img src="/assets/img/reglage-epreuve.webp" alt="Réglages d&#x27;épreuve et de couleur dans le panneau d&#x27;envoi d&#x27;E-KO RIP Center" width="1280" height="800"></figure>
+    </div>
+  </header>
+  <div class="conteneur billet-grille">
+    <div class="billet-corps doc-article">
+<p>Pour une couleur stable en grand format, on étalonne dans cet ordre : régler la limite d'encre, linéariser chaque encre, étalonner le gris, puis seulement profiler le support avec un profil ICC. Chaque étape corrige un défaut différent, et sauter l'une d'elles rend les suivantes instables.</p>
+<h2 id="pourquoi-étalonner-avant-de-profiler"><a class="ancre" href="#pourquoi-étalonner-avant-de-profiler" aria-hidden="true">#</a>Pourquoi étalonner avant de profiler ?</h2>
+<p>Une imprimante dérive : tête, température, lot d'encre, support. Un profil ICC décrit l'état de la machine <strong>à un instant donné</strong>. S'il est fait sur une machine qui dérive, il se périme vite. L'étalonnage ramène la machine à un comportement connu et répétable ; le profil sert ensuite à convertir les couleurs depuis cet état stable.</p>
+<p>L'ordre est donc : limite d'encre, linéarisation, étalonnage du gris, profil ICC, courbes de retouche au besoin.</p>
+<aside class="encadre encadre-note"><p class="encadre-titre">À savoir</p><p>Dans E-KO RIP Center, l'étalonnage du gris de type G7 et la linéarisation se font aujourd'hui par l'API du serveur, réservée à l'administrateur. La méthode et les seuils sont les nôtres : ce n'est pas une certification G7. Les courbes calculées s'appliqueront au rendu avec la linéarisation par mode, prévue ensuite.</p></aside>
+<h2 id="quest-ce-que-la-linéarisation"><a class="ancre" href="#quest-ce-que-la-linéarisation" aria-hidden="true">#</a>Qu'est-ce que la linéarisation ?</h2>
+<p>La <strong>linéarisation</strong> mesure des plages d'encre pour régler la réponse de chaque encre sur un support. Sans elle, 50 % demandé au RIP ne donne pas 50 % de densité perçue : la réponse est courbe, avec des hautes lumières qui s'engraissent trop vite ou des ombres bouchées.</p>
+<p>Le principe : imprimer une mire d'une plage par encre et par palier, mesurer chaque plage au spectrophotomètre, puis corriger pour que la progression soit régulière. E-KO RIP Center fournit une mire de linéarisation au format CGATS, resserrée dans les hautes lumières (8 plages sous 20 % sur 21, contre 4 pour une rampe régulière), car l'œil y est le plus sensible.</p>
+<h2 id="comment-fixer-la-limite-dencre"><a class="ancre" href="#comment-fixer-la-limite-dencre" aria-hidden="true">#</a>Comment fixer la limite d'encre ?</h2>
+<p>Avant la linéarisation, il faut savoir quelle quantité d'encre le support accepte. Le RIP propose une aide :</p>
+<ol><li>imprimer des aplats d'encre totale croissante, par exemple de 100 à 400 % par pas de 20 % ;</li><li>mesurer leur luminosité L* ;</li><li>envoyer la série au serveur, qui propose la limite : le dernier palier qui fonce encore d'au moins 1 L* par 10 % d'encre en plus, arrondi aux 5 % inférieurs ;</li><li>relire les gains renvoyés, vérifier l'aplat au séchage, puis saisir la limite dans le mode d'impression.</li></ol>
+<p>Un palier qui s'éclaircit (bronzage, bavure) arrête la recherche. Rien n'est enregistré automatiquement : la décision reste à l'opérateur. La limite se règle par support et par mode, dans <strong>Système &gt; Supports de l'Epson</strong>.</p>
+<h2 id="quest-ce-que-létalonnage-du-gris-de-type-g7"><a class="ancre" href="#quest-ce-que-létalonnage-du-gris-de-type-g7" aria-hidden="true">#</a>Qu'est-ce que l'étalonnage du gris de type G7 ?</h2>
+<p>La méthode G7 vise un <strong>équilibre des gris</strong> : une rampe de gris composée de cyan, magenta et jaune à parts égales doit paraître neutre, avec la même courbe de tonalité qu'une rampe noire. Si le gris CMJ vire au rouge ou au vert, aucune retouche couleur par couleur ne tiendra durablement.</p>
+<p>Le déroulé dans E-KO RIP Center :</p>
+<ol><li>récupérer la mire, une rampe CMJ à parts égales et une rampe noire, de 0 à 100 % ;</li><li>l'imprimer sur le support et le mode concernés ;</li><li>mesurer en L*a*b* chaque plage ;</li><li>envoyer les mesures au serveur (chaque rampe demande son papier à 0 %, son aplat à 100 % et au moins trois plages entre les deux) ;</li><li>lire la réponse : écarts à la cible (ΔL* moyen et écart de gris moyen), courbes de correction C, M, J et N de 5 en 5 %, historique des itérations et numéro de la meilleure.</li></ol>
+<p>Le résultat est <code>conforme</code> sous 1,5 pour chacun des deux écarts, des seuils indicatifs. La cible garde la teinte du papier, qui s'efface à mesure que le gris fonce.</p>
+<h2 id="pourquoi-plusieurs-itérations"><a class="ancre" href="#pourquoi-plusieurs-itérations" aria-hidden="true">#</a>Pourquoi plusieurs itérations ?</h2>
+<p>On imprime la mire suivante <strong>avec les courbes de la meilleure itération</strong>, on mesure, puis on envoie les nouvelles mesures en indiquant quelle itération a servi. La nouvelle correction se compose avec les précédentes. Une itération moins bonne n'efface pas la meilleure, et les 50 dernières sont gardées. En général, deux ou trois passes suffisent pour se rapprocher de la cible, mais cela dépend de la machine et du support.</p>
+<h2 id="où-entrent-les-profils-icc-de-support"><a class="ancre" href="#où-entrent-les-profils-icc-de-support" aria-hidden="true">#</a>Où entrent les profils ICC de support ?</h2>
+<p>Une fois la machine stable, le <strong>profil ICC de support</strong> décrit le gamut et le comportement de ce support avec cette encre. Dans le bloc <strong>Couleur</strong> du panneau d'envoi :</p>
+<ul><li><strong>Ajouter un profil ICC…</strong> dépose un profil <code>.icc</code> ou <code>.icm</code> sur le serveur ;</li><li><strong>Entrée CMJN / Entrée RVB</strong> s'applique aux données sans profil (ou à toutes, avec <strong>Ignorer les profils du PDF</strong>) ;</li><li><strong>Support (sortie)</strong> est le profil du support imprimé ; l'aperçu simule son rendu ;</li><li><strong>Intention</strong> : perceptuelle, colorimétrique relative, saturation ou absolue.</li></ul>
+<p>Pour les teintes de marque, la <strong>table des tons directs</strong> convertit un ton nommé d'après sa valeur Lab, via le profil de sortie et l'intention du travail. Par défaut, l'intention des tons directs est la colorimétrique relative, qui vise la teinte. Les tons <code>White</code> et <code>Silver</code> ne sont jamais convertis. Un profil se fait avec une mire et un spectrophotomètre par un outil de profilage externe ; le RIP l'applique.</p>
+<h2 id="comment-retoucher-une-couleur-avec-les-courbes"><a class="ancre" href="#comment-retoucher-une-couleur-avec-les-courbes" aria-hidden="true">#</a>Comment retoucher une couleur avec les courbes ?</h2>
+<p>Une fois étalonné et profilé, il reste parfois un travail précis à corriger. La visionneuse offre un <strong>filtre couleur</strong>, propre au travail :</p>
+<ul><li><strong>courbes</strong> C, M, J, N par points « entrée:sortie » en pourcentage (par exemple <code>0:0 50:60 100:100</code>) ;</li><li><strong>luminosité</strong> et <strong>saturation</strong> de −100 à 100 % ;</li><li><strong>remplacement de couleur</strong> d'une teinte CMJN vers une autre, avec une plage ;</li><li><strong>avant/après</strong> en aperçu scindé.</li></ul>
+<p>Le filtre agit après le profil de sortie et avant le blanc automatique ; le blanc, l'argent et la découpe ne sont pas touchés. Un bouton <strong>Exporter vers le réglage</strong> le range dans un réglage enregistré.</p>
+<h2 id="quelles-bonnes-pratiques-datelier"><a class="ancre" href="#quelles-bonnes-pratiques-datelier" aria-hidden="true">#</a>Quelles bonnes pratiques d'atelier ?</h2>
+<ul><li>Étalonnez <strong>par support et par mode d'impression</strong>, jamais globalement.</li><li>Refaites une mesure rapide régulièrement, et après tout changement de lot d'encre, de tête ou de support.</li><li>Attendez le séchage complet avant de mesurer.</li><li>Gardez le même instrument et les mêmes conditions de mesure.</li><li>Le RIP permet d'exporter un <strong>paquet support</strong> (support, modes et réglages) pour le reprendre sur un autre serveur, sans les profils ICC.</li><li>La sauvegarde de configuration du serveur contient les profils ICC déposés.</li></ul>
+<p>Pour la logique générale d'un RIP, relisez <a href="/blog/qu-est-ce-qu-un-rip/">ce qu'est un RIP</a> ; pour les encres spéciales, le blanc et l'argent. Les réglages de supports sont décrits dans la <a href="/documentation/utilisation/">documentation d'utilisation</a>.</p>
+<h2 id="à-vous-de-mesurer"><a class="ancre" href="#à-vous-de-mesurer" aria-hidden="true">#</a>À vous de mesurer</h2>
+<p><a href="/telecharger/">Installez E-KO RIP Center gratuitement</a> et testez la mire sur votre support. Une question de méthode ou de machine ? <a href="/contact/">Écrivez-nous</a>.</p>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="quelle-différence-entre-linéarisation-et-profil-icc"><a class="ancre" href="#quelle-différence-entre-linéarisation-et-profil-icc" aria-hidden="true">#</a>Quelle différence entre linéarisation et profil ICC ?</h3>
+<p>La linéarisation règle la réponse de chaque encre pour que la machine soit régulière. Le profil ICC décrit les couleurs que le support peut reproduire pour les convertir. On linéarise d'abord, on profile ensuite.</p>
+<h3 id="létalonnage-de-ko-rip-center-est-il-une-certification-g7"><a class="ancre" href="#létalonnage-de-ko-rip-center-est-il-une-certification-g7" aria-hidden="true">#</a>L'étalonnage d'E-KO RIP Center est-il une certification G7 ?</h3>
+<p>Non. La méthode et les seuils sont ceux d'E-KO RIP Center, inspirés de l'approche G7 par équilibre des gris. Ce n'est pas une certification.</p>
+<h3 id="à-quelle-fréquence-faut-il-étalonner"><a class="ancre" href="#à-quelle-fréquence-faut-il-étalonner" aria-hidden="true">#</a>À quelle fréquence faut-il étalonner ?</h3>
+<p>Cela dépend de la machine et du volume. Refaites au minimum une vérification après un changement de lot d'encre, de tête ou de support, puis à intervalle régulier selon vos tolérances.</p>
+<h3 id="faut-il-un-spectrophotomètre"><a class="ancre" href="#faut-il-un-spectrophotomètre" aria-hidden="true">#</a>Faut-il un spectrophotomètre ?</h3>
+<p>Oui : les mesures L*a*b* des plages sont indispensables pour la limite d'encre, la linéarisation et l'étalonnage du gris.</p>
+    </div>
+    <aside class="billet-cote">
+      <nav class="billet-toc" aria-label="Dans cet article"><p>Dans cet article</p><ol><li><a href="#pourquoi-étalonner-avant-de-profiler">Pourquoi étalonner avant de profiler ?</a></li><li><a href="#quest-ce-que-la-linéarisation">Qu&#x27;est-ce que la linéarisation ?</a></li><li><a href="#comment-fixer-la-limite-dencre">Comment fixer la limite d&#x27;encre ?</a></li><li><a href="#quest-ce-que-létalonnage-du-gris-de-type-g7">Qu&#x27;est-ce que l&#x27;étalonnage du gris de type G7 ?</a></li><li><a href="#pourquoi-plusieurs-itérations">Pourquoi plusieurs itérations ?</a></li><li><a href="#où-entrent-les-profils-icc-de-support">Où entrent les profils ICC de support ?</a></li><li><a href="#comment-retoucher-une-couleur-avec-les-courbes">Comment retoucher une couleur avec les courbes ?</a></li><li><a href="#quelles-bonnes-pratiques-datelier">Quelles bonnes pratiques d&#x27;atelier ?</a></li><li><a href="#à-vous-de-mesurer">À vous de mesurer</a></li><li><a href="#questions-fréquentes">Questions fréquentes</a></li></ol></nav>
+      <div class="billet-cta">
+        <p><strong>E-KO RIP Center</strong></p>
+        <p>Le RIP grand format libre et gratuit qui pilote tout l'atelier.</p>
+        <a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a>
+        <a class="bouton bouton-clair bouton-petit" href="/contact/">Poser une question</a>
+      </div>
+    </aside>
+  </div>
+</article>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">À lire aussi</span><h2>Dans la même veine</h2></div>
+    <div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/imprimer-blanc-argent-vinyle/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/reglage-blanc.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-couleur">Couleur</span> <time datetime="2026-11-03">3 novembre 2026</time> · 5 min</p>
+          <h3><a href="/blog/imprimer-blanc-argent-vinyle/">Imprimer en blanc et argent : préparer ses fichiers</a></h3>
+          <p>Sous-couche, sur-couche, tons directs White et Silver, rétraction : comment préparer vos fichiers et régler le RIP pour imprimer du blanc et de l&#x27;argent.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/relier-rip-et-erp/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-logiciel">Logiciel</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/relier-rip-et-erp/">Relier son RIP à son ERP : du dossier à la machine</a></h3>
+          <p>Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/qu-est-ce-qu-un-rip/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-guides">Guides</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/qu-est-ce-qu-un-rip/">Qu&#x27;est-ce qu&#x27;un RIP d&#x27;impression grand format ?</a></h3>
+          <p>Un RIP traduit votre PDF en plaques d&#x27;encre que la tête d&#x27;impression comprend. Rendu, tramage, couleur, file d&#x27;attente et pilotes : le guide complet.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Essayez E-KO RIP Center dans votre atelier.</h2>
+        <p>Gratuit, open source, installé en quelques minutes sur un serveur Ubuntu ou Debian. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

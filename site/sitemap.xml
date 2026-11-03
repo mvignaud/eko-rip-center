@@ -1,11 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://e-ko.rip/</loc></url>
-  <url><loc>https://e-ko.rip/prerequis/</loc></url>
-  <url><loc>https://e-ko.rip/cloud/</loc></url>
-  <url><loc>https://e-ko.rip/compatibilite/</loc></url>
-  <url><loc>https://e-ko.rip/changelog/</loc></url>
-  <url><loc>https://e-ko.rip/mentions-legales/</loc></url>
   <url><loc>https://e-ko.rip/app/</loc></url>
   <url><loc>https://e-ko.rip/app/confidentialite/</loc></url>
+  <url><loc>https://e-ko.rip/changelog/</loc></url>
+  <url><loc>https://e-ko.rip/cloud/</loc></url>
+  <url><loc>https://e-ko.rip/compatibilite/</loc></url>
+  <url><loc>https://e-ko.rip/contact/</loc></url>
+  <url><loc>https://e-ko.rip/feuille-de-route/</loc></url>
+  <url><loc>https://e-ko.rip/mentions-legales/</loc></url>
+  <url><loc>https://e-ko.rip/prerequis/</loc></url>
+  <url><loc>https://e-ko.rip/telecharger/</loc></url>
+  <url><loc>https://e-ko.rip/blog/</loc></url>
+  <url><loc>https://e-ko.rip/blog/categorie/guides/</loc></url>
+  <url><loc>https://e-ko.rip/blog/categorie/couleur/</loc></url>
+  <url><loc>https://e-ko.rip/blog/categorie/atelier/</loc></url>
+  <url><loc>https://e-ko.rip/blog/categorie/logiciel/</loc></url>
+  <url><loc>https://e-ko.rip/blog/categorie/comparatifs/</loc></url>
+  <url><loc>https://e-ko.rip/blog/etalonnage-g7-linearisation/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/relier-rip-et-erp/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/qu-est-ce-qu-un-rip/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/rip-open-source-agpl/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/piloter-atelier-a-distance/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/imprimer-blanc-argent-vinyle/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/impression-decoupe-reperage/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/fiery-xf-ou-e-ko-rip/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/comparatif-rip-grand-format/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/choisir-son-rip-grand-format/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/alternative-onyx/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/alternative-flexi-sai/</loc><lastmod>2026-11-03</lastmod></url>
+  <url><loc>https://e-ko.rip/blog/alternative-caldera/</loc><lastmod>2026-11-03</lastmod></url>
 </urlset>

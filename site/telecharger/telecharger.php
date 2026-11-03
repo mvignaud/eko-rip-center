@@ -1,7 +1,8 @@
 <?php
 // E-KO RIP Center : lien de téléchargement direct du client, toujours sur la dernière version.
 //   /telecharger/mac      → le .dmg (universel, signé et notarisé) de la dernière release qui en a un
-//   /telecharger/windows  → l'installateur Windows (.exe, sinon .msi) de la dernière release qui en a un
+//   /telecharger/windows  → la page GitHub de la dernière release qui a un installateur Windows (non signé)
+//   /telecharger/infos.json → version, taille et SHA-256 des fichiers, pour la page /telecharger/
 // La liste des releases vient de l'API GitHub, gardée 10 minutes dans ~/eko-rip-cache (limite de 60 appels
 // par heure sans jeton). Si GitHub ne répond pas, on renvoie vers la page des versions.
 
@@ -18,9 +19,10 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
 $os = $_GET['os'] ?? '';
+$infos = isset($_GET['infos']);
 $secours = 'https://github.com/' . DEPOT . '/releases/latest';
-if (!isset(MOTIFS[$os])) {
-    header('Location: /#installer', true, 302);
+if (!$infos && !isset(MOTIFS[$os])) {
+    header('Location: /telecharger/', true, 302);
     exit;
 }
 
@@ -87,19 +89,55 @@ function lire_github_brut(): ?string
     return $corps;
 }
 
-$releases = lire_releases() ?? [];
-foreach ($releases as $rel) {
-    if (!empty($rel['draft']) || !empty($rel['prerelease'])) {
-        continue;
-    }
-    foreach (MOTIFS[$os] as $motif) {
-        foreach ($rel['assets'] ?? [] as $a) {
-            $lien = (string) ($a['browser_download_url'] ?? '');
-            if (preg_match($motif, (string) ($a['name'] ?? '')) && str_starts_with($lien, 'https://github.com/' . DEPOT . '/releases/download/')) {
-                header('Location: ' . $lien, true, 302);
-                exit;
+/** Dernière release publiée qui a un fichier pour ce système : [release, fichier] ou null. */
+function trouver(array $releases, string $os): ?array
+{
+    foreach ($releases as $rel) {
+        if (!empty($rel['draft']) || !empty($rel['prerelease'])) {
+            continue;
+        }
+        foreach (MOTIFS[$os] as $motif) {
+            foreach ($rel['assets'] ?? [] as $a) {
+                $lien = (string) ($a['browser_download_url'] ?? '');
+                if (preg_match($motif, (string) ($a['name'] ?? '')) && str_starts_with($lien, 'https://github.com/' . DEPOT . '/releases/download/')) {
+                    return [$rel, $a];
+                }
             }
         }
     }
+    return null;
 }
-header('Location: ' . $secours, true, 302);
+
+$releases = lire_releases() ?? [];
+
+// /telecharger/infos.json : version, taille et empreinte SHA-256 de chaque fichier, affichées
+// sur /telecharger/ avant le téléchargement (l'empreinte est celle que GitHub calcule).
+if ($infos) {
+    header('Content-Type: application/json; charset=utf-8');
+    $sortie = [];
+    foreach (array_keys(MOTIFS) as $systeme) {
+        $t = trouver($releases, $systeme);
+        if ($t === null) {
+            continue;
+        }
+        [$rel, $a] = $t;
+        $digest = (string) ($a['digest'] ?? '');
+        $sortie[$systeme] = [
+            'version' => ltrim((string) ($rel['tag_name'] ?? ''), 'v'),
+            'date' => substr((string) ($rel['published_at'] ?? ''), 0, 10),
+            'fichier' => (string) ($a['name'] ?? ''),
+            'taille' => (int) ($a['size'] ?? 0),
+            'sha256' => str_starts_with($digest, 'sha256:') ? substr($digest, 7) : null,
+            'release' => (string) ($rel['html_url'] ?? $secours),
+        ];
+    }
+    echo json_encode($sortie, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// Mac : le .dmg, signé et notarisé, part directement. Windows : tant que l'installateur n'est pas
+// signé, jamais de .exe en un clic (Google le classe en « pages trompeuses ») : la page de la release,
+// qui montre le fichier, sa taille et son empreinte.
+$t = trouver($releases, $os);
+$cible = $t === null ? $secours : ($os === 'mac' ? (string) $t[1]['browser_download_url'] : (string) ($t[0]['html_url'] ?? $secours));
+header('Location: ' . $cible, true, 302);

@@ -17,28 +17,68 @@
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"SoftwareApplication","name":"E-KO RIP Center","applicationCategory":"BusinessApplication","operatingSystem":"Linux, macOS, Windows","url":"https://e-ko.rip/","publisher":{"@type":"Organization","name":"GOLDEN PRINT","email":"contact@e-ko.rip"},"offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}
 </script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"GOLDEN PRINT","brand":"E-KO RIP Center","url":"https://e-ko.rip/","logo":"https://e-ko.rip/assets/img/icone.svg","email":"contact@e-ko.rip","address":{"@type":"PostalAddress","streetAddress":"14 Route d'Espas","postalCode":"32370","addressLocality":"Manciet","addressCountry":"FR"},"sameAs":["https://github.com/mvignaud/eko-rip-center"]}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"E-KO RIP Center est-il vraiment gratuit ?","acceptedAnswer":{"@type":"Answer","text":"Oui. Le serveur et les clients sont gratuits, sans licence par poste, sans clé matérielle ni serveur d'activation. Le code est publié sous licence AGPL-3.0. Seul le Cloud E-KO RIP, pour piloter l'atelier à distance, devient payant au-delà d'un petit atelier."}},
+{"@type":"Question","name":"Quelles machines sont prises en charge ?","acceptedAnswer":{"@type":"Answer","text":"Des imprimantes grand format et des découpeuses, en pilote direct, en HP-GL, par IPP ou CUPS, ou par dépôt de fichiers dans un dossier. La liste à jour est sur https://e-ko.rip/compatibilite/."}},
+{"@type":"Question","name":"Sur quoi tourne le RIP ?","acceptedAnswer":{"@type":"Answer","text":"Le serveur tourne sous Ubuntu ou Debian 64 bits et s'installe par un dépôt APT signé. Chaque poste utilise un client natif pour macOS, Linux ou Windows."}},
+{"@type":"Question","name":"Peut-on suivre la production hors de l'atelier ?","acceptedAnswer":{"@type":"Answer","text":"Oui, avec le Cloud E-KO RIP : les clients et l'application mobile se connectent au serveur de l'atelier sans VPN, et les alertes des machines arrivent sur le téléphone."}},
+{"@type":"Question","name":"Le RIP remplace-t-il mon RIP actuel du jour au lendemain ?","acceptedAnswer":{"@type":"Answer","text":"Pas forcément. Beaucoup d'ateliers le font tourner à côté de leur RIP actuel, machine par machine. La feuille de route publique dit ce qui est fait, en cours et planifié."}},
+{"@type":"Question","name":"Comment obtenir de l'aide ?","acceptedAnswer":{"@type":"Answer","text":"La documentation couvre l'installation, les réglages et le dépannage, en français et en anglais. Pour une question, une démonstration ou un partenariat : https://e-ko.rip/contact/."}}
+]}
+</script>
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
 </head>
 <body>
 <a class="lien-evitement" href="#contenu">Aller au contenu</a>
 
+<!-- entete -->
 <header class="entete">
   <div class="conteneur">
-    <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
     <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <nav class="nav" id="nav">
-      <a href="#fonctionnalites">Fonctionnalités</a>
-      <a href="#fonctionnement">Fonctionnement</a>
-      <a href="#captures">Captures</a>
-      <a href="#open-source">Open source</a>
-      <a href="/compatibilite/">Machines</a>
-      <a href="/cloud/">Cloud</a>
-      <a class="nav-mobile" href="/#installer">Installer</a>
-      <a href="/documentation/">Documentation</a>
-      <a href="/changelog/">Nouveautés</a>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
     </nav>
-    <a class="bouton bouton-plein bouton-petit" href="#installer">Installer</a>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
   </div>
 </header>
+<!-- /entete -->
 
 <main id="contenu">
 
@@ -51,10 +91,10 @@
     <h1 class="apparait">Le RIP grand format<br><span class="degrade">qui pilote tout l'atelier.</span></h1>
     <p class="chapo apparait">E-KO RIP Center reçoit vos PDF, les rend en plaques d'encre CMJN, blanc et argent, prépare l'impression et la découpe, et parle directement à vos machines. Un serveur Linux au cœur de l'atelier, une vraie application sur chaque poste.</p>
     <div class="actions apparait">
-      <a class="bouton bouton-plein" href="#installer">Installer gratuitement</a>
+      <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
       <a class="bouton bouton-clair" href="#fonctionnement">Comment ça marche</a>
     </div>
-    <p class="note-heros apparait">Serveur Ubuntu ou Debian · Clients Mac, Linux, et bientôt Windows natif</p>
+    <p class="note-heros apparait">Serveur Ubuntu ou Debian · Clients natifs Mac, Linux et Windows</p>
     <p class="note-heros apparait"><a href="/cloud/">Piloter l'atelier de partout avec le Cloud E-KO RIP, gratuit pour un petit atelier →</a></p>
 
     <!-- Maquettes des clients -->
@@ -261,7 +301,7 @@
       </article>
       <article class="tuile apparait" style="--t:var(--magenta)">
         <h3>Les clients</h3>
-        <p>Des applications natives : SwiftUI sur Mac, GTK 4 et libadwaita sur Linux, WinUI 3 sur Windows en préparation. Elles trouvent seules les serveurs du réseau local. Un navigateur, lui, ne voit qu'une page d'état.</p>
+        <p>Des applications natives : SwiftUI sur Mac, GTK 4 et libadwaita sur Linux, WinUI 3 sur Windows. Elles trouvent seules les serveurs du réseau local. Un navigateur, lui, ne voit qu'une page d'état.</p>
       </article>
       <article class="tuile apparait" style="--t:var(--cyan)">
         <h3>Le réseau</h3>
@@ -372,12 +412,12 @@ cargo run --release -p eko-rip-serveur</pre>
     </div>
     <div class="panneau-install" role="tabpanel" id="inst-mac" aria-labelledby="t-mac" hidden>
       <p>macOS 14 ou plus récent, Apple Silicon et Intel. L'application est signée et notarisée par Apple : elle s'ouvre sans avertissement.</p>
-      <p><a class="bouton bouton-clair" href="/telecharger/mac">Télécharger pour Mac (.dmg)</a></p>
+      <p><a class="bouton bouton-clair" href="/telecharger/#mac">Télécharger pour Mac</a></p>
       <p style="font-size:14px;opacity:.8">Toujours la dernière version. Les versions précédentes sont sur <a href="https://github.com/mvignaud/eko-rip-center/releases" rel="noopener" style="color:#7cc4ff">GitHub</a>.</p>
     </div>
     <div class="panneau-install" role="tabpanel" id="inst-windows" aria-labelledby="t-windows" hidden>
-      <p>Windows 10 et 11, 64 bits. Le client natif est en préparation ; le client actuel n'est pas encore signé : au premier lancement, cliquer sur <strong>Informations complémentaires</strong> puis <strong>Exécuter quand même</strong>.</p>
-      <p><a class="bouton bouton-clair" href="/telecharger/windows">Télécharger pour Windows (.exe)</a></p>
+      <p>Windows 10 et 11, 64 bits, client natif WinUI 3. L'installateur n'est pas encore signé : vérifiez son empreinte sur la page Télécharger, puis au premier lancement cliquez sur <strong>Informations complémentaires</strong> et <strong>Exécuter quand même</strong>.</p>
+      <p><a class="bouton bouton-clair" href="/telecharger/#windows">Télécharger pour Windows</a></p>
     </div>
   </div>
   <p class="apparait" style="text-align:center;margin-top:28px">Serveur, clients, application mobile et Cloud pas à pas : <a href="/documentation/demarrage/" style="color:#7cc4ff">lire la documentation</a>.</p>
@@ -396,24 +436,100 @@ cargo run --release -p eko-rip-serveur</pre>
   </div>
 </section>
 
+<!-- ================= Blog ================= -->
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Le blog</span>
+      <h2>Ce que l'atelier nous apprend.</h2>
+      <p>Guides pratiques, couleur, découpe et comparatifs, écrits par ceux qui font tourner le RIP tous les jours.</p>
+    </div>
+<!-- blog-recents -->
+<div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/etalonnage-g7-linearisation/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/reglage-epreuve.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-couleur">Couleur</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/etalonnage-g7-linearisation/">Étalonnage G7 et linéarisation : guide d&#x27;atelier</a></h3>
+          <p>Étalonnage du gris type G7, linéarisation par encre, profils ICC de support et courbes : la méthode pas à pas pour une couleur stable en grand format.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/relier-rip-et-erp/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-logiciel">Logiciel</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/relier-rip-et-erp/">Relier son RIP à son ERP : du dossier à la machine</a></h3>
+          <p>Comment un ERP envoie un dossier au RIP et en suit l&#x27;état jusqu&#x27;à la machine : référence de dossier, statuts remontés, journal signé et quantités réelles.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/qu-est-ce-qu-un-rip/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="640" height="400"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-guides">Guides</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/qu-est-ce-qu-un-rip/">Qu&#x27;est-ce qu&#x27;un RIP d&#x27;impression grand format ?</a></h3>
+          <p>Un RIP traduit votre PDF en plaques d&#x27;encre que la tête d&#x27;impression comprend. Rendu, tramage, couleur, file d&#x27;attente et pilotes : le guide complet.</p>
+        </div>
+      </article>
+    </div>
+<!-- /blog-recents -->
+    <div class="actions apparait" style="justify-content:center;margin-top:28px"><a class="bouton bouton-clair" href="/blog/">Tous les articles</a></div>
+  </div>
+</section>
+
+<!-- ================= Questions fréquentes ================= -->
+<section id="faq">
+  <div class="conteneur">
+    <div class="section-titre apparait">
+      <span class="surtitre">Questions fréquentes</span>
+      <h2>Ce qu'on nous demande le plus.</h2>
+    </div>
+    <div class="faq apparait">
+      <details><summary>E-KO RIP Center est-il vraiment gratuit ?</summary><p>Oui. Le serveur et les clients sont gratuits, sans licence par poste, sans clé matérielle ni serveur d'activation. Le code est publié sous licence AGPL-3.0. Seul le <a href="/cloud/">Cloud E-KO RIP</a>, pour piloter l'atelier à distance, devient payant au-delà d'un petit atelier.</p></details>
+      <details><summary>Quelles machines sont prises en charge ?</summary><p>Des imprimantes grand format et des découpeuses, en pilote direct, en HP-GL, par IPP ou CUPS, ou par dépôt de fichiers dans un dossier. La liste à jour et l'état de chaque pilote sont sur la page <a href="/compatibilite/">Machines compatibles</a>. Il manque la vôtre ? <a href="/compatibilite/#demande">Demandez un pilote</a>.</p></details>
+      <details><summary>Sur quoi tourne le RIP ?</summary><p>Le serveur tourne sous Ubuntu ou Debian 64 bits et s'installe par un dépôt APT signé. Chaque poste utilise un client natif pour macOS, Linux ou Windows. Le détail est dans les <a href="/prerequis/">pré-requis</a>.</p></details>
+      <details><summary>Peut-on suivre la production hors de l'atelier ?</summary><p>Oui, avec le <a href="/cloud/">Cloud E-KO RIP</a> : les clients et l'<a href="/app/">application mobile</a> se connectent au serveur de l'atelier sans VPN, et les alertes des machines arrivent sur le téléphone.</p></details>
+      <details><summary>Le RIP remplace-t-il mon RIP actuel du jour au lendemain ?</summary><p>Pas forcément. Beaucoup d'ateliers le font tourner à côté de leur RIP actuel, machine par machine. La <a href="/feuille-de-route/">feuille de route</a> publique dit ce qui est fait, en cours et planifié, et nos <a href="/blog/categorie/comparatifs/">comparatifs</a> aident à décider.</p></details>
+      <details><summary>Comment obtenir de l'aide ?</summary><p>La <a href="/documentation/">documentation</a> couvre l'installation, les réglages et le dépannage, en français et en anglais. Pour une question, une démonstration ou un partenariat, utilisez le <a href="/contact/">formulaire de contact</a>.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= Appel final ================= -->
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Prêt à essayer dans votre atelier ?</h2>
+        <p>Gratuit, open source, installé en quelques minutes. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 </main>
 
+<!-- pied -->
 <footer class="pied">
-  <div class="conteneur">
-    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center</span>
-    <nav>
-      <a href="/documentation/">Documentation</a>
-      <a href="/changelog/">Nouveautés</a>
-      <a href="/cloud/">Cloud E-KO RIP et tarifs</a>
-      <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a>
-      <a href="/prerequis/">Pré-requis</a>
-      <a href="/compatibilite/">Compatibilité machines</a>
-      <a href="/app/">Application mobile</a>
-      <a href="/mentions-legales/">Mentions légales</a>
-      <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
-    </nav>
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
   </div>
 </footer>
+<!-- /pied -->
 
 <script src="/assets/site.js" defer></script>
 <script src="/assets/journal.js" defer></script>

@@ -75,8 +75,10 @@ déconnecter*), **About E-KO RIP Center** (*À propos d'E-KO RIP Center*).
 
 **Requirements**: Windows 10 or 11, 64-bit.
 
-1. Download the installer: [e-ko.rip/telecharger/windows](https://e-ko.rip/telecharger/windows).
-2. Run the `…_x64-setup.exe` file and follow the wizard.
+1. Open [e-ko.rip/telecharger](https://e-ko.rip/telecharger/#windows): it shows the installer's version, size and
+   SHA-256 fingerprint, then takes you to the GitHub release that holds the `…_x64-setup.exe`
+   file.
+2. Download that file, run it and follow the wizard.
 3. The client is not signed yet: if Windows shows "Windows protected your PC", click **More
    info** then **Run anyway** (once per workstation).
 
