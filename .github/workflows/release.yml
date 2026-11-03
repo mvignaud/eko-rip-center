@@ -188,10 +188,12 @@ jobs:
           gpg --batch --import <<< "$DEPOT_GPG_KEY"
           # publier-depot.sh CRÉE une clé neuve s'il n'en trouve pas : jamais ici.
           [ "$(gpg --batch --with-colons --list-secret-keys depot@e-ko.fr 2>/dev/null | grep -c "^sec")" -gt 0 ] || { echo "::error::Clé depot@e-ko.fr non importée."; exit 1; }
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPOT_SSH_KEY" > ~/.ssh/eko_depot && chmod 600 ~/.ssh/eko_depot
-          printf '%s\n' "$DEPOT_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          printf 'Host apt.e-ko.fr\n  User depot\n  IdentityFile ~/.ssh/eko_depot\n  IdentitiesOnly yes\n' > ~/.ssh/config
+          install -d -m 700 /root/.ssh
+          printf '%s\n' "$DEPOT_SSH_KEY" > /root/.ssh/eko_depot && chmod 600 /root/.ssh/eko_depot
+          printf '%s\n' "$DEPOT_KNOWN_HOSTS" > /root/.ssh/known_hosts
+          # Le conteneur pose HOME=/github/home, mais ssh lit le dossier de root : d'où /root/.ssh.
+          ssh-keygen -F apt.e-ko.fr -f /root/.ssh/known_hosts >/dev/null || { echo "::error::DEPOT_KNOWN_HOSTS ne contient pas de ligne pour apt.e-ko.fr."; exit 1; }
+          printf 'Host apt.e-ko.fr\n  User depot\n  IdentityFile /root/.ssh/eko_depot\n  IdentitiesOnly yes\n' > /root/.ssh/config
           # Le dossier local du dépôt part vide ici : on y remet d'abord les paquets en
           # ligne, sinon l'envoi (--delete-after) les retirerait du dépôt.
           export EKO_DEPOT_LOCAL="$RUNNER_TEMP/depot/rip" && mkdir -p "$EKO_DEPOT_LOCAL"
@@ -212,4 +214,4 @@ jobs:
 
       - name: Oublier les clés
         if: always()
-        run: rm -rf "$RUNNER_TEMP/gnupg" ~/.ssh "$RUNNER_TEMP/depot"
+        run: rm -rf "$RUNNER_TEMP/gnupg" /root/.ssh "$RUNNER_TEMP/depot"
