@@ -215,6 +215,102 @@ pub fn telephone_e164(saisie: &str) -> Option<String> {
     (n.len() >= 9 && n.len() <= 16 && n[1..].chars().all(|x| x.is_ascii_digit())).then_some(n)
 }
 
+/// Pays proposés devant le numéro de téléphone : (code ISO, nom, indicatif).
+pub const INDICATIFS: &[(&str, &str, &str)] = &[
+    ("FR", "France", "33"),
+    ("BE", "Belgique", "32"),
+    ("CH", "Suisse", "41"),
+    ("LU", "Luxembourg", "352"),
+    ("MC", "Monaco", "377"),
+    ("DE", "Allemagne", "49"),
+    ("AT", "Autriche", "43"),
+    ("ES", "Espagne", "34"),
+    ("AD", "Andorre", "376"),
+    ("PT", "Portugal", "351"),
+    ("IT", "Italie", "39"),
+    ("NL", "Pays-Bas", "31"),
+    ("GB", "Royaume-Uni", "44"),
+    ("IE", "Irlande", "353"),
+    ("DK", "Danemark", "45"),
+    ("SE", "Suède", "46"),
+    ("NO", "Norvège", "47"),
+    ("FI", "Finlande", "358"),
+    ("PL", "Pologne", "48"),
+    ("CZ", "Tchéquie", "420"),
+    ("GR", "Grèce", "30"),
+    ("RO", "Roumanie", "40"),
+    ("MA", "Maroc", "212"),
+    ("DZ", "Algérie", "213"),
+    ("TN", "Tunisie", "216"),
+    ("SN", "Sénégal", "221"),
+    ("CI", "Côte d'Ivoire", "225"),
+    ("US", "États-Unis", "1"),
+    ("CA", "Canada", "1"),
+    ("RE", "La Réunion", "262"),
+    ("GP", "Guadeloupe", "590"),
+    ("MQ", "Martinique", "596"),
+    ("GF", "Guyane", "594"),
+    ("NC", "Nouvelle-Calédonie", "687"),
+    ("PF", "Polynésie française", "689"),
+];
+
+/// Drapeau emoji d'un code pays ISO (deux lettres).
+pub fn drapeau(iso: &str) -> String {
+    iso.chars()
+        .filter_map(|c| {
+            char::from_u32(0x1F1E6 + (c.to_ascii_uppercase() as u32).checked_sub('A' as u32)?)
+        })
+        .collect()
+}
+
+/// Numéro au format international à partir du pays choisi et de la saisie :
+/// « 06 12 34 56 78 » avec FR donne +33612345678 ; une saisie qui commence par + ou 00 garde son indicatif.
+pub fn telephone_avec_pays(pays: &str, saisie: &str) -> Option<String> {
+    let t = saisie.trim();
+    if t.starts_with('+') || t.starts_with("00") {
+        return telephone_e164(t);
+    }
+    let indicatif = INDICATIFS
+        .iter()
+        .find(|(iso, _, _)| iso.eq_ignore_ascii_case(pays))
+        .map_or("33", |(_, _, i)| *i);
+    let chiffres: String = t.chars().filter(char::is_ascii_digit).collect();
+    // Le 0 de tête du numéro national tombe (sauf en Italie, où il fait partie du numéro).
+    let national = if indicatif == "39" {
+        chiffres.as_str()
+    } else {
+        chiffres.strip_prefix('0').unwrap_or(&chiffres)
+    };
+    if national.is_empty()
+        || t.chars()
+            .any(|c| !(c.is_ascii_digit() || " .-()/".contains(c)))
+    {
+        return None;
+    }
+    telephone_e164(&format!("+{indicatif}{national}"))
+}
+
+/// Découpe un numéro international en (pays, numéro national) pour réafficher le formulaire.
+pub fn pays_du_telephone(numero: &str) -> (&'static str, String) {
+    if let Some(r) = numero.strip_prefix('+') {
+        // L'indicatif le plus long d'abord (+352 avant +35…) ; +1 donne le Canada et les États-Unis : on garde le premier.
+        let mut liste: Vec<_> = INDICATIFS.iter().collect();
+        liste.sort_by_key(|(_, _, i)| std::cmp::Reverse(i.len()));
+        if let Some((iso, _, i)) = liste.into_iter().find(|(_, _, i)| r.starts_with(*i)) {
+            let reste = &r[i.len()..];
+            return (
+                iso,
+                if *i == "39" {
+                    reste.to_string()
+                } else {
+                    format!("0{reste}")
+                },
+            );
+        }
+    }
+    ("FR", numero.to_string())
+}
+
 /// IBAN plausible (clé modulo 97), sans espaces, en majuscules.
 pub fn iban_valide(saisie: &str) -> Option<String> {
     let i: String = saisie.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_uppercase();
@@ -247,6 +343,41 @@ mod tests {
         assert_eq!(verifier_signature("secret", corps, "v1=abc", 1000), Err("signature_malformee"));
         // Vecteur connu de HMAC-SHA256.
         assert_eq!(crate::hex(&crate::hmac_sha256(b"key", b"The quick brown fox jumps over the lazy dog")), "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8");
+    }
+
+    #[test]
+    fn telephone_et_pays() {
+        assert_eq!(
+            telephone_avec_pays("FR", "06 12 34 56 78").as_deref(),
+            Some("+33612345678")
+        );
+        assert_eq!(
+            telephone_avec_pays("BE", "0470 12 34 56").as_deref(),
+            Some("+32470123456")
+        );
+        assert_eq!(
+            telephone_avec_pays("IT", "06 1234 5678").as_deref(),
+            Some("+390612345678")
+        );
+        assert_eq!(
+            telephone_avec_pays("CH", "+33 6 12 34 56 78").as_deref(),
+            Some("+33612345678")
+        );
+        assert_eq!(telephone_avec_pays("FR", "06 12 abc"), None);
+        assert_eq!(telephone_avec_pays("FR", ""), None);
+        assert_eq!(
+            pays_du_telephone("+33612345678"),
+            ("FR", "0612345678".to_string())
+        );
+        assert_eq!(
+            pays_du_telephone("+352621123456"),
+            ("LU", "0621123456".to_string())
+        );
+        assert_eq!(
+            pays_du_telephone("+390612345678"),
+            ("IT", "0612345678".to_string())
+        );
+        assert_eq!(drapeau("FR"), "\u{1F1EB}\u{1F1F7}");
     }
 
     #[test]

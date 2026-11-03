@@ -248,7 +248,7 @@ Le cloud reste **gratuit pour un petit atelier** (1 site, 1 imprimante et 1 déc
 
 1. Ouvrir **Abonnement**, puis **Voir les offres**.
 2. Choisir l'offre et la périodicité (mensuelle ou annuelle).
-3. Renseigner l'entreprise. Saisir le SIREN ou le SIRET remplit automatiquement la raison sociale et l'adresse. Ajouter le contact, l'adresse e-mail de facturation et, si besoin, un numéro de bon de commande.
+3. Renseigner l'entreprise. Saisir le SIREN ou le SIRET remplit automatiquement la raison sociale et l'adresse. Ajouter le contact, l'adresse e-mail de facturation, le téléphone (choisir le pays, drapeau et indicatif, puis saisir le numéro comme d'habitude, par exemple 06 12 34 56 78) et, si besoin, un numéro de bon de commande.
 4. Si vous avez un code, le saisir dans le champ unique **Code promo ou partenaire**. Il est vérifié aussitôt et ses conditions s'affichent.
 5. Cocher l'acceptation des CGV, puis choisir le moyen de paiement. Tout se fait dans la page, sans la quitter :
    - **Carte bancaire** : saisir la carte dans le champ sécurisé. Si la banque demande une confirmation (3-D Secure), elle s'affiche dans la page.

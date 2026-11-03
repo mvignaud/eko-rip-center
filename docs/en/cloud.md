@@ -42,7 +42,8 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   (quote). Machines are counted from the inventory each RIP server reports. Terms of sale at
   `/cgv`.
 - **Subscription** page of the portal: subscribe (company details from the SIREN, billing
-  contact, optional purchase order number, promo or partner code, terms of sale accepted), pay by
+  contact, phone number with a country picker showing flag and dialling code, optional purchase
+  order number, promo or partner code, terms of sale accepted), pay by
   **card** (secure field of the payment provider, 3-D Secure in an overlay, never leaving the
   portal) or **SEPA direct debit** (mandate shown in the page, signed with an SMS code; a mandate
   is valid for the company it was created for). 30-day trial when the account's first paid

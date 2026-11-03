@@ -243,7 +243,7 @@ liste site par site.
 
 1. **Abonnement › Voir les offres**, choisir l'offre et la périodicité (mensuelle ou annuelle).
 2. Renseigner l'entreprise : le SIREN remplit la raison sociale et l'adresse ; contact et e-mail
-   de facturation, téléphone mobile (pour le code du mandat SEPA), n° de bon de commande
+   de facturation, téléphone mobile (pays avec drapeau et indicatif, puis numéro national ; il reçoit le code du mandat SEPA), n° de bon de commande
    facultatif, code promotionnel ou code partenaire facultatif (vérifié aussitôt, ses conditions
    s'affichent). Cocher l'acceptation des CGV.
 3. Payer, sans quitter le portail :
