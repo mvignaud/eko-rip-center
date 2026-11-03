@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alternative à Flexi (SAi) : E-KO RIP Center · Blog E-KO RIP</title>
+<meta name="description" content="Flexi (SAi) réunit conception, RIP et découpe sous Windows, par abonnement. E-KO RIP Center est libre, sur serveur Linux. Comparatif sourcé du 3 novembre 2026.">
+<link rel="canonical" href="https://e-ko.rip/blog/alternative-flexi-sai/">
+<link rel="icon" href="/assets/img/icone.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Blog E-KO RIP Center" href="/blog/rss.xml">
+<meta name="theme-color" content="#0a84ff">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="E-KO RIP Center">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Alternative à Flexi (SAi) : E-KO RIP Center · Blog E-KO RIP">
+<meta property="og:description" content="Flexi (SAi) réunit conception, RIP et découpe sous Windows, par abonnement. E-KO RIP Center est libre, sur serveur Linux. Comparatif sourcé du 3 novembre 2026.">
+<meta property="og:url" content="https://e-ko.rip/blog/alternative-flexi-sai/">
+<meta property="og:image" content="https://e-ko.rip/assets/img/linux-travaux.webp">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="/assets/style.css">
+<link rel="stylesheet" href="/assets/documentation.css">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Alternative à Flexi (SAi) : E-KO RIP Center","description":"Flexi (SAi) réunit conception, RIP et découpe sous Windows, par abonnement. E-KO RIP Center est libre, sur serveur Linux. Comparatif sourcé du 3 novembre 2026.","datePublished":"2026-11-03","dateModified":"2026-11-03","inLanguage":"fr-FR","mainEntityOfPage":"https://e-ko.rip/blog/alternative-flexi-sai/","articleSection":"Comparatifs","wordCount":1104,"author":{"@type":"Organization","name":"E-KO RIP Center","url":"https://e-ko.rip/"},"publisher":{"@type":"Organization","name":"GOLDEN PRINT","url":"https://e-ko.rip/","logo":{"@type":"ImageObject","url":"https://e-ko.rip/assets/img/icone.svg"}},"image":"https://e-ko.rip/assets/img/linux-travaux.webp"}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Accueil","item":"https://e-ko.rip/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://e-ko.rip/blog/"},{"@type":"ListItem","position":3,"name":"Comparatifs","item":"https://e-ko.rip/blog/categorie/comparatifs/"},{"@type":"ListItem","position":4,"name":"Alternative à Flexi (SAi) : E-KO RIP Center","item":"https://e-ko.rip/blog/alternative-flexi-sai/"}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Flexi fonctionne-t-il sous Mac ou Linux ?","acceptedAnswer":{"@type":"Answer","text":"Selon SAi, seul Flexi DESIGN (sans RIP) existe sous macOS ; le RIP tourne sous Windows. Linux n'est pas pris en charge."}},{"@type":"Question","name":"Flexi est-il gratuit ?","acceptedAnswer":{"@type":"Answer","text":"Non : abonnement mensuel ou annuel à tarif publié. E-KO RIP Center est gratuit (AGPL-3.0)."}},{"@type":"Question","name":"E-KO RIP Center remplace-t-il Flexi ?","acceptedAnswer":{"@type":"Answer","text":"Pour le RIP, l'impression et la découpe de ses machines, oui ; pour la conception graphique, non."}},{"@type":"Question","name":"Mon traceur est-il compatible avec E-KO RIP Center ?","acceptedAnswer":{"@type":"Answer","text":"Voir la page compatibilité ; sinon, demandez-le."}}]}</script>
+<meta property="article:published_time" content="2026-11-03">
+</head>
+<body>
+<a class="lien-evitement" href="#contenu">Aller au contenu</a>
+<!-- Page générée par outils/generer-site.py : ne pas modifier ici. -->
+
+<header class="entete">
+  <div class="conteneur">
+    <a class="marque" href="/" aria-label="E-KO RIP Center, accueil"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+    <button class="nav-bouton" aria-label="Menu" aria-expanded="false" aria-controls="nav"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <nav class="nav" id="nav">
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-0">Logiciel<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-0">
+          <a href="/#fonctionnalites"><strong>Fonctionnalités</strong><small>Rendu, couleur, blanc, découpe, file</small></a>
+          <a href="/#fonctionnement"><strong>Fonctionnement</strong><small>Le trajet d&#x27;un fichier, étape par étape</small></a>
+          <a href="/#captures"><strong>Captures</strong><small>Les clients Mac, Linux et Windows</small></a>
+          <a href="/app/"><strong>Application mobile</strong><small>La file et les alertes dans la poche</small></a>
+          <a href="/#open-source"><strong>Open source</strong><small>Code ouvert sous licence AGPL-3.0</small></a>
+          <a href="/feuille-de-route/"><strong>Feuille de route</strong><small>Fait, en cours, planifié</small></a>
+          <a href="/changelog/"><strong>Nouveautés</strong><small>Le journal des versions</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe">
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-1">Machines<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-1">
+          <a href="/compatibilite/"><strong>Machines compatibles</strong><small>Imprimantes et découpeuses pilotées</small></a>
+          <a href="/compatibilite/#demande"><strong>Demander un pilote</strong><small>Votre machine n&#x27;est pas dans la liste</small></a>
+          <a href="/prerequis/"><strong>Pré-requis</strong><small>Serveur, postes et réseau</small></a>
+        </div>
+      </div>
+      <div class="nav-groupe"><a href="/cloud/" class="nav-titre">Cloud et tarifs</a></div>
+      <div class="nav-groupe" data-actif>
+        <button class="nav-titre" type="button" aria-expanded="false" aria-controls="nav-3">Ressources<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+        <div class="nav-panneau" id="nav-3">
+          <a href="/documentation/"><strong>Documentation</strong><small>Installer, régler, dépanner</small></a>
+          <a href="/blog/"><strong>Blog</strong><small>Guides d&#x27;atelier et comparatifs</small></a>
+          <a href="/blog/categorie/comparatifs/"><strong>Comparatifs</strong><small>E-KO RIP face aux autres RIP</small></a>
+          <a href="https://github.com/mvignaud/eko-rip-center" rel="noopener"><strong>GitHub</strong><small>Le code source et les tickets</small></a>
+          <a href="/contact/"><strong>Contact</strong><small>Une question, une démonstration</small></a>
+        </div>
+      </div>
+      <a class="nav-mobile bouton bouton-plein" href="/telecharger/">Télécharger</a>
+    </nav>
+    <a class="entete-contact" href="/contact/">Contact</a>
+    <a class="bouton bouton-plein bouton-petit entete-cta" href="/telecharger/">Télécharger</a>
+  </div>
+</header>
+
+<main id="contenu">
+<article class="billet">
+  <header class="billet-tete">
+    <div class="conteneur">
+      <nav class="fil" aria-label="Fil d'Ariane"><a href="/">Accueil</a> › <a href="/blog/">Blog</a> › <a href="/blog/categorie/comparatifs/">Comparatifs</a> › <span aria-current="page">Alternative à Flexi (SAi) : E-KO RIP Center</span></nav>
+      <p><a class="pastille-cat cat-comparatifs" href="/blog/categorie/comparatifs/">Comparatifs</a></p>
+      <h1>Alternative à Flexi (SAi) : E-KO RIP Center</h1>
+      <p class="billet-meta">Par l'équipe E-KO RIP · <time datetime="2026-11-03">3 novembre 2026</time> · 5 min de lecture</p>
+      <figure class="billet-image"><img src="/assets/img/linux-travaux.webp" alt="Le client Linux d&#x27;E-KO RIP Center avec la liste des travaux et l&#x27;inspecteur" width="1436" height="814"></figure>
+    </div>
+  </header>
+  <div class="conteneur billet-grille">
+    <div class="billet-corps doc-article">
+<p>Flexi, édité par SAi, est un logiciel tout-en-un d'enseigne et d'impression-découpe (conception, RIP, découpe) sous Windows, vendu par abonnement, avec un parc de machines très étendu. E-KO RIP Center est un RIP seul, libre et gratuit, avec un serveur Linux : une alternative pour un atelier dont les machines sont pilotées par E-KO, pas un remplaçant de la partie conception de Flexi. Nous éditons E-KO RIP Center ; les faits sur SAi sont sourcés, consultés le 3 novembre 2026.</p>
+<h2 id="quest-ce-que-flexi-exactement"><a class="ancre" href="#quest-ce-que-flexi-exactement" aria-hidden="true">#</a>Qu'est-ce que Flexi, exactement ?</h2>
+<p>Flexi est une famille de logiciels de SAi. <a href="https://www.thinksai.com/latam/flexi-complete/" rel="noopener">Flexi Complete</a> est présenté comme un ensemble de conception, RIP, impression-découpe et découpe directe de vinyle, avec un RIP 64 bits (« Production Manager »), un moteur de découpe de contour, de l'imbrication à forme réelle, du tuilage, de la gestion de couleur (remplacement de couleur, tons directs, profils ICC) et un outil d'approbation de maquette. <a href="https://www.thinksai.com/products-flexi/" rel="noopener">Flexi DESIGN</a> n'inclut pas de RIP : il envoie à un Production Manager distant ou à un autre RIP.</p>
+<p>E-KO RIP Center ne fait pas de conception graphique : il reçoit vos PDF (et AI compatible PDF, SVG, TIFF, PNG, JPEG) et s'occupe du rendu, de l'imposition, de l'impression et de la découpe. Si vous utilisez Flexi pour dessiner, il se remplace en partie seulement : la création graphique y est hors périmètre.</p>
+<h2 id="sous-quel-système-tourne-flexi"><a class="ancre" href="#sous-quel-système-tourne-flexi" aria-hidden="true">#</a>Sous quel système tourne Flexi ?</h2>
+<p>Windows 10 ou plus récent. Une version macOS existe, <a href="https://www.thinksai.com/products-flexi/" rel="noopener">mais seulement pour Flexi DESIGN</a>, sans le RIP : un Mac <a href="https://support.thinksai.com/hc/en-us/articles/4415528518420-FAQ-for-FlexiDESIGN-for-MacOS" rel="noopener">envoie à un ordinateur Windows qui exécute Production Manager</a>. Selon les <a href="https://support.thinksai.com/hc/en-us/articles/11461954425364-Flexi-21-System-Requirements" rel="noopener">exigences de Flexi 21</a>, Linux, Android, iOS et ARM ne sont pas pris en charge.</p>
+<p>E-KO RIP Center a son <a href="/prerequis/">serveur sous Ubuntu ou Debian</a> et des clients natifs <a href="/telecharger/">Mac, Linux et Windows</a> (installateur Windows pas encore signé).</p>
+<h2 id="licence-et-prix-que-publie-sai"><a class="ancre" href="#licence-et-prix-que-publie-sai" aria-hidden="true">#</a>Licence et prix : que publie SAi ?</h2>
+<p>SAi vend par abonnement et affiche ses tarifs : Flexi Complete <a href="https://www.thinksai.com/latam/flexi-complete/" rel="noopener">à partir d'environ 92 $ par mois selon la page de l'éditeur pour l'Amérique latine</a> (consultée le 3 novembre 2026). L'abonnement inclut pilotes, mises à jour et support téléphonique et e-mail, et permet de piloter jusqu'à 5 imprimantes ou découpeuses en même temps. Les essais de 7 jours se transforment en abonnement s'ils ne sont pas annulés.</p>
+<p>E-KO RIP Center est sous <a href="/blog/rip-open-source-agpl/">AGPL-3.0</a> : gratuit, sans limite de machines, sans abonnement. Le Cloud est facultatif, gratuit pour une imprimante et une découpeuse.</p>
+<h2 id="et-laccès-à-distance"><a class="ancre" href="#et-laccès-à-distance" aria-hidden="true">#</a>Et l'accès à distance ?</h2>
+<p>SAi décrit son logiciel comme le « premier RIP compatible cloud » ; une connexion internet est requise pour l'activation de la licence et les fonctions cloud, d'après les <a href="https://support.thinksai.com/hc/en-us/articles/11461954425364-Flexi-21-System-Requirements" rel="noopener">exigences</a>. Les pages consultées ne détaillent pas le pilotage à distance d'un atelier.</p>
+<p>Le <a href="/cloud/">Cloud E-KO RIP</a> relie le serveur à une plate-forme par un tunnel sortant, sans VPN ni port ouvert, avec client Mac, Linux, Windows et application mobile. E-KO fonctionne sans connexion Internet dans l'atelier : seule la mise à jour et le Cloud en ont besoin.</p>
+<h2 id="combien-de-machines-sont-pilotées"><a class="ancre" href="#combien-de-machines-sont-pilotées" aria-hidden="true">#</a>Combien de machines sont pilotées ?</h2>
+<p>SAi annonce <a href="https://www.thinksai.com/latam/flexi-complete/" rel="noopener">plus de 7 500 imprimantes et plus de 2 200 découpeuses</a>. C'est de loin le plus grand parc de cette série d'articles. E-KO RIP Center est très en retrait : Epson SureColor SC-S80600, Mutoh Kona 1650, Graphtec FC7000, Roland VersaCAMM (découpe ; Impression sur Roland VersaCAMM En cours…). Imprimantes d'autres marques est aussi En cours… (voir la <a href="/feuille-de-route/">feuille de route</a>). Le parc s'élargit à chaque version ; <a href="/compatibilite/">demandez votre machine</a>.</p>
+<div class="tableau"><table><thead><tr><th></th><th>Flexi (SAi)</th><th>E-KO RIP Center</th></tr></thead><tbody><tr><td>Système</td><td>Windows ; macOS pour DESIGN seulement</td><td>Serveur Ubuntu/Debian ; clients natifs Mac, Linux, Windows (installateur Windows pas encore signé)</td></tr><tr><td>Licence</td><td>Abonnement, tarif publié</td><td>AGPL-3.0, gratuit</td></tr><tr><td>Conception graphique</td><td>Oui (Flexi Complete)</td><td>Hors périmètre</td></tr><tr><td>Code ouvert</td><td>Non annoncé</td><td>Oui</td></tr><tr><td>Parc de machines</td><td>Plus de 7 500 imprimantes, 2 200 découpeuses</td><td>4 références ; Imprimantes d'autres marques : En cours…</td></tr></tbody></table></div>
+<h2 id="que-fait-e-ko-que-flexi-ne-met-pas-en-avant"><a class="ancre" href="#que-fait-e-ko-que-flexi-ne-met-pas-en-avant" aria-hidden="true">#</a>Que fait E-KO que Flexi ne met pas en avant ?</h2>
+<p>D'après les pages consultées, Flexi est pensé pour un poste Windows qui pilote jusqu'à 5 machines. E-KO RIP Center sépare le calcul des postes : un serveur Linux fait le rendu, plusieurs opérateurs partagent la même file, et l'on peut fermer le client sans interrompre un travail. Il propose aussi le blanc et l'argent générés automatiquement, un journal de consommation d'encre et de support avec export CSV, des dossiers surveillés par réglage et un pont ERP public. Ces fonctions ne sont pas nécessairement absentes de Flexi ; les pages consultées ne les détaillent simplement pas.</p>
+<h2 id="quand-flexi-reste-t-il-le-meilleur-choix"><a class="ancre" href="#quand-flexi-reste-t-il-le-meilleur-choix" aria-hidden="true">#</a>Quand Flexi reste-t-il le meilleur choix ?</h2>
+<ul><li>Vous dessinez, imprimez et découpez avec un seul outil, par exemple en enseigne ou en covering.</li><li>Votre machine est absente de la liste d'E-KO : le parc de Flexi est sans commune mesure.</li><li>Vous voulez un support téléphonique et un abonnement tout compris.</li></ul>
+<h2 id="quand-regarder-e-ko-rip-center"><a class="ancre" href="#quand-regarder-e-ko-rip-center" aria-hidden="true">#</a>Quand regarder E-KO RIP Center ?</h2>
+<p>Si vous faites déjà votre conception ailleurs (Illustrator, Affinity), que votre atelier a un PC Linux et l'une des machines pilotées, et que vous voulez supprimer l'abonnement. Essai : <a href="/telecharger/">téléchargement</a>. Autres comparatifs : <a href="/blog/alternative-caldera/">Caldera</a>, <a href="/blog/alternative-onyx/">ONYX</a>, <a href="/blog/fiery-xf-ou-e-ko-rip/">Fiery XF</a>, le <a href="/blog/comparatif-rip-grand-format/">comparatif général</a> et <a href="/blog/choisir-son-rip-grand-format/">choisir son RIP</a>. Une question ? <a href="/contact/">Contactez-nous</a>.</p>
+<p><em>Flexi, FlexiPRINT, FlexiDESIGN et SAi sont des marques de leurs propriétaires respectifs. Comparatif établi d'après les informations publiques des éditeurs au 3 novembre 2026 ; écrivez-nous pour toute correction.</em></p>
+<h2 id="questions-fréquentes"><a class="ancre" href="#questions-fréquentes" aria-hidden="true">#</a>Questions fréquentes</h2>
+<h3 id="flexi-fonctionne-t-il-sous-mac-ou-linux"><a class="ancre" href="#flexi-fonctionne-t-il-sous-mac-ou-linux" aria-hidden="true">#</a>Flexi fonctionne-t-il sous Mac ou Linux ?</h3>
+<p>Selon SAi, seul Flexi DESIGN (sans RIP) existe sous macOS ; le RIP tourne sous Windows. Linux n'est pas pris en charge.</p>
+<h3 id="flexi-est-il-gratuit"><a class="ancre" href="#flexi-est-il-gratuit" aria-hidden="true">#</a>Flexi est-il gratuit ?</h3>
+<p>Non : abonnement mensuel ou annuel à tarif publié. E-KO RIP Center est gratuit (AGPL-3.0).</p>
+<h3 id="e-ko-rip-center-remplace-t-il-flexi"><a class="ancre" href="#e-ko-rip-center-remplace-t-il-flexi" aria-hidden="true">#</a>E-KO RIP Center remplace-t-il Flexi ?</h3>
+<p>Pour le RIP, l'impression et la découpe de ses machines, oui ; pour la conception graphique, non.</p>
+<h3 id="mon-traceur-est-il-compatible-avec-e-ko-rip-center"><a class="ancre" href="#mon-traceur-est-il-compatible-avec-e-ko-rip-center" aria-hidden="true">#</a>Mon traceur est-il compatible avec E-KO RIP Center ?</h3>
+<p>Voir la <a href="/compatibilite/">page compatibilité</a> ; sinon, demandez-le.</p>
+    </div>
+    <aside class="billet-cote">
+      <nav class="billet-toc" aria-label="Dans cet article"><p>Dans cet article</p><ol><li><a href="#quest-ce-que-flexi-exactement">Qu&#x27;est-ce que Flexi, exactement ?</a></li><li><a href="#sous-quel-système-tourne-flexi">Sous quel système tourne Flexi ?</a></li><li><a href="#licence-et-prix-que-publie-sai">Licence et prix : que publie SAi ?</a></li><li><a href="#et-laccès-à-distance">Et l&#x27;accès à distance ?</a></li><li><a href="#combien-de-machines-sont-pilotées">Combien de machines sont pilotées ?</a></li><li><a href="#que-fait-e-ko-que-flexi-ne-met-pas-en-avant">Que fait E-KO que Flexi ne met pas en avant ?</a></li><li><a href="#quand-flexi-reste-t-il-le-meilleur-choix">Quand Flexi reste-t-il le meilleur choix ?</a></li><li><a href="#quand-regarder-e-ko-rip-center">Quand regarder E-KO RIP Center ?</a></li><li><a href="#questions-fréquentes">Questions fréquentes</a></li></ol></nav>
+      <div class="billet-cta">
+        <p><strong>E-KO RIP Center</strong></p>
+        <p>Le RIP grand format libre et gratuit qui pilote tout l'atelier.</p>
+        <a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a>
+        <a class="bouton bouton-clair bouton-petit" href="/contact/">Poser une question</a>
+      </div>
+    </aside>
+  </div>
+</article>
+
+<section class="bande">
+  <div class="conteneur">
+    <div class="section-titre apparait"><span class="surtitre">À lire aussi</span><h2>Dans la même veine</h2></div>
+    <div class="grille-billets">
+      <article class="carte-billet apparait">
+        <a href="/blog/fiery-xf-ou-e-ko-rip/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="1436" height="814"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-comparatifs">Comparatifs</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/fiery-xf-ou-e-ko-rip/">Fiery XF ou E-KO RIP Center : lequel pour un atelier ?</a></h3>
+          <p>Fiery XF (serveur Windows) ou E-KO RIP Center (serveur Linux, libre) ? Différences, serveurs Fiery des presses feuille, et profils d&#x27;ateliers grand format.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/comparatif-rip-grand-format/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="1436" height="814"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-comparatifs">Comparatifs</span> <time datetime="2026-11-03">3 novembre 2026</time> · 6 min</p>
+          <h3><a href="/blog/comparatif-rip-grand-format/">Comparatif des RIP grand format en 2026</a></h3>
+          <p>Caldera, ONYX, Fiery XF, Flexi (SAi) et E-KO RIP Center : système du serveur, clients, licence, code ouvert, accès distant, machines. Tableau daté et sourcé.</p>
+        </div>
+      </article>
+      <article class="carte-billet apparait">
+        <a href="/blog/alternative-onyx/" class="carte-billet-image" tabindex="-1" aria-hidden="true"><img src="/assets/img/linux-travaux.webp" alt="" loading="lazy" width="1436" height="814"></a>
+        <div class="carte-billet-corps">
+          <p class="carte-billet-meta"><span class="pastille-cat cat-comparatifs">Comparatifs</span> <time datetime="2026-11-03">3 novembre 2026</time> · 5 min</p>
+          <h3><a href="/blog/alternative-onyx/">Alternative à ONYX RIP : ce qu&#x27;il faut savoir</a></h3>
+          <p>ONYX (Thrive, RIPCenter) tourne sous Windows ; E-KO RIP Center a son serveur sous Linux. Licence, accès distant, parc de machines : comparatif sourcé.</p>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="appel-final">
+  <div class="conteneur">
+    <div class="appel-final-cadre apparait">
+      <div>
+        <h2>Essayez E-KO RIP Center dans votre atelier.</h2>
+        <p>Gratuit, open source, installé en quelques minutes sur un serveur Ubuntu ou Debian. Une question sur votre machine ou votre flux ? Nous répondons nous-mêmes.</p>
+      </div>
+      <div class="actions">
+        <a class="bouton bouton-plein" href="/telecharger/">Télécharger gratuitement</a>
+        <a class="bouton bouton-clair" href="/contact/">Nous contacter</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="pied">
+  <div class="conteneur pied-grille">
+    <div class="pied-marque">
+      <a class="marque" href="/"><img src="/assets/img/icone.svg" alt="" width="30" height="30">E-KO RIP Center</a>
+      <p>Le RIP grand format libre qui pilote tout l&#x27;atelier : rendu, couleur, blanc, découpe et machines. Conçu et éprouvé dans un atelier d&#x27;impression du Gers.</p>
+      <p><a class="bouton bouton-plein bouton-petit" href="/telecharger/">Télécharger</a> <a class="bouton bouton-clair bouton-petit" href="/contact/">Contact</a></p>
+    </div>
+    <nav aria-label="Logiciel"><h2>Logiciel</h2><a href="/#fonctionnalites">Fonctionnalités</a><a href="/telecharger/">Télécharger</a><a href="/app/">Application mobile</a><a href="/cloud/">Cloud et tarifs</a><a href="/feuille-de-route/">Feuille de route</a><a href="/changelog/">Nouveautés</a></nav>
+      <nav aria-label="Ressources"><h2>Ressources</h2><a href="/documentation/">Documentation</a><a href="/blog/">Blog</a><a href="/blog/categorie/comparatifs/">Comparatifs</a><a href="/compatibilite/">Machines compatibles</a><a href="/prerequis/">Pré-requis</a><a href="/blog/rss.xml">Flux RSS du blog</a></nav>
+      <nav aria-label="E-KO RIP"><h2>E-KO RIP</h2><a href="/contact/">Contact</a><a href="/compatibilite/#demande">Demander un pilote</a><a href="https://github.com/mvignaud/eko-rip-center" rel="noopener">GitHub</a><a href="/mentions-legales/">Mentions légales</a><a href="/app/confidentialite/">Confidentialité de l&#x27;application</a></nav>
+  </div>
+  <div class="conteneur pied-bas">
+    <span>© <span data-annee>2026</span> GOLDEN PRINT · E-KO RIP Center · Logiciel libre sous licence AGPL-3.0</span>
+    <a href="mailto:contact@e-ko.rip">contact@e-ko.rip</a>
+  </div>
+</footer>
+
+<script src="/assets/site.js" defer></script>
+</body>
+</html>

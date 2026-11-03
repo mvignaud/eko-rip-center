@@ -65,6 +65,11 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   `https://platform.e-ko.rip/api/erp/webhooks`) and storage (S3 endpoint, region, bucket, keys,
   server-side encryption, separate bucket for the daily portal database copy) are set in the
   admin page only; secrets are never shown again. Each card has a **Test** button.
+  **Save and configure from the ERP** does the billing setup in one click with a token that also
+  has `webhooks.manage` (ERP 1.95.510 or later): it reads the plans, saves the `RIP-<PLAN>-<M|A>`
+  codes (SUPP for extra machines), creates the webhook with all its events, keeps its secret
+  without showing it, then deletes the previous webhook to the same address. After regenerating
+  the token in the ERP, paste it and run the configuration again.
 - **Tunnel**: a plain WebSocket (`Sec-WebSocket-Protocol: eko-tunnel/1`) carrying HTTP/2, so it
   goes through shared-hosting front ends (LiteSpeed, Passenger); the bare `Upgrade: eko-tunnel/1`
   of RIP 0.30 servers is still accepted.

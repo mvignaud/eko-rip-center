@@ -11,6 +11,7 @@ RewriteRule ^ https://e-ko.rip%{REQUEST_URI} [R=301,L]
 
 # Téléchargement direct du client, toujours sur la dernière version publiée sur GitHub.
 RewriteRule ^telecharger/(mac|windows)/?$ /telecharger/telecharger.php?os=$1 [L,QSA]
+RewriteRule ^telecharger/infos\.json$ /telecharger/telecharger.php?infos=1 [L]
 
 ErrorDocument 404 /404.html
 

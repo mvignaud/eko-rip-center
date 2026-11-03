@@ -16,6 +16,9 @@ done
 echo "· documentation publique à jour (docs/ → site/documentation/)"
 python3 outils/generer-documentation.py --verifier
 
+echo "· site à jour (blog/, pages/, menu commun → site/)"
+python3 outils/generer-site.py --verifier
+
 echo "· clés de traduction en double"
 node outils/doublons-traductions.js serveur/static/index.html
 
