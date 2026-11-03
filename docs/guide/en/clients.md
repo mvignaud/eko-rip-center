@@ -86,7 +86,7 @@ the previous version.
 
 The Windows client has the same interface as the Mac and Linux clients: sidebar (Jobs, Machines,
 System), job queue as a table, inspector on the right, drag-and-drop upload with a choice of
-preset (or **No preset** (*Sans réglage*) for the server's defaults) and a Windows notification
+preset (**No preset** (*Sans réglage*) by default: the server applies its defaults) and a Windows notification
 when a job is ready.
 
 **Menu** (**…** button in the toolbar): **Refresh** (*Actualiser*, F5), **Administration…**,

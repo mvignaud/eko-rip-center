@@ -146,8 +146,9 @@ public sealed partial class MainWindow
                 // « saisie libre » dans l'interface web.
                 reglages.Items.Add(SansReglage);
                 foreach (var r in _c.Reglages) reglages.Items.Add(r.Nom);
-                var retenu = _c.Parametres.DernierReglage;
-                reglages.SelectedItem = _c.Reglages.Any(r => r.Nom == retenu) ? retenu : _c.Reglages[0].Nom;
+                // Par défaut « Sans réglage » (choix de Mathieu, 2026-11-03) : un réglage s'applique
+                // seulement quand on le choisit pour cet envoi.
+                reglages.SelectedItem = SansReglage;
                 panneau.Children.Add(reglages);
             }
 
