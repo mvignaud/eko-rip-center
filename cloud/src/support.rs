@@ -42,7 +42,6 @@ const MAX_MESSAGE_DEMANDE: usize = 20_000;
 const MAX_MESSAGE_DISCUSSION: usize = 5_000;
 /// Durée de vie des files (catégories) et de l'état « ouvert / fermé » gardés en mémoire.
 const CACHE_CATEGORIES: u64 = 600;
-const CACHE_OUVERT: u64 = 3600;
 /// Une discussion terminée reste visible dans la bulle une heure, puis la bulle repart à neuf.
 const VISIBLE_APRES_FIN: u64 = 3600;
 /// Les discussions terminées sont oubliées après 30 jours (la demande, elle, reste dans l'ERP).
@@ -175,6 +174,11 @@ pub fn categories(r: &Partage) -> Result<Vec<(String, String)>, String> {
         let rep = erp.get("/support/categories")?;
         if !rep.ok() {
             return Err(refus(&rep));
+        }
+        if rep.corps["meta"].is_object() {
+            let c = r.base();
+            let _ = base::regler(&c, "support_meta", &rep.corps["meta"].to_string());
+            let _ = base::regler(&c, "support_meta_le", &t.to_string());
         }
         let l: Vec<(String, String)> = rep
             .donnees()
@@ -504,40 +508,110 @@ struct Discussion {
 /// La discussion à montrer dans la bulle : celle en cours, ou la dernière si elle vient de finir.
 fn discussion_courante(c: &Connection, compte: i64, t: u64) -> Option<Discussion> {
     c.query_row(
-        "SELECT uuid, statut, agent, ticket_code, maj_le FROM support_discussions WHERE compte = ?1 ORDER BY cree_le DESC, rowid DESC LIMIT 1",
+        "SELECT uuid, statut, agent, ticket_code, maj_le, congediee FROM support_discussions WHERE compte = ?1 ORDER BY cree_le DESC, rowid DESC LIMIT 1",
         [compte],
-        |l| Ok((Discussion { uuid: l.get(0)?, statut: l.get(1)?, agent: l.get(2)?, ticket_code: l.get(3)? }, l.get::<_, i64>(4)? as u64)),
+        |l| Ok((Discussion { uuid: l.get(0)?, statut: l.get(1)?, agent: l.get(2)?, ticket_code: l.get(3)? }, l.get::<_, i64>(4)? as u64, l.get::<_, i64>(5)? == 1)),
     )
     .optional()
     .ok()
     .flatten()
-    .filter(|(d, maj)| !terminee(&d.statut) || t.saturating_sub(*maj) < VISIBLE_APRES_FIN)
-    .map(|(d, _)| d)
+    .filter(|(d, maj, congediee)| !terminee(&d.statut) || (!*congediee && t.saturating_sub(*maj) < VISIBLE_APRES_FIN))
+    .map(|(d, _, _)| d)
 }
 
 fn discussion_active(c: &Connection, compte: i64) -> Option<Discussion> {
     discussion_courante(c, compte, crate::maintenant()).filter(|d| !terminee(&d.statut))
 }
 
-fn retenir_ouverture(c: &Connection, d: &Value) {
-    if let Some(o) = d["open_now"].as_bool() {
-        let _ = base::regler(c, "support_ouvert", if o { "1" } else { "0" });
-        let _ = base::regler(c, "support_ouvert_le", &crate::maintenant().to_string());
+/// Horaires d'ouverture du support (`meta.opening_hours` de `GET /categories`) : le support
+/// est-il ouvert à l'instant `t` (UTC) ? Seul le fuseau Europe/Paris est calculé ici.
+pub fn ouvert_selon(horaires: &Value, t: u64) -> Option<bool> {
+    if horaires["timezone"]
+        .as_str()
+        .is_some_and(|z| z != "Europe/Paris")
+    {
+        return None;
     }
+    let minutes = |v: &Value| -> Option<i64> {
+        let (h, m) = v.as_str()?.split_once(':')?;
+        Some(h.trim().parse::<i64>().ok()? * 60 + m.trim().parse::<i64>().ok()?)
+    };
+    let (debut, fin) = (minutes(&horaires["start"])?, minutes(&horaires["end"])?);
+    let local = t as i64 + crate::temps::decalage_paris(t);
+    let jour = local.div_euclid(86_400);
+    // 1970-01-01 est un jeudi ; 1 = lundi … 7 = dimanche.
+    let iso = (jour + 3).rem_euclid(7) + 1;
+    let ouvre = horaires["days"]
+        .as_array()?
+        .iter()
+        .any(|d| d.as_i64() == Some(iso));
+    let m = local.rem_euclid(86_400) / 60;
+    Some(ouvre && (debut..fin).contains(&m))
 }
 
-/// Le support est-il ouvert ? Dernier état connu, rendu par l'ERP à chaque discussion ; `None`
-/// s'il date de plus d'une heure (l'API ne le donne que dans une discussion).
+fn meta_support(c: &Connection) -> Option<Value> {
+    serde_json::from_str(&base::reglage(c, "support_meta").ok().flatten()?).ok()
+}
+
+/// Le support est-il ouvert ? Calculé ici d'après les horaires de l'ERP (lus avec les files,
+/// gardés 10 minutes à neuf puis réutilisés) ; à défaut d'horaires exploitables, le `open_now`
+/// de la dernière lecture s'il a moins de 10 minutes ; sinon `None`.
 fn ouvert_maintenant(c: &Connection) -> Option<bool> {
-    let le: u64 = base::reglage(c, "support_ouvert_le")
+    let meta = meta_support(c)?;
+    let t = crate::maintenant();
+    if let Some(o) = ouvert_selon(&meta["opening_hours"], t) {
+        return Some(o);
+    }
+    let le: u64 = base::reglage(c, "support_meta_le")
         .ok()
         .flatten()?
         .parse()
         .ok()?;
-    if crate::maintenant().saturating_sub(le) > CACHE_OUVERT {
+    if t.saturating_sub(le) > CACHE_CATEGORIES {
         return None;
     }
-    Some(base::reglage(c, "support_ouvert").ok().flatten()? == "1")
+    meta["open_now"].as_bool()
+}
+
+/// Horaires en clair (« de 9 h à 18 h, du lundi au vendredi »), pour la bulle quand c'est fermé.
+fn horaires_texte(c: &Connection) -> Option<String> {
+    let h = meta_support(c)?["opening_hours"].clone();
+    let heure = |v: &Value| -> Option<String> {
+        let (hh, mm) = v.as_str()?.split_once(':')?;
+        let (hh, mm): (u32, u32) = (hh.trim().parse().ok()?, mm.trim().parse().ok()?);
+        Some(if mm == 0 {
+            format!("{hh} h")
+        } else {
+            format!("{hh} h {mm:02}")
+        })
+    };
+    let noms = [
+        "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche",
+    ];
+    let mut jours: Vec<usize> = h["days"]
+        .as_array()?
+        .iter()
+        .filter_map(|d| d.as_i64())
+        .filter(|d| (1..=7).contains(d))
+        .map(|d| d as usize - 1)
+        .collect();
+    jours.sort_unstable();
+    jours.dedup();
+    let (premier, dernier) = (*jours.first()?, *jours.last()?);
+    let quand = if jours.len() == dernier - premier + 1 && jours.len() > 1 {
+        format!("du {} au {}", noms[premier], noms[dernier])
+    } else {
+        jours
+            .iter()
+            .map(|j| noms[*j])
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    Some(format!(
+        "de {} à {}, {quand}",
+        heure(&h["start"])?,
+        heure(&h["end"])?
+    ))
 }
 
 fn messages_apres(c: &Connection, uuid: &str, apres: i64) -> Vec<Value> {
@@ -563,7 +637,7 @@ fn etat_json(c: &Connection, compte: i64, uuid_connu: &str, apres: i64) -> Value
         }
         None => (Value::Null, Vec::new()),
     };
-    json!({ "actif": true, "ouvert": ouvert_maintenant(c), "discussion": disc, "messages": messages })
+    json!({ "actif": true, "ouvert": ouvert_maintenant(c), "horaires": horaires_texte(c), "discussion": disc, "messages": messages })
 }
 
 // ————— Webhooks `support.*` —————
@@ -1114,12 +1188,14 @@ pub async fn creer(State(r): State<Partage>, h: HeaderMap, mut mp: Multipart) ->
     let cle = Some(champ(&f, "cle"))
         .filter(|c| (8..=64).contains(&c.len()) && c.chars().all(|x| x.is_ascii_hexdigit()))
         .unwrap_or_else(|| crate::aleatoire_hex(16));
-    let cats = bloquant(&r, categories)
+    let files = bloquant(&r, categories)
         .await
-        .unwrap_or(Err(String::new()))
-        .unwrap_or_default();
+        .unwrap_or(Err("Service momentanément indisponible.".into()));
+    let cats = files.clone().unwrap_or_default();
     let erreur = if trop {
         "Trop de pièces jointes, ou l'une dépasse 10 Mo (5 fichiers de 10 Mo au plus).".to_string()
+    } else if let Err(e) = &files {
+        e.clone()
     } else if !cats.iter().any(|(c, _)| c.eq_ignore_ascii_case(&categorie)) {
         "Choisissez une file.".into()
     } else if sujet.is_empty() || sujet.chars().count() > 255 {
@@ -1139,6 +1215,13 @@ pub async fn creer(State(r): State<Partage>, h: HeaderMap, mut mp: Multipart) ->
         return formulaire_nouvelle(&s, &cats, &erreur, &categorie, &sujet, &message, &cle);
     }
     let ident = Identite::depuis(&r.base(), &s.compte);
+    let (cle_ecran, categorie_ecran, sujet_ecran, message_ecran) = (
+        cle.clone(),
+        categorie.clone(),
+        sujet.clone(),
+        message.clone(),
+    );
+    let avait_des_pieces = !pieces.is_empty();
     let resultat = bloquant(&r, move |r| {
         creer_demande(r, &ident, &cle, &categorie, &sujet, &message, &pieces)
     })
@@ -1151,8 +1234,23 @@ pub async fn creer(State(r): State<Partage>, h: HeaderMap, mut mp: Multipart) ->
         ))
         .into_response(),
         Err(e) => {
-            // Le formulaire est rendu de nouveau sans le texte tapé : il est dans la requête, perdue ; on garde au moins la file.
-            formulaire_nouvelle(&s, &cats, &e, "", "", "", &crate::aleatoire_hex(16))
+            // Même clé d'idempotence et mêmes champs : un nouvel envoi ne crée pas de doublon
+            // (si l'ERP avait créé la demande sans qu'on le sache, il rend la même). Les
+            // fichiers, eux, sont à resélectionner.
+            let e = if avait_des_pieces {
+                format!("{e} Vos pièces jointes sont à sélectionner de nouveau.")
+            } else {
+                e
+            };
+            formulaire_nouvelle(
+                &s,
+                &cats,
+                &e,
+                &categorie_ecran,
+                &sujet_ecran,
+                &message_ecran,
+                &cle_ecran,
+            )
         }
     }
 }
@@ -1535,6 +1633,7 @@ pub async fn etat(
                 .collect::<Vec<_>>()
         );
         v["ouvert"] = json!(ouvert_maintenant(&r.base()));
+        v["horaires"] = json!(horaires_texte(&r.base()));
     }
     sans_cache(v)
 }
@@ -1595,7 +1694,6 @@ pub async fn ouvrir_discussion(
         }
         let d = rep.donnees();
         let c = r.base();
-        retenir_ouverture(&c, d);
         if let Some(uuid) = enregistrer_discussion(&c, compte, d) {
             for m in d["messages"].as_array().cloned().unwrap_or_default() {
                 enregistrer_message(&c, &uuid, &m);
@@ -1706,6 +1804,20 @@ pub async fn fermer_discussion(State(r): State<Partage>, h: HeaderMap) -> Respon
     }
 }
 
+/// `POST /support/direct/congedier` : le client repart d'une bulle neuve (« Nouvelle discussion »).
+/// Une discussion terminée n'est plus montrée ; une discussion en cours n'est pas touchée.
+pub async fn congedier_discussion(State(r): State<Partage>, h: HeaderMap) -> Response {
+    let s = match appel_bulle(&r, &h, true) {
+        Ok(s) => s,
+        Err(rep) => return *rep,
+    };
+    let _ = r.base().execute(
+        "UPDATE support_discussions SET congediee = 1 WHERE compte = ?1 AND statut IN ('close', 'convertie')",
+        [s.compte.id],
+    );
+    sans_cache(etat_json(&r.base(), s.compte.id, "", 0))
+}
+
 /// `GET /support/bulle.js` : la bulle de discussion, chargée par chaque page connectée.
 pub async fn bulle_js() -> Response {
     let mut rep = (StatusCode::OK, SCRIPT_BULLE).into_response();
@@ -1730,7 +1842,7 @@ const SCRIPT_BULLE: &str = r##"(function () {
   'use strict';
   var script = document.currentScript;
   var csrf = (script && script.getAttribute('data-csrf')) || '';
-  var etat = { uuid: '', apres: 0, ouvert: false, actif: false, discussion: null, categories: [], enCours: false };
+  var etat = { uuid: '', apres: 0, ouvert: false, sOuvert: null, horaires: '', actif: false, discussion: null, categories: [], enCours: false };
   var temps = null;
   function el(tag, attrs, texte) {
     var e = document.createElement(tag);
@@ -1793,21 +1905,20 @@ const SCRIPT_BULLE: &str = r##"(function () {
     function dessinerFormulaire() {
       var d = etat.discussion;
       var pourquoi = d ? (d.fin ? 'fin' : 'direct') : 'debut';
-      if (formulaire.getAttribute('data-vue') === pourquoi && pourquoi !== 'debut') return;
-      if (formulaire.getAttribute('data-vue') === pourquoi && pourquoi === 'debut' && formulaire.querySelector('select')) {
-        var s = formulaire.querySelector('select');
-        if (s.options.length !== etat.categories.length + 0) { /* files changées : on redessine */ } else return;
-      }
-      formulaire.setAttribute('data-vue', pourquoi);
+      var cle = pourquoi + '|' + etat.categories.length + '|' + String(etat.sOuvert) + '|' + (etat.horaires || '');
+      if (formulaire.getAttribute('data-vue') === cle) return;
+      var ancien = formulaire.querySelector('textarea'); var saisi = ancien ? ancien.value : '';
+      formulaire.setAttribute('data-vue', cle);
       formulaire.textContent = '';
       if (pourquoi === 'debut') {
-        formulaire.appendChild(el('p', { class: 'intro' }, 'Posez votre question à l’équipe d’E-KO. Hors des heures d’ouverture, ou si personne n’est disponible, votre message devient une demande suivie par e-mail.'));
+        formulaire.appendChild(el('p', { class: 'intro' }, etat.sOuvert === false ? 'Le support est fermé pour le moment' + (etat.horaires ? ' (ouvert ' + etat.horaires + ')' : '') + '. Votre message deviendra une demande : la réponse vous parviendra par e-mail.' : 'Posez votre question à l’équipe d’E-KO. Si personne n’est disponible, votre message devient une demande suivie par e-mail.'));
         if (etat.categories.length) {
           var sel = el('select', { 'aria-label': 'Sujet' });
           etat.categories.forEach(function (c) { var o = el('option', { value: c.code }, c.libelle); sel.appendChild(o); });
           formulaire.appendChild(sel);
         }
         var ta = el('textarea', { rows: '3', maxlength: '5000', placeholder: 'Votre message', 'aria-label': 'Votre message' });
+        ta.value = saisi;
         formulaire.appendChild(ta);
         var l = el('div', { class: 'ligne2' }); var go = el('button', { type: 'submit' }, 'Démarrer la discussion'); l.appendChild(go); formulaire.appendChild(l);
       } else if (pourquoi === 'direct') {
@@ -1820,7 +1931,7 @@ const SCRIPT_BULLE: &str = r##"(function () {
         l2.appendChild(fin); l2.appendChild(el('button', { type: 'submit' }, 'Envoyer')); formulaire.appendChild(l2);
       } else {
         var nv = el('div', { class: 'ligne2' }); var nb = el('button', { type: 'button' }, 'Nouvelle discussion');
-        nb.addEventListener('click', function () { etat.discussion = null; etat.uuid = ''; etat.apres = 0; corps.textContent = ''; formulaire.removeAttribute('data-vue'); charger(true); });
+        nb.addEventListener('click', function () { appeler('POST', '/support/direct/congedier').then(function () { etat.discussion = null; etat.uuid = ''; etat.apres = 0; corps.textContent = ''; formulaire.removeAttribute('data-vue'); charger(true); }); });
         nv.appendChild(nb); formulaire.appendChild(nv);
       }
     }
@@ -1828,7 +1939,7 @@ const SCRIPT_BULLE: &str = r##"(function () {
       if (!j || j.actif === false) { b.style.display = 'none'; fen.style.display = 'none'; arreter(); return; }
       etat.actif = true;
       if (j.categories) etat.categories = j.categories;
-      if (j.ouvert !== undefined) etat.ouvert_connu = j.ouvert;
+      etat.horaires = j.horaires || ''; etat.sOuvert = j.ouvert;
       indicateur({ ouvert: j.ouvert });
       var d = j.discussion;
       if (d && d.uuid !== etat.uuid) { corps.textContent = ''; etat.apres = 0; etat.uuid = d.uuid; }

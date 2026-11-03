@@ -188,7 +188,8 @@ CREATE TABLE IF NOT EXISTS support_discussions (
     ticket_code TEXT,
     cree_le INTEGER NOT NULL DEFAULT 0,
     maj_le INTEGER NOT NULL DEFAULT 0,
-    prevenue INTEGER NOT NULL DEFAULT 0
+    prevenue INTEGER NOT NULL DEFAULT 0,
+    congediee INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS support_discussions_compte ON support_discussions (compte, cree_le);
 CREATE TABLE IF NOT EXISTS support_messages (

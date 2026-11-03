@@ -225,7 +225,7 @@ Pour une réponse tout de suite, la bulle bleue en bas à droite de chaque page 
 
 ![Bulle de discussion en direct ouverte sur la page Support](../images/cloud-support-direct.png "La discussion en direct")
 
-1. Cliquer sur la bulle. L'en-tête indique si le support est **Ouvert** ou **Fermé**.
+1. Cliquer sur la bulle. L'en-tête indique si le support est **Ouvert** ou **Fermé** ; fermé, la bulle rappelle les horaires d'ouverture.
 2. Choisir le sujet, écrire le premier message, puis cliquer sur **Démarrer la discussion**.
 3. Les messages de l'équipe s'affichent dans la bulle, quelques secondes après leur envoi. Fermer la bulle ne coupe pas la discussion, et une pastille rouge signale un nouveau message.
 4. Cliquer sur **Terminer la discussion** pour y mettre fin.

@@ -363,8 +363,11 @@ requêtes par minute et par compte). Écritures en JSON avec l'en-tête `X-CSRF-
 `POST /support/direct/ouvrir` (`{categorie, message}` → `POST /discussions`, `locale` `fr`),
 `/support/direct/envoyer` (`POST /discussions/<uuid>/messages`) et `/support/direct/fermer`
 (`POST /discussions/<uuid>/close`). Une seule discussion à la fois par compte. L'indicateur
-**Ouvert / Fermé** reprend `open_now`, que l'ERP ne donne que dans une discussion : on garde le
-dernier état connu pendant une heure, sinon l'indicateur n'affiche rien.
+**Ouvert / Fermé** est calculé ici d'après les horaires que l'ERP rend avec les files
+(`meta.opening_hours` de `GET /categories`, relus au plus toutes les 10 minutes ; seul le fuseau
+Europe/Paris est calculé, sinon on prend le `meta.open_now` de la dernière lecture). Fermé, la
+bulle affiche les horaires. « Nouvelle discussion » après une discussion terminée repart d'une
+bulle neuve (`POST /support/direct/congedier`).
 
 **Webhooks `support.*`** (même point d'arrivée `/api/erp/webhooks`, même signature
 `X-EKO-Signature`, même protection contre les rejeux) :

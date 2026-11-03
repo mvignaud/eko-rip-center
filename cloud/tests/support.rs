@@ -85,10 +85,18 @@ async fn faux_erp(State(e): State<FauxErp>, q: Request) -> Response {
         .unwrap_or("")
         .to_string();
     match (methode.as_str(), p.as_slice()) {
-        ("GET", ["support", "categories"]) => j(
-            StatusCode::OK,
-            json!({ "data": [{ "id": 1, "code": "TECH", "label": "Technique", "color": "#007aff" }, { "id": 2, "code": "COMPTA", "label": "Comptabilité", "color": "#34c759" }] }),
-        ),
+        ("GET", ["support", "categories"]) => {
+            let ouvert = e.ouvert;
+            let horaires = if ouvert {
+                json!({ "start": "00:00", "end": "23:59", "days": [1, 2, 3, 4, 5, 6, 7], "timezone": "Europe/Paris" })
+            } else {
+                json!({ "start": "09:00", "end": "18:00", "days": [], "timezone": "Europe/Paris" })
+            };
+            j(
+                StatusCode::OK,
+                json!({ "data": [{ "id": 1, "code": "TECH", "label": "Technique", "color": "#007aff" }, { "id": 2, "code": "COMPTA", "label": "Comptabilité", "color": "#34c759" }], "meta": { "open_now": ouvert, "opening_hours": horaires } }),
+            )
+        }
         ("POST", ["support", "tickets"]) => {
             let cle = entetes.get("idempotency-key").cloned().unwrap_or_default();
             if let Some(code) = e.cles.get(&cle) {
@@ -666,6 +674,7 @@ async fn discussion_en_direct_et_conversion() {
         let etat = |q: &str| appel(&b, "GET", &format!("/support/direct/etat{q}"), &[("Cookie", &c)], Corps::Rien).json();
         // Rien en cours : les files et l'état d'ouverture arrivent avec `files=1`.
         let e = etat("?files=1");
+        assert_eq!((e["ouvert"].as_bool(), e["horaires"].as_str()), (Some(true), Some("de 0 h à 23 h 59, du lundi au dimanche")), "{e}");
         assert_eq!((e["actif"].as_bool(), e["discussion"].is_null(), e["categories"].as_array().map(Vec::len)), (Some(true), true, Some(2)), "{e}");
         // Ouverture : l'écriture exige le jeton anti-falsification et l'origine.
         assert_eq!(post("/support/direct/ouvrir", json!({ "message": "Bonjour" }), &c, "faux").statut, 403);
@@ -720,6 +729,8 @@ async fn discussion_en_direct_et_conversion() {
 
         // Support fermé : la discussion devient aussitôt une demande, avec la transcription par e-mail.
         b.erp.lock().unwrap().ouvert = false;
+        b.r.base().execute("DELETE FROM reglages WHERE cle LIKE 'support_%'", []).unwrap();
+        assert_eq!(etat("?files=1")["ouvert"], false, "horaires de l'ERP : fermé");
         let r = post("/support/direct/ouvrir", json!({ "message": "Question sur la facture" }), &c, &j);
         assert_eq!(r.statut, 200, "{}", r.corps);
         let e = r.json();
@@ -742,8 +753,15 @@ async fn discussion_en_direct_et_conversion() {
         assert_eq!(courriels_de(&b, "Votre discussion est devenue").len(), 1);
         // La demande est dans la liste locale.
         assert!(appel(&b, "GET", "/support", &[("Cookie", &c)], Corps::Rien).corps.contains("Question sur la facture"));
-        // Page de la bulle sans discussion active : la bulle voit « convertie » puis repart à neuf.
-        assert_eq!(etat("")["discussion"]["fin"], true);
+        // « Nouvelle discussion » : la discussion terminée n'est plus montrée, une nouvelle s'ouvre.
+        assert_eq!(post("/support/direct/congedier", json!({}), &c2, &j2).statut, 200);
+        assert_eq!(etat("")["discussion"]["fin"], true, "congédier ne touche que le compte de la session");
+        let r = post("/support/direct/congedier", json!({}), &c, &j);
+        assert!(r.json()["discussion"].is_null(), "{}", r.corps);
+        assert!(etat("?files=1")["discussion"].is_null());
+        b.erp.lock().unwrap().ouvert = true;
+        let r = post("/support/direct/ouvrir", json!({ "message": "Autre question" }), &c, &j);
+        assert_eq!((r.statut, r.json()["discussion"]["statut"].as_str()), (200, Some("en_attente")), "{}", r.corps);
     })
     .await;
     let _ = std::fs::remove_dir_all(&b.donnees);
@@ -868,6 +886,127 @@ async fn webhook_unique_abonne_aux_evenements_support() {
             page.corps.contains("support.view") && page.corps.contains("support.create"),
             "droits de jeton listés dans la carte"
         );
+    })
+    .await;
+    let _ = std::fs::remove_dir_all(&b.donnees);
+}
+
+#[test]
+fn horaires_calcules_localement() {
+    let h = json!({ "start": "09:00", "end": "18:00", "days": [1, 2, 3, 4, 5], "timezone": "Europe/Paris" });
+    // Mercredi 4 novembre 2026, heure d'hiver (UTC+1) : 09:00 Paris = 08:00 UTC.
+    let mercredi = eko_rip_cloud::offres::date_iso("2026-11-04").unwrap();
+    let ouvert = |h_utc: u64, m: u64| {
+        eko_rip_cloud::support::ouvert_selon(&h, mercredi + h_utc * 3600 + m * 60)
+    };
+    assert_eq!(ouvert(7, 59), Some(false));
+    assert_eq!(ouvert(8, 0), Some(true));
+    assert_eq!(ouvert(16, 59), Some(true));
+    assert_eq!(ouvert(17, 0), Some(false));
+    // Samedi 7 novembre : fermé toute la journée. Été (UTC+2) : 15 juillet 2026, 09:00 Paris = 07:00 UTC.
+    assert_eq!(
+        eko_rip_cloud::support::ouvert_selon(
+            &h,
+            eko_rip_cloud::offres::date_iso("2026-11-07").unwrap() + 10 * 3600
+        ),
+        Some(false)
+    );
+    let ete = eko_rip_cloud::offres::date_iso("2026-07-15").unwrap();
+    assert_eq!(
+        eko_rip_cloud::support::ouvert_selon(&h, ete + 7 * 3600),
+        Some(true)
+    );
+    assert_eq!(
+        eko_rip_cloud::support::ouvert_selon(&h, ete + 6 * 3600 + 59 * 60),
+        Some(false)
+    );
+    // Autre fuseau : non calculé ici.
+    assert_eq!(
+        eko_rip_cloud::support::ouvert_selon(
+            &json!({ "start": "09:00", "end": "18:00", "days": [1], "timezone": "America/Cayenne" }),
+            mercredi
+        ),
+        None
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bulle_autorisee_par_la_politique_de_securite_et_creation_rejouable() {
+    let b = banc().await;
+    let b2 = b.clone();
+    bl(move || {
+        let b = b2;
+        regler(&b);
+        let (c, j, _) = inscrire(&b, "claire@atelier.fr");
+        // Le script de la bulle est externe : la CSP réelle de la page doit l'autoriser ('self').
+        let page = appel(&b, "GET", "/support", &[("Cookie", &c)], Corps::Rien);
+        let csp = page
+            .entetes
+            .get("content-security-policy")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(csp.contains("script-src 'self' 'unsafe-inline'"), "{csp}");
+        assert!(page.corps.contains(r#"<script src="/support/bulle.js""#));
+        assert_eq!(
+            appel(&b, "GET", "/support/bulle.js", &[], Corps::Rien).statut,
+            200
+        );
+        // L'ERP refuse (jeton retiré) : le formulaire revient avec la même clé et les mêmes textes.
+        let envoyer = |cle: &str| {
+            appel(
+                &b,
+                "POST",
+                "/support/nouvelle",
+                &[
+                    ("Origin", URL),
+                    ("Cookie", &c),
+                    ("Content-Type", "multipart/form-data; boundary=L"),
+                ],
+                Corps::Octets(multipart(
+                    "L",
+                    &[
+                        ("csrf", &j),
+                        ("cle", cle),
+                        ("categorie", "TECH"),
+                        ("sujet", "Sujet gardé"),
+                        ("message", "Texte gardé"),
+                    ],
+                    &[("pieces", "a.txt", b"x")],
+                )),
+            )
+        };
+        assert!(
+            appel(
+                &b,
+                "GET",
+                "/support/nouvelle",
+                &[("Cookie", &c)],
+                Corps::Rien
+            )
+            .corps
+            .contains("Comptabilité")
+        );
+        base::regler(&b.r.base(), "erp_jeton", "mauvais-jeton").unwrap();
+        let r = envoyer("abcdef0123456789");
+        assert!(
+            r.corps.contains(r#"name="cle" value="abcdef0123456789""#),
+            "{}",
+            r.corps
+        );
+        assert!(
+            r.corps.contains("Sujet gardé")
+                && r.corps.contains("Texte gardé")
+                && r.corps.contains("sélectionner de nouveau"),
+            "{}",
+            r.corps
+        );
+        // Renvoi avec la clé gardée une fois l'ERP revenu : une seule demande, même si l'envoi précédent avait abouti sans réponse.
+        base::regler(&b.r.base(), "erp_jeton", "jeton-secret-erp").unwrap();
+        assert_eq!(envoyer("abcdef0123456789").lieu, "/support/TKT-1?ok=creee");
+        assert_eq!(envoyer("abcdef0123456789").lieu, "/support/TKT-1?ok=creee");
+        assert_eq!(b.erp.lock().unwrap().tickets.len(), 1);
     })
     .await;
     let _ = std::fs::remove_dir_all(&b.donnees);

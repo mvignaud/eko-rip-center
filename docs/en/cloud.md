@@ -102,8 +102,11 @@ RIP Cloud colours.
 - **Live chat bubble**: loaded on every signed-in page. No WebSocket (the hosting front end keeps
   the upstream direction): the browser polls the platform's local store every **3 seconds while
   the bubble is open** (every 20 seconds closed, while a chat is running). Writes are JSON with
-  an `X-CSRF-Token` header. One chat at a time per account. The **Open / Closed** indicator is the
-  ERP's `open_now`, which it only returns inside a chat: the last known value is kept for an hour.
+  an `X-CSRF-Token` header. One chat at a time per account. The **Open / Closed** indicator is computed
+  here from the opening hours the ERP returns with the queues (`meta.opening_hours` of
+  `GET /categories`, re-read at most every 10 minutes; only Europe/Paris is computed, otherwise the
+  last `meta.open_now` is used). When closed, the bubble shows the hours. "New chat" after a
+  finished chat starts a fresh bubble.
 - **Webhooks** (same `/api/erp/webhooks` endpoint, same signature and replay protection): a
   created request e-mails **Request received** (when opened here); a reply from the team e-mails
   **Support reply** (never for internal notes, never for the customer's own messages); a

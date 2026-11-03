@@ -225,7 +225,7 @@ For an answer right away, the blue bubble at the bottom right of every portal pa
 
 ![Live chat bubble open on the Support page](../images/cloud-support-direct.png "The live chat")
 
-1. Click the bubble. The header shows whether support is **Open** (*Ouvert*) or **Closed** (*Fermé*).
+1. Click the bubble. The header shows whether support is **Open** (*Ouvert*) or **Closed** (*Fermé*); when closed, the bubble reminds you of the opening hours.
 2. Choose the topic, write the first message, then click **Start the chat** (*Démarrer la discussion*).
 3. The team's messages appear in the bubble a few seconds after they are sent. Closing the bubble does not end the chat, and a red badge flags a new message.
 4. Click **End the chat** (*Terminer la discussion*) to finish it.
