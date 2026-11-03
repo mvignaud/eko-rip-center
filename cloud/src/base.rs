@@ -163,6 +163,46 @@ CREATE TABLE IF NOT EXISTS sauvegardes (
     cle_s3 TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sauvegardes_site ON sauvegardes (site, cree_le);
+-- Support : index local des demandes du compte (état tenu par les webhooks `support.*`), les
+-- discussions en direct et leurs messages (lus par la bulle du navigateur, jamais l'ERP).
+CREATE TABLE IF NOT EXISTS support_demandes (
+    code TEXT PRIMARY KEY,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    sujet TEXT NOT NULL DEFAULT '',
+    categorie TEXT NOT NULL DEFAULT '',
+    statut TEXT NOT NULL DEFAULT 'open',
+    ouverte_le INTEGER NOT NULL DEFAULT 0,
+    maj_le INTEGER NOT NULL DEFAULT 0,
+    resolue_le INTEGER,
+    note INTEGER,
+    recu_prevenu INTEGER NOT NULL DEFAULT 0,
+    resolue_prevenue INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS support_demandes_compte ON support_demandes (compte, maj_le);
+CREATE TABLE IF NOT EXISTS support_discussions (
+    uuid TEXT PRIMARY KEY,
+    compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE,
+    statut TEXT NOT NULL DEFAULT 'en_attente',
+    categorie TEXT NOT NULL DEFAULT '',
+    agent TEXT NOT NULL DEFAULT '',
+    ticket_code TEXT,
+    cree_le INTEGER NOT NULL DEFAULT 0,
+    maj_le INTEGER NOT NULL DEFAULT 0,
+    prevenue INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS support_discussions_compte ON support_discussions (compte, cree_le);
+CREATE TABLE IF NOT EXISTS support_messages (
+    discussion TEXT NOT NULL REFERENCES support_discussions(uuid) ON DELETE CASCADE,
+    id INTEGER NOT NULL,
+    auteur_type TEXT NOT NULL,
+    auteur_nom TEXT NOT NULL DEFAULT '',
+    corps TEXT NOT NULL,
+    cree_le INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (discussion, id)
+);
+-- Créations de demandes en cours d'envoi à l'ERP : distingue la demande ouverte ici de celle
+-- née de la conversion d'une discussion quand le webhook arrive avant la réponse.
+CREATE TABLE IF NOT EXISTS support_creations (compte INTEGER NOT NULL, debut INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS sauvegardes_compte ON sauvegardes (compte);
 ";
 

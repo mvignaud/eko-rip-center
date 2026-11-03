@@ -389,7 +389,7 @@ async fn configuration_depuis_l_erp() {
         assert_eq!(b.erp.lock().unwrap().webhooks.len(), 2, "webhook incomplet supprimé, ancien gardé");
         assert_eq!(base::reglage(&b.r.base(), "plan_atelier_annuel").unwrap().as_deref(), Some("RIP-ATELIER-A"));
         assert_eq!(base::reglage(&b.r.base(), "erp_webhook_secret").unwrap(), None, "pas de secret d'un webhook incomplet");
-        // ERP à jour : 8 plans, un webhook à 11 événements, secret gardé, ancien supprimé.
+        // ERP à jour : 8 plans, un webhook à 16 événements (facturation et support), secret gardé, ancien supprimé.
         b.erp.lock().unwrap().webhooks_un_seul_evenement = false;
         let r = appel(&b, "POST", "/admin/facturation", &[("Origin", URL), ("Cookie", &c)], Corps::Formulaire(&formulaire));
         assert!(r.corps.contains("Facturation configurée depuis l"), "{}", r.corps);

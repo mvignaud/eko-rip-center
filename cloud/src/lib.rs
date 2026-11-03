@@ -27,6 +27,7 @@ pub mod s3;
 pub mod sauvegardes;
 pub mod relais;
 pub mod sites;
+pub mod support;
 pub mod temps;
 pub mod webpush;
 pub mod ws;

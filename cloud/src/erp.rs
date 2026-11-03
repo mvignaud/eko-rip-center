@@ -19,7 +19,7 @@ pub const TOLERANCE_WEBHOOK: u64 = 300;
 /// Source annoncée à l'ERP (libellé des webhooks créés par l'API).
 pub const SOURCE: &str = "E-KO RIP Cloud";
 /// Événements de l'ERP écoutés par la plate-forme (un seul point d'arrivée, un seul secret).
-pub const EVENEMENTS_WEBHOOK: [&str; 11] = [
+pub const EVENEMENTS_WEBHOOK: [&str; 16] = [
     "subscription.created",
     "subscription.paused",
     "subscription.resumed",
@@ -31,6 +31,12 @@ pub const EVENEMENTS_WEBHOOK: [&str; 11] = [
     "dunning.reminder_sent",
     "dunning.exhausted",
     "sepa_mandate.signed",
+    // Support et discussion en direct (API `/support`, même jeton, même webhook).
+    "support.ticket.created",
+    "support.ticket.replied",
+    "support.ticket.status_changed",
+    "support.discussion.message",
+    "support.discussion.converted",
 ];
 
 #[derive(Clone)]
@@ -140,6 +146,36 @@ impl Erp {
 
     pub fn post(&self, chemin: &str, corps: &Value, idempotence: Option<&str>) -> Result<Reponse, String> {
         self.envoyer("POST", chemin, corps, idempotence)
+    }
+
+    /// Requête `multipart/form-data` (demande de support avec pièces jointes) : champs texte,
+    /// puis fichiers `(champ, nom du fichier, type, octets)`. Délai plus long : 5 fichiers de 10 Mo.
+    pub fn post_multipart(&self, chemin: &str, champs: &[(String, String)], fichiers: &[(String, String, String, Vec<u8>)], idempotence: Option<&str>) -> Result<Reponse, String> {
+        let limite = format!("----eko-cloud-{}", crate::aleatoire_hex(12));
+        let mut corps: Vec<u8> = Vec::new();
+        let nettoyer = |s: &str| s.chars().filter(|c| !c.is_control() && *c != '"' && *c != '\\').collect::<String>();
+        for (nom, valeur) in champs {
+            corps.extend_from_slice(format!("--{limite}\r\nContent-Disposition: form-data; name=\"{}\"\r\n\r\n", nettoyer(nom)).as_bytes());
+            corps.extend_from_slice(valeur.as_bytes());
+            corps.extend_from_slice(b"\r\n");
+        }
+        for (champ, nom, genre, octets) in fichiers {
+            corps.extend_from_slice(format!("--{limite}\r\nContent-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\nContent-Type: {}\r\n\r\n", nettoyer(champ), nettoyer(nom), nettoyer(genre)).as_bytes());
+            corps.extend_from_slice(octets);
+            corps.extend_from_slice(b"\r\n");
+        }
+        corps.extend_from_slice(format!("--{limite}--\r\n").as_bytes());
+        let agent: ureq::Agent = ureq::Agent::config_builder().http_status_as_error(false).max_redirects(0).timeout_global(Some(Duration::from_secs(120))).build().into();
+        let mut q = agent
+            .post(self.url(chemin))
+            .header("Authorization", &format!("Bearer {}", self.jeton))
+            .header("Accept", "application/json")
+            .header("X-Integration-Source", SOURCE)
+            .header("Content-Type", &format!("multipart/form-data; boundary={limite}"));
+        if let Some(k) = idempotence {
+            q = q.header("Idempotency-Key", k);
+        }
+        Self::lire(q.send(&corps[..]))
     }
 
     /// Document binaire (PDF) : (statut, type, octets).

@@ -218,6 +218,8 @@ const ICONE_SITES: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="curren
 const ICONE_COMPTE: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><circle cx="10" cy="8" r="2.6"/><path d="M5.2 15.3c1.1-1.8 2.8-2.7 4.8-2.7s3.7.9 4.8 2.7"/></svg>"#;
 const ICONE_ADMIN: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.5 16 5v4.6c0 3.6-2.5 6.6-6 7.9-3.5-1.3-6-4.3-6-7.9V5z"/><path d="m7.3 10 1.9 1.9 3.6-3.8"/></svg>"#;
 
+const ICONE_SUPPORT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M17 10a7 7 0 0 1-10.1 6.2L3 17l.9-3.7A7 7 0 1 1 17 10z"/><path d="M7.3 8.6h5.4M7.3 11.4h3.4"/></svg>"#;
+
 const ICONE_ABONNEMENT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M2.5 8h15"/><path d="M5.5 12.2h3"/></svg>"#;
 
 const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a>"#;
@@ -230,12 +232,14 @@ pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String
             let entree = |lien: &str, nom: &str, icone: &str| format!(r#"<a class="entree{}" href="{lien}"{}>{icone}<span>{nom}</span></a>"#, if titre == nom { " active" } else { "" }, if titre == nom { r#" aria-current="page""# } else { "" });
             let admin = if s.compte.super_admin { format!(r#"<div class="rubrique">Plate-forme</div>{}"#, entree("/admin", "Administration", ICONE_ADMIN)) } else { String::new() };
             format!(
-                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div></body></html>"#,
+                r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div>{bulle}</body></html>"#,
                 entree("/sites", "Mes sites", ICONE_SITES),
                 entree("/abonnement", "Abonnement", ICONE_ABONNEMENT),
+                entree("/support", "Support", ICONE_SUPPORT),
                 entree("/compte", "Mon compte", ICONE_COMPTE),
                 echapper(&s.csrf),
-                echapper(titre)
+                echapper(titre),
+                bulle = crate::support::balise_bulle(&s.csrf),
             )
         }
         None => format!(

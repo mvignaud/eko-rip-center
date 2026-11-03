@@ -621,6 +621,118 @@ pub fn mandat_signe(url: &str, a: &str, nom: &str, rum: &str, iban_fin: &str, li
     )
 }
 
+// ————— Support —————
+
+const RAISON_SUPPORT: &str = "vous avez ouvert une demande ou une discussion auprès du support E-KO RIP Cloud";
+
+/// Texte coupé à `max` caractères (sur un mot si possible), avec « … » s'il a été coupé.
+pub fn extrait(texte: &str, max: usize) -> String {
+    let t: String = texte.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.chars().count() <= max {
+        return t;
+    }
+    let coupe: String = t.chars().take(max).collect();
+    let coupe = coupe.rsplit_once(' ').map_or(coupe.as_str(), |(d, _)| d).trim_end_matches([',', ';', ':', '.', ' ']).to_string();
+    format!("{coupe}…")
+}
+
+fn lien_demande(url: &str, code: &str) -> String {
+    format!("{url}/support/{}", crate::portail::encoder(code))
+}
+
+/// 25. Demande reçue par le support.
+pub fn support_demande_recue(url: &str, a: &str, nom: &str, code: &str, sujet: &str, file: &str, premiere_reponse: Option<u64>) -> Courriel {
+    let mut l = vec![("Référence", code.to_string()), ("Sujet", une_ligne(sujet))];
+    if !file.is_empty() {
+        l.push(("File", file.to_string()));
+    }
+    if let Some(t) = premiere_reponse {
+        l.push(("Première réponse attendue avant le", date_heure_fr(t)));
+    }
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre demande au support E-KO RIP Cloud est reçue ({code})"),
+            resume: format!("{code} · {}", extrait(sujet, 80)),
+            titre: "Demande reçue".into(),
+            blocs: vec![Bloc::Paragraphe(format!("Bonjour {nom}, l'équipe du support a bien reçu votre demande et vous répond dès que possible.")), faits(&l), Bloc::Paragraphe("Vous êtes prévenu par e-mail à chaque réponse. Vous pouvez aussi suivre la demande et répondre depuis le portail.".into())],
+            bouton: Some(("Voir ma demande".into(), lien_demande(url, code))),
+            lien_en_clair: false,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 26. Nouvelle réponse de l'équipe du support.
+pub fn support_reponse(url: &str, a: &str, nom: &str, code: &str, sujet: &str, agent: &str, message: &str) -> Courriel {
+    let qui = if agent.is_empty() { "L'équipe du support".to_string() } else { format!("{agent}, du support E-KO,") };
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Réponse du support E-KO RIP Cloud : {}", une_ligne(sujet)),
+            resume: extrait(message, 110),
+            titre: "Nouvelle réponse".into(),
+            blocs: vec![Bloc::Paragraphe(format!("Bonjour {nom}, {qui} a répondu à votre demande {code}.")), faits(&[("Sujet", une_ligne(sujet)), ("Réponse", extrait(message, 600))]), Bloc::Paragraphe("Ouvrez la demande pour lire le message en entier et répondre.".into())],
+            bouton: Some(("Lire et répondre".into(), lien_demande(url, code))),
+            lien_en_clair: false,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 27. Demande résolue, avec le lien pour noter le support.
+pub fn support_resolue(url: &str, a: &str, nom: &str, code: &str, sujet: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre demande au support E-KO RIP Cloud est résolue ({code})"),
+            resume: "Dites-nous si vous êtes satisfait : une note de 1 à 5.".into(),
+            titre: "Demande résolue".into(),
+            blocs: vec![
+                Bloc::Paragraphe(format!("Bonjour {nom}, votre demande « {} » est marquée comme résolue.", une_ligne(sujet))),
+                Bloc::Paragraphe("Votre réponse nous aide à nous améliorer : donnez une note de 1 à 5 au support, avec un commentaire si vous le souhaitez. Si le problème persiste, répondez simplement dans la demande : elle sera rouverte.".into()),
+            ],
+            bouton: Some(("Noter le support".into(), format!("{}?note=1#note", lien_demande(url, code)))),
+            lien_en_clair: false,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 28. Discussion transformée en demande, avec la transcription `(auteur, texte)`.
+pub fn support_discussion_convertie(url: &str, a: &str, nom: &str, code: &str, sujet: &str, transcription: &[(String, String)]) -> Courriel {
+    let lignes: Vec<String> = transcription.iter().take(30).map(|(qui, texte)| format!("{qui} : {}", extrait(texte, 500))).collect();
+    let mut blocs = vec![Bloc::Paragraphe(format!("Bonjour {nom}, personne n'a pu prendre votre discussion en direct à temps : elle est devenue la demande {code}. L'équipe du support vous répondra par e-mail et dans le portail."))];
+    if !lignes.is_empty() {
+        blocs.push(Bloc::Titre("Vos messages".into()));
+        blocs.push(Bloc::Liste(lignes));
+    }
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre discussion est devenue la demande {code}"),
+            resume: format!("{code} · {}", extrait(sujet, 80)),
+            titre: "Discussion transformée en demande".into(),
+            blocs,
+            bouton: Some(("Voir ma demande".into(), lien_demande(url, code))),
+            lien_en_clair: false,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
 /// Tous les messages avec des données d'exemple (`eko-rip-cloud apercu-courriels <dossier>`).
 pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
     use crate::evenements::ResumeSite;
@@ -660,6 +772,10 @@ pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
         ("offre-depassee", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "3 imprimante(s) et 1 découpeur(s) pour 1 imprimante et 1 découpeur compris dans l'offre Gratuit", lundi + 14 * 86_400, false)),
         ("acces-suspendu", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "2 sites rattachés pour 1 compris dans l'offre Gratuit", lundi, true)),
         ("mandat-signe", mandat_signe(url, "contact@atelier-dupont.fr", "Atelier Dupont", "GP-SEPA-000123", "0189", &format!("{url}/abonnement/mandat.pdf"))),
+        ("support-demande-recue", support_demande_recue(url, "contact@atelier-dupont.fr", "Atelier Dupont", "TKT-202611-4H8K2P", "Le RIP ne voit plus l'imprimante", "Technique", Some(lundi + 9 * 3600))),
+        ("support-reponse", support_reponse(url, "contact@atelier-dupont.fr", "Atelier Dupont", "TKT-202611-4H8K2P", "Le RIP ne voit plus l'imprimante", "Camille", "Bonjour, merci pour le journal. Réinstallez le pilote depuis la page Machines, puis relancez la détection. Dites-moi si l'imprimante réapparaît.")),
+        ("support-resolue", support_resolue(url, "contact@atelier-dupont.fr", "Atelier Dupont", "TKT-202611-4H8K2P", "Le RIP ne voit plus l'imprimante")),
+        ("support-discussion-convertie", support_discussion_convertie(url, "contact@atelier-dupont.fr", "Atelier Dupont", "TKT-202611-4H9M3Q", "Question sur la facture", &[("Vous".to_string(), "Bonjour, j'ai une question sur ma dernière facture.".to_string()), ("Support E-KO".to_string(), "Le support est fermé pour le moment : votre message devient une demande.".to_string())])),
     ]
 }
 
@@ -815,9 +931,9 @@ mod tests {
     #[test]
     fn apercus_complets() {
         let v = apercus("https://platform.e-ko.rip");
-        assert_eq!(v.len(), 24);
+        assert_eq!(v.len(), 28);
         let noms: Vec<&str> = v.iter().map(|(n, _)| *n).collect();
-        for n in ["abonnement-souscrit", "facture-emise", "paiement-refuse", "relance-1", "relance-2", "relance-3", "resiliation-impaye", "fin-essai", "quota-80", "quota-100", "sauvegarde-echec", "restauration", "offre-depassee", "acces-suspendu", "mandat-signe"] {
+        for n in ["abonnement-souscrit", "facture-emise", "paiement-refuse", "relance-1", "relance-2", "relance-3", "resiliation-impaye", "fin-essai", "quota-80", "quota-100", "sauvegarde-echec", "restauration", "offre-depassee", "acces-suspendu", "mandat-signe", "support-demande-recue", "support-reponse", "support-resolue", "support-discussion-convertie"] {
             assert!(noms.contains(&n), "aperçu {n} absent");
         }
         for (_, c) in &v {
