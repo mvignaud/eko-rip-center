@@ -87,7 +87,7 @@ le nouvel installateur : il remplace l'ancienne version.
 
 Le client Windows reprend l'interface des clients Mac et Linux : barre latérale (Travaux,
 Machines, Système), file des travaux en tableau, inspecteur à droite, envoi par glisser-déposer
-avec choix du réglage (ou **Sans réglage** pour les réglages par défaut du serveur) et
+avec choix du réglage (par défaut **Sans réglage** : le serveur applique ses réglages par défaut) et
 notification Windows quand un travail est prêt.
 
 **Menu** (bouton **…** de la barre d'outils) : **Actualiser** (F5), **Administration…**,

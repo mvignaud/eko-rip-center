@@ -598,11 +598,6 @@ public sealed class Controleur : IDisposable
     {
         var api = Api;
         if (api is null) return;
-        if (!string.IsNullOrEmpty(reglage) && _parametres.DernierReglage != reglage)
-        {
-            _parametres.DernierReglage = reglage;
-            _enregistrer(_parametres);
-        }
         var champs = Regles.ChampsEnvoi(reglage, client, commande, quantite);
         var cts = new CancellationTokenSource();
         var nouveaux = fichiers.Select(f => new EnvoiEnCours(Path.GetFileName(f)) { Annulation = cts }).ToList();
