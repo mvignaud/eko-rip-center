@@ -124,7 +124,7 @@ async fn faux_erp(State(e): State<FauxErp>, q: Request) -> Response {
                 );
             }
             let code = format!("TKT-{}", e.tickets.len() + 1);
-            let t = json!({ "code": code, "label": champ("subject"), "status": "open", "source": "rip-cloud", "category": { "code": champ("category"), "label": if champ("category") == "TECH" { "Technique" } else { "Comptabilité" } }, "account_reference": champ("account_reference"), "opened_at": "2026-11-04T09:00:00+00:00", "first_response_due_at": "2026-11-04T16:00:00+00:00", "first_response_at": null, "resolved_at": null, "satisfaction": null, "description": format!("&lt;p&gt;{}&lt;/p&gt;", champ("message")) });
+            let t = json!({ "code": code, "label": champ("subject"), "status": "open", "source": "rip-cloud", "origin": "request", "discussion_uuid": null, "category": { "code": champ("category"), "label": if champ("category") == "TECH" { "Technique" } else { "Comptabilité" } }, "account_reference": champ("account_reference"), "opened_at": "2026-11-04T09:00:00+00:00", "first_response_due_at": "2026-11-04T16:00:00+00:00", "first_response_at": null, "resolved_at": null, "satisfaction": null, "description": format!("&lt;p&gt;{}&lt;/p&gt;", champ("message")) });
             e.cles.insert(cle, code.clone());
             e.fils.insert(code.clone(), Vec::new());
             e.tickets.push(t.clone());
@@ -736,8 +736,8 @@ async fn discussion_en_direct_et_conversion() {
         let e = r.json();
         assert_eq!((e["ouvert"].as_bool(), e["discussion"]["statut"].as_str(), e["discussion"]["ticket"].as_str(), e["discussion"]["fin"].as_bool()), (Some(false), Some("convertie"), Some("TKT-77"), Some(true)), "{e}");
         let uuid2 = e["discussion"]["uuid"].as_str().unwrap().to_string();
-        let ticket = json!({ "code": "TKT-77", "label": "Question sur la facture", "status": "open", "category": { "code": "TECH", "label": "Technique" }, "account_reference": format!("cloud-{id}"), "opened_at": "2026-11-04T09:00:02+00:00", "first_response_due_at": "2026-11-05T09:00:00+00:00" });
-        // `ticket.created` arrive avant `converted` : demande inconnue, aucun e-mail « reçue ».
+        let ticket = json!({ "origin": "discussion", "discussion_uuid": "uuid-2", "code": "TKT-77", "label": "Question sur la facture", "status": "open", "category": { "code": "TECH", "label": "Technique" }, "account_reference": format!("cloud-{id}"), "opened_at": "2026-11-04T09:00:02+00:00", "first_response_due_at": "2026-11-05T09:00:00+00:00" });
+        // `ticket.created` d'origine `discussion`, avant `converted` : aucun e-mail « reçue ».
         assert_eq!(webhook(&b, &ticket_webhook("support.ticket.created", ticket.clone(), json!({})), t, SECRET).json()["code"], "traite");
         assert!(sujets_support(&b).is_empty(), "{:?}", sujets(&b));
         let conv = json!({ "event": "support.discussion.converted", "occurred_at": "2026-11-04T09:00:03+00:00", "tenant": "support-eko", "data": { "discussion": { "uuid": uuid2, "status": "convertie", "origin": "rip_cloud", "account_reference": format!("cloud-{id}"), "category": { "code": "TECH", "label": "Technique" }, "customer_name": "Claire Dupont", "agent_name": null, "ticket_code": "TKT-77", "created_at": "2026-11-04T09:00:00+00:00" }, "ticket": ticket } });
@@ -768,7 +768,7 @@ async fn discussion_en_direct_et_conversion() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn demande_ouverte_ici_prevenue_apres_conversion_d_une_autre() {
+async fn demande_ouverte_ici_prevenue_sur_son_origine() {
     let b = banc().await;
     let b2 = b.clone();
     bl(move || {
@@ -818,17 +818,11 @@ async fn demande_ouverte_ici_prevenue_apres_conversion_d_une_autre() {
                 Some(format!("cloud-{id}").as_str())
             )
         );
-        // Le webhook `created` arrive pendant la création (avant la réponse de l'API) : demande
-        // ouverte ici, reconnue par la création en cours.
+        // Le webhook `created` arrive avant la réponse de l'API (demande encore inconnue ici) :
+        // `origin: request` suffit pour envoyer « demande reçue ».
         let t = maintenant();
         b.r.base()
             .execute("DELETE FROM support_demandes", [])
-            .unwrap();
-        b.r.base()
-            .execute(
-                "INSERT INTO support_creations (compte, debut) VALUES (?1, ?2)",
-                rusqlite::params![id, t as i64],
-            )
             .unwrap();
         webhook(
             &b,

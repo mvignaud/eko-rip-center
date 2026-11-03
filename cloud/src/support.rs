@@ -231,22 +231,6 @@ pub fn creer_demande(
     pieces: &[Piece],
 ) -> Result<Value, String> {
     let erp = erp_pret(r)?;
-    // Le webhook `support.ticket.created` peut arriver avant la réponse : il reconnaît ainsi
-    // une demande ouverte ici (et la signale par e-mail) d'une discussion transformée.
-    let t = crate::maintenant();
-    let marque = {
-        let c = r.base();
-        let _ = c.execute(
-            "DELETE FROM support_creations WHERE debut < ?1",
-            [t.saturating_sub(300) as i64],
-        );
-        c.execute(
-            "INSERT INTO support_creations (compte, debut) VALUES (?1, ?2)",
-            params![ident.compte, t as i64],
-        )
-        .ok()
-        .map(|_| c.last_insert_rowid())
-    };
     let idem = format!("cloud-{}-{cle}", ident.compte);
     let rep = if pieces.is_empty() {
         let mut corps = ident.json();
@@ -265,11 +249,6 @@ pub fn creer_demande(
             .collect();
         erp.post_multipart("/support/tickets", &champs, &fichiers, Some(&idem))
     };
-    if let Some(m) = marque {
-        let _ = r
-            .base()
-            .execute("DELETE FROM support_creations WHERE rowid = ?1", [m]);
-    }
     let rep = rep?;
     if !rep.ok() {
         return Err(refus(&rep));
@@ -277,18 +256,6 @@ pub fn creer_demande(
     let d = rep.donnees().clone();
     enregistrer_demande(&r.base(), ident.compte, &d);
     Ok(d)
-}
-
-fn creation_en_cours(c: &Connection, compte: i64, t: u64) -> bool {
-    c.query_row(
-        "SELECT 1 FROM support_creations WHERE compte = ?1 AND debut >= ?2",
-        params![compte, t.saturating_sub(300) as i64],
-        |_| Ok(()),
-    )
-    .optional()
-    .ok()
-    .flatten()
-    .is_some()
 }
 
 /// Détail d'une demande du compte (`GET /support/tickets/{code}?account_reference=`).
@@ -716,15 +683,13 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
     };
     let url = r.config.url_publique.clone();
     let a = cp.email.clone();
-    let t = crate::maintenant();
     eprintln!("webhook {evenement} : compte {id}");
     match evenement {
         "support.ticket.created" => {
             let ticket = &data["ticket"];
             let code = texte(&ticket["code"]);
-            let (connu, ici, prevenu) = {
+            let prevenu = {
                 let c = r.base();
-                let connu = demande_connue(&c, id, &code);
                 let prevenu = c
                     .query_row(
                         "SELECT recu_prevenu FROM support_demandes WHERE code = ?1",
@@ -736,13 +701,13 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
                     .flatten()
                     .unwrap_or(0)
                     == 1;
-                let ici = creation_en_cours(&c, id, t);
                 enregistrer_demande(&c, id, ticket);
-                (connu, ici, prevenu)
+                prevenu
             };
-            // Une demande qu'on ne connaît pas et qu'on n'est pas en train d'ouvrir vient d'une
-            // discussion transformée : son e-mail (avec la transcription) part au webhook `converted`.
-            if (connu || ici) && !prevenu {
+            // `origin` de la demande : `request` (ouverte par l'API) reçoit « demande reçue » ;
+            // `discussion` (discussion transformée) reçoit l'e-mail avec la transcription au
+            // webhook `converted`.
+            if ticket["origin"].as_str() != Some("discussion") && !prevenu {
                 let _ = r.base().execute(
                     "UPDATE support_demandes SET recu_prevenu = 1 WHERE code = ?1",
                     [&code],
@@ -928,12 +893,8 @@ pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
     true
 }
 
-/// Ménage : créations en cours oubliées, discussions terminées anciennes.
+/// Ménage : discussions terminées anciennes.
 pub fn entretenir(c: &Connection, t: u64) {
-    let _ = c.execute(
-        "DELETE FROM support_creations WHERE debut < ?1",
-        [t.saturating_sub(300) as i64],
-    );
     let _ = c.execute(
         "DELETE FROM support_discussions WHERE statut IN ('close', 'convertie') AND maj_le < ?1",
         [t.saturating_sub(CONSERVATION_DISCUSSIONS) as i64],

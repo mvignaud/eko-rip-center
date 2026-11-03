@@ -374,7 +374,7 @@ bulle neuve (`POST /support/direct/congedier`).
 
 | Événement | Effet local | E-mail et notification |
 |---|---|---|
-| `support.ticket.created` | demande rangée dans l'index | **Demande reçue**, si elle a été ouverte ici (une demande née d'une discussion reçoit l'e-mail de conversion à la place) |
+| `support.ticket.created` | demande rangée dans l'index | **Demande reçue** si `ticket.origin` vaut `request` (une demande d'origine `discussion` reçoit l'e-mail de conversion à la place) |
 | `support.ticket.replied` | date de mise à jour | **Réponse du support** (extrait du message) si l'auteur n'est pas le client ; jamais pour une note interne |
 | `support.ticket.status_changed` | statut | **Demande résolue**, avec le lien `/support/<code>?note=1#note`, une fois par résolution |
 | `support.discussion.message` | message rangé (idempotent par identifiant) | aucun : le navigateur le lit |
@@ -388,7 +388,7 @@ ils répondent à une demande du client. Aperçu : `eko-rip-cloud apercu-courrie
 
 **Données** (`portail.sqlite`) : `support_demandes` (index des demandes, indicateurs d'envoi des
 e-mails), `support_discussions` et `support_messages` (discussions terminées oubliées après 30
-jours ; la demande, elle, reste dans l'ERP), `support_creations` (créations en cours d'envoi).
+jours ; la demande, elle, reste dans l'ERP).
 Supprimer un compte supprime ces lignes.
 
 ## Régler la facturation et le stockage (administration)

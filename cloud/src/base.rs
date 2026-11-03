@@ -201,9 +201,7 @@ CREATE TABLE IF NOT EXISTS support_messages (
     cree_le INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (discussion, id)
 );
--- Créations de demandes en cours d'envoi à l'ERP : distingue la demande ouverte ici de celle
--- née de la conversion d'une discussion quand le webhook arrive avant la réponse.
-CREATE TABLE IF NOT EXISTS support_creations (compte INTEGER NOT NULL, debut INTEGER NOT NULL);
+
 CREATE INDEX IF NOT EXISTS sauvegardes_compte ON sauvegardes (compte);
 ";
 
