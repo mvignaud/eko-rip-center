@@ -248,7 +248,7 @@ The Cloud stays **free for a small shop** (1 site, 1 printer and 1 cutter). Paid
 
 1. Open **Subscription**, then **See the plans**.
 2. Choose the plan and the billing period (monthly or annual).
-3. Fill in the company. Entering the SIREN or SIRET fills in the company name and address automatically. Add the contact, the billing e-mail address and, if needed, a purchase order number.
+3. Fill in the company. Entering the SIREN or SIRET fills in the company name and address automatically. Add the contact, the billing e-mail address, the phone number (pick the country, shown with its flag and dialling code, then type the number as you usually would) and, if needed, a purchase order number.
 4. If you have a code, enter it in the single **Promo or partner code** field. It is checked straight away and its conditions are shown.
 5. Tick the acceptance of the terms of sale, then choose the payment method. Everything happens on the page, without leaving it:
    - **Bank card**: enter the card in the secure field. If the bank asks for confirmation (3-D Secure), it appears on the page.
