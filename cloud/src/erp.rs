@@ -16,6 +16,22 @@ use std::time::Duration;
 pub const CHEMIN_PDF_FACTURE: &str = "/invoices/{code}/pdf";
 /// Tolérance de l'horodatage des webhooks.
 pub const TOLERANCE_WEBHOOK: u64 = 300;
+/// Source annoncée à l'ERP (libellé des webhooks créés par l'API).
+pub const SOURCE: &str = "E-KO RIP Cloud";
+/// Événements de l'ERP écoutés par la plate-forme (un seul point d'arrivée, un seul secret).
+pub const EVENEMENTS_WEBHOOK: [&str; 11] = [
+    "subscription.created",
+    "subscription.paused",
+    "subscription.resumed",
+    "subscription.cancel_scheduled",
+    "subscription.cancelled",
+    "cycle.billed",
+    "cycle.paid",
+    "cycle.failed",
+    "dunning.reminder_sent",
+    "dunning.exhausted",
+    "sepa_mandate.signed",
+];
 
 #[derive(Clone)]
 pub struct Erp {
@@ -93,7 +109,11 @@ impl Erp {
     }
 
     pub fn get(&self, chemin: &str) -> Result<Reponse, String> {
-        Self::lire(Self::agent().get(self.url(chemin)).header("Authorization", &format!("Bearer {}", self.jeton)).header("Accept", "application/json").call())
+        Self::lire(Self::agent().get(self.url(chemin)).header("Authorization", &format!("Bearer {}", self.jeton)).header("Accept", "application/json").header("X-Integration-Source", SOURCE).call())
+    }
+
+    pub fn supprimer(&self, chemin: &str) -> Result<Reponse, String> {
+        Self::lire(Self::agent().delete(self.url(chemin)).header("Authorization", &format!("Bearer {}", self.jeton)).header("Accept", "application/json").header("X-Integration-Source", SOURCE).call())
     }
 
     /// Requête avec corps JSON. `idempotence` : en-tête `Idempotency-Key` (créations).
@@ -103,7 +123,7 @@ impl Erp {
         let auth = format!("Bearer {}", self.jeton);
         macro_rules! avec_corps {
             ($q:expr) => {{
-                let mut q = $q.header("Authorization", &auth).header("Accept", "application/json");
+                let mut q = $q.header("Authorization", &auth).header("Accept", "application/json").header("X-Integration-Source", SOURCE);
                 if let Some(k) = idempotence {
                     q = q.header("Idempotency-Key", k);
                 }

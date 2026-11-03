@@ -333,6 +333,12 @@ carte a un bouton **Tester**.
   l'outil de facturation est `https://platform.e-ko.rip/api/erp/webhooks` (événements abonnement,
   cycle de facturation, relance, mandat SEPA) ; les e-mails aux clients de l'outil de
   facturation restent désactivés, la plate-forme les envoie elle-même.
+  **Enregistrer et configurer depuis l'ERP** fait le reste en un clic, avec un jeton qui a en
+  plus le droit `webhooks.manage` (ERP 1.95.510 ou plus récent) : la plate-forme lit les plans,
+  enregistre les codes `RIP-MACHINE-M`, `RIP-ATELIER-A`, `RIP-SUPP-M`… (`RIP-<OFFRE>-<M|A>`, SUPP
+  pour les machines supplémentaires), crée le webhook avec tous ses événements et garde son
+  secret sans l'afficher, puis supprime l'ancien webhook vers la même adresse. Après avoir
+  régénéré le jeton dans l'ERP, il suffit de le coller et de relancer la configuration.
 - **Stockage** : point d'accès S3, région, compartiment, clé d'accès et clé secrète, chiffrement
   côté serveur ; et un compartiment séparé pour la copie quotidienne de la base du portail.
 - **Abonnements** : vue d'ensemble des comptes, de leur offre, de leurs machines et des

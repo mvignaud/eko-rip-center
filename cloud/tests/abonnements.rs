@@ -31,6 +31,12 @@ struct EtatErp {
     suivis: u32,
     /// Mandats SEPA : RUM -> (tiers, signé).
     mandats: HashMap<String, (String, bool)>,
+    /// Webhooks : (id, adresse, événements).
+    webhooks: Vec<(i64, String, Vec<Value>)>,
+    /// ERP antérieur à 1.95.510 : un webhook par l'API ne retient qu'un événement.
+    webhooks_un_seul_evenement: bool,
+    /// En-tête X-Integration-Source reçu.
+    sources: Vec<String>,
 }
 
 type Erp = Arc<Mutex<EtatErp>>;
@@ -42,10 +48,12 @@ async fn faux_erp(State(e): State<Erp>, q: Request) -> Response {
     let chemin = q.uri().path().trim_start_matches("/api/v1").to_string();
     let requete = q.uri().query().unwrap_or("").to_string();
     let autorisation = q.headers().get("authorization").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+    let source = q.headers().get("x-integration-source").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
     let octets = axum::body::to_bytes(q.into_body(), 1 << 20).await.unwrap();
     let corps: Value = serde_json::from_slice(&octets).unwrap_or(Value::Null);
     let mut e = e.lock().unwrap();
     e.appels.push(Appel { methode: methode.clone(), chemin: chemin.clone(), corps: corps.clone(), autorisation: autorisation.clone() });
+    e.sources.push(source);
     if autorisation != "Bearer jeton-secret-erp" {
         return (StatusCode::UNAUTHORIZED, axum::Json(json!({ "error": "unauthenticated" }))).into_response();
     }
@@ -56,7 +64,25 @@ async fn faux_erp(State(e): State<Erp>, q: Request) -> Response {
         ("GET", ["companies", _]) => j(StatusCode::UNPROCESSABLE_ENTITY, json!({ "error": "siren.invalid" })),
         ("GET", ["tiers"]) => j(StatusCode::OK, json!({ "data": if requete.contains("552100554") { json!([{ "code": "CLI-EXISTANT", "name": "Existant" }]) } else { json!([]) } })),
         ("POST", ["tiers"]) => j(StatusCode::CREATED, json!({ "data": { "code": "CLI-1", "name": corps["name"] } })),
-        ("GET", ["subscription-plans"]) => j(StatusCode::OK, json!({ "data": [{ "code": "MACH-M", "name": "À la machine", "pricing_mode": "per_seat", "unit_price_ht": "6.00", "currency": "EUR", "billing_cycle": "monthly", "trial_days": 30 }, { "code": "ATEL-M", "name": "Atelier", "pricing_mode": "flat", "unit_price_ht": "19.00", "currency": "EUR", "billing_cycle": "monthly", "trial_days": 30 }] })),
+        ("GET", ["subscription-plans"]) => j(StatusCode::OK, json!({ "data": [{ "code": "MACH-M", "name": "À la machine", "pricing_mode": "per_seat", "unit_price_ht": "6.00", "currency": "EUR", "billing_cycle": "monthly", "trial_days": 30 }, { "code": "ATEL-M", "name": "Atelier", "pricing_mode": "flat", "unit_price_ht": "19.00", "currency": "EUR", "billing_cycle": "monthly", "trial_days": 30 }, { "code": "RIP-MACHINE-M" }, { "code": "RIP-MACHINE-A" }, { "code": "RIP-ATELIER-M" }, { "code": "RIP-ATELIER-A" }, { "code": "RIP-PRO-M" }, { "code": "RIP-PRO-A" }, { "code": "RIP-SUPP-M" }, { "code": "RIP-SUPP-A" }] })),
+        ("GET", ["webhook-subscriptions"]) => j(StatusCode::OK, json!({ "data": e.webhooks.iter().rev().map(|(id, url, ev)| json!({ "id": id, "target_url": url, "events": ev })).collect::<Vec<_>>() })),
+        ("POST", ["webhook-subscriptions"]) => {
+            let id = 50 + e.appels.len() as i64;
+            let evenements = if e.webhooks_un_seul_evenement { vec![corps["event"].clone()] } else { corps["events"].as_array().cloned().unwrap_or_default() };
+            if evenements.iter().any(Value::is_null) || evenements.is_empty() {
+                return j(StatusCode::UNPROCESSABLE_ENTITY, json!({ "errors": { "event": ["The event field is required."] } }));
+            }
+            e.webhooks.push((id, corps["target_url"].as_str().unwrap_or("").to_string(), evenements.clone()));
+            let mut rep = json!({ "id": id, "target_url": corps["target_url"], "event": evenements[0], "secret": format!("whsec_{id}") });
+            if !e.webhooks_un_seul_evenement {
+                rep["events"] = Value::Array(evenements);
+            }
+            j(StatusCode::CREATED, rep)
+        }
+        ("DELETE", ["webhook-subscriptions", id]) => {
+            e.webhooks.retain(|(w, _, _)| w.to_string() != *id);
+            StatusCode::NO_CONTENT.into_response()
+        }
         ("GET", ["subscription-coupons", "BIENVENUE"]) => j(StatusCode::OK, json!({ "data": { "code": "BIENVENUE", "name": "Bienvenue", "kind": "discount_percent", "value": 20, "currency": "EUR", "is_recurring": false, "valid_until": null } })),
         ("GET", ["subscription-coupons", "EXPIRE"]) => j(StatusCode::UNPROCESSABLE_ENTITY, json!({ "error": "coupon.expired" })),
         ("GET", ["subscription-coupons", _]) => j(StatusCode::NOT_FOUND, json!({ "error": "not_found" })),
@@ -340,6 +366,56 @@ async fn administration_secrets_et_essais() {
         let accueil = appel(&b, "GET", "/", &[], Corps::Rien);
         assert!(accueil.corps.contains("/abonnement/offres") && !accueil.corps.contains("Service gratuit."));
         assert!(accueil.corps.contains(r#"href="/cgv""#), "lien CGV dans le pied de page");
+    })
+    .await;
+    let _ = std::fs::remove_dir_all(&b.donnees);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn configuration_depuis_l_erp() {
+    let b = banc().await;
+    let b2 = b.clone();
+    bl(move || {
+        let b = b2;
+        let (c, j) = admin(&b);
+        let cible = format!("{URL}/api/erp/webhooks");
+        // Ancien webhook déclaré à la main vers la plate-forme, et un autre sans rapport.
+        b.erp.lock().unwrap().webhooks = vec![(7, cible.clone(), vec![json!("cycle.paid")]), (8, "https://hooks.zapier.com/x".into(), vec![json!("invoice.paid")])];
+        // ERP trop ancien : refus clair, aucun webhook incomplet laissé, plans quand même remplis.
+        b.erp.lock().unwrap().webhooks_un_seul_evenement = true;
+        let formulaire = [("csrf", j.as_str()), ("erp_url", b.url_erp.as_str()), ("erp_jeton", "jeton-secret-erp"), ("stancer_cle_publique", "pk_test_123"), ("action", "configurer")];
+        let r = appel(&b, "POST", "/admin/facturation", &[("Origin", URL), ("Cookie", &c)], Corps::Formulaire(&formulaire));
+        assert!(r.corps.contains("1.95.510"), "{}", r.corps);
+        assert_eq!(b.erp.lock().unwrap().webhooks.len(), 2, "webhook incomplet supprimé, ancien gardé");
+        assert_eq!(base::reglage(&b.r.base(), "plan_atelier_annuel").unwrap().as_deref(), Some("RIP-ATELIER-A"));
+        assert_eq!(base::reglage(&b.r.base(), "erp_webhook_secret").unwrap(), None, "pas de secret d'un webhook incomplet");
+        // ERP à jour : 8 plans, un webhook à 11 événements, secret gardé, ancien supprimé.
+        b.erp.lock().unwrap().webhooks_un_seul_evenement = false;
+        let r = appel(&b, "POST", "/admin/facturation", &[("Origin", URL), ("Cookie", &c)], Corps::Formulaire(&formulaire));
+        assert!(r.corps.contains("Facturation configurée depuis l"), "{}", r.corps);
+        assert!(!r.corps.contains("whsec_"), "secret jamais affiché");
+        {
+            let cx = b.r.base();
+            for (cle, code) in [("plan_machine_mensuel", "RIP-MACHINE-M"), ("plan_machine_annuel", "RIP-MACHINE-A"), ("plan_atelier_mensuel", "RIP-ATELIER-M"), ("plan_pro_annuel", "RIP-PRO-A"), ("plan_supplement_mensuel", "RIP-SUPP-M"), ("plan_supplement_annuel", "RIP-SUPP-A")] {
+                assert_eq!(base::reglage(&cx, cle).unwrap().as_deref(), Some(code), "{cle}");
+            }
+        }
+        let webhooks = b.erp.lock().unwrap().webhooks.clone();
+        assert_eq!(webhooks.len(), 2, "{webhooks:?}");
+        assert!(webhooks.iter().any(|(id, _, _)| *id == 8), "webhook sans rapport intact");
+        let (id, url, ev) = webhooks.iter().find(|(id, _, _)| *id != 8).unwrap().clone();
+        assert_eq!(url, cible);
+        assert_eq!(ev.len(), erp::EVENEMENTS_WEBHOOK.len());
+        assert_eq!(base::reglage(&b.r.base(), "erp_webhook_secret").unwrap(), Some(format!("whsec_{id}")));
+        assert!(b.erp.lock().unwrap().sources.iter().all(|s| s == erp::SOURCE));
+        // Le nouveau secret signe bien les webhooks reçus.
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let r = webhook(&b, &json!({ "event": "cycle.paid", "data": { "subscription": { "code": "SUB-INCONNU" } } }), t, &format!("whsec_{id}"));
+        assert_eq!(r.statut, 200, "{}", r.corps);
+        // Relancer la configuration remplace le webhook, sans doublon.
+        appel(&b, "POST", "/admin/facturation", &[("Origin", URL), ("Cookie", &c)], Corps::Formulaire(&formulaire));
+        let webhooks = b.erp.lock().unwrap().webhooks.clone();
+        assert_eq!(webhooks.iter().filter(|(_, u, _)| *u == cible).count(), 1, "{webhooks:?}");
     })
     .await;
     let _ = std::fs::remove_dir_all(&b.donnees);
