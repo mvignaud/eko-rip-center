@@ -38,6 +38,12 @@ env:
   CARGO_TERM_COLOR: always
   DEBIAN_FRONTEND: noninteractive
 
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   controle:
     if: github.ref == 'refs/heads/main'

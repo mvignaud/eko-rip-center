@@ -27,6 +27,12 @@ env:
   HOTE: sc3nihe1770@fleur.o2switch.net
   URL_SANTE: https://platform.e-ko.rip/sante
 
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   cloud:
     if: github.ref == 'refs/heads/main'
@@ -81,7 +87,20 @@ jobs:
           cp -p app.js app.js.precedent
           sauvegarde=~/eko-cloud-data/avant-$VERSION-$(date +%Y%m%d%H%M%S)
           mkdir -p "$sauvegarde"
-          cp -p ~/eko-cloud-data/portail.sqlite* ~/eko-cloud-data/*.json "$sauvegarde"/ 2>/dev/null || true
+          # Base en WAL, service en marche : copie cohérente par l'API de sauvegarde
+          # de SQLite (comme sauvegarder_base), jamais un cp des fichiers.
+          for base in ~/eko-cloud-data/*.sqlite; do
+              [ -f "$base" ] || continue
+              cible="$sauvegarde/$(basename "$base")"
+              if command -v python3 >/dev/null; then
+                  python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close(); s.close()' "$base" "$cible"
+              elif command -v sqlite3 >/dev/null; then
+                  sqlite3 "$base" ".backup '$cible'"
+              else
+                  echo "Ni python3 ni sqlite3 sur l'hébergement : sauvegarde de $base impossible." >&2; exit 1
+              fi
+          done
+          cp -p ~/eko-cloud-data/*.json "$sauvegarde"/ 2>/dev/null || true
           # Bascule AVANT d'arrêter le relais : sinon app.js relance l'ancien binaire.
           mv eko-rip-cloud.nouveau eko-rip-cloud
           mv app.js.nouveau app.js

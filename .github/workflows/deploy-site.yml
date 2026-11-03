@@ -17,6 +17,12 @@ concurrency:
 permissions:
   contents: read
 
+# Les conteneurs lancent les étapes avec sh par défaut : set -o pipefail, ${!x}
+# et <<< demandent bash.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   site:
     if: github.ref == 'refs/heads/main'
