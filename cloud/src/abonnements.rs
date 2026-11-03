@@ -2178,6 +2178,7 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
     if !pk.is_empty() && (!pk.starts_with("pk_") || !pk.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
         return erreur_page(&r, Some(&s), "Clé publique Stancer invalide (pk_…).");
     }
+    let configurer = champ(&f, "action") == "configurer";
     let mut cles: Vec<(String, String)> = vec![("erp_url".into(), url.trim_end_matches('/').to_string()), ("stancer_cle_publique".into(), pk)];
     for (o, _) in PLANS {
         for cy in [Cycle::Mensuel, Cycle::Annuel] {
@@ -2186,10 +2187,17 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
             if v.chars().any(|c| c.is_control()) || v.len() > 64 {
                 return erreur_page(&r, Some(&s), "Code de plan invalide.");
             }
-            cles.push((k, v));
+            // Avec « configurer », les codes viennent de l'ERP : ceux du formulaire ne sont pas écrits.
+            if !configurer {
+                cles.push((k, v));
+            }
         }
     }
     let ok = {
+        let _verrou = match verrou_configuration(&r) {
+            Ok(v) => v,
+            Err(e) => return erreur_page(&r, Some(&s), &e),
+        };
         let b = r.base();
         let mut ok = true;
         for (k, v) in &cles {
@@ -2208,7 +2216,7 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
     if !ok {
         return erreur_page(&r, Some(&s), "Enregistrement impossible.");
     }
-    if champ(&f, "action") != "configurer" {
+    if !configurer {
         return Redirect::to("/admin?ok=facturation").into_response();
     }
     let resultat = reponse_bloquante(&r, configurer_depuis_erp).await.unwrap_or_else(|_| Err("Service momentanément indisponible.".into()));
@@ -2222,6 +2230,29 @@ pub async fn regler_facturation(State(r): State<Partage>, h: HeaderMap, axum::Fo
         Err(e) => format!(r#"<div class="carte"><h2>Configuration depuis l'ERP impossible</h2><p class="erreur">{}</p><p>Les autres réglages sont enregistrés.</p><p><a href="/admin">Retour</a></p></div>"#, echapper(&e)),
     };
     page("Administration", Some(&s), &format!("<h1>Administration</h1>{corps}")).into_response()
+}
+
+/// Une seule configuration depuis l'ERP à la fois, et pas d'enregistrement du formulaire
+/// pendant qu'elle tourne : deux passes croisées pourraient laisser actif le webhook de l'une
+/// avec le secret de l'autre, ou effacer les codes de plans qu'elle vient de remplir.
+static CONFIGURATION_ERP: std::sync::Mutex<Vec<std::path::PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// Verrou de configuration d'une plate-forme (clé : son dossier de données), rendu à la sortie.
+struct VerrouConfiguration(std::path::PathBuf);
+
+impl Drop for VerrouConfiguration {
+    fn drop(&mut self) {
+        CONFIGURATION_ERP.lock().unwrap_or_else(std::sync::PoisonError::into_inner).retain(|d| d != &self.0);
+    }
+}
+
+fn verrou_configuration(r: &Partage) -> Result<VerrouConfiguration, String> {
+    let mut en_cours = CONFIGURATION_ERP.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if en_cours.contains(&r.config.donnees) {
+        return Err("Une configuration depuis l'ERP est en cours : réessaie dans un instant.".into());
+    }
+    en_cours.push(r.config.donnees.clone());
+    Ok(VerrouConfiguration(r.config.donnees.clone()))
 }
 
 /// Code de plan attendu dans l'ERP pour une offre et un cycle (`RIP-ATELIER-M`, `RIP-SUPP-A`…).
@@ -2242,14 +2273,7 @@ pub struct Bilan {
 /// tous les événements écoutés et un seul secret, gardé ici sans être affiché. L'ancien
 /// webhook vers la même adresse est supprimé après coup, une fois le nouveau secret enregistré.
 pub fn configurer_depuis_erp(r: &Partage) -> Result<Bilan, String> {
-    // Une seule configuration à la fois : deux passes croisées pourraient laisser actif le
-    // webhook de l'une avec le secret de l'autre.
-    static EN_COURS: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _verrou = match EN_COURS.try_lock() {
-        Ok(v) => v,
-        Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
-        Err(std::sync::TryLockError::WouldBlock) => return Err("Une configuration depuis l'ERP est déjà en cours : réessaie dans un instant.".into()),
-    };
+    let _verrou = verrou_configuration(r)?;
     let erp = Erp::depuis(&r.base()).ok_or("Adresse ou jeton de l'API non renseigné.")?;
     let mut bilan = Bilan::default();
 
