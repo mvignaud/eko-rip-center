@@ -6,3 +6,6 @@ essais-atelier/
 
 # Copies du journal déposées à la publication du site
 /site/changelog.*.json
+
+# Cache Python des outils (generer-site.py importe site_commun et generer-documentation)
+__pycache__/
