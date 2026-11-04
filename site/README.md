@@ -1,7 +1,8 @@
 # Site vitrine e-ko.rip
 
 Site statique (HTML, CSS, JavaScript sans dépendance ni étape de construction), servi par
-Apache sur l'hébergement o2switch. Aucune ressource externe, aucun cookie.
+Apache sur l'hébergement o2switch. Aucune ressource externe ni cookie, sauf le chat en direct
+(`assets/chat.js`, support Suite E-KO sur help.suite-eko.com, autorisé dans la CSP de `.htaccess`).
 
 | Page | Fichier |
 |---|---|

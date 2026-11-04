@@ -436,6 +436,7 @@ def gabarit(p, contenu, titres, pages, precedente, suivante, traduction):
 {site_commun.pied(p["langue"])}
 
 <script src="/assets/site.js" defer></script>
+<script src="/assets/chat.js" defer></script>
 <script src="/assets/documentation.js" defer></script>
 </body>
 </html>

@@ -185,6 +185,7 @@ def queue():
 {site_commun.pied("fr")}
 
 <script src="/assets/site.js" defer></script>
+<script src="/assets/chat.js" defer></script>
 </body>
 </html>
 """
