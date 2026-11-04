@@ -27,7 +27,7 @@ parité ; d'ici là, 0.Y.Z.
   sauvegarde chaque nuit, après chaque changement et à la demande ; conservation selon l'offre,
   alertes de quota et d'échec, restauration depuis le portail.
 - **CGV** de la plate-forme, CGU et politique de confidentialité mises à jour.
-- **Cloud E-KO RIP : support en direct.** Bulle « Support E-KO RIP » en bas à droite de toutes
+- **Cloud E-KO RIP : support en direct.** Bulle du support en direct en bas à droite de toutes
   les pages connectées du portail (le lien « Support » du menu l'ouvre aussi) : le client est
   reconnu sans rien saisir (identité signée par la plate-forme, nom, e-mail, société), l'historique
   des échanges reste dans la bulle et les réponses arrivent par e-mail quand la page est fermée.

@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""Publie les articles de docs/aide/ dans le centre d'aide de la Suite E-KO (catégories rip et rip-cloud).
+
+    outils/publier-aide --verifier     contrôle sans réseau (CI, outils/verifier.sh)
+    outils/publier-aide --a-blanc      lit le centre d'aide et dit ce qui serait fait, sans rien écrire
+    outils/publier-aide                crée les sous-rubriques manquantes, envoie les images nouvelles,
+                                       crée ou met à jour les articles (nouveaux en brouillon) ;
+                                       les articles retirés du dépôt passent en « archived »
+    outils/publier-aide --publier      idem, puis passe tous les articles du dépôt en « published »
+                                       (seulement sur l'ordre de Mathieu : « Publie l'aide »)
+
+Jeton : variable CHATWOOT_DOC_TOKEN (secret de l'environnement GitHub production). Il n'est jamais
+affiché. Le script ne supprime rien, ne touche ni aux catégories maîtres ni aux réglages du portail.
+Une mise à jour garde le statut de l'article ; un article déjà publié n'est modifié qu'avec
+--publier, pour que rien ne change en ligne sans l'ordre de Mathieu. Bibliothèque standard seulement.
+"""
+
+import argparse
+import hashlib
+import json
+import mimetypes
+import os
+import re
+import sys
+import urllib.error
+import urllib.request
+import uuid
+from pathlib import Path
+
+RACINE = Path(__file__).resolve().parent.parent
+AIDE = RACINE / "docs" / "aide"
+IMAGES = AIDE / "images"
+TABLE = AIDE / "televersements.json"
+API = os.environ.get("CHATWOOT_AIDE_API", "https://help.suite-eko.com/api/v1/accounts/1")
+PROFIL = os.environ.get("CHATWOOT_AIDE_PROFIL", "https://help.suite-eko.com/api/v1/profile")
+PORTAIL = "aide"
+LANGUE = "fr"
+# Adresse publique d'un article (liens entre articles).
+URL_ARTICLE = os.environ.get("CHATWOOT_AIDE_URL_ARTICLE", "https://help.suite-eko.com/hc/aide/articles/{slug}")
+MAITRES = {"rip": "rip-", "rip-cloud": "rip-cloud-"}
+# Identifiants attendus (directives du 04/11/2026) : un écart veut dire mauvais portail ou mauvais jeton.
+ID_MAITRES = {"rip": 3, "rip-cloud": 8}
+ID_AUTEUR = 4
+CHAMPS = ("titre", "description", "sous_rubrique", "position", "mots_cles")
+SECTIONS = ("## Avant de commencer", "## Étapes", "## Bon à savoir", "## Voir aussi")
+MAX_IMAGES = 5
+MAX_DESCRIPTION = 160
+INTERDITS = [
+    (re.compile(r"chatwoot", re.I), "nom du logiciel de support"),
+    (re.compile(r"o2switch|\bovh\b|cloudflare|hetzner", re.I), "nom d'hébergeur"),
+    (re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b"), "adresse IP"),
+    (re.compile(r"\b(?:caldera|onyx|wasatch|ergosoft|fiery|ripcenter|cadlink|flexi)\b", re.I), "nom de concurrent"),
+]
+IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)\)")
+LIEN = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)")
+
+
+# ————— Lecture du dépôt —————
+
+def rubriques():
+    sortie = {}
+    for n, ligne in enumerate((AIDE / "rubriques.tsv").read_text(encoding="utf-8").splitlines(), 1):
+        if not ligne.strip() or ligne.startswith("#"):
+            continue
+        morceaux = ligne.split("\t")
+        if len(morceaux) != 5:
+            raise SystemExit(f"rubriques.tsv:{n} : 5 colonnes attendues (slug, maître, position, nom, description)")
+        slug, maitre, position, nom, description = (m.strip() for m in morceaux)
+        sortie[slug] = {"slug": slug, "maitre": maitre, "position": int(position), "nom": nom, "description": description, "ligne": n}
+    return sortie
+
+
+def lire_article(chemin):
+    texte = chemin.read_text(encoding="utf-8")
+    m = re.match(r"---\n(.*?)\n---\n(.*)", texte, re.S)
+    if not m:
+        return None, texte
+    entete = {}
+    for ligne in m.group(1).splitlines():
+        if ":" in ligne:
+            cle, valeur = ligne.split(":", 1)
+            entete[cle.strip()] = valeur.strip()
+    return entete, m.group(2).strip() + "\n"
+
+
+def articles():
+    liste = []
+    for chemin in sorted(AIDE.glob("*/*.md")):
+        if chemin.parent.name == "images":
+            continue
+        entete, corps = lire_article(chemin)
+        liste.append({"chemin": chemin, "slug": chemin.stem, "dossier": chemin.parent.name, "entete": entete, "corps": corps})
+    return liste
+
+
+# ————— Vérification —————
+
+def verifier(rub, arts):
+    erreurs = []
+    for r in rub.values():
+        if r["maitre"] not in MAITRES:
+            erreurs.append(f"rubriques.tsv:{r['ligne']} : catégorie maître inconnue « {r['maitre']} »")
+        if not r["slug"].startswith(r["maitre"] + "-"):
+            erreurs.append(f"rubriques.tsv:{r['ligne']} : le slug doit commencer par « {r['maitre']}- »")
+        elif r["maitre"] == "rip" and r["slug"].startswith("rip-cloud-"):
+            erreurs.append(f"rubriques.tsv:{r['ligne']} : une sous-rubrique rip-cloud-… va sous rip-cloud")
+    slugs = {a["slug"] for a in arts}
+    vus = set()
+    for a in arts:
+        ici = a["chemin"].relative_to(RACINE)
+        e = a["entete"]
+        if e is None:
+            erreurs.append(f"{ici} : en-tête --- … --- absent")
+            continue
+        for champ in CHAMPS:
+            if not e.get(champ):
+                erreurs.append(f"{ici} : champ « {champ} » absent ou vide")
+        if a["slug"] in vus:
+            erreurs.append(f"{ici} : slug en double")
+        vus.add(a["slug"])
+        r = rub.get(a["dossier"])
+        if r is None:
+            erreurs.append(f"{ici} : dossier « {a['dossier']} » absent de rubriques.tsv")
+        else:
+            if e.get("sous_rubrique") != a["dossier"]:
+                erreurs.append(f"{ici} : sous_rubrique « {e.get('sous_rubrique')} » ≠ dossier « {a['dossier']} »")
+            prefixe = MAITRES.get(r["maitre"], "")
+            if not a["slug"].startswith(prefixe) or (r["maitre"] == "rip" and a["slug"].startswith("rip-cloud-")):
+                erreurs.append(f"{ici} : le slug doit commencer par « {prefixe} »")
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", a["slug"]):
+            erreurs.append(f"{ici} : slug en minuscules, chiffres et tirets seulement")
+        if e.get("position") and not e["position"].isdigit():
+            erreurs.append(f"{ici} : position entière attendue")
+        if len(e.get("description", "")) > MAX_DESCRIPTION:
+            erreurs.append(f"{ici} : description de {len(e['description'])} caractères (160 au plus)")
+        titre = e.get("titre", "")
+        if titre.endswith("?") or re.match(r"(?i)e-ko", titre):
+            erreurs.append(f"{ici} : titre à l'infinitif, sans question ni nom de produit en tête")
+        for s in SECTIONS:
+            if not re.search(rf"^{re.escape(s)}\s*$", a["corps"], re.M):
+                erreurs.append(f"{ici} : section « {s} » absente")
+        images = IMAGE.findall(a["corps"])
+        if len(images) > MAX_IMAGES:
+            erreurs.append(f"{ici} : {len(images)} captures ({MAX_IMAGES} au plus)")
+        for alt, cible in images:
+            if not alt.strip():
+                erreurs.append(f"{ici} : capture {cible} sans texte alternatif")
+            if cible.startswith("http"):
+                erreurs.append(f"{ici} : capture distante {cible} (mettre l'image dans docs/aide/images/)")
+            elif not (a["chemin"].parent / cible).resolve().is_file():
+                erreurs.append(f"{ici} : capture introuvable {cible}")
+            elif not cible.lower().endswith(".png"):
+                erreurs.append(f"{ici} : capture {cible} : PNG attendu")
+        for _, cible in LIEN.findall(a["corps"]):
+            if re.match(r"(https?:|mailto:|#)", cible):
+                continue
+            cible_fichier = cible.split("#", 1)[0]
+            if not cible_fichier.endswith(".md"):
+                erreurs.append(f"{ici} : lien relatif inattendu {cible}")
+                continue
+            vise = (a["chemin"].parent / cible_fichier).resolve()
+            if not vise.is_file() or Path(cible_fichier).stem not in slugs:
+                erreurs.append(f"{ici} : lien vers un article introuvable {cible}")
+        texte = json.dumps(e, ensure_ascii=False) + a["corps"]
+        for motif, quoi in INTERDITS:
+            m = motif.search(texte)
+            if m:
+                erreurs.append(f"{ici} : interdit ({quoi}) : « {m.group(0)} »")
+    return erreurs
+
+
+# ————— Centre d'aide —————
+
+class Api:
+    def __init__(self, jeton):
+        self._jeton = jeton
+
+    def appel(self, methode, url, corps=None, multipart=None):
+        entetes = {"api_access_token": self._jeton, "Accept": "application/json"}
+        donnees = None
+        if multipart is not None:
+            limite = uuid.uuid4().hex
+            nom, octets, genre = multipart
+            donnees = (f"--{limite}\r\nContent-Disposition: form-data; name=\"attachment\"; filename=\"{nom}\"\r\nContent-Type: {genre}\r\n\r\n").encode() + octets + f"\r\n--{limite}--\r\n".encode()
+            entetes["Content-Type"] = f"multipart/form-data; boundary={limite}"
+        elif corps is not None:
+            donnees = json.dumps(corps).encode()
+            entetes["Content-Type"] = "application/json"
+        requete = urllib.request.Request(url if url.startswith("http") else API + url, data=donnees, method=methode, headers=entetes)
+        try:
+            with urllib.request.urlopen(requete, timeout=60) as r:
+                brut = r.read()
+        except urllib.error.HTTPError as e:
+            detail = e.read()[:300].decode("utf-8", "replace")
+            raise SystemExit(f"{methode} {url.split('?')[0]} : HTTP {e.code} {detail}")
+        return json.loads(brut) if brut else {}
+
+
+def charge(r):
+    """Les réponses de l'API mettent l'objet ou la liste sous `payload` (selon les versions)."""
+    return r.get("payload", r) if isinstance(r, dict) else r
+
+
+def lister_articles(api, categorie_slug):
+    tous, page = [], 1
+    while page <= 50:
+        r = api.appel("GET", f"/portals/{PORTAIL}/articles?locale={LANGUE}&category_slug={categorie_slug}&page={page}")
+        lot = charge(r)
+        if not isinstance(lot, list) or not lot:
+            break
+        tous.extend(lot)
+        if len(lot) < 25:
+            break
+        page += 1
+    return tous
+
+
+def lire_table():
+    try:
+        return json.loads(TABLE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+def contenu_publie(a, url_image):
+    def image(m):
+        return f"![{m.group(1)}]({url_image((a['chemin'].parent / m.group(2)).resolve())})"
+
+    def lien(m):
+        cible = m.group(2)
+        if re.match(r"(https?:|mailto:|#)", cible):
+            return m.group(0)
+        slug = Path(cible.split("#", 1)[0]).stem
+        return f"[{m.group(1)}]({URL_ARTICLE.format(slug=slug)})"
+
+    return LIEN.sub(lien, IMAGE.sub(image, a["corps"]))
+
+
+def publier(rub, arts, a_blanc, tout_publier):
+    jeton = os.environ.get("CHATWOOT_DOC_TOKEN", "").strip()
+    if not jeton:
+        raise SystemExit("CHATWOOT_DOC_TOKEN absent : rien n'est envoyé.")
+    api = Api(jeton)
+    auteur = charge(api.appel("GET", PROFIL)).get("id")
+    if auteur != ID_AUTEUR:
+        raise SystemExit(f"Le jeton n'est pas celui du compte « Documentation Suite E-KO » (auteur {auteur!r}, attendu {ID_AUTEUR}).")
+    categories = {c["slug"]: c for c in charge(api.appel("GET", f"/portals/{PORTAIL}/categories?locale={LANGUE}"))}
+    for m in MAITRES:
+        if m not in categories:
+            raise SystemExit(f"Catégorie maître « {m} » absente du portail : on ne la crée pas.")
+        if categories[m].get("id") != ID_MAITRES[m]:
+            raise SystemExit(f"Catégorie maître « {m} » : id {categories[m].get('id')!r}, attendu {ID_MAITRES[m]}.")
+    bilan = []
+
+    # 1. Sous-rubriques manquantes.
+    for r in sorted(rub.values(), key=lambda r: (r["maitre"], r["position"])):
+        if r["slug"] in categories:
+            continue
+        bilan.append(f"sous-rubrique créée : {r['slug']}")
+        if not a_blanc:
+            c = charge(api.appel("POST", f"/portals/{PORTAIL}/categories", {"category": {"name": r["nom"], "slug": r["slug"], "description": r["description"], "locale": LANGUE, "parent_category_id": categories[r["maitre"]]["id"], "position": r["position"]}}))
+            categories[r["slug"]] = c
+
+    # 2. Images (table empreinte → file_url).
+    table = lire_table()
+    envoyees = []
+
+    def url_image(chemin):
+        octets = chemin.read_bytes()
+        empreinte = hashlib.sha256(octets).hexdigest()
+        if empreinte in table:
+            return table[empreinte]
+        if a_blanc:
+            envoyees.append(chemin.name)
+            return f"(à envoyer : {chemin.name})"
+        genre = mimetypes.guess_type(chemin.name)[0] or "application/octet-stream"
+        url = api.appel("POST", "/upload", multipart=(chemin.name, octets, genre)).get("file_url")
+        if not url:
+            raise SystemExit(f"Envoi de {chemin.name} : pas de file_url dans la réponse.")
+        table[empreinte] = url
+        envoyees.append(chemin.name)
+        return url
+
+    # 3. Articles existants dans nos sous-rubriques, par slug.
+    existants = {}
+    for slug in rub:
+        if slug in categories:
+            for art in lister_articles(api, slug):
+                # Garde-fou : jamais un article d'un autre produit, même si le filtre était ignoré.
+                rangé = (art.get("category") or {}).get("slug", slug)
+                if str(art.get("slug", "")).startswith(tuple(MAITRES.values())) and rangé in rub:
+                    existants[art.get("slug")] = art
+
+    for a in sorted(arts, key=lambda a: (a["dossier"], int(a["entete"]["position"]))):
+        e = a["entete"]
+        champs = {
+            "title": e["titre"],
+            "slug": a["slug"],
+            "description": e["description"],
+            "content": contenu_publie(a, url_image),
+            "category_id": categories.get(a["dossier"], {}).get("id"),
+            "author_id": auteur,
+            "locale": LANGUE,
+            "position": int(e["position"]),
+            "meta": {"title": e["titre"], "description": e["description"], "tags": [t.strip() for t in e["mots_cles"].split(",") if t.strip()]},
+        }
+        ancien = existants.get(a["slug"])
+        if ancien is None:
+            champs["status"] = "published" if tout_publier else "draft"
+            bilan.append(f"article créé ({champs['status']}) : {a['slug']}")
+            if not a_blanc:
+                api.appel("POST", f"/portals/{PORTAIL}/articles", {"article": champs})
+        else:
+            statut = ancien.get("status")
+            if tout_publier:
+                champs["status"] = "published"
+            elif statut == "archived":
+                champs["status"] = "draft"
+            change = any(str(ancien.get(k)) != str(champs[k]) for k in ("title", "description", "content", "position")) or champs.get("status", statut) != statut or ancien.get("category_id", champs["category_id"]) != champs["category_id"]
+            if change and statut == "published" and not tout_publier:
+                # Un article en ligne ne change qu'avec l'ordre de publication de Mathieu.
+                bilan.append(f"article en ligne modifié, envoyé seulement avec --publier : {a['slug']}")
+            elif change:
+                bilan.append(f"article mis à jour ({champs.get('status', statut)}) : {a['slug']}")
+                if not a_blanc:
+                    api.appel("PATCH", f"/portals/{PORTAIL}/articles/{ancien['id']}", {"article": champs})
+
+    # 4. Articles retirés du dépôt : archivés, jamais supprimés.
+    slugs = {a["slug"] for a in arts}
+    for slug, art in existants.items():
+        if slug not in slugs and art.get("status") != "archived":
+            bilan.append(f"article archivé : {slug}")
+            if not a_blanc:
+                api.appel("PATCH", f"/portals/{PORTAIL}/articles/{art['id']}", {"article": {"status": "archived"}})
+
+    if not a_blanc and envoyees:
+        TABLE.write_text(json.dumps(table, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+    bilan += [f"image envoyée : {n}" for n in envoyees]
+    print("\n".join(bilan) if bilan else "Centre d'aide déjà à jour.")
+    print(f"{len(arts)} articles dans le dépôt, {len(existants)} déjà dans le centre d'aide.")
+
+
+def main():
+    p = argparse.ArgumentParser(description="Articles de docs/aide/ → centre d'aide de la Suite E-KO.")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--verifier", action="store_true", help="contrôle sans réseau")
+    g.add_argument("--a-blanc", action="store_true", help="lit le centre d'aide, n'écrit rien")
+    g.add_argument("--publier", action="store_true", help="passe les articles en published (sur ordre de Mathieu)")
+    o = p.parse_args()
+    rub, arts = rubriques(), articles()
+    erreurs = verifier(rub, arts)
+    if erreurs:
+        print("\n".join(erreurs), file=sys.stderr)
+        raise SystemExit(f"{len(erreurs)} erreur(s) dans docs/aide/.")
+    if o.verifier:
+        print(f"Aide à jour : {len(arts)} articles, {len(rub)} sous-rubriques.")
+        return
+    publier(rub, arts, o.a_blanc, o.publier)
+
+
+if __name__ == "__main__":
+    main()
