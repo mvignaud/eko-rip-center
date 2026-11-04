@@ -9,7 +9,7 @@
   s.defer = true;
   s.async = true;
   s.onload = function () {
-    window.chatwootSDK.run({ websiteToken: 'WEBSITE_TOKEN_SITE_E_KO_RIP', baseUrl: BASE });
+    window.chatwootSDK.run({ websiteToken: 'Wokn8ZeMGSBx8n114mqsgize', baseUrl: BASE });
   };
   document.head.appendChild(s);
 })();
