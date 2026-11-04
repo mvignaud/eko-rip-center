@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn identite_aller_retour() {
-        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false, email_verifie: true, alertes: true, resume: true, notifications_proposees: false };
+        let c = base::Compte { id: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), super_admin: false, suspendu: false, cree_le: 0, a_mot_de_passe: true, google: false, facebook: false, eko: false, email_verifie: true, alertes: true, resume: true, notifications_proposees: false };
         let v = entete_identite(&c, "proprietaire");
         let i = lire_identite(v.to_str().unwrap()).unwrap();
         assert_eq!(i, IdentiteCloud { compte: 7, email: "a@b.fr".into(), nom: "Élodie Ünal".into(), role: "admin".into() });

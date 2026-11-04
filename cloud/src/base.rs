@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS comptes (
     hachage TEXT,
     google TEXT UNIQUE,
     facebook TEXT UNIQUE,
+    eko TEXT,
     super_admin INTEGER NOT NULL DEFAULT 0,
     suspendu INTEGER NOT NULL DEFAULT 0,
     cree_le INTEGER NOT NULL,
@@ -249,6 +250,10 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !a("notifications_proposees") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN notifications_proposees INTEGER NOT NULL DEFAULT 0;")?;
     }
+    if !a("eko") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN eko TEXT;")?;
+    }
+    c.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS comptes_eko ON comptes(eko);")?;
     let jetons: Vec<String> = c.prepare("PRAGMA table_info(jetons_applis)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<rusqlite::Result<_>>()?;
     if !jetons.iter().any(|x| x == "jeton_expo") {
         c.execute_batch("ALTER TABLE jetons_applis ADD COLUMN jeton_expo TEXT; ALTER TABLE jetons_applis ADD COLUMN plateforme_expo TEXT;")?;
@@ -275,6 +280,8 @@ pub struct Compte {
     pub a_mot_de_passe: bool,
     pub google: bool,
     pub facebook: bool,
+    /// Compte lié à la Suite E-KO (ERP, OpenID Connect).
+    pub eko: bool,
     /// Adresse confirmée (lien reçu par e-mail, ou e-mail vérifié par Google).
     pub email_verifie: bool,
     /// Reçoit les alertes « site hors ligne ».
@@ -285,10 +292,10 @@ pub struct Compte {
     pub notifications_proposees: bool,
 }
 
-const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL, email_verifie, alertes, resume, notifications_proposees";
+const COLONNES: &str = "id, email, nom, super_admin, suspendu, cree_le, hachage IS NOT NULL, google IS NOT NULL, facebook IS NOT NULL, email_verifie, alertes, resume, notifications_proposees, eko IS NOT NULL";
 
 fn compte(r: &rusqlite::Row) -> rusqlite::Result<Compte> {
-    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)?, email_verifie: r.get(9)?, alertes: r.get(10)?, resume: r.get(11)?, notifications_proposees: r.get(12)? })
+    Ok(Compte { id: r.get(0)?, email: r.get(1)?, nom: r.get(2)?, super_admin: r.get(3)?, suspendu: r.get(4)?, cree_le: r.get::<_, i64>(5)? as u64, a_mot_de_passe: r.get(6)?, google: r.get(7)?, facebook: r.get(8)?, email_verifie: r.get(9)?, alertes: r.get(10)?, resume: r.get(11)?, notifications_proposees: r.get(12)?, eko: r.get(13)? })
 }
 
 pub fn hacher(mot_de_passe: &str) -> String {
@@ -332,7 +339,7 @@ pub fn compte_par_email(c: &Connection, email: &str) -> rusqlite::Result<Option<
     c.query_row(&format!("SELECT {COLONNES} FROM comptes WHERE email = ?1"), [email.trim()], compte).optional()
 }
 
-/// `fournisseur` : `google` ou `facebook` (colonne).
+/// `fournisseur` : `google`, `facebook` ou `eko` (colonne).
 pub fn compte_par_fournisseur(c: &Connection, fournisseur: &str, ident: &str) -> rusqlite::Result<Option<Compte>> {
     let col = colonne_fournisseur(fournisseur);
     c.query_row(&format!("SELECT {COLONNES} FROM comptes WHERE {col} = ?1"), [ident], compte).optional()
@@ -342,6 +349,7 @@ fn colonne_fournisseur(f: &str) -> &'static str {
     match f {
         "google" => "google",
         "facebook" => "facebook",
+        "eko" => "eko",
         _ => panic!("fournisseur inconnu : {f}"),
     }
 }
@@ -360,7 +368,7 @@ pub fn lier_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &
 pub fn reprendre_par_fournisseur(c: &Connection, compte: i64, fournisseur: &str, ident: &str) -> rusqlite::Result<bool> {
     let col = colonne_fournisseur(fournisseur);
     let t = c.unchecked_transaction()?;
-    t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, echecs = 0, bloque_jusqua = 0, email_verifie = 1 WHERE id = ?1", [compte])?;
+    t.execute("UPDATE comptes SET hachage = NULL, google = NULL, facebook = NULL, eko = NULL, echecs = 0, bloque_jusqua = 0, email_verifie = 1 WHERE id = ?1", [compte])?;
     t.execute("DELETE FROM sessions WHERE compte = ?1", [compte])?;
     t.execute("DELETE FROM jetons_courriel WHERE compte = ?1", [compte])?;
     revoquer_jetons_du_compte(&t, compte)?;
@@ -437,7 +445,7 @@ pub fn regler(c: &Connection, cle: &str, valeur: &str) -> rusqlite::Result<()> {
 
 pub fn lister_comptes(c: &Connection) -> rusqlite::Result<Vec<(Compte, i64)>> {
     let mut q = c.prepare(&format!("SELECT {COLONNES}, (SELECT COUNT(*) FROM droits d WHERE d.compte = comptes.id AND d.role = 'proprietaire') FROM comptes ORDER BY id"))?;
-    q.query_map([], |r| Ok((compte(r)?, r.get(13)?)))?.collect()
+    q.query_map([], |r| Ok((compte(r)?, r.get(14)?)))?.collect()
 }
 
 pub fn suspendre(c: &Connection, compte: i64, suspendu: bool) -> rusqlite::Result<()> {

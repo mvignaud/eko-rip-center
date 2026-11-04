@@ -104,6 +104,7 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 - **Réglages récents dans les clients** : lissage des images agrandies, empilement de couches et rappel de recalibration par machine.
 
 ### Cloud et accès à distance
+- **Connexion avec un compte Suite E-KO** : vous vous connectez au Cloud, créez un compte ou liez le vôtre avec votre compte Suite E-KO, comme avec Google ou Facebook.
 - **Support et discussion en direct dans le Cloud** : vous discutez avec l'équipe d'E-KO dans la bulle du portail, sans vous présenter, l'historique de vos échanges y reste et les réponses arrivent aussi par e-mail.
 
 ### Rapports et coûts
