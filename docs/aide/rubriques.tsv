@@ -6,7 +6,8 @@ rip-travaux	rip	2	Envoyer et suivre les travaux	Envoyer un fichier, suivre la fi
 rip-couleur	rip	3	Couleur et supports	Régler les supports, les profils, les tons directs et la qualité d'impression.
 rip-machines	rip	4	Machines	Ajouter et brancher les imprimantes, plotters et tables de découpe pris en charge.
 rip-administration	rip	5	Administrer le serveur	Comptes, sauvegardes, mises à jour et réglages du serveur RIP.
-rip-depannage	rip	6	Dépannage	Les messages courants du RIP, leur cause et la marche à suivre.
+rip-erp	rip	6	Relier le RIP à l'ERP	Pont avec l'ERP de la Suite E-KO : commandes, BAT, consommations et retours de production.
+rip-depannage	rip	7	Dépannage	Les messages courants du RIP, leur cause et la marche à suivre.
 rip-cloud-premiers-pas	rip-cloud	1	Premiers pas	Créer un compte, relier le serveur de l'atelier et y accéder depuis l'extérieur.
 rip-cloud-compte	rip-cloud	2	Compte et accès	Gérer son compte, les personnes qui ont accès aux sites, les e-mails et les notifications.
 rip-cloud-abonnement	rip-cloud	3	Offres et facturation	Choisir une offre, payer, retrouver ses factures et changer d'offre.

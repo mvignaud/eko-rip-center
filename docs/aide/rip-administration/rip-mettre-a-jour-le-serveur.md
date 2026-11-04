@@ -35,4 +35,4 @@ Le serveur a été installé par le dépôt de paquets E-KO. Prévenez les opér
 - [Sauvegarder la configuration du serveur](rip-sauvegarder-la-configuration.md)
 - [Remonter un serveur à partir d'une sauvegarde](rip-remonter-un-serveur.md)
 - [Installer le serveur RIP](../rip-premiers-pas/rip-installer-le-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/administration/
+- [Installer le serveur sans le dépôt (paquet, Docker, binaire)](../rip-premiers-pas/rip-installer-le-serveur-sans-depot.md)

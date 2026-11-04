@@ -40,5 +40,4 @@ Il vous faut un compte administrateur, l'Epson câblée au réseau du serveur av
 
 - [Régler un support et ses modes d'impression](../rip-couleur/rip-regler-un-support-et-ses-modes.md)
 - [La sortie vers la machine a échoué](../rip-depannage/rip-sortie-vers-la-machine-echouee.md)
-- [Choisir la connexion d'une machine](rip-choisir-la-connexion-d-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/epson-sc-s80600/
+- [Comprendre le pilote direct de l'Epson](rip-comprendre-le-pilote-direct-de-l-epson.md)

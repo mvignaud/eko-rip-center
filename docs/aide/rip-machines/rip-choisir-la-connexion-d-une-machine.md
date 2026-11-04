@@ -42,4 +42,3 @@ Vous êtes administrateur et la machine est en cours d'ajout (voir [Ajouter une 
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [La sortie vers la machine a échoué](../rip-depannage/rip-sortie-vers-la-machine-echouee.md)
 - [Brancher la Mutoh Kona 1650](rip-brancher-mutoh-kona-1650.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/

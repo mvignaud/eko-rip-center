@@ -33,6 +33,9 @@ Il vous faut un compte administrateur. Pour importer une bibliothèque, vous ave
 - `White`, `Silver`, `Metallic` et les tons de découpe ne peuvent pas entrer dans la table.
 - Un ton du fichier absent de la table est signalé sur la page (« ton direct absent de la table des tons directs ») et listé dans **Tons rencontrés absents de la table** : **Ajouter** le fait entrer avec sa valeur Lab.
 - Un ton écrit de plusieurs façons dans vos fichiers s'ajoute une fois par écriture.
+- **Intention des tons directs** : colorimétrique relative par défaut (on vise la teinte). Un réglage ou un travail peut en choisir une autre (bloc **Couleur**, « Intention des tons directs »). Changer celle du serveur ne touche que les travaux restés sur « Celle du serveur », aux rendus suivants. Avec les profils de base du RIP, perceptuelle et relative donnent le même résultat ; avec le profil ICC d'un support, elles diffèrent.
+- Le travail signale la conversion (« Tons directs imprimés en CMJN d'après la table ») ; la conversion passe par le profil de sortie et l'intention du travail, et l'aperçu montre la couleur Lab.
+- Le CSV de votre fournisseur (par exemple un nuancier) accepte `;`, tabulation ou `,` comme séparateur, et la virgule décimale avec `;`. N'importez que les bibliothèques que vous avez le droit d'utiliser.
 - Une teinte à 50 % pose la moitié de la recette CMJN de la teinte pleine.
 
 ## Voir aussi
@@ -40,4 +43,3 @@ Il vous faut un compte administrateur. Pour importer une bibliothèque, vous ave
 - [Choisir les profils de couleur d'un travail](rip-choisir-les-profils-de-couleur.md)
 - [Poser du blanc automatiquement](rip-poser-du-blanc-automatique.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

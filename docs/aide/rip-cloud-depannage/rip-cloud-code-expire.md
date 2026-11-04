@@ -24,10 +24,10 @@ Un nouveau code règle la plupart des refus.
 ## Bon à savoir
 
 - Si le portail refuse toujours, confirmez votre adresse e-mail.
+- Le code a la forme `KXRT-4821` et ne se saisit qu'une fois. Si le portail refuse un code valide, vérifiez qu'il ne manque aucun caractère.
 - Si le cloud ne s'ouvre pas à cause du message « au moins un compte », créez d'abord un compte sur le serveur RIP, puis recommencez.
 
 ## Voir aussi
 
 - [Relier un serveur RIP au cloud](../rip-cloud-premiers-pas/rip-cloud-relier-un-serveur.md)
 - [Confirmer son adresse e-mail](../rip-cloud-premiers-pas/rip-cloud-confirmer-adresse-email.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

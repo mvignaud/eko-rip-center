@@ -17,15 +17,18 @@ Le serveur RIP de l'atelier reste utilisable sur place.
 
 1. Ouvrez **Mon compte**.
 2. Allez à la rubrique **Supprimer mon compte**.
-3. Confirmez.
+3. Cochez **Je confirme la suppression définitive de mon compte.**
+4. Cliquez sur **Supprimer mon compte**.
+
+   ![Rubrique Supprimer mon compte avec la case de confirmation et le bouton Supprimer mon compte encadré](../images/cloud-compte-supprimer.png)
 
 ## Bon à savoir
 
 - Pour garder le compte et couper seulement un site, voir le détachement d'un serveur.
+- La suppression est irréversible.
 - Vous pouvez recréer un compte et relier de nouveau le serveur avec un nouveau code.
 
 ## Voir aussi
 
 - [Détacher un serveur RIP du cloud](rip-cloud-detacher-un-serveur.md)
 - [Changer d'offre ou résilier](../rip-cloud-abonnement/rip-cloud-changer-ou-resilier.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

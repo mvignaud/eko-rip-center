@@ -1,0 +1,93 @@
+docs/fr/utilisation.md	*	rip-prendre-en-main-l-ecran-du-client	
+docs/fr/utilisation.md	Utilisation (introduction : écran du client)	rip-prendre-en-main-l-ecran-du-client	
+docs/fr/utilisation.md	Envoyer un travail	rip-envoyer-un-travail	
+docs/fr/utilisation.md	Envoyer un travail (formats, tons directs TIFF)	rip-connaitre-les-formats-de-fichier-acceptes	
+docs/fr/utilisation.md	Envoyer un travail (canal alpha)	rip-poser-du-blanc-ou-du-vernis-depuis-un-canal-alpha	
+docs/fr/utilisation.md	Rotation automatique et réglages après l'import	rip-envoyer-un-travail	
+docs/fr/utilisation.md	Édition rapide	rip-regler-l-edition-rapide-d-un-travail	
+docs/fr/utilisation.md	Édition rapide (œillets, marques imprimées)	rip-poser-des-oeillets-et-des-marques-imprimees	
+docs/fr/utilisation.md	Édition rapide (fond perdu)	rip-ajouter-un-fond-perdu	
+docs/fr/utilisation.md	Édition rapide (étiquette, QR code)	rip-imprimer-une-etiquette-et-un-qr-code	
+docs/fr/utilisation.md	Mise en file automatique	rip-mettre-en-file-automatiquement	
+docs/fr/utilisation.md	BAT (bon à tirer)	rip-valider-un-bat	
+docs/fr/utilisation.md	Épreuve TIFF	rip-faire-une-epreuve-tiff	
+docs/fr/utilisation.md	Éditeur visuel (visionneuse)	rip-utiliser-la-visionneuse	
+docs/fr/utilisation.md	Éditer la page	rip-recadrer-redimensionner-ou-tourner-une-page	
+docs/fr/utilisation.md	Filtre couleur	rip-retoucher-les-couleurs-avec-le-filtre-couleur	
+docs/fr/utilisation.md	Lés et tuilage	rip-couper-une-page-en-les-et-en-tuiles	
+docs/fr/utilisation.md	Suivre les travaux	rip-suivre-les-travaux	
+docs/fr/utilisation.md	Suivre les travaux (zones, inspecteur, clic droit)	rip-lire-l-ecran-production	
+docs/fr/utilisation.md	Suivre les travaux (alertes)	rip-lire-les-alertes-d-un-travail	
+docs/fr/utilisation.md	Suivre les travaux (fiche travail, imprimer cette page)	rip-renseigner-la-fiche-travail	
+docs/fr/utilisation.md	File d'attente	rip-gerer-la-file-d-une-machine	
+docs/fr/utilisation.md	File d'attente (raison d'attente)	rip-comprendre-les-raisons-d-attente-d-une-sortie	
+docs/fr/utilisation.md	Pilote direct de l'Epson	rip-comprendre-le-pilote-direct-de-l-epson	
+docs/fr/utilisation.md	Les plaques	rip-comprendre-les-plaques-et-les-tons-directs	
+docs/fr/utilisation.md	Blanc automatique	rip-poser-du-blanc-automatique	
+docs/fr/utilisation.md	Découpe	rip-regler-les-prefixes-de-decoupe	
+docs/fr/utilisation.md	Préfixes de découpe	rip-regler-les-prefixes-de-decoupe	
+docs/fr/utilisation.md	Couches de découpe	rip-ordonner-les-couches-de-decoupe	
+docs/fr/utilisation.md	Contrôle préalable	rip-comprendre-le-controle-prealable-de-la-decoupe	
+docs/fr/utilisation.md	Découpeuse et coupe après impression	rip-choisir-la-decoupeuse-d-un-travail	
+docs/fr/utilisation.md	Mise en coupe	rip-mettre-en-coupe-un-travail	
+docs/fr/utilisation.md	Tolérance de découpe	rip-etendre-l-image-pres-des-traces-de-decoupe	
+docs/fr/utilisation.md	Tracés ouverts et tri	rip-regler-les-traces-ouverts-le-tri-et-l-apres-coupe	
+docs/fr/utilisation.md	Couper dès l'arrivée et après la coupe	rip-regler-les-traces-ouverts-le-tri-et-l-apres-coupe	
+docs/fr/utilisation.md	Détourage automatique	rip-detourer-automatiquement-une-image	
+docs/fr/utilisation.md	Compensation de cintrage	rip-compenser-le-cintrage	
+docs/fr/utilisation.md	Variantes de machine	rip-dupliquer-une-decoupeuse-pour-un-autre-jeu-de-reperes	
+docs/fr/utilisation.md	Repérage pour le Kona	rip-choisir-le-reperage-kona	
+docs/fr/utilisation.md	Repérage pour le Kona (fond sous les repères)	rip-imprimer-un-fond-sous-les-reperes	
+docs/fr/utilisation.md	Repérage pour le Kona (envoi au Kona, réglages de coupe)	rip-regler-la-coupe-du-kona	
+docs/fr/utilisation.md	Réglages et dossiers surveillés	rip-deposer-un-fichier-dans-un-dossier-surveille	
+docs/fr/utilisation.md	Réglages et dossiers surveillés (dossier automatique)	rip-regler-le-dossier-automatique	
+docs/fr/utilisation.md	Réglages et dossiers surveillés (motif à balises)	rip-nommer-un-fichier-avec-des-balises	
+docs/fr/utilisation.md	Réglages et dossiers surveillés (une page par travail, polices, rendus simultanés)	rip-trier-les-fichiers-a-l-arrivee	
+docs/fr/utilisation.md	Réglages et dossiers surveillés (exporter, importer)	rip-exporter-et-importer-les-reglages	
+docs/fr/utilisation.md	Mosaïque	rip-couper-une-page-en-les-et-en-tuiles	
+docs/fr/utilisation.md	Planche (imbrication)	rip-creer-une-planche	
+docs/fr/utilisation.md	Planche (formes, step & repeat, contour global)	rip-affiner-une-planche	
+docs/fr/utilisation.md	Planche manuelle (API, écran à venir dans les clients natifs)	rip-composer-une-planche-par-l-api	
+docs/fr/utilisation.md	Imbrication dans la file	rip-regler-l-imbrication-d-une-imprimante	
+docs/fr/utilisation.md	Réglage (Système > Machines)	rip-regler-l-imbrication-d-une-imprimante	
+docs/fr/utilisation.md	Réglage (Système > Machines) (déclencheurs)	rip-regler-les-declencheurs-de-depart-d-une-planche	
+docs/fr/utilisation.md	Ce qui s'imbrique ensemble	rip-suivre-une-planche-dans-la-file	
+docs/fr/utilisation.md	File > planche en préparation	rip-suivre-une-planche-dans-la-file	
+docs/fr/utilisation.md	Couleur	rip-choisir-les-profils-de-couleur	
+docs/fr/utilisation.md	Table des tons directs	rip-declarer-les-tons-directs	
+docs/fr/utilisation.md	Système	rip-lire-la-vue-systeme	
+docs/fr/utilisation.md	Machines	rip-comprendre-les-champs-d-une-machine	
+docs/fr/utilisation.md	Machines (pool d'imprimantes)	rip-regrouper-des-imprimantes-en-pool	
+docs/fr/utilisation.md	Supports et modes d'impression	rip-regler-un-support-et-ses-modes	
+docs/fr/utilisation.md	Supports et modes d'impression (bascule des claires, encre totale)	rip-regler-les-encres-claires-et-l-encre-totale	
+docs/fr/utilisation.md	Supports et modes d'impression (limite d'encre proposée, mire de linéarisation)	rip-proposer-une-limite-d-encre	
+docs/fr/utilisation.md	Supports et modes d'impression (étalonnage du gris G7)	rip-etalonner-le-gris-type-g7	
+docs/fr/utilisation.md	Supports et modes d'impression (paquet support)	rip-partager-un-support-avec-un-paquet	
+docs/fr/utilisation.md	Média chargé dans l'Epson	rip-lire-le-media-charge-dans-l-epson	
+docs/fr/utilisation.md	Encre et coût	rip-regler-les-couts-d-encre-et-de-support	
+docs/fr/utilisation.md	Journal des impressions	rip-consulter-le-journal-des-impressions	
+docs/fr/utilisation.md	Journal des impressions (rapports CSV)	rip-exporter-les-rapports-csv-de-consommation	
+docs/fr/utilisation.md	Journal des impressions (facteurs de correction)	rip-corriger-l-estimation-d-encre	
+docs/fr/utilisation.md	Ce qui n'existe pas encore	rip-connaitre-les-limites-actuelles-du-rip	
+docs/fr/utilisation.md	Glossaire	-	Simple renvoi vers docs/fr/glossaire.md
+docs/fr/machines.md	*	rip-connaitre-les-machines-prises-en-charge	
+docs/fr/machines.md	Machines prises en charge	rip-connaitre-les-machines-prises-en-charge	
+docs/fr/machines.md	Ajouter une machine	rip-ajouter-une-machine	
+docs/fr/machines.md	Connexions	rip-choisir-la-connexion-d-une-machine	
+docs/fr/machines.md	Une machine qui n'est pas dans la liste	rip-connaitre-les-machines-prises-en-charge	
+docs/fr/machines/epson-sc-s80600.md	*	rip-brancher-epson-sc-s80600	
+docs/fr/machines/epson-sc-s80600.md	Ce que fait le RIP / Brancher / Sur la machine / Dans le RIP / Vérifier	rip-brancher-epson-sc-s80600	
+docs/fr/machines/epson-sc-s80600.md	Ennuis courants	rip-brancher-epson-sc-s80600	
+docs/fr/machines/graphtec-fc7000.md	*	rip-brancher-graphtec-fc7000	
+docs/fr/machines/graphtec-fc7000.md	Ce que fait le RIP / Brancher / Sur la machine / Dans le RIP / Vérifier	rip-brancher-graphtec-fc7000	
+docs/fr/machines/graphtec-fc7000.md	Ennuis courants	rip-brancher-graphtec-fc7000	
+docs/fr/machines/mutoh-kona.md	*	rip-brancher-mutoh-kona-1650	
+docs/fr/machines/mutoh-kona.md	Ce que fait le RIP / Brancher / Sur la machine / Dans le RIP / Vérifier	rip-brancher-mutoh-kona-1650	
+docs/fr/machines/mutoh-kona.md	Ennuis courants	rip-brancher-mutoh-kona-1650	
+docs/fr/machines/roland-versacamm.md	*	rip-brancher-roland-versacamm	
+docs/fr/machines/roland-versacamm.md	Ce que fait le RIP / Brancher / Sur la machine / Dans le RIP / Vérifier	rip-brancher-roland-versacamm	
+docs/fr/machines/roland-versacamm.md	Ennuis courants	rip-brancher-roland-versacamm	
+docs/fr/machines/tables-de-decoupe.md	*	rip-preparer-une-planche-pour-une-table-de-decoupe	
+docs/fr/machines/tables-de-decoupe.md	Préparer une planche pour une table	rip-preparer-une-planche-pour-une-table-de-decoupe	
+docs/fr/machines/tables-de-decoupe.md	Demander une table	rip-preparer-une-planche-pour-une-table-de-decoupe	
+docs/fr/machines/mutoh-kona.md	Ennuis courants (EPOS 6213)	rip-arret-du-kona-sur-epos-6213	

@@ -28,9 +28,12 @@ Il vous faut un compte administrateur. Prévoyez un endroit hors du serveur pour
 - Pour tout sauvegarder, comptes compris, copiez le dossier `/var/lib/eko-rip` service arrêté. Les travaux sont volumineux et se refont depuis leurs fichiers sources : la configuration et le fichier des comptes (`utilisateurs.json`) suffisent souvent.
 - **Exporter les réglages** télécharge seulement les réglages enregistrés, pour les reprendre sur un autre serveur avec **Importer des réglages**.
 
+- Le fichier téléchargé est au format JSON : catalogue des machines, tarifs, réglages enregistrés, découpe, tons directs et profils ICC déposés. Les comptes n'y sont pas (recréez-les sur le serveur), ni les travaux ni la file.
+- **Restaurer…** remplace machines, tarifs et réglages par ceux du fichier et ajoute ses profils. Pour un serveur neuf : installer, créer le compte administrateur, restaurer.
+
 ## Voir aussi
 
 - [Remonter un serveur à partir d'une sauvegarde](rip-remonter-un-serveur.md)
 - [Mettre à jour le serveur](rip-mettre-a-jour-le-serveur.md)
 - [Gérer les comptes du serveur](rip-gerer-les-comptes.md)
-- Page détaillée : https://e-ko.rip/documentation/administration/
+- [Savoir où sont les données du serveur](rip-savoir-ou-sont-les-donnees-du-serveur.md)

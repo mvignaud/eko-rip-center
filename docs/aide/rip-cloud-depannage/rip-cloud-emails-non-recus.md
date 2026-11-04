@@ -21,6 +21,7 @@ Quelques vérifications suffisent en général.
 
 ## Bon à savoir
 
+- Les e-mails viennent de `no-reply@e-ko.fr` : ajoutez-le à vos expéditeurs de confiance si besoin.
 - Ne répondez pas à ces messages : ils partent d'une adresse sans réception.
 - L'e-mail « nouvelle app connectée » est toujours envoyé.
 - Les réponses du support en direct arrivent par e-mail quand la page est fermée.
@@ -28,6 +29,6 @@ Quelques vérifications suffisent en général.
 ## Voir aussi
 
 - [Choisir les e-mails reçus](../rip-cloud-compte/rip-cloud-choisir-les-emails.md)
+- [Consulter la liste des e-mails de la plate-forme](../rip-cloud-compte/rip-cloud-comprendre-les-emails.md)
 - [Confirmer son adresse e-mail](../rip-cloud-premiers-pas/rip-cloud-confirmer-adresse-email.md)
 - [Joindre le support en direct](rip-cloud-joindre-le-support.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

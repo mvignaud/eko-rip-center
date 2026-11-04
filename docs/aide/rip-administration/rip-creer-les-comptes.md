@@ -42,4 +42,4 @@ Le serveur est installé (voir [Installer le serveur RIP](../rip-premiers-pas/ri
 - [Gérer les comptes du serveur](rip-gerer-les-comptes.md)
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
 - [Connexion refusée](../rip-depannage/rip-connexion-refusee.md)
-- Page détaillée : https://e-ko.rip/documentation/serveur/
+- [Modifier les réglages avancés du serveur](rip-modifier-les-reglages-avances-du-serveur.md)

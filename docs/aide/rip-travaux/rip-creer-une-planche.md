@@ -36,6 +36,6 @@ Vos travaux sont des PDF dont les pages sont plus étroites que la laize. Vous c
 ## Voir aussi
 
 - [Préparer une planche pour une table de découpe](../rip-machines/rip-preparer-une-planche-pour-une-table-de-decoupe.md)
-- [Gérer la file d'une machine](rip-gerer-la-file-d-une-machine.md)
+- [Affiner une planche : formes, répétition et contour global](rip-affiner-une-planche.md)
+- [Suivre une planche en préparation dans la file](rip-suivre-une-planche-dans-la-file.md)
 - [Envoyer un travail au RIP](rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

@@ -38,4 +38,4 @@ Selon le message, vous avez besoin d'un terminal sur le serveur ou d'un compte a
 - [Créer les comptes du serveur](../rip-administration/rip-creer-les-comptes.md)
 - [Gérer les comptes du serveur](../rip-administration/rip-gerer-les-comptes.md)
 - [Le client ne trouve pas le serveur](rip-client-ne-trouve-pas-le-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Signaler un problème à l'équipe](rip-signaler-un-probleme.md)

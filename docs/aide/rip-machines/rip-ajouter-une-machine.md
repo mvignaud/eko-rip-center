@@ -32,11 +32,11 @@ Il vous faut un compte administrateur. La machine est branchée (voir la page de
 - Le **Décalage X / Y** (−20 à 20 mm) corrige l'écart mesuré sur une coupe d'essai entre la découpe et l'impression.
 - Avec le même **Pool** sur des machines identiques (même modèle, même laize), un bouton **Imprimer sur pool** apparaît sur chaque page.
 - Pour une découpeuse, **Dupliquer (autre jeu de repères)** crée une variante de la même machine physique.
+- Chaque champ de la fiche est décrit dans [Comprendre les champs d'une machine](rip-comprendre-les-champs-d-une-machine.md).
 - Modèles pris en charge : Epson SC-S80600, Roland VersaCAMM VP-300 / VP-540, Mutoh Kona 1650, Graphtec FC7000. Pour un autre modèle, écrivez à contact@e-ko.rip avec la marque, le modèle et son branchement.
 
 ## Voir aussi
 
 - [Choisir la connexion d'une machine](rip-choisir-la-connexion-d-une-machine.md)
-- [Brancher l'Epson SureColor SC-S80600](rip-brancher-epson-sc-s80600.md)
+- [Connaître les machines prises en charge](rip-connaitre-les-machines-prises-en-charge.md)
 - [La découpe est décalée par rapport à l'impression](../rip-depannage/rip-decoupe-decalee.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/

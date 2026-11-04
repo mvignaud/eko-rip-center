@@ -25,9 +25,11 @@ Vous avez 14 jours pour régulariser.
 - Sans régularisation dans les 14 jours, l'**accès à distance** des sites concernés est **suspendu**.
 - L'utilisation à l'atelier n'est jamais touchée : le serveur continue d'imprimer et de découper.
 - Dès la régularisation, l'accès à distance revient.
+- Le propriétaire et les administrateurs sont prévenus par e-mail, par notification et par un bandeau sur **Mes sites** et **Abonnement**.
+- Une fois l'accès suspendu, les demandes à distance reçoivent la réponse « offre dépassée » (code 402), et le navigateur affiche une page explicative.
+- Voir comment les machines sont comptées : [Comprendre les machines comptées dans l'offre](rip-cloud-comprendre-les-machines-comptees.md).
 
 ## Voir aussi
 
 - [Choisir une offre](rip-cloud-choisir-une-offre.md)
 - [Mon accès à distance est suspendu](../rip-cloud-depannage/rip-cloud-acces-suspendu.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

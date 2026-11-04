@@ -38,11 +38,13 @@ Dans l'application mobile :
 
 - Les comptes utilisés à distance sont ceux du serveur RIP. Le compte de la plate-forme sert au portail et à **Se connecter au cloud**.
 - L'interface d'administration fonctionne comme à l'atelier.
-- Le pont avec l'ERP et le renvoi de travaux entre deux RIP restent réservés à l'atelier.
+- Le pont avec l'ERP et le renvoi de travaux entre deux RIP restent réservés à l'atelier. Voir [Savoir ce qui ne passe jamais par le cloud](rip-cloud-ce-qui-reste-reserve-a-l-atelier.md).
+- Les apps Mac, Linux et mobile offrent aussi **Se connecter au cloud** : plus besoin de saisir l'adresse ni un second mot de passe. Voir [Connecter une app au cloud](rip-cloud-connecter-une-app.md).
+- L'ancienne forme `https://platform.e-ko.rip/s/<site>` existe encore pour les clients déjà installés, mais une page web y est isolée (sans script). Préférez toujours l'adresse propre au site.
+- Si l'adresse ne répond pas, le site est peut-être hors ligne ou l'accès suspendu : voir [Résoudre un site hors ligne](../rip-cloud-depannage/rip-cloud-site-hors-ligne.md).
 
 ## Voir aussi
 
 - [Connecter une app au cloud](rip-cloud-connecter-une-app.md)
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
-- [Le site est hors ligne](../rip-cloud-depannage/rip-cloud-site-hors-ligne.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)
+- [Se connecter au serveur depuis l'extérieur avec l'application mobile](../rip-premiers-pas/rip-connecter-l-application-mobile-via-le-cloud.md)

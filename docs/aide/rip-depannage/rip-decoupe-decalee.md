@@ -36,4 +36,4 @@ Il vous faut un compte administrateur et un support pour une coupe d'essai.
 - [Brancher la Mutoh Kona 1650](../rip-machines/rip-brancher-mutoh-kona-1650.md)
 - [Brancher la Graphtec FC7000](../rip-machines/rip-brancher-graphtec-fc7000.md)
 - [Ajouter une machine au RIP](../rip-machines/rip-ajouter-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Signaler un problème à l'équipe](rip-signaler-un-probleme.md)

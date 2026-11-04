@@ -24,6 +24,8 @@ Il vous faut Ubuntu 24.04 ou plus récent, ou Debian 13 (bureau GNOME conseillé
 
 ## Bon à savoir
 
+- Le script ajoute la clé du dépôt et un fichier de source APT (`/etc/apt/sources.list.d/eko-rip.list`), puis installe le client.
+- Des fichiers `.deb` et `.AppImage` sont aussi disponibles sur la page des releases, pour les postes sans accès au dépôt.
 - Le client se met ensuite à jour avec le reste du système : `sudo apt update && sudo apt upgrade`.
 - Le menu principal (bouton ☰ en haut à droite) donne **Administration…**, **Signaler un problème…**, **Changer de serveur…**, **Se déconnecter** et **À propos d'E-KO RIP Center**.
 - Un PC peut être à la fois serveur et poste de travail : le même dépôt sert aux deux, il suffit ensuite d'installer le paquet `eko-rip-serveur`.
@@ -33,4 +35,4 @@ Il vous faut Ubuntu 24.04 ou plus récent, ou Debian 13 (bureau GNOME conseillé
 - [Se connecter au serveur depuis un poste](rip-se-connecter-au-serveur.md)
 - [Installer le serveur RIP](rip-installer-le-serveur.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/clients/
+- [Comprendre la fenêtre du client et ses menus](rip-comprendre-la-fenetre-du-client.md)

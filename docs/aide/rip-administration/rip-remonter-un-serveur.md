@@ -37,4 +37,4 @@ Vous avez le fichier de sauvegarde de la configuration (voir [Sauvegarder la con
 - [Sauvegarder la configuration du serveur](rip-sauvegarder-la-configuration.md)
 - [Installer le serveur RIP](../rip-premiers-pas/rip-installer-le-serveur.md)
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/administration/
+- [Savoir où sont les données du serveur](rip-savoir-ou-sont-les-donnees-du-serveur.md)

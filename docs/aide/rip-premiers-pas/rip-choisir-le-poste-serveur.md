@@ -28,9 +28,15 @@ Prévoyez un PC 64 bits (x86) qui restera allumé en permanence. Comptez quelque
 - Une coupure de courant arrête le rendu en cours (le travail est à relancer) et une sortie en cours d'envoi (à refaire). Les fichiers de réglage résistent à la coupure.
 - Plus de mémoire et de cœurs raccourcissent les rendus de bâches de plusieurs dizaines de m² à haute résolution.
 
+- Le serveur de test de l'atelier E-KO tourne sur un Pentium G645T (2 cœurs, 2012), 16 Go de mémoire et un disque mécanique de 640 Go sans partition à part : il suffit aux essais, c'est un plancher, pas une cible. Les chiffres ci-dessus sont un conseil, pas une mesure : le délai d'un rendu (`EKO_RIP_DELAI_S`, 30 minutes par défaut) dit vite si le poste est trop juste.
+- Comptez au moins 500 Go, plus si vous gardez les travaux longtemps (`EKO_RIP_CONSERVATION_JOURS`). La vue **Production** montre le tampon de la file et la part du disque occupée. Un disque dédié se change ou s'agrandit sans réinstaller ; montez-le sur `/var/lib/eko-rip` (ou pointez `EKO_RIP_DATA` dessus).
+- Choisissez un onduleur qui tient quelques minutes et prévient le serveur pour qu'il s'éteigne proprement (par exemple avec `nut`).
+- Un port USB libre est nécessaire par découpeuse en USB (Kona) ; le service est dans le groupe `dialout`.
+- Pour comparer, voir aussi la page [Pré-requis](https://e-ko.rip/prerequis/) du site.
+
 ## Voir aussi
 
 - [Installer le serveur RIP](rip-installer-le-serveur.md)
 - [Se connecter au serveur depuis un poste](rip-se-connecter-au-serveur.md)
 - [Brancher l'Epson SureColor SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md)
-- Page détaillée : https://e-ko.rip/documentation/serveur/
+- [Connaître les ports réseau du serveur](rip-connaitre-les-ports-reseau-du-serveur.md)

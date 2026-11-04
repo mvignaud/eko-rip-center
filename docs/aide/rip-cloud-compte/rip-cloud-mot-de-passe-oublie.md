@@ -26,10 +26,12 @@ Si vous avez oublié le mot de passe de votre compte de la plate-forme, un lien 
 - La page répond de la même façon que l'adresse existe ou non, par sécurité.
 - Le nouveau mot de passe ferme toutes les sessions du compte et déconnecte ses apps.
 - Après 5 échecs de connexion, le mot de passe est bloqué 5 minutes.
-- Un mot de passe de compte du serveur RIP se gère sur le serveur, pas sur la plate-forme.
+- Un mot de passe de compte du serveur RIP se gère sur le serveur, pas sur la plate-forme. Voir [Gérer les comptes du serveur](../rip-administration/rip-gerer-les-comptes.md).
+- Vous pouvez demander 3 e-mails au plus par heure et par adresse. Aucun e-mail n'est envoyé pour un compte suspendu.
+- Si le lien n'est plus valable, demandez-en un nouveau : voir [Résoudre un lien expiré ou invalide](../rip-cloud-depannage/rip-cloud-lien-expire.md).
+- Si le mot de passe est bloqué, voir [Résoudre un mot de passe bloqué](../rip-cloud-depannage/rip-cloud-mot-de-passe-bloque.md).
 
 ## Voir aussi
 
 - [Déconnecter les apps du cloud](rip-cloud-deconnecter-les-apps.md)
 - [Je ne reçois pas les e-mails](../rip-cloud-depannage/rip-cloud-emails-non-recus.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

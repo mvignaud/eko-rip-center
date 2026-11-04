@@ -37,4 +37,4 @@ Vous voyez le travail en échec dans le client. Pour modifier un réglage du ser
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
 - [Mettre à jour le serveur](../rip-administration/rip-mettre-a-jour-le-serveur.md)
 - [Choisir le poste serveur](../rip-premiers-pas/rip-choisir-le-poste-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Comprendre le rendu par bandes d'un très grand format](rip-comprendre-le-rendu-par-bandes.md)

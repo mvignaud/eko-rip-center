@@ -63,8 +63,11 @@ Les articles d'aide des catégories « E-KO RIP » et « E-KO RIP Cloud » du ce
 E-KO viennent de `docs/aide/` (format et style dans `docs/aide/README.md`). Ils complètent la
 documentation d'e-ko.rip, qui reste la référence détaillée.
 
-- Une PR qui change un écran ou un parcours décrit dans un article met l'article et sa capture à
-  jour dans la même PR. `python3 outils/publier-aide --verifier` (dans `outils/verifier.sh`) contrôle
+- **Règle de Mathieu (2026-11-04)** : 1 nouvelle fonction ou 1 nouveau module = un article détaillé
+  dans `docs/aide/` (guide pas à pas, captures d'écran, réglages, cas particuliers), dans la même PR.
+  Une fonction qui change = ses articles et ses captures mis à jour dans la même PR.
+- Le centre d'aide remplace la documentation d'e-ko.rip : chaque page de `docs/guide/` et `docs/fr/`
+  est couverte par des articles (`docs/aide/couverture/*.tsv`), puis redirigée en 301 vers eux. `python3 outils/publier-aide --verifier` (dans `outils/verifier.sh`) contrôle
   en-têtes, slugs préfixés `rip-` / `rip-cloud-`, images et liens.
 - Envoi par le workflow `publier-aide.yml`, sur ordre de Mathieu seulement : en brouillon par
   défaut ; entrée `publier` seulement après « Publie l'aide ». Ne jamais toucher aux catégories

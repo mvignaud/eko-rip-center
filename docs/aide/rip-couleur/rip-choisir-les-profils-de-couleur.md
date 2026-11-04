@@ -35,4 +35,3 @@ Vous avez le profil `.icc` ou `.icm` du support, fourni par son fabricant ou pro
 - [Déclarer les tons directs de l'atelier](rip-declarer-les-tons-directs.md)
 - [Régler un support et ses modes d'impression](rip-regler-un-support-et-ses-modes.md)
 - [Faire une épreuve TIFF](rip-faire-une-epreuve-tiff.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

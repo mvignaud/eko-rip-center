@@ -26,10 +26,11 @@ Vous n'avez aucun autre compte à créer.
 - Inutile de vous présenter : votre nom, votre e-mail et votre société accompagnent le message.
 - Fermer la bulle ne coupe pas la discussion. Si la page est fermée quand l'équipe répond, la réponse arrive par e-mail.
 - À la déconnexion du portail, la discussion est retirée de ce navigateur.
-- Les anciennes demandes (`TKT-…`) restent lisibles 30 jours sur la page **Support** : rappelez leur référence dans la bulle.
+- Les anciennes demandes (`TKT-…`) restent lisibles 30 jours sur la page **Support** : rappelez leur référence dans la bulle. Voir [Retrouver une ancienne demande de support](rip-cloud-ancienne-demande-de-support.md).
+- L'équipe voit de quel compte vient le message. L'historique des échanges reste dans la bulle.
+- Si la bulle n'est pas disponible, la page **Support** renvoie vers contact@e-ko.rip.
 
 ## Voir aussi
 
 - [La bulle du support n'apparaît pas](rip-cloud-bulle-support-invisible.md)
 - [Je ne reçois pas les e-mails](rip-cloud-emails-non-recus.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

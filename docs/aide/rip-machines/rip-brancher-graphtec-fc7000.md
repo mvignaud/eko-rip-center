@@ -35,4 +35,3 @@ Il vous faut un compte administrateur. La machine est en réseau avec une adress
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [La découpe est décalée par rapport à l'impression](../rip-depannage/rip-decoupe-decalee.md)
 - [Choisir la connexion d'une machine](rip-choisir-la-connexion-d-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/graphtec-fc7000/

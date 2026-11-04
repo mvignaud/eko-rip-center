@@ -27,12 +27,13 @@ L'imprimante a une encre blanche. Le travail est en mode **Imprimer**. Sachez qu
 
 - Le blanc déjà dessiné dans le fichier (ton direct `White`) est gardé : le blanc final réunit les deux.
 - Les noms reconnus sont `White`, `Blanc` ou `WH` pour le blanc ; `Metallic`, `Silver`, `Argent` ou `MS` pour l'argent.
+- La plaque générée apparaît dans les aperçus, compte dans le coût et part à l'Epson avec les autres plaques (en connexion Dossier pour l'instant). Un réglage enregistré garde le choix de blanc.
+- Pour les noms reconnus et le détail des plaques, voir [Comprendre les plaques d'encre et les noms de tons directs](rip-comprendre-les-plaques-et-les-tons-directs.md).
 - Sur une plaque, le noir est l'encre et le blanc l'absence d'encre.
-- Pour un PNG ou un TIFF détouré, le réglage **Canal alpha** peut donner une plaque `White` ou `Varnish` qui suit le détourage.
+- Pour un PNG ou un TIFF détouré, le réglage **Canal alpha** peut donner une plaque `White` ou `Varnish` qui suit le détourage : voir [Poser du blanc ou du vernis depuis un canal alpha](rip-poser-du-blanc-ou-du-vernis-depuis-un-canal-alpha.md).
 
 ## Voir aussi
 
 - [Déclarer les tons directs de l'atelier](rip-declarer-les-tons-directs.md)
 - [Brancher l'Epson SureColor SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md)
 - [La sortie vers la machine a échoué](../rip-depannage/rip-sortie-vers-la-machine-echouee.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

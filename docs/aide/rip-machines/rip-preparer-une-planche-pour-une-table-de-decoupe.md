@@ -27,11 +27,11 @@ Vos pages sont des PDF à imbriquer sur une planche (voir [Créer une planche](.
 ## Bon à savoir
 
 - Le contour est dans sa propre couche `NestTrimBox`, coupé en dernier et jamais imprimé.
-- Pour demander la prise en charge d'une table, écrivez à contact@e-ko.rip avec la marque, le modèle et le logiciel de la table.
+- Aucune table de découpe n'est encore pilotée directement par le RIP : chaque table prise en charge aura son article dans cette famille, comme les imprimantes et les plotters. Pour demander la prise en charge d'une table, écrivez à [contact@e-ko.rip](mailto:contact@e-ko.rip) avec la marque, le modèle et le logiciel de la table.
+- Détail de la planche : [Affiner une planche : formes, répétition et contour global](../rip-travaux/rip-affiner-une-planche.md).
 
 ## Voir aussi
 
 - [Créer une planche pour regrouper des impressions](../rip-travaux/rip-creer-une-planche.md)
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [Gérer la file d'une machine](../rip-travaux/rip-gerer-la-file-d-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/tables-de-decoupe/

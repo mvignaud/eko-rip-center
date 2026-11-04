@@ -28,10 +28,13 @@ Vous avez un terminal sur le serveur et un accès `sudo`.
 - Supprimer un compte ferme aussitôt ses sessions.
 - Cinq mots de passe faux bloquent le nom pendant 5 minutes (« Trop d'essais pour cet utilisateur : réessayer dans 5 minutes. »).
 - Aucun redémarrage n'est nécessaire.
+- Plus aucun administrateur : un compte déclaré sans rôle le devient.
+- Les mots de passe sont gardés hachés (Argon2id) dans `utilisateurs.json` (droits 0600), jamais en clair.
+- Une session dure 12 heures et est perdue au redémarrage du serveur.
 
 ## Voir aussi
 
 - [Créer les comptes du serveur](rip-creer-les-comptes.md)
 - [Connexion refusée](../rip-depannage/rip-connexion-refusee.md)
 - [Sauvegarder la configuration du serveur](rip-sauvegarder-la-configuration.md)
-- Page détaillée : https://e-ko.rip/documentation/administration/
+- [Surveiller le service du serveur](rip-surveiller-le-service-du-serveur.md)

@@ -31,9 +31,12 @@ Vous voyez la sortie en échec dans la file de la machine. Accédez à la machin
 - Si la durée estimée ne correspond pas à la réalité, mesurez la cadence réelle (m² par heure sur la laize) et saisissez-la en **Cadence** de la machine.
 - Pas de notification sur le téléphone : vérifiez l'autorisation dans les réglages du téléphone et l'interrupteur **Notifications** de l'application.
 
+- En connexion réseau directe (pilote direct), le blanc et l'argent sont pour l'instant refusés : passez par une machine en connexion **Dossier**. Une page qui porte à la fois du blanc et de l'argent provoque aussi « Envoi à l'imprimante impossible. ».
+- Le message « L'imprimante signale une alerte : impression arrêtée. » vient d'une alerte bloquante lue par SNMP (capot ouvert, cartouche vide…) : levez-la sur la machine puis **Refaire**.
+
 ## Voir aussi
 
 - [Gérer la file d'une machine](../rip-travaux/rip-gerer-la-file-d-une-machine.md)
 - [Choisir la connexion d'une machine](../rip-machines/rip-choisir-la-connexion-d-une-machine.md)
 - [Brancher l'Epson SureColor SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Résoudre une Epson qui ne répond pas ou sans largeur de média](rip-epson-ne-repond-pas.md)

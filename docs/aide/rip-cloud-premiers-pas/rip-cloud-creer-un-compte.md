@@ -30,10 +30,11 @@ Il s'adresse à toute personne qui veut relier le serveur de son atelier.
 - Si la page propose **Google** ou **Facebook**, ces boutons permettent de s'inscrire sans mot de passe.
 - Un compte créé avec Google est confirmé d'office. Sinon, un e-mail de confirmation vous est envoyé.
 - Le cloud est facultatif : le serveur fonctionne à l'atelier avec ou sans lui.
+- Un e-mail déjà inscrit n'est lié à Google que si Google a vérifié l'adresse ; il n'est jamais lié à Facebook sans connexion préalable (la liaison se fait depuis **Mon compte**).
+- Pour écrire à l'équipe, voir [Joindre le support en direct](../rip-cloud-depannage/rip-cloud-joindre-le-support.md).
 
 ## Voir aussi
 
 - [Confirmer l'adresse e-mail](rip-cloud-confirmer-adresse-email.md)
 - [Relier un serveur RIP au cloud](rip-cloud-relier-un-serveur.md)
-- [Choisir une offre](../rip-cloud-abonnement/rip-cloud-choisir-une-offre.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)
+- [Comprendre le cloud E-KO RIP](rip-cloud-comprendre-le-cloud.md)

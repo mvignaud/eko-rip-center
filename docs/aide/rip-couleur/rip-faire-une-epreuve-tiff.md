@@ -38,4 +38,3 @@ Le rendu du travail est fini. Aucun droit particulier n'est requis.
 - [Valider un BAT avec le client](../rip-travaux/rip-valider-un-bat.md)
 - [Choisir les profils de couleur d'un travail](rip-choisir-les-profils-de-couleur.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

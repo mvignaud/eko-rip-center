@@ -18,14 +18,17 @@ C'est utile après la perte d'un appareil.
 2. Ouvrez **Mon compte**.
 3. Dans **Apps connectées**, cliquez sur **Déconnecter toutes les apps**.
 
+   ![Carte Apps connectées avec deux appareils et le bouton Déconnecter toutes les apps encadré](../images/cloud-compte-apps.png)
+
 ## Bon à savoir
 
 - Pour une seule app, utilisez **Se déconnecter du cloud** dans l'app : cela retire l'accès de cet appareil.
 - Changer de mot de passe ferme aussi toutes les sessions et déconnecte les apps.
+- La liste montre, pour chaque appareil, la date de connexion et la dernière utilisation. L'accès d'une app dure environ 180 jours.
 - Les apps doivent ensuite se reconnecter avec **Se connecter au cloud**.
 
 ## Voir aussi
 
 - [Connecter une app au cloud](../rip-cloud-premiers-pas/rip-cloud-connecter-une-app.md)
 - [Mot de passe oublié](rip-cloud-mot-de-passe-oublie.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)
+- [Comprendre la sécurité du cloud](../rip-cloud-premiers-pas/rip-cloud-securite.md)
