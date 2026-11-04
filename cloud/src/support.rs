@@ -148,12 +148,12 @@ const SCRIPT_CHAT: &str = r##"(function () {
   if (!balise || !balise.dataset.jeton) return;
   var d = balise.dataset;
   var ORIGINE = "https://help.suite-eko.com";
-  window.chatwootSettings = { locale: "fr", position: "right", type: "expanded_bubble", launcherTitle: "Support E-KO RIP" };
+  window.chatwootSettings = { locale: "fr", position: "right", type: "standard" };
   window.addEventListener("chatwoot:ready", function () {
     if (!window.$chatwoot) return;
     // Attributs dans le même appel que l'identité : un setCustomAttributes séparé partirait
     // avec le jeton du contact anonyme et pourrait se perdre lors de la fusion des contacts.
-    var attributs = { compte_rip: d.id, page: location.pathname };
+    var attributs = { appli: "rip-cloud", compte_rip: d.id, page: location.pathname };
     if (d.societe) attributs.societe = d.societe;
     var identite = { name: d.nom || d.email, email: d.email, identifier_hash: d.hash, custom_attributes: attributs };
     if (d.societe) identite.company_name = d.societe;

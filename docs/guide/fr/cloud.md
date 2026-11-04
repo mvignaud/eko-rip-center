@@ -190,11 +190,11 @@ Les apps demandent l'autorisation d'afficher des notifications juste après la p
 
 ## Support en direct
 
-Une question, un problème, une idée ? L'équipe d'E-KO se joint depuis le portail, sans autre compte à créer, dans la bulle **Support E-KO RIP** en bas à droite de chaque page du portail une fois connecté. Le lien **Support** de la barre latérale ouvre la même bulle.
+Une question, un problème, une idée ? L'équipe d'E-KO se joint depuis le portail, sans autre compte à créer, dans la bulle bleue du support en direct, en bas à droite de chaque page du portail une fois connecté. Le lien **Support** de la barre latérale ouvre la même bulle.
 
-![Page Support du portail : la bulle Support E-KO RIP en bas à droite](../images/cloud-support.png "Le support en direct")
+![Page Support du portail : la bulle du support en direct en bas à droite](../images/cloud-support.png "Le support en direct")
 
-1. Cliquer sur la bulle **Support E-KO RIP**, ou sur **Support** dans la barre latérale.
+1. Cliquer sur la bulle bleue en bas à droite, ou sur **Support** dans la barre latérale.
 2. Écrire le message et l'envoyer. Une copie d'écran ou un journal peut y être joint.
 3. Les réponses de l'équipe s'affichent dans la bulle. Fermer la bulle ne coupe pas la discussion.
 

@@ -1,0 +1,14 @@
+# Sous-rubriques du centre d'aide (portail « aide », langue fr) pour les catégories maîtres rip et rip-cloud.
+# Une ligne par sous-rubrique : slug<TAB>catégorie maître<TAB>position<TAB>nom<TAB>description.
+# Les articles vont dans docs/aide/<slug>/<slug-article>.md ; outils/publier-aide crée les sous-rubriques manquantes.
+rip-premiers-pas	rip	1	Premiers pas	Comprendre le RIP et installer le serveur, les clients et l'application mobile.
+rip-travaux	rip	2	Envoyer et suivre les travaux	Envoyer un fichier, suivre la file, valider un BAT, imprimer et découper au quotidien.
+rip-couleur	rip	3	Couleur et supports	Régler les supports, les profils, les tons directs et la qualité d'impression.
+rip-machines	rip	4	Machines	Ajouter et brancher les imprimantes, plotters et tables de découpe pris en charge.
+rip-administration	rip	5	Administrer le serveur	Comptes, sauvegardes, mises à jour et réglages du serveur RIP.
+rip-depannage	rip	6	Dépannage	Les messages courants du RIP, leur cause et la marche à suivre.
+rip-cloud-premiers-pas	rip-cloud	1	Premiers pas	Créer un compte, relier le serveur de l'atelier et y accéder depuis l'extérieur.
+rip-cloud-compte	rip-cloud	2	Compte et accès	Gérer son compte, les personnes qui ont accès aux sites, les e-mails et les notifications.
+rip-cloud-abonnement	rip-cloud	3	Offres et facturation	Choisir une offre, payer, retrouver ses factures et changer d'offre.
+rip-cloud-sauvegardes	rip-cloud	4	Sauvegardes en ligne	Consulter et restaurer les sauvegardes de la configuration du serveur.
+rip-cloud-depannage	rip-cloud	5	Dépannage et support	Résoudre les problèmes courants et joindre le support en direct.

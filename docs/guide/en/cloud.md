@@ -190,11 +190,11 @@ The apps ask for permission to show notifications right after the first sign-in 
 
 ## Live support
 
-A question, a problem, an idea? You can reach the E-KO team from the portal, with no other account to create, in the **Support E-KO RIP** bubble at the bottom right of every portal page once signed in. The **Support** link in the sidebar opens the same bubble.
+A question, a problem, an idea? You can reach the E-KO team from the portal, with no other account to create, in the blue live support bubble at the bottom right of every portal page once signed in. The **Support** link in the sidebar opens the same bubble.
 
-![Portal Support page: the Support E-KO RIP bubble at the bottom right](../images/cloud-support.png "Live support")
+![Portal Support page: the live support bubble at the bottom right](../images/cloud-support.png "Live support")
 
-1. Click the **Support E-KO RIP** bubble, or **Support** in the sidebar.
+1. Click the blue bubble at the bottom right, or **Support** in the sidebar.
 2. Write your message and send it. You can attach a screenshot or a log.
 3. The team's replies show up in the bubble. Closing the bubble does not end the conversation.
 
