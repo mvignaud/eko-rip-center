@@ -16,6 +16,8 @@ Vous êtes sur le réseau de l'atelier. Si vous avez un accès au serveur, ouvre
 
 1. Vérifiez que le serveur tourne : `systemctl status eko-rip-serveur` sur le serveur.
 2. Depuis votre poste, ouvrez `http://<adresse-du-serveur>:8640` dans un navigateur. La page d'état doit s'afficher.
+
+   ![Page d'état du serveur, avec sa version, ses machines et l'adresse à saisir dans le client](../images/serveur-page-etat.png)
 3. Sur Mac, autorisez le client à accéder au **réseau local** : Réglages Système › Confidentialité et sécurité › Réseau local.
 4. Dans le client, cliquez **Rechercher à nouveau**.
 5. Toujours rien : saisissez l'adresse sous **Saisir une adresse**, sous la forme `<adresse-du-serveur>:8640`.

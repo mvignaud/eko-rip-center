@@ -14,13 +14,15 @@ Il vous faut un compte administrateur. Enregistrez d'abord le support dans l'Eps
 
 ## Étapes
 
-1. Ouvrez **Administration…**, puis **Système › Supports de l'Epson**.
-2. Ajoutez un support et saisissez son **Nom**.
+1. Ouvrez **Administration…**, puis la vue **Système**, section **Supports de l'Epson**.
+2. Cliquez **Ajouter un support** et saisissez son **Nom**.
 3. Saisissez le **N° dans l'imprimante**, c'est-à-dire le numéro enregistré dans l'Epson. Il permet de reconnaître le support chargé.
 4. Saisissez la **Laize (mm)** et les **Encres**.
 5. Écrivez ses **Modes** d'impression, séparés par des points-virgules : `Nom = 720 dpi / 8 passes ; Autre = 360 dpi / 4`.
-6. Enregistrez.
-7. À l'envoi d'un travail, choisissez le support dans **Support et mode d'impression** : le mode impose la résolution du rendu.
+
+   ![Section Supports de l'Epson avec, pour chaque support, son nom, son numéro dans l'imprimante, sa laize, ses encres et ses modes](../images/rip-supports-epson.png)
+6. Cliquez **Enregistrer**.
+7. À l'envoi d'un travail (**Importer**), choisissez le support dans **Support et mode d'impression** : le mode impose la résolution du rendu.
 
 ## Bon à savoir
 

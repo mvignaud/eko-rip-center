@@ -15,13 +15,18 @@ Il vous faut un compte administrateur, l'Epson câblée au réseau du serveur av
 ## Étapes
 
 1. Branchez l'Epson par câble réseau et réservez-lui une adresse fixe.
-2. Dans le client, ouvrez **Administration… › Système › Machines** et ajoutez la machine (voir [Ajouter une machine](rip-ajouter-une-machine.md)).
-3. Choisissez la connexion **Réseau (TCP)**, avec l'adresse de l'Epson comme hôte et le port **9100**.
+2. Dans le client, ouvrez **Administration…**, vue **Système**, section **Machines**, et ajoutez la machine avec **Ajouter une machine** (voir [Ajouter une machine](rip-ajouter-une-machine.md)).
+3. Dans **Connexion**, choisissez **Réseau (TCP)**, saisissez l'adresse de l'Epson dans **Adresse IP** et gardez le **Port TCP** 9100 : c'est le pilote direct.
 4. Renseignez l'adresse **SNMP (largeur du média)** : l'Epson donne alors sa largeur de média, son support chargé, ses encres et ses alertes.
-5. Réglez l'**Origine X / Y impression** sur un essai papier, et la **Cadence (m²/h)** mesurée à l'atelier.
-6. Dans **Système › Supports de l'Epson**, déclarez vos supports avec le numéro enregistré dans l'imprimante.
-7. Vérifiez depuis le serveur : `nc -vz <adresse-de-l-epson> 9100`.
-8. Ouvrez **Système › Média chargé dans l'Epson** : la laize, le rouleau restant et les encres doivent s'afficher.
+
+   ![Fiche de l'Epson avec la connexion Réseau (TCP), l'adresse, le port 9100 et l'adresse SNMP entourés](../images/rip-machine-epson-reseau.png)
+5. Réglez l'**Origine X impression (mm)** et l'**Origine Y impression (mm)** sur un essai papier, et la **Cadence (m²/h)** mesurée à l'atelier.
+
+   ![Fiche de l'Epson avec les champs Origine X, Origine Y et Cadence entourés](../images/rip-machine-epson-origine.png)
+6. Cliquez **Enregistrer**, en bas de la section **Machines**.
+7. Dans la section **Supports de l'Epson**, déclarez vos supports avec le numéro enregistré dans l'imprimante.
+8. Vérifiez depuis le serveur : `nc -vz <adresse-de-l-epson> 9100`.
+9. Descendez à la section **Média chargé dans l'Epson** : la laize, le rouleau restant et les encres doivent s'afficher.
 
 ## Bon à savoir
 

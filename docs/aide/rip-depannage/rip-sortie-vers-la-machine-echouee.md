@@ -14,11 +14,15 @@ Vous voyez la sortie en échec dans la file de la machine. Accédez à la machin
 
 ## Étapes
 
-1. Lisez le message affiché sous la sortie.
+1. Ouvrez **Imprimés** (vue **Production**) et cliquez la sortie en échec : le message s'affiche dans la colonne **Relevé**.
 2. Pour **« La sortie vers la machine a échoué. »** : vérifiez que la machine est allumée, joignable, que son port USB existe et que le droit d'écriture est accordé.
 3. Pour **« L'imprimante signale une alerte : impression arrêtée. »** : levez l'alerte sur la machine (capot ouvert, cartouche vide…).
-4. Pour **« Envoi à l'imprimante impossible »** sur l'Epson : renommez le ton direct `White` ou `Metallic`, convertissez-le en CMJN, ou ajoutez-le à la table des tons directs (**Système › Tons directs**). Puis relancez le travail.
-5. Ouvrez l'**Historique** de la machine et cliquez **Refaire** sur la sortie.
+4. Pour **« Envoi à l'imprimante impossible. »** sur l'Epson, un message rouge s'affiche au moment de l'envoi : renommez le ton direct `White` ou `Metallic`, convertissez-le en CMJN, ou ajoutez-le à la table des tons directs (**Système › Tons directs**). Puis relancez le travail.
+
+   ![Message rouge « Envoi à l'imprimante impossible. » indiquant un ton direct sans encre sur l'Epson](../images/rip-envoi-impossible.png)
+5. Une fois la cause réglée, cliquez la sortie dans **Imprimés**, puis **Refaire** (↻), dans la colonne de boutons à gauche de la liste.
+
+   ![Sortie en échec dans Imprimés avec son message, et le bouton Refaire entouré](../images/rip-sortie-echec.png)
 
 ## Bon à savoir
 

@@ -17,10 +17,14 @@ Vous avez le fichier de sauvegarde de la configuration (voir [Sauvegarder la con
 1. Installez le serveur sur le nouveau PC (voir [Installer le serveur RIP](../rip-premiers-pas/rip-installer-le-serveur.md)).
 2. Créez le compte administrateur (voir [Créer les comptes](rip-creer-les-comptes.md)).
 3. Dans le client, connectez-vous à ce nouveau serveur.
-4. Ouvrez **Administration… › Système › Sauvegarde de la configuration**, puis cliquez **Restaurer…**.
+4. Ouvrez **Administration…**, vue **Système**, descendez à la section **Sauvegarde de la configuration**, puis cliquez **Restaurer…**.
+
+   ![Section Sauvegarde de la configuration avec le bouton Restaurer… entouré](../images/rip-sauvegarde-restaurer.png)
 5. Choisissez le fichier de sauvegarde.
 6. Recréez les comptes opérateurs.
-7. Vérifiez la liste des machines dans **Système › Machines**.
+7. Vérifiez la liste des machines dans la section **Machines** de la vue **Système**.
+
+   ![Section Machines de la vue Système, avec la fiche de chaque machine](../images/interface-systeme-machines.png)
 
 ## Bon à savoir
 

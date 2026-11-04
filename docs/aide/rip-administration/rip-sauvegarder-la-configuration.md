@@ -15,8 +15,10 @@ Il vous faut un compte administrateur. Prévoyez un endroit hors du serveur pour
 ## Étapes
 
 1. Dans le client, ouvrez **Administration…**.
-2. Ouvrez **Système › Sauvegarde de la configuration**.
+2. Ouvrez la vue **Système**, puis descendez à la section **Sauvegarde de la configuration**.
 3. Cliquez **Télécharger la sauvegarde**.
+
+   ![Section Sauvegarde de la configuration avec le bouton Télécharger la sauvegarde entouré](../images/rip-sauvegarde.png)
 4. Copiez le fichier sur un autre poste ou un disque externe.
 5. Refaites la sauvegarde après chaque changement de réglages.
 

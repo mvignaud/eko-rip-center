@@ -14,11 +14,18 @@ Selon le message, vous avez besoin d'un terminal sur le serveur ou d'un compte a
 
 ## Étapes
 
-1. Lisez le message exact affiché.
-2. Pour **« Trop d'essais pour cet utilisateur. »** : cinq mots de passe faux ont bloqué ce nom 5 minutes. Attendez, puis réessayez.
-3. En cas de mot de passe oublié, un administrateur redéclare le compte avec `utilisateur ajouter` : le nouveau mot de passe remplace l'ancien.
-4. Pour **« Réservé à l'administrateur du RIP. »** : votre compte est **opérateur**. Demandez à un administrateur de faire le réglage, ou de vous donner le rôle administrateur.
-5. Pour **« Accès libre »** en rouge : aucun compte n'est déclaré. Créez un compte administrateur.
+1. Lisez le message exact affiché sous le mot de passe.
+2. Pour **« Utilisateur ou mot de passe incorrect. »** : vérifiez le nom et le mot de passe (majuscules comprises), puis réessayez.
+
+   ![Écran de connexion qui indique « Utilisateur ou mot de passe incorrect. »](../images/rip-connexion-erreur.png)
+3. Pour **« Trop d'essais pour cet utilisateur : réessayer dans 5 minutes. »** : cinq mots de passe faux ont bloqué ce nom 5 minutes. Attendez, puis réessayez.
+
+   ![Écran de connexion qui indique « Trop d'essais pour cet utilisateur : réessayer dans 5 minutes. »](../images/rip-connexion-trop-d-essais.png)
+4. En cas de mot de passe oublié, un administrateur redéclare le compte avec `utilisateur ajouter` : le nouveau mot de passe remplace l'ancien.
+5. Pour **« Réservé à l'administrateur du RIP. »** : votre compte est **opérateur**. Demandez à un administrateur de faire le réglage, ou de vous donner le rôle administrateur.
+6. Pour **« Accès libre »** en rouge : aucun compte n'est déclaré. Créez un compte administrateur.
+
+   ![Bandeau rouge « Accès libre » : aucun utilisateur n'est déclaré sur le serveur](../images/rip-acces-libre.png)
 
 ## Bon à savoir
 

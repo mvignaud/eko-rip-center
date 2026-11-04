@@ -17,7 +17,9 @@ Il vous faut un compte administrateur et un port USB libre sur le serveur. Le se
 1. Branchez le Kona en USB (adaptateur série FTDI). Le paquet crée `/dev/kona` pour le groupe `dialout`.
 2. Vérifiez le port : `ls -l /dev/kona`.
 3. Sur le Kona, réglez la résolution à **0,010 mm**.
-4. Dans le client, ajoutez la machine (**Administration… › Système › Machines**) avec la connexion **Série / USB-série**, le port `/dev/kona` et les réglages `9600 cs8 -cstopb -parenb crtscts raw -echo`.
+4. Dans le client, ajoutez la machine (**Administration… › Système › Machines › Ajouter une machine**) avec la connexion **Série / USB-série**, le **Port série** `/dev/kona` et le réglage **stty** `9600 cs8 -cstopb -parenb crtscts raw -echo`.
+
+   ![Fiche du Mutoh Kona avec la connexion Série / USB-série, le port /dev/kona et les réglages stty entourés](../images/rip-machine-kona.png)
 5. Réglez le pas de découpe à 0,01 mm et les **réglages de coupe** (vitesse, force, accélération, outil, motif) ; le premier sert par défaut.
 6. À l'envoi d'un travail, choisissez le **Repérage Kona**. Le cadre avec code-barres (type 2) est celui éprouvé à l'atelier.
 7. Faites une coupe d'essai, mesurez l'écart et saisissez-le en **Décalage X / Y**.

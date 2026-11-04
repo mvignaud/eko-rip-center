@@ -14,19 +14,25 @@ Il vous faut un compte administrateur. Pour importer une bibliothèque, vous ave
 
 ## Étapes
 
-1. Ouvrez **Administration…**, puis **Système › Tons directs**.
-2. Pour ajouter un ton, saisissez son nom, identique à celui du fichier, et sa valeur Lab.
-3. Pour une autre écriture du même nom, ajoutez un **alias**.
+1. Ouvrez **Administration…**, puis la vue **Système**, section **Tons directs**.
+
+   ![Section Tons directs avec la table des teintes, le bouton Importer un CSV Lab et la liste des tons absents de la table](../images/rip-tons-directs.png)
+2. Pour savoir quels tons déclarer, envoyez un fichier qui les utilise : un ton absent de la table est signalé dans l'inspecteur du travail.
+
+   ![Alerte d'un travail : ton direct absent de la table des tons directs](../images/rip-ton-direct-absent-alerte.png)
+3. Dans **Tons rencontrés absents de la table**, cliquez **Ajouter** à côté du ton, puis saisissez sa couleur Lab sous la forme `L a b` (par exemple `48 68 48`).
 4. Pour importer en une fois, cliquez **Importer un CSV Lab**. Chaque ligne s'écrit `nom;L;a;b`.
 5. Réglez l'**Intention des tons directs** (colorimétrique relative par défaut).
-6. Relancez les travaux déjà rendus : la table n'est prise en compte qu'aux rendus suivants.
+6. Pour retirer un ton, cliquez **×** sur sa ligne et confirmez.
+7. Relancez les travaux déjà rendus : la table n'est prise en compte qu'aux rendus suivants.
 
 ## Bon à savoir
 
 - Le nom doit être identique : la casse et les espaces comptent (« PANTONE 485 C » ne trouve pas « Pantone 485 C »).
 - Si un nom du CSV existe déjà, tout l'import est refusé, sans rien écrire.
 - `White`, `Silver`, `Metallic` et les tons de découpe ne peuvent pas entrer dans la table.
-- Un ton du fichier absent de la table est signalé sur la page (« ton direct absent de la table ») et listé dans **Tons rencontrés absents de la table** : **Ajouter** le fait entrer avec sa valeur Lab.
+- Un ton du fichier absent de la table est signalé sur la page (« ton direct absent de la table des tons directs ») et listé dans **Tons rencontrés absents de la table** : **Ajouter** le fait entrer avec sa valeur Lab.
+- Un ton écrit de plusieurs façons dans vos fichiers s'ajoute une fois par écriture.
 - Une teinte à 50 % pose la moitié de la recette CMJN de la teinte pleine.
 
 ## Voir aussi

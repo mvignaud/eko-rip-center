@@ -17,7 +17,9 @@ Le serveur a été installé par le dépôt de paquets E-KO. Prévenez les opér
 1. Sur le serveur, ouvrez un terminal.
 2. Si possible, téléchargez d'abord la sauvegarde de la configuration (voir [Sauvegarder la configuration](rip-sauvegarder-la-configuration.md)).
 3. Lancez : `sudo apt update && sudo apt upgrade`.
-4. Vérifiez la version dans la vue **Système** du client.
+4. Vérifiez la version : dans **Administration…**, ouvrez la vue **Système** et lisez la ligne **Version**.
+
+   ![Section Système de la fenêtre Administration, avec la ligne Version](../images/rip-systeme-version.png)
 5. Relancez les travaux passés en échec « interrompu » avec **Relancer**.
 
 ## Bon à savoir

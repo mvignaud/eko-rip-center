@@ -15,7 +15,7 @@ Il vous faut un compte administrateur. La machine est branchée (voir la page de
 ## Étapes
 
 1. Dans le client, ouvrez **Administration…**, vue **Système › Machines**.
-2. Cliquez **Ajouter**.
+2. Cliquez **Ajouter une machine**.
 3. Choisissez le **modèle**. Le lien **Aide** à côté ouvre la page de cette machine.
 4. Donnez un identifiant (minuscules, chiffres et `-`) et un nom.
 5. Saisissez la laize.

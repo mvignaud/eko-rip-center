@@ -14,12 +14,16 @@ Des sorties sont en file (voir [Suivre les travaux et lancer l'impression](rip-s
 
 ## Étapes
 
-1. Ouvrez la file de la machine : cliquez son nom dans la barre latérale, ou ouvrez la vue **File d'attente**.
+1. Ouvrez la file de la machine : cliquez son nom dans le tableau des machines (vue **Production**), dans la barre latérale ou dans la vue **File d'attente** des clients.
 2. Cliquez la sortie à traiter.
 3. Pour changer l'ordre, cliquez **En tête**, **Monter** ou **Descendre**. Vous pouvez aussi glisser une sortie en attente à la place d'une autre de la même machine.
+
+   ![File de l'Epson avec les deux sorties en attente et la colonne de boutons En tête, Monter, Descendre, Suspendre, Reprendre, Annuler, Refaire et Retirer entourée](../images/rip-file-machine.png)
 4. Pour la mettre de côté, cliquez **Suspendre** ; les suivantes passent devant elle. Cliquez **Reprendre** pour la libérer.
 5. Pour l'abandonner, cliquez **Annuler**.
-6. Pour la repasser, ouvrez l'**Historique** et cliquez **Refaire** : la même sortie repart sans refaire le rendu.
+6. Pour la repasser, ouvrez **Imprimés** (l'**Historique** dans les clients) et cliquez **Refaire** : la même sortie repart sans refaire le rendu.
+
+   ![Section Imprimés avec une sortie sélectionnée et le bouton Refaire entouré](../images/rip-sortie-echec.png)
 7. Pour nettoyer l'historique, cliquez **Retirer**.
 
 ## Bon à savoir

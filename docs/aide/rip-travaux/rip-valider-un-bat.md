@@ -17,9 +17,13 @@ Le rendu du travail est fini. Pour l'épreuve sur une autre machine, le RIP doit
 1. Cliquez le travail fini dans le tableau.
 2. Cliquez **BAT** dans la barre d'outils. Le RIP produit un PDF A4 paysage, une page par page du travail.
 3. Envoyez ce PDF au client. Il porte l'image en épreuve écran, le tracé de découpe en magenta, le format, les réglages, les alertes et un cadre « Bon pour accord » (date, nom et signature).
-4. Pour une épreuve imprimée, choisissez la machine d'épreuve dans la liste **BAT sur…**, à côté de **Imprimer sur…**.
+4. Pour une épreuve imprimée, choisissez la machine d'épreuve dans la liste de l'inspecteur (**Sans BAT**, **BAT sur …**), au-dessus de **Imprimer sur…**.
+
+   ![Barre d'outils avec le bouton BAT entouré, et l'inspecteur avec la liste Sans BAT / BAT sur entourée](../images/rip-bat-bouton.png)
 5. Cliquez **Imprimer sur…** : deux sorties entrent en file. La copie « nom-BAT » part sur la machine d'épreuve ; l'impression demandée est suspendue et affiche **Attend le BAT**.
 6. Si le client accepte, cliquez **Reprendre** sur l'original. S'il refuse, cliquez **Annuler**.
+
+   ![File de l'Epson : l'affiche attend le BAT, avec les boutons Reprendre et Annuler dans la colonne de gauche](../images/rip-file-machine.png)
 
 ## Bon à savoir
 

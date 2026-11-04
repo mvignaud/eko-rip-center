@@ -18,7 +18,11 @@ Vos pages sont des PDF à imbriquer sur une planche (voir [Créer une planche](.
 2. Réglez la **Marge haute (mm)** pour laisser du blanc au-dessus des éléments.
 3. Réglez la **Marge basse (mm)** pour laisser du blanc au-dessous (0 à 200 mm pour chaque marge).
 4. Cliquez **Créer la planche**.
-5. Pour une planche faite par l'imbrication de la file, réglez les mêmes options dans **Système › Machines**, à la fiche de l'imprimante.
+
+   ![Panneau Planche avec le contour de toute la planche, les marges haute et basse et le bouton Créer la planche entourés](../images/rip-planche-contour.png)
+5. Pour une planche faite par l'imbrication de la file, réglez les mêmes options dans la section **Machines** de la vue **Système**, à la fiche de l'imprimante : **Marge haute (mm)**, **Marge basse (mm)** et **Contour de toute la planche (couche NestTrimBox)**.
+
+   ![Fiche de l'imprimante avec les marges haute et basse et le contour de toute la planche entourés](../images/rip-machine-imbrication-marges.png)
 
 ## Bon à savoir
 
