@@ -249,6 +249,11 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !a("notifications_proposees") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN notifications_proposees INTEGER NOT NULL DEFAULT 0;")?;
     }
+    // Contact du compte dans la boîte « Demandes » du support (identifiant interne, jamais affiché).
+    if !a("support_source_id") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN support_source_id TEXT;")?;
+    }
+    c.execute_batch("CREATE TABLE IF NOT EXISTS webhooks_support (empreinte TEXT PRIMARY KEY, recu_le INTEGER NOT NULL);")?;
     let jetons: Vec<String> = c.prepare("PRAGMA table_info(jetons_applis)")?.query_map([], |r| r.get::<_, String>(1))?.collect::<rusqlite::Result<_>>()?;
     if !jetons.iter().any(|x| x == "jeton_expo") {
         c.execute_batch("ALTER TABLE jetons_applis ADD COLUMN jeton_expo TEXT; ALTER TABLE jetons_applis ADD COLUMN plateforme_expo TEXT;")?;

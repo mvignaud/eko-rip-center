@@ -358,6 +358,7 @@ pub fn essai(url: &str, a: &str, nom: &str, maintenant: u64) -> Courriel {
 
 /// Raison commune des e-mails de facturation.
 const RAISON_FACTURATION: &str = "vous êtes titulaire d'un abonnement E-KO RIP Cloud (facturé par SAS GOLDEN PRINT)";
+const RAISON_SUPPORT: &str = "vous avez ouvert une demande auprès du support E-KO RIP Cloud";
 
 fn faits(l: &[(&str, String)]) -> Bloc {
     Bloc::Faits(l.iter().map(|(k, v)| (k.to_string(), v.clone())).collect())
@@ -621,6 +622,44 @@ pub fn mandat_signe(url: &str, a: &str, nom: &str, rum: &str, iban_fin: &str, li
     )
 }
 
+/// 17. Réponse du support à une demande (le texte de l'agent n'est jamais recopié).
+pub fn demande_reponse(url: &str, a: &str, nom: &str, numero: u64, lien: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Nouvelle réponse à votre demande n° {numero}"),
+            resume: "L'équipe d'E-KO a répondu à votre demande.".into(),
+            titre: format!("Nouvelle réponse à votre demande n° {numero}"),
+            blocs: vec![Bloc::Paragraphe(format!("Bonjour {nom}, l'équipe d'E-KO a répondu à votre demande n° {numero}. Pour la lire et y répondre, ouvrez la demande dans votre espace E-KO RIP Cloud."))],
+            bouton: Some(("Voir la réponse".into(), lien.into())),
+            lien_en_clair: true,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
+/// 18. Demande passée en « résolue » par le support.
+pub fn demande_resolue(url: &str, a: &str, nom: &str, numero: u64, lien: &str) -> Courriel {
+    rendre(
+        url,
+        a,
+        nom,
+        &Contenu {
+            sujet: format!("Votre demande n° {numero} est résolue"),
+            resume: "Votre demande est close. Une réponse de votre part la rouvre.".into(),
+            titre: format!("Votre demande n° {numero} est résolue"),
+            blocs: vec![Bloc::Paragraphe(format!("Bonjour {nom}, l'équipe d'E-KO a marqué votre demande n° {numero} comme résolue. Si le problème n'est pas réglé, répondez simplement dans la demande : elle sera rouverte."))],
+            bouton: Some(("Voir la demande".into(), lien.into())),
+            lien_en_clair: true,
+            raison: RAISON_SUPPORT.into(),
+            preferences: false,
+        },
+    )
+}
+
 /// Tous les messages avec des données d'exemple (`eko-rip-cloud apercu-courriels <dossier>`).
 pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
     use crate::evenements::ResumeSite;
@@ -660,6 +699,8 @@ pub fn apercus(url: &str) -> Vec<(&'static str, Courriel)> {
         ("offre-depassee", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "3 imprimante(s) et 1 découpeur(s) pour 1 imprimante et 1 découpeur compris dans l'offre Gratuit", lundi + 14 * 86_400, false)),
         ("acces-suspendu", offre_depassee(url, "contact@atelier-dupont.fr", "Atelier Dupont", "2 sites rattachés pour 1 compris dans l'offre Gratuit", lundi, true)),
         ("mandat-signe", mandat_signe(url, "contact@atelier-dupont.fr", "Atelier Dupont", "GP-SEPA-000123", "0189", &format!("{url}/abonnement/mandat.pdf"))),
+        ("demande-reponse", demande_reponse(url, "contact@atelier-dupont.fr", "Atelier Dupont", 1287, &format!("{url}/support/1287"))),
+        ("demande-resolue", demande_resolue(url, "contact@atelier-dupont.fr", "Atelier Dupont", 1287, &format!("{url}/support/1287"))),
     ]
 }
 
@@ -815,7 +856,7 @@ mod tests {
     #[test]
     fn apercus_complets() {
         let v = apercus("https://platform.e-ko.rip");
-        assert_eq!(v.len(), 24);
+        assert_eq!(v.len(), 26);
         let noms: Vec<&str> = v.iter().map(|(n, _)| *n).collect();
         for n in ["abonnement-souscrit", "facture-emise", "paiement-refuse", "relance-1", "relance-2", "relance-3", "resiliation-impaye", "fin-essai", "quota-80", "quota-100", "sauvegarde-echec", "restauration", "offre-depassee", "acces-suspendu", "mandat-signe"] {
             assert!(noms.contains(&n), "aperçu {n} absent");

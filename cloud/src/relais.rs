@@ -208,7 +208,11 @@ pub fn routes(relais: Partage) -> Router {
         .route("/abonnement/changer", post(crate::abonnements::changer))
         .route("/abonnement/resilier", post(crate::abonnements::resilier))
         .route("/support", get(crate::support::liste))
+        .route("/support/nouvelle", get(crate::demandes::nouvelle).post(crate::demandes::envoyer_nouvelle).layer(axum::extract::DefaultBodyLimit::max(crate::demandes::MAX_CORPS)))
         .route("/support/{code}", get(crate::support::demande))
+        .route("/support/{code}/repondre", post(crate::demandes::envoyer_reponse).layer(axum::extract::DefaultBodyLimit::max(crate::demandes::MAX_CORPS)))
+        .route("/support/{code}/resoudre", post(crate::demandes::marquer_resolue))
+        .route("/webhooks/support", post(crate::demandes::webhook).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
         .route("/assets/chat.js", get(crate::support::chat_js))
         .route("/api/erp/webhooks", post(crate::abonnements::webhook).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
         .route("/sites/{site}/sauvegardes", get(crate::sauvegardes::page_site))
@@ -323,6 +327,7 @@ pub async fn entretenir(relais: Partage) {
         crate::evenements::entretenir(&relais).await;
         crate::abonnements::entretenir(&relais).await;
         crate::sauvegardes::entretenir(&relais).await;
+        crate::demandes::entretenir(&relais.base(), crate::maintenant());
         let d = relais.config.donnees.clone();
         let _ = tokio::task::spawn_blocking(move || crate::rapports::purger(&d, crate::maintenant())).await;
         if let Ok(sites) = sites::lire(&relais.config.donnees) {

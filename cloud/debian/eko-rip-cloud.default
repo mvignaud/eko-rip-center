@@ -24,3 +24,7 @@
 # vérification d'identité (HMAC). Si l'une manque, pas de bulle.
 #CHATWOOT_WEBSITE_TOKEN=
 #CHATWOOT_HMAC_TOKEN=
+# « Mes demandes » (boîte API du support) : les trois, sinon le menu est masqué.
+#CHATWOOT_DEMANDES_INBOX=
+#CHATWOOT_DEMANDES_HMAC=
+#CHATWOOT_DEMANDES_WEBHOOK_SECRET=

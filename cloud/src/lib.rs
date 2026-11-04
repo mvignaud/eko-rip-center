@@ -15,6 +15,7 @@ pub mod applis;
 pub mod base;
 pub mod client;
 pub mod courriels;
+pub mod demandes;
 pub mod erp;
 pub mod evenements;
 pub mod installations;

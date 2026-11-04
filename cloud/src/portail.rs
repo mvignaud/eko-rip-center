@@ -41,7 +41,7 @@ pub fn encoder(s: &str) -> String {
 }
 
 /// Inverse d'`encoder` (séquences `%XX` ; invalide : texte vide).
-fn decoder(s: &str) -> String {
+pub fn decoder(s: &str) -> String {
     let o = s.as_bytes();
     let mut v = Vec::with_capacity(o.len());
     let mut i = 0;
@@ -239,7 +239,7 @@ pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String
                 r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div>{bulle}</body></html>"#,
                 entree("/sites", "Mes sites", ICONE_SITES),
                 entree("/abonnement", "Abonnement", ICONE_ABONNEMENT),
-                entree("/support", "Support", ICONE_SUPPORT).replacen("<a ", "<a data-support ", 1),
+                if crate::demandes::actif() { entree("/support", "Support", ICONE_SUPPORT) } else { entree("/support", "Support", ICONE_SUPPORT).replacen("<a ", "<a data-support ", 1) },
                 entree("/compte", "Mon compte", ICONE_COMPTE),
                 echapper(&s.csrf),
                 echapper(titre),

@@ -84,18 +84,34 @@ jobs:
         env:
           CHATWOOT_WEBSITE_TOKEN: ${{ secrets.CHATWOOT_WEBSITE_TOKEN }}
           CHATWOOT_HMAC_TOKEN: ${{ secrets.CHATWOOT_HMAC_TOKEN }}
+          CHATWOOT_DEMANDES_INBOX: ${{ secrets.CHATWOOT_DEMANDES_INBOX }}
+          CHATWOOT_DEMANDES_HMAC: ${{ secrets.CHATWOOT_DEMANDES_HMAC }}
+          CHATWOOT_DEMANDES_WEBHOOK_SECRET: ${{ secrets.CHATWOOT_DEMANDES_WEBHOOK_SECRET }}
         run: |
           set -euo pipefail
           scp target/x86_64-unknown-linux-musl/release/eko-rip-cloud "$HOTE:eko-rip-cloud/eko-rip-cloud.nouveau"
           scp cloud/o2switch/app.js "$HOTE:eko-rip-cloud/app.js.nouveau"
-          # Secrets du support en direct : par l'entrée standard de ssh, jamais en argument.
+          # Secrets du support (bulle et « Mes demandes ») : par l'entrée standard de ssh, jamais
+          # en argument ni dans le journal.
+          secrets=""
           if [ -n "$CHATWOOT_WEBSITE_TOKEN" ] && [ -n "$CHATWOOT_HMAC_TOKEN" ]; then
-              printf 'CHATWOOT_WEBSITE_TOKEN=%s\nCHATWOOT_HMAC_TOKEN=%s\n' "$CHATWOOT_WEBSITE_TOKEN" "$CHATWOOT_HMAC_TOKEN" \
-                  | ssh "$HOTE" 'umask 077 && cat > eko-rip-cloud/secrets.env.nouveau && mv eko-rip-cloud/secrets.env.nouveau eko-rip-cloud/secrets.env'
-              echo "Support en direct : secrets.env mis à jour."
+              secrets+="CHATWOOT_WEBSITE_TOKEN=$CHATWOOT_WEBSITE_TOKEN"$'\n'"CHATWOOT_HMAC_TOKEN=$CHATWOOT_HMAC_TOKEN"$'\n'
           else
-              echo "::warning::CHATWOOT_WEBSITE_TOKEN ou CHATWOOT_HMAC_TOKEN absent de l'environnement production : secrets.env inchangé (sans lui, pas de bulle de support)."
+              echo "::warning::CHATWOOT_WEBSITE_TOKEN ou CHATWOOT_HMAC_TOKEN absent de l'environnement production : pas de bulle de support."
           fi
+          if [ -n "$CHATWOOT_DEMANDES_INBOX" ] && [ -n "$CHATWOOT_DEMANDES_HMAC" ] && [ -n "$CHATWOOT_DEMANDES_WEBHOOK_SECRET" ]; then
+              secrets+="CHATWOOT_DEMANDES_INBOX=$CHATWOOT_DEMANDES_INBOX"$'\n'"CHATWOOT_DEMANDES_HMAC=$CHATWOOT_DEMANDES_HMAC"$'\n'"CHATWOOT_DEMANDES_WEBHOOK_SECRET=$CHATWOOT_DEMANDES_WEBHOOK_SECRET"$'\n'
+          else
+              echo "::warning::Un secret CHATWOOT_DEMANDES_* manque dans l'environnement production : menu « Mes demandes » masqué."
+          fi
+          if [ -n "$secrets" ]; then
+              printf '%s' "$secrets" \
+                  | ssh "$HOTE" 'umask 077 && cat > eko-rip-cloud/secrets.env.nouveau && mv eko-rip-cloud/secrets.env.nouveau eko-rip-cloud/secrets.env'
+              echo "Support : secrets.env mis à jour."
+          else
+              echo "::warning::Aucun secret du support : secrets.env inchangé."
+          fi
+          unset secrets
           ssh "$HOTE" VERSION="$VERSION" bash -s <<'DISTANT'
           set -euo pipefail
           cd ~/eko-rip-cloud

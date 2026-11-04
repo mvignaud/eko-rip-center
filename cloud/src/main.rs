@@ -136,6 +136,7 @@ async fn main() {
     let adresse = env_ou("EKO_CLOUD_ADDR", "127.0.0.1:8650");
     let r = relais::nouveau(config);
     eprintln!("support en direct : {}", if eko_rip_cloud::support::configurer_depuis_env() { "widget en service" } else { "désactivé (CHATWOOT_WEBSITE_TOKEN ou CHATWOOT_HMAC_TOKEN absent)" });
+    eprintln!("mes demandes : {}", if eko_rip_cloud::demandes::configurer_depuis_env() { "en service" } else { "désactivées (CHATWOOT_DEMANDES_INBOX, CHATWOOT_DEMANDES_HMAC ou CHATWOOT_DEMANDES_WEBHOOK_SECRET absent)" });
     tokio::spawn(relais::entretenir(r.clone()));
     // `unix:<chemin>` : socket local (hébergement mutualisé, où un port TCP ouvert est abattu).
     if let Some(chemin) = adresse.strip_prefix("unix:") {
