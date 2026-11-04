@@ -34,6 +34,8 @@ jobs:
   aide:
     if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, eko-ci-rip]
+    # Les images partent au rythme permis par le support (55 par heure au plus, reprise à l'heure pleine sur 429).
+    timeout-minutes: 300
     container: ubuntu:24.04
     environment: production
     env:

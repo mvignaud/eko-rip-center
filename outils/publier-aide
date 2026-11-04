@@ -172,9 +172,32 @@ def verifier(rub, arts):
 
 # ————— Centre d'aide —————
 
+# Le support limite les envois d'images à 60 par heure et par compte, en fenêtre fixe remise à
+# zéro à l'heure pleine (UTC) ; les refus comptent aussi. Le compte est partagé avec l'aide des
+# autres applis : on s'arrête à 55 envois par heure, et sur un 429 on attend l'heure suivante au
+# lieu de réessayer (chaque essai refusé repousserait la fenêtre).
+ENVOIS_PAR_HEURE = 55
+
+
+def attendre_heure_suivante(motif):
+    attente = 3600 - time.time() % 3600 + 30
+    print(f"{motif} : reprise dans {attente / 60:.0f} min (heure suivante).", flush=True)
+    time.sleep(attente)
+
+
 class Api:
     def __init__(self, jeton):
         self._jeton = jeton
+        self._heure, self._envois = None, 0
+
+    def _compter_envoi(self):
+        heure = int(time.time() // 3600)
+        if heure != self._heure:
+            self._heure, self._envois = heure, 0
+        if self._envois >= ENVOIS_PAR_HEURE:
+            attendre_heure_suivante(f"{ENVOIS_PAR_HEURE} images envoyées cette heure-ci")
+            self._heure, self._envois = int(time.time() // 3600), 0
+        self._envois += 1
 
     def appel(self, methode, url, corps=None, multipart=None):
         entetes = {"Authorization": f"Bearer {self._jeton}", "Accept": "application/json"}
@@ -188,26 +211,33 @@ class Api:
             donnees = json.dumps(corps).encode()
             entetes["Content-Type"] = "application/json"
         requete = urllib.request.Request(url if url.startswith("http") else API + url, data=donnees, method=methode, headers=entetes)
-        # Le support limite le débit (HTTP 429) : on attend (Retry-After, sinon 5, 10, 20… s,
-        # 2 min au plus) puis on réessaie, 8 fois au plus. Une erreur 5xx n'est réessayée qu'en
-        # lecture : une écriture a pu passer, la refaire créerait un doublon.
-        for essai in range(9):
+        # HTTP 429 : on attend l'heure pleine suivante, 3 fois au plus. Une erreur 5xx n'est
+        # réessayée qu'en lecture (5, 10, 20… s, 8 fois au plus) : une écriture a pu passer, la
+        # refaire créerait un doublon.
+        refus, essai = 0, 0
+        while True:
+            if multipart is not None:
+                self._compter_envoi()
             try:
                 with urllib.request.urlopen(requete, timeout=60) as r:
                     brut = r.read()
                 return json.loads(brut) if brut else {}
             except urllib.error.HTTPError as e:
                 detail = e.read()[:300].decode("utf-8", "replace")
-                if (e.code == 429 or (e.code >= 500 and methode == "GET")) and essai < 8:
-                    try:
-                        attente = float(e.headers.get("Retry-After") or 0)
-                    except ValueError:
-                        attente = 0
-                    attente = min(max(attente, 5 * 2 ** essai), 120)
-                    print(f"{methode} {url.split('?')[0]} : HTTP {e.code}, nouvel essai dans {attente:.0f} s", flush=True)
-                    time.sleep(attente)
+                chemin = url.split("?")[0]
+                if e.code == 429 and refus < 3:
+                    refus += 1
+                    attendre_heure_suivante(f"{methode} {chemin} : HTTP 429")
+                    if multipart is not None:
+                        self._heure, self._envois = int(time.time() // 3600), 0
                     continue
-                raise SystemExit(f"{methode} {url.split('?')[0]} : HTTP {e.code} {detail}")
+                if e.code >= 500 and methode == "GET" and essai < 8:
+                    attente = 5 * 2 ** min(essai, 4)
+                    print(f"{methode} {chemin} : HTTP {e.code}, nouvel essai dans {attente} s", flush=True)
+                    time.sleep(attente)
+                    essai += 1
+                    continue
+                raise SystemExit(f"{methode} {chemin} : HTTP {e.code} {detail}")
 
 
 def charge(r):
