@@ -67,7 +67,10 @@ documentation d'e-ko.rip, qui reste la référence détaillée.
   dans `docs/aide/` (guide pas à pas, captures d'écran, réglages, cas particuliers), dans la même PR.
   Une fonction qui change = ses articles et ses captures mis à jour dans la même PR.
 - Le centre d'aide remplace la documentation d'e-ko.rip : chaque page de `docs/guide/` et `docs/fr/`
-  est couverte par des articles (`docs/aide/couverture/*.tsv`), puis redirigée en 301 vers eux. `python3 outils/publier-aide --verifier` (dans `outils/verifier.sh`) contrôle
+  est couverte par des articles (`docs/aide/couverture/*.tsv`), et redirigée en 301 vers eux (FR et EN,
+  bloc de `site/.htaccess` écrit par `outils/redirections-documentation`). Les articles existent en
+  français et en anglais (`docs/aide/en/`, voir `docs/aide/README.md`) : un article ajouté ou modifié
+  l'est dans les deux langues, dans la même PR. `python3 outils/publier-aide --verifier` (dans `outils/verifier.sh`) contrôle
   en-têtes, slugs préfixés `rip-` / `rip-cloud-`, images et liens.
 - Envoi par le workflow `publier-aide.yml`, sur ordre de Mathieu seulement : en brouillon par
   défaut ; entrée `publier` seulement après « Publie l'aide ». Ne jamais toucher aux catégories

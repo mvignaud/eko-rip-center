@@ -25,7 +25,7 @@ Il vous faut un compte administrateur. Prévoyez un endroit hors du serveur pour
 ## Bon à savoir
 
 - Avant chaque mise à jour, le paquet copie seul la configuration dans `/var/lib/eko-rip/sauvegardes/` ; les 10 dernières sont gardées.
-- Pour tout sauvegarder, comptes compris, copiez le dossier `/var/lib/eko-rip` service arrêté. Les travaux sont volumineux et se refont depuis leurs fichiers sources : la configuration et le fichier des comptes (`utilisateurs.json`) suffisent souvent.
+- Pour tout sauvegarder, comptes compris, copiez le dossier `/var/lib/eko-rip` (ou celui de `EKO_RIP_DATA`, s'il a été changé) service arrêté. Il contient les comptes et les secrets du serveur : gardez cette copie chiffrée, en lieu sûr. Les travaux sont volumineux et se refont depuis leurs fichiers sources : la configuration et le fichier des comptes (`utilisateurs.json`) suffisent souvent.
 - **Exporter les réglages** télécharge seulement les réglages enregistrés, pour les reprendre sur un autre serveur avec **Importer des réglages**.
 
 - Le fichier téléchargé est au format JSON : catalogue des machines, tarifs, réglages enregistrés, découpe, tons directs et profils ICC déposés. Les comptes n'y sont pas (recréez-les sur le serveur), ni les travaux ni la file.

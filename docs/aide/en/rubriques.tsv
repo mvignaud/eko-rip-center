@@ -1,0 +1,14 @@
+# Help-centre sub-categories in English (portal « aide », locale en), under the master categories rip and rip-cloud.
+# Same slugs as the French ones (a category slug is unique per locale). Columns: slug<TAB>master<TAB>position<TAB>name<TAB>description.
+rip-premiers-pas	rip	1	Getting started	Understand the RIP and install the server, the clients and the mobile app.
+rip-travaux	rip	2	Sending and tracking jobs	Send a file, follow the queue, approve a proof, print and cut day to day.
+rip-couleur	rip	3	Colour and media	Set up media, profiles, spot colours and print quality.
+rip-machines	rip	4	Machines	Add and connect the supported printers, cutting plotters and cutting tables.
+rip-administration	rip	5	Running the server	Accounts, backups, updates and settings of the RIP server.
+rip-erp	rip	6	Connecting the RIP to the ERP	Bridge with the Suite E-KO ERP: orders, proofs, consumption and production feedback.
+rip-depannage	rip	7	Troubleshooting	Common RIP messages, what causes them and what to do.
+rip-cloud-premiers-pas	rip-cloud	1	Getting started	Create an account, link the workshop server and reach it from outside.
+rip-cloud-compte	rip-cloud	2	Account and access	Manage your account, who can access the sites, e-mails and notifications.
+rip-cloud-abonnement	rip-cloud	3	Plans and billing	Choose a plan, pay, find your invoices and change plan.
+rip-cloud-sauvegardes	rip-cloud	4	Online backups	View and restore backups of the server configuration.
+rip-cloud-depannage	rip-cloud	5	Troubleshooting and support	Solve common problems and reach live support.
