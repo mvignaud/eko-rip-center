@@ -207,6 +207,17 @@ pub fn routes(relais: Partage) -> Router {
         .route("/abonnement/factures/{fichier}", get(crate::abonnements::facture_pdf))
         .route("/abonnement/changer", post(crate::abonnements::changer))
         .route("/abonnement/resilier", post(crate::abonnements::resilier))
+        .route("/support", get(crate::support::liste))
+        .route("/support/nouvelle", get(crate::support::nouvelle).post(crate::support::creer).layer(axum::extract::DefaultBodyLimit::max(crate::support::MAX_REQUETE)))
+        .route("/support/bulle.js", get(crate::support::bulle_js))
+        .route("/support/direct/etat", get(crate::support::etat))
+        .route("/support/direct/ouvrir", post(crate::support::ouvrir_discussion).layer(axum::extract::DefaultBodyLimit::max(64 * 1024)))
+        .route("/support/direct/envoyer", post(crate::support::envoyer_message).layer(axum::extract::DefaultBodyLimit::max(64 * 1024)))
+        .route("/support/direct/fermer", post(crate::support::fermer_discussion))
+        .route("/support/direct/congedier", post(crate::support::congedier_discussion))
+        .route("/support/{code}", get(crate::support::demande))
+        .route("/support/{code}/repondre", post(crate::support::repondre))
+        .route("/support/{code}/note", post(crate::support::noter))
         .route("/api/erp/webhooks", post(crate::abonnements::webhook).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
         .route("/sites/{site}/sauvegardes", get(crate::sauvegardes::page_site))
         .route("/sites/{site}/sauvegardes/{id}", get(crate::sauvegardes::telecharger))
@@ -289,7 +300,7 @@ async fn aiguiller(State(relais): State<Partage>, requete: Request, suite: axum:
 async fn entetes_du_portail(mut rep: Response) -> Response {
     let h = rep.headers_mut();
     if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
-        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
         h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
         h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
         h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));

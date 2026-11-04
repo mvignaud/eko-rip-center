@@ -144,6 +144,10 @@ La plate-forme écrit depuis **E-KO RIP Cloud**, adresse `no-reply@e-ko.fr`. Il 
 | Site de nouveau en ligne | Le serveur répond de nouveau, uniquement si l'alerte « hors ligne » est partie. |
 | Nouvelle app connectée | Une app vient de se connecter au compte. |
 | Résumé hebdomadaire | Chaque lundi vers 8 h, pour chaque site. |
+| Demande reçue | Votre demande au support est enregistrée. |
+| Réponse du support | L'équipe répond à votre demande, avec un extrait du message. |
+| Demande résolue | La demande est résolue, avec le lien pour noter le support. |
+| Discussion transformée en demande | Personne n'a pu prendre la discussion en direct : elle devient une demande, avec la transcription. |
 
 Les alertes de site hors ligne concernent les propriétaires et les administrateurs du site. Au plus une alerte est envoyée par site et par heure.
 
@@ -154,7 +158,7 @@ Le résumé hebdomadaire indique, pour chaque site : le nombre de coupures, la d
 1. Ouvrir **Mon compte** sur le portail.
 2. Cocher ou décocher **Recevoir les alertes** et **Recevoir le résumé hebdomadaire**.
 
-Les deux cases sont cochées par défaut. L'e-mail « nouvelle app connectée » est toujours envoyé : c'est une mesure de sécurité.
+Les deux cases sont cochées par défaut. L'e-mail « nouvelle app connectée » est toujours envoyé : c'est une mesure de sécurité. Les e-mails du support (demande reçue, réponse, demande résolue) le sont aussi : ils répondent à une demande que vous avez faite.
 
 ### Mot de passe oublié
 
@@ -167,7 +171,7 @@ Pour des raisons de sécurité, la page répond de la même façon que l'adresse
 
 ## Notifications
 
-Les mêmes événements que les alertes par e-mail peuvent arriver en notifications : **site hors ligne**, **site de retour en ligne** et **nouvelle app connectée**. Elles suivent la case **Recevoir les alertes**.
+Les mêmes événements que les alertes par e-mail peuvent arriver en notifications : **site hors ligne**, **site de retour en ligne** et **nouvelle app connectée**. Elles suivent la case **Recevoir les alertes**. Les réponses du support et les demandes résolues sont aussi notifiées.
 
 ### Dans le navigateur
 
@@ -187,6 +191,47 @@ Les notifications arrivent même quand la page du portail est fermée, tant que 
 ### Dans les apps Mac, Linux et mobile
 
 Les apps demandent l'autorisation d'afficher des notifications juste après la première connexion au cloud. Il suffit d'accepter. Si l'autorisation a été refusée, la rétablir dans les réglages du système ou du téléphone.
+
+## Support et discussion en direct
+
+Une question, un problème, une idée ? Le support d'E-KO se joint depuis le portail, sans autre compte à créer : cliquer sur **Support** dans la barre latérale.
+
+![Liste Support : mes demandes, leur file et leur état](../images/cloud-support-demandes.png "Mes demandes au support")
+
+### Ouvrir une demande
+
+1. Cliquer sur **Support**, puis sur **Nouvelle demande**.
+2. Choisir la **File** : Technique, Comptabilité, Commercial ou Idée.
+3. Saisir le **Sujet** et le message. Joindre au besoin une copie d'écran ou un journal : 5 fichiers de 10 Mo au plus.
+4. Cliquer sur **Envoyer la demande**.
+
+Un e-mail confirme la réception, avec la référence de la demande (`TKT-…`). Le fil de la demande, les réponses de l'équipe et un champ pour répondre se trouvent dans **Support**, en cliquant sur la demande.
+
+![Fil d'une demande : messages, réponse et état](../images/cloud-support-demande.png "Le fil d'une demande")
+
+### Suivre et répondre
+
+Chaque réponse de l'équipe arrive par e-mail et par une notification, avec un lien qui ouvre directement la demande. Répondre depuis la page, pas depuis l'e-mail : l'adresse d'envoi (`no-reply`) ne lit pas les réponses.
+
+L'état de la demande se lit dans la liste : **Reçue**, **En cours**, **En attente de votre réponse**, **Résolue** ou **Fermée**. Répondre à une demande résolue la rouvre. Une demande fermée ne reçoit plus de messages : ouvrir une nouvelle demande.
+
+### Noter le support
+
+Quand la demande est résolue, un e-mail propose de **Noter le support**. Sur la page de la demande, choisir une note de 1 (pas du tout satisfait) à 5 (très satisfait), ajouter un commentaire si on le souhaite, puis cliquer sur **Envoyer ma note**. La note peut être modifiée plus tard.
+
+### Discussion en direct
+
+Pour une réponse tout de suite, la bulle bleue en bas à droite de chaque page du portail ouvre une discussion avec l'équipe.
+
+![Bulle de discussion en direct ouverte sur la page Support](../images/cloud-support-direct.png "La discussion en direct")
+
+1. Cliquer sur la bulle. L'en-tête indique si le support est **Ouvert** ou **Fermé** ; fermé, la bulle rappelle les horaires d'ouverture.
+2. Choisir le sujet, écrire le premier message, puis cliquer sur **Démarrer la discussion**.
+3. Les messages de l'équipe s'affichent dans la bulle, quelques secondes après leur envoi. Fermer la bulle ne coupe pas la discussion, et une pastille rouge signale un nouveau message.
+4. Cliquer sur **Terminer la discussion** pour y mettre fin.
+
+> [!NOTE]
+> Hors des heures d'ouverture du support, ou si personne ne prend la discussion en deux minutes, votre message devient automatiquement une demande. Un e-mail vous l'annonce, avec la transcription de ce que vous avez écrit, et la suite se passe dans **Support**.
 
 ## Gérer son compte
 
@@ -353,6 +398,10 @@ Elles se trouvent dans **Mes sites › Sauvegardes**. Si la dernière est ancien
 ### Je ne reçois pas les e-mails
 
 Regarder dans les courriers indésirables. Vérifier l'adresse du compte dans **Mon compte** et les cases cochées. Les e-mails viennent de `no-reply@e-ko.fr`.
+
+### Le support ne peut pas enregistrer ma demande
+
+Le message « Votre compte n'est pas encore relié à un dossier client E-KO » signifie que le support ne retrouve pas votre société à partir de l'adresse e-mail du compte. Souscrire une offre relie le compte automatiquement. Sinon, écrire à E-KO depuis l'adresse de votre société, ou utiliser la même adresse e-mail que celle de vos échanges avec E-KO pour le compte du portail.
 
 ## Informations légales
 

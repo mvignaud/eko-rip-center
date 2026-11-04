@@ -563,6 +563,7 @@ pub fn entretenir_bloquant(r: &Partage, t: u64) {
     let comptes: Vec<i64> = {
         let c = r.base();
         let _ = c.execute("DELETE FROM webhooks_erp WHERE recu_le < ?1", [t.saturating_sub(CONSERVATION_WEBHOOKS) as i64]);
+        crate::support::entretenir(&c, t);
         let _ = c.execute("DELETE FROM resiliations_erp WHERE essais >= 50 AND cree_le < ?1", [t.saturating_sub(CONSERVATION_WEBHOOKS) as i64]);
         c.prepare("SELECT compte FROM droits WHERE role = 'proprietaire' UNION SELECT compte FROM abonnements_cloud").and_then(|mut q| q.query_map([], |l| l.get(0))?.collect()).unwrap_or_default()
     };
@@ -646,6 +647,10 @@ pub async fn webhook(State(r): State<Partage>, h: HeaderMap, corps: Bytes) -> Re
 
 /// Rend vrai si l'événement concernait un compte connu.
 pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
+    // Support : le même webhook, des événements `support.*` pour un autre index (support.rs).
+    if evenement.starts_with("support.") {
+        return crate::support::traiter_webhook(r, evenement, data);
+    }
     let code_sub = premier_texte(data, &["/subscription/code", "/subscription_code", "/cycle/subscription_code", "/cycle/subscription/code"]);
     let tier = premier_texte(data, &["/tier/code", "/tier_code", "/subscription/tier_code", "/mandate/tier_code", "/tier"]);
     let id = {
@@ -2144,7 +2149,7 @@ pub(crate) fn carte_admin(b: &Connection, s: &Session, url: &str) -> String {
     }
     format!(
         r#"<div class="carte"><h2>Facturation (E-KO)</h2>
-<p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view, et webhooks.manage pour la configuration automatique. « Enregistrer et configurer depuis l'ERP » remplit les codes des plans <code>RIP-…</code> et crée le webhook vers <code>{url}/api/erp/webhooks</code> avec son secret (il remplace l'ancien). Sans webhooks.manage, déclarer le webhook à la main et coller son secret.</p>
+<p class="meta">API v1 de l'ERP (tenant GOLDEN PRINT). Jeton avec les droits tiers.view, tiers.create, subscriptions.view, subscriptions.create, subscriptions.update, subscriptions.cancel, subscription-plans.view, apporteurs.view, apporteurs.link, sepa-mandates.view, sepa-mandates.create, invoices.view, support.view et support.create (support et discussion en direct, API /support), et webhooks.manage pour la configuration automatique. « Enregistrer et configurer depuis l'ERP » remplit les codes des plans <code>RIP-…</code> et crée le webhook vers <code>{url}/api/erp/webhooks</code> avec son secret, abonné aussi aux événements <code>support.*</code> (il remplace l'ancien). Sans webhooks.manage, déclarer le webhook à la main et coller son secret.</p>
 <form method="post" action="/admin/facturation">{csrf}
 <label>Adresse de l'API<input type="text" name="erp_url" value="{erp}" placeholder="https://app.e-ko.fr/api/v1" autocomplete="off"></label>
 <label>Jeton d'API ({j})<input type="password" name="erp_jeton" autocomplete="new-password"></label>
