@@ -24,6 +24,8 @@ const SOURCE: &str = "source-contact-1";
 #[derive(Default)]
 struct Faux {
     contacts: Vec<Value>,
+    /// Mises à jour signées du contact (vérification de l'identité).
+    identites: Vec<Value>,
     conversations: Vec<Value>,
     /// Attributs reçus à la création (l'API client du support ne les rend jamais).
     attributs: Vec<Value>,
@@ -46,6 +48,11 @@ fn faux_support(etat: Etat) -> Router {
         assert_eq!(boite, BOITE);
         e.lock().unwrap().contacts.push(v.clone());
         Json(json!({ "source_id": SOURCE, "name": v["name"] }))
+    }
+    async fn identite(State(e): State<Etat>, Path((_, s)): Path<(String, String)>, Json(v): Json<Value>) -> Json<Value> {
+        assert_eq!(s, SOURCE);
+        e.lock().unwrap().identites.push(v.clone());
+        Json(json!({ "source_id": SOURCE }))
     }
     async fn conversations(State(e): State<Etat>, Path((_, s)): Path<(String, String)>) -> Result<Json<Value>, axum::http::StatusCode> {
         if s != SOURCE {
@@ -107,6 +114,7 @@ fn faux_support(etat: Etat) -> Router {
     let p = "/public/api/v1/inboxes/{boite}/contacts";
     Router::new()
         .route(p, post(contact))
+        .route(&format!("{p}/{{s}}"), axum::routing::patch(identite))
         .route(&format!("{p}/{{s}}/conversations"), get(conversations).post(creer))
         .route(&format!("{p}/{{s}}/conversations/{{id}}"), get(une))
         .route(&format!("{p}/{{s}}/conversations/{{id}}/messages"), get(messages).post(ecrire))
@@ -213,6 +221,8 @@ async fn mes_demandes_de_bout_en_bout() {
             assert_eq!(f.contacts[0]["identifier"], ident);
             assert_eq!(f.contacts[0]["identifier_hash"], eko_rip_cloud::hex(&eko_rip_cloud::hmac_sha256(CLE.as_bytes(), ident.as_bytes())));
             assert_eq!(f.contacts[0]["email"], "claire@atelier.fr");
+            assert_eq!(f.identites.len(), 1, "identité vérifiée par une mise à jour signée");
+            assert_eq!(f.identites[0]["identifier_hash"], f.contacts[0]["identifier_hash"]);
         }
 
         // Nouvelle demande avec une capture.

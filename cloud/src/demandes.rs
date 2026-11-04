@@ -159,6 +159,10 @@ fn get(d: &Demandes, chemin: &str) -> Result<Value, Echec> {
     lire(agent().get(d.api(chemin)).header("Accept", "application/json").call())
 }
 
+fn patch(d: &Demandes, chemin: &str, corps: &Value) -> Result<Value, Echec> {
+    lire(agent().patch(d.api(chemin)).header("Accept", "application/json").send_json(corps))
+}
+
 fn post(d: &Demandes, chemin: &str, corps: &Value) -> Result<Value, Echec> {
     lire(agent().post(d.api(chemin)).header("Accept", "application/json").send_json(corps))
 }
@@ -224,9 +228,27 @@ fn creer_contact(d: &Demandes, r: &Partage, cl: &Client) -> Result<String, Echec
     }
     let v = post(d, "/contacts", &corps)?;
     let source = v["source_id"].as_str().or_else(|| v["payload"]["source_id"].as_str()).filter(|s| !s.is_empty()).ok_or_else(|| Echec::Service("support : contact sans source_id".into()))?;
+    // À la création, le support ne peut pas encore marquer l'identité vérifiée : la mise à jour
+    // signée qui suit le fait, et rattache les discussions de la bulle à ce contact.
+    if let Err(e) = patch(d, &format!("/contacts/{}", crate::portail::encoder(source)), &corps) {
+        eprintln!("mes demandes : identité du contact non vérifiée ({e:?})");
+    }
     // Base verrouillée seulement après l'appel au support : un support lent ne bloque pas le portail.
     retenir_source(&r.base(), cl.compte, Some(source));
     Ok(source.to_string())
+}
+
+/// Une seule création de contact à la fois (verrou à part, jamais celui de la base) : deux
+/// onglets ouverts au premier passage partagent le même contact au lieu d'en créer deux.
+static CREATIONS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn contact_unique(d: &Demandes, r: &Partage, cl: &Client) -> Result<String, Echec> {
+    let _seul = CREATIONS.lock().unwrap_or_else(|e| e.into_inner());
+    let actuelle = source_connue(&r.base(), cl.compte);
+    match actuelle {
+        Some(s) => Ok(s),
+        None => creer_contact(d, r, cl),
+    }
 }
 
 /// Appelle `f` avec le contact du compte. Si `f` ne trouve rien, le contact n'est recréé (une
@@ -236,15 +258,23 @@ fn avec_contact<T>(d: &Demandes, r: &Partage, cl: &Client, f: impl Fn(&str) -> R
     let connue = source_connue(&r.base(), cl.compte);
     let source = match connue {
         Some(s) => s,
-        None => creer_contact(d, r, cl)?,
+        None => contact_unique(d, r, cl)?,
     };
     match f(&source) {
         Err(Echec::Introuvable) => {
             if get(d, &format!("/contacts/{source}/conversations")).is_ok() {
                 return Err(Echec::Introuvable);
             }
-            retenir_source(&r.base(), cl.compte, None);
-            let neuf = creer_contact(d, r, cl)?;
+            let neuf = {
+                let _seul = CREATIONS.lock().unwrap_or_else(|e| e.into_inner());
+                // Lu à part : un verrou de base pris dans le `match` durerait jusqu'à sa fin.
+                let actuelle = source_connue(&r.base(), cl.compte);
+                match actuelle {
+                    // Déjà remplacé par une requête concurrente.
+                    Some(s) if s != source => s,
+                    _ => creer_contact(d, r, cl)?,
+                }
+            };
             f(&neuf)
         }
         autre => autre,
