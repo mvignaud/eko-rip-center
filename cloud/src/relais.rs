@@ -208,16 +208,8 @@ pub fn routes(relais: Partage) -> Router {
         .route("/abonnement/changer", post(crate::abonnements::changer))
         .route("/abonnement/resilier", post(crate::abonnements::resilier))
         .route("/support", get(crate::support::liste))
-        .route("/support/nouvelle", get(crate::support::nouvelle).post(crate::support::creer).layer(axum::extract::DefaultBodyLimit::max(crate::support::MAX_REQUETE)))
-        .route("/support/bulle.js", get(crate::support::bulle_js))
-        .route("/support/direct/etat", get(crate::support::etat))
-        .route("/support/direct/ouvrir", post(crate::support::ouvrir_discussion).layer(axum::extract::DefaultBodyLimit::max(64 * 1024)))
-        .route("/support/direct/envoyer", post(crate::support::envoyer_message).layer(axum::extract::DefaultBodyLimit::max(64 * 1024)))
-        .route("/support/direct/fermer", post(crate::support::fermer_discussion))
-        .route("/support/direct/congedier", post(crate::support::congedier_discussion))
         .route("/support/{code}", get(crate::support::demande))
-        .route("/support/{code}/repondre", post(crate::support::repondre))
-        .route("/support/{code}/note", post(crate::support::noter))
+        .route("/assets/chat.js", get(crate::support::chat_js))
         .route("/api/erp/webhooks", post(crate::abonnements::webhook).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)))
         .route("/sites/{site}/sauvegardes", get(crate::sauvegardes::page_site))
         .route("/sites/{site}/sauvegardes/{id}", get(crate::sauvegardes::telecharger))
@@ -295,12 +287,24 @@ async fn aiguiller(State(relais): State<Partage>, requete: Request, suite: axum:
     }
 }
 
+/// Politique de sécurité des pages du portail (sans le support en direct).
+pub const CSP_PORTAIL: &str = "default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+
+/// `csp`, ouverte au widget du support en direct quand il est en service.
+pub fn csp_du_portail(csp: &'static str) -> HeaderValue {
+    if crate::support::actif() {
+        HeaderValue::from_str(&crate::support::csp_avec_support(csp)).unwrap_or_else(|_| HeaderValue::from_static(csp))
+    } else {
+        HeaderValue::from_static(csp)
+    }
+}
+
 /// En-têtes de sécurité des pages du portail ; une réponse d'atelier garde les siens
 /// (`sandbox`, posés par `relayer`).
 async fn entetes_du_portail(mut rep: Response) -> Response {
     let h = rep.headers_mut();
     if !h.contains_key(header::CONTENT_SECURITY_POLICY) {
-        h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; worker-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"));
+        h.insert(header::CONTENT_SECURITY_POLICY, csp_du_portail(CSP_PORTAIL));
         h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
         h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
         h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));

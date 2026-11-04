@@ -647,9 +647,9 @@ pub async fn webhook(State(r): State<Partage>, h: HeaderMap, corps: Bytes) -> Re
 
 /// Rend vrai si l'événement concernait un compte connu.
 pub fn traiter_webhook(r: &Partage, evenement: &str, data: &Value) -> bool {
-    // Support : le même webhook, des événements `support.*` pour un autre index (support.rs).
+    // Ancien support (`support.*`) : remplacé par le support en direct, ignoré.
     if evenement.starts_with("support.") {
-        return crate::support::traiter_webhook(r, evenement, data);
+        return false;
     }
     let code_sub = premier_texte(data, &["/subscription/code", "/subscription_code", "/cycle/subscription_code", "/cycle/subscription/code"]);
     let tier = premier_texte(data, &["/tier/code", "/tier_code", "/subscription/tier_code", "/mandate/tier_code", "/tier"]);
@@ -1550,7 +1550,7 @@ const SCRIPT_CARTE: &str = r##"<script>
 
 fn avec_csp_paiement(mut rep: Response) -> Response {
     let h = rep.headers_mut();
-    h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static(CSP_PAIEMENT));
+    h.insert(header::CONTENT_SECURITY_POLICY, crate::relais::csp_du_portail(CSP_PAIEMENT));
     h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));

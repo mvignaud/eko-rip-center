@@ -144,10 +144,6 @@ The platform writes from **E-KO RIP Cloud**, address `no-reply@e-ko.fr`. There i
 | Site back online | The server answers again, only if the "offline" alert was sent. |
 | New app connected | An app has just connected to the account. |
 | Weekly summary | Every Monday around 8 a.m., for each site. |
-| Request received | Your support request is registered. |
-| Support reply | The team replies to your request, with an excerpt of the message. |
-| Request resolved | The request is resolved, with the link to rate the support. |
-| Chat turned into a request | Nobody could take the live chat: it becomes a request, with the transcript. |
 
 Site offline alerts go to the site's owners and administrators. At most one alert is sent per site per hour.
 
@@ -158,7 +154,7 @@ The weekly summary gives, for each site: the number of outages, the total time o
 1. Open **My account** on the portal.
 2. Tick or untick **Receive alerts** and **Receive the weekly summary** (*Recevoir les alertes*, *Recevoir le résumé hebdomadaire*).
 
-Both boxes are ticked by default. The "new app connected" e-mail is always sent: it is a security measure. The support e-mails (request received, reply, request resolved) are always sent too: they answer a request you made.
+Both boxes are ticked by default. The "new app connected" e-mail is always sent: it is a security measure. Live support replies arrive by e-mail when the page is closed, whatever these boxes say.
 
 ### Forgotten password
 
@@ -171,7 +167,7 @@ For security reasons, the page answers the same way whether the address exists o
 
 ## Notifications
 
-The same events as the e-mail alerts can arrive as notifications: **site offline**, **site back online** and **new app connected**. They follow the **Receive alerts** box. Support replies and resolved requests are notified as well.
+The same events as the e-mail alerts can arrive as notifications: **site offline**, **site back online** and **new app connected**. They follow the **Receive alerts** box.
 
 ### In the browser
 
@@ -192,46 +188,22 @@ Notifications arrive even when the portal page is closed, as long as the browser
 
 The apps ask for permission to show notifications right after the first sign-in to the cloud. Just accept. If permission was refused, restore it in the system or phone settings.
 
-## Support and live chat
+## Live support
 
-A question, a problem, an idea? You can reach the E-KO support team from the portal, with no other account to create: click **Support** in the sidebar.
+A question, a problem, an idea? You can reach the E-KO team from the portal, with no other account to create, in the **Support E-KO RIP** bubble at the bottom right of every portal page once signed in. The **Support** link in the sidebar opens the same bubble.
 
-![Support list: my requests, their queue and status](../images/cloud-support-demandes.png "My support requests")
+![Portal Support page: the Support E-KO RIP bubble at the bottom right](../images/cloud-support.png "Live support")
 
-### Opening a request
+1. Click the **Support E-KO RIP** bubble, or **Support** in the sidebar.
+2. Write your message and send it. You can attach a screenshot or a log.
+3. The team's replies show up in the bubble. Closing the bubble does not end the conversation.
 
-1. Click **Support**, then **New request** (*Nouvelle demande*).
-2. Choose the **Queue** (*File*): Technique (Technical), Comptabilité (Accounting), Commercial (Sales) or Idée (Idea).
-3. Enter the **Subject** (*Sujet*) and your message. Attach a screenshot or a log if needed: up to 5 files of 10 MB each.
-4. Click **Send the request** (*Envoyer la demande*).
+No need to introduce yourself: the account's name, e-mail address and company come with the message, and the team sees which account it is from. The history of your conversations stays in the bubble. If the page is closed when the team replies, the reply also arrives by e-mail.
 
-An e-mail confirms receipt, with the request reference (`TKT-…`). The request thread, the team's replies and a reply box are in **Support**, by clicking the request.
-
-![A request thread: messages, reply and status](../images/cloud-support-demande.png "A request thread")
-
-### Following up and replying
-
-Every reply from the team arrives by e-mail and as a notification, with a link that opens the request directly. Reply from the page, not from the e-mail: the sending address (`no-reply`) does not read replies.
-
-The status shows in the list: **Received** (*Reçue*), **In progress** (*En cours*), **Waiting for your reply** (*En attente de votre réponse*), **Resolved** (*Résolue*) or **Closed** (*Fermée*). Replying to a resolved request reopens it. A closed request no longer takes messages: open a new request.
-
-### Rating the support
-
-When the request is resolved, an e-mail offers to **Rate the support** (*Noter le support*). On the request page, pick a rating from 1 (not at all satisfied) to 5 (very satisfied), add a comment if you like, then click **Send my rating** (*Envoyer ma note*). You can change the rating later.
-
-### Live chat
-
-For an answer right away, the blue bubble at the bottom right of every portal page opens a chat with the team.
-
-![Live chat bubble open on the Support page](../images/cloud-support-direct.png "The live chat")
-
-1. Click the bubble. The header shows whether support is **Open** (*Ouvert*) or **Closed** (*Fermé*); when closed, the bubble reminds you of the opening hours.
-2. Choose the topic, write the first message, then click **Start the chat** (*Démarrer la discussion*).
-3. The team's messages appear in the bubble a few seconds after they are sent. Closing the bubble does not end the chat, and a red badge flags a new message.
-4. Click **End the chat** (*Terminer la discussion*) to finish it.
+When you sign out of the portal, the conversation is removed from this browser: the next person using the computer does not see it.
 
 > [!NOTE]
-> Outside support hours, or if nobody picks up the chat within two minutes, your message automatically becomes a request. An e-mail tells you so, with a transcript of what you wrote, and the rest happens in **Support**.
+> Requests opened before live support arrived stay readable for 30 days on the **Support** page, read-only. To follow one up, write in the bubble and quote its reference (`TKT-…`). There is no requests page or **New request** (*Nouvelle demande*) button any more: everything goes through the bubble.
 
 ## Managing your account
 
@@ -399,9 +371,9 @@ They are in **My sites › Backups**. If the latest one is old, check that the s
 
 Look in the spam folder. Check the account's address in **My account** and the boxes ticked. The e-mails come from `no-reply@e-ko.fr`.
 
-### Support cannot register my request
+### I cannot see the support bubble
 
-The message "Votre compte n'est pas encore relié à un dossier client E-KO" (your account is not linked to an E-KO customer record yet) means support cannot find your company from the account's e-mail address. Subscribing to a plan links the account automatically. Otherwise, write to E-KO from your company's address, or use for the portal account the same e-mail address you use with E-KO.
+The bubble only appears on portal pages once signed in. An ad blocker or a privacy extension can hide it: allow `platform.e-ko.rip` in the extension, then reload the page. Otherwise, write to <contact@e-ko.rip>.
 
 ## Legal information
 

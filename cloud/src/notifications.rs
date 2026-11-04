@@ -42,8 +42,6 @@ pub const PAIEMENT: &str = "paiement";
 pub const SAUVEGARDE: &str = "sauvegarde";
 /// Offre dépassée, accès à distance suspendu.
 pub const DEPASSEMENT: &str = "depassement";
-/// Réponse du support, demande résolue.
-pub const SUPPORT: &str = "support";
 
 // ————— Contenu —————
 

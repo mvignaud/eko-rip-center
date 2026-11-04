@@ -13,6 +13,9 @@
 //   EKO_CLOUD_MONTANT_POST  1 par défaut : le frontal de l'hébergeur garde pour lui ce que
 //     le serveur RIP envoie dans le WebSocket ; le sens montant du tunnel passe donc en
 //     requêtes POST (eko-tunnel/2). 0 pour revenir au WebSocket dans les deux sens.
+//   secrets.env  fichier facultatif à côté de ce fichier (lignes NOM=valeur, droits 600),
+//     écrit par deploy-cloud.yml depuis les secrets GitHub (CHATWOOT_WEBSITE_TOKEN,
+//     CHATWOOT_HMAC_TOKEN du support en direct) ; transmis au relais, jamais journalisé.
 //
 // Journal du relais : relais.log, à côté de ce fichier (la sortie de l'application, elle,
 // part dans les journaux de l'hébergeur, illisibles depuis le compte).
@@ -128,9 +131,29 @@ function tourner_journal() {
   }
 }
 
+// Variables de `secrets.env` (NOM=valeur ; lignes vides et # ignorées).
+function lire_secrets() {
+  const secrets = {};
+  let texte = '';
+  try {
+    texte = fs.readFileSync(path.join(__dirname, 'secrets.env'), 'utf8');
+  } catch (_) {
+    return secrets;
+  }
+  for (const ligne of texte.split('\n')) {
+    const l = ligne.trim();
+    const i = l.indexOf('=');
+    if (!l || l.startsWith('#') || i < 1) continue;
+    const nom = l.slice(0, i).trim();
+    if (/^[A-Z][A-Z0-9_]*$/.test(nom)) secrets[nom] = l.slice(i + 1).trim();
+  }
+  return secrets;
+}
+
 function demarrer() {
   const env = {
     ...process.env,
+    ...lire_secrets(),
     EKO_CLOUD_ADDR: `unix:${SOCKET}`,
     EKO_CLOUD_DATA: process.env.EKO_CLOUD_DATA || path.join(os.homedir(), 'eko-cloud-data'),
     EKO_CLOUD_MONTANT_POST: process.env.EKO_CLOUD_MONTANT_POST || '1',

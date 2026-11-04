@@ -12,6 +12,9 @@
 //! Environnement facultatif (E-mails ; ils priment sur les réglages saisis dans /admin) :
 //!   EKO_CLOUD_SMTP_HOTE, EKO_CLOUD_SMTP_PORT, EKO_CLOUD_SMTP_SECURITE (`starttls` ou `tls`),
 //!   EKO_CLOUD_SMTP_IDENTIFIANT, EKO_CLOUD_SMTP_MOT_DE_PASSE, EKO_CLOUD_SMTP_EXPEDITEUR
+//!
+//! Support en direct (widget des pages connectées ; désactivé si l'une manque) :
+//!   CHATWOOT_WEBSITE_TOKEN (jeton public de la boîte), CHATWOOT_HMAC_TOKEN (clé d'identité)
 
 use eko_rip_cloud::{appairage, installations, relais, sites};
 use std::path::PathBuf;
@@ -132,6 +135,7 @@ async fn main() {
     };
     let adresse = env_ou("EKO_CLOUD_ADDR", "127.0.0.1:8650");
     let r = relais::nouveau(config);
+    eprintln!("support en direct : {}", if eko_rip_cloud::support::configurer_depuis_env() { "widget en service" } else { "désactivé (CHATWOOT_WEBSITE_TOKEN ou CHATWOOT_HMAC_TOKEN absent)" });
     tokio::spawn(relais::entretenir(r.clone()));
     // `unix:<chemin>` : socket local (hébergement mutualisé, où un port TCP ouvert est abattu).
     if let Some(chemin) = adresse.strip_prefix("unix:") {
