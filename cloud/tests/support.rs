@@ -116,7 +116,7 @@ async fn support_en_direct_dans_la_bulle() {
         let js = appel(&b, "GET", "/assets/chat.js", None, &[]);
         assert_eq!(js.statut, 200);
         assert!(js.entetes.get("content-type").unwrap().to_str().unwrap().starts_with("text/javascript"));
-        for morceau in ["https://help.suite-eko.com", "/packs/js/sdk.js", "chatwootSDK.run", "chatwoot:ready", "setUser(d.id", "identifier_hash: d.hash", "setCustomAttributes", "compte_rip", "location.pathname", "toggle(\"open\")", "/deconnexion", "$chatwoot.reset()"] {
+        for morceau in ["https://help.suite-eko.com", "/packs/js/sdk.js", "chatwootSDK.run", "chatwoot:ready", "setUser(d.id", "identifier_hash: d.hash", "custom_attributes: attributs", "compte_rip", "location.pathname", "toggle(\"open\")", "/deconnexion", "$chatwoot.reset()"] {
             assert!(js.corps.contains(morceau), "chat.js sans {morceau}");
         }
         assert!(!js.corps.contains(CLE));

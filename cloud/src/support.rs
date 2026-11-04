@@ -151,10 +151,13 @@ const SCRIPT_CHAT: &str = r##"(function () {
   window.chatwootSettings = { locale: "fr", position: "right", type: "expanded_bubble", launcherTitle: "Support E-KO RIP" };
   window.addEventListener("chatwoot:ready", function () {
     if (!window.$chatwoot) return;
-    window.$chatwoot.setUser(d.id, { name: d.nom || d.email, email: d.email, identifier_hash: d.hash });
+    // Attributs dans le même appel que l'identité : un setCustomAttributes séparé partirait
+    // avec le jeton du contact anonyme et pourrait se perdre lors de la fusion des contacts.
     var attributs = { compte_rip: d.id, page: location.pathname };
     if (d.societe) attributs.societe = d.societe;
-    window.$chatwoot.setCustomAttributes(attributs);
+    var identite = { name: d.nom || d.email, email: d.email, identifier_hash: d.hash, custom_attributes: attributs };
+    if (d.societe) identite.company_name = d.societe;
+    window.$chatwoot.setUser(d.id, identite);
   });
   var sdk = document.createElement("script");
   sdk.src = ORIGINE + "/packs/js/sdk.js";

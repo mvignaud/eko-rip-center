@@ -342,8 +342,9 @@ data-hash data-nom data-email data-societe>`. L'identifiant est `cloud-<id du co
 `hex(HMAC-SHA256(CHATWOOT_HMAC_TOKEN, identifiant))`, calculé par le serveur. La société est la
 raison sociale saisie à la souscription. `/assets/chat.js` (aucun script en ligne) charge
 `https://help.suite-eko.com/packs/js/sdk.js`, lance `chatwootSDK.run`, puis sur `chatwoot:ready`
-appelle `setUser(id, {name, email, identifier_hash})` et `setCustomAttributes({societe,
-compte_rip, page})`. Le lien **Support** du menu (`data-support`) ouvre la bulle
+appelle `setUser(id, {name, email, identifier_hash, company_name, custom_attributes: {societe,
+compte_rip, page}})` (attributs dans le même appel, pour ne pas les perdre à la fusion d'un
+contact anonyme). Le lien **Support** du menu (`data-support`) ouvre la bulle
 (`toggle('open')`) ; la déconnexion appelle `reset()` avant d'envoyer le formulaire.
 
 **Politique de sécurité** : quand le widget est en service, la CSP des pages du portail (et celle

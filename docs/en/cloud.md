@@ -98,8 +98,8 @@ the service sends its own. Billing is unchanged.
   `account_reference` as the ERP's former support) and `data-hash` is
   `hex(HMAC-SHA256(CHATWOOT_HMAC_TOKEN, identifier))`, computed by the server. `/assets/chat.js`
   loads `https://help.suite-eko.com/packs/js/sdk.js`, runs `chatwootSDK.run`, then on
-  `chatwoot:ready` calls `setUser` (name, e-mail, `identifier_hash`) and `setCustomAttributes`
-  (`societe`, `compte_rip`, `page`). The sidebar **Support** link opens the bubble; signing out
+  `chatwoot:ready` calls `setUser` with name, e-mail, `identifier_hash`, `company_name` and
+  `custom_attributes` (`societe`, `compte_rip`, `page`) in one call. The sidebar **Support** link opens the bubble; signing out
   calls `reset()` before the form is sent.
 - **Security policy**: when the widget is on, the portal CSP (and the payment pages' one) adds
   `https://help.suite-eko.com` to `script-src`, `style-src`, `frame-src` and `img-src`, and
