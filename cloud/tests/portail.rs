@@ -187,6 +187,7 @@ async fn inscription_rattachement_administration() {
     let adm = b(move || get(&q, "/admin", Some(&c5))).await;
     assert_eq!(adm.statut, 200);
     assert!(adm.corps.contains(&format!("{URL}/auth/google/retour")) && adm.corps.contains(&format!("{URL}/auth/facebook/retour")));
+    assert!(adm.corps.contains(&format!("{URL}/auth/eko/retour")) && adm.corps.contains("php artisan eko:oidc:client"));
     assert!(adm.corps.contains("autre@atelier.fr") && adm.corps.contains(&site));
     let q = p.clone();
     let (c6, j6) = (chef.clone(), csrf(&adm.corps));
@@ -204,6 +205,32 @@ async fn inscription_rattachement_administration() {
     let q = p.clone();
     let r = b(move || get(&q, "/auth/google/retour?code=x&state=invente", Some("plateforme_oauth=google:autre"))).await;
     assert!(r.statut == 400 && r.corps.contains("interrompue"), "état OAuth vérifié");
+
+    // Suite E-KO : bouton seulement une fois l'identifiant ET le secret réglés ; PKCE S256 au départ.
+    let q = p.clone();
+    let (c9, j9) = (chef.clone(), csrf(&adm.corps));
+    let r = b(move || post(&q, "/admin/oauth", Some(&c9), &[("csrf", &j9), ("eko_url", "http://erp.exemple.fr"), ("eko_client_id", "client-eko")], true)).await;
+    assert_eq!(r.statut, 400, "http refusé pour l'ERP");
+    let q = p.clone();
+    let (c9, j9) = (chef.clone(), csrf(&adm.corps));
+    let r = b(move || post(&q, "/admin/oauth", Some(&c9), &[("csrf", &j9), ("eko_url", "https://erp.exemple.fr/"), ("eko_client_id", "client-eko")], true)).await;
+    assert_eq!(r.lieu, "/admin?ok=oauth");
+    let q = p.clone();
+    let connexion = b(move || get(&q, "/connexion", None)).await;
+    assert!(!connexion.corps.contains("/auth/eko"), "sans secret, pas de bouton");
+    let q = p.clone();
+    let (c9, j9) = (chef.clone(), csrf(&adm.corps));
+    b(move || post(&q, "/admin/oauth", Some(&c9), &[("csrf", &j9), ("eko_url", "https://erp.exemple.fr"), ("eko_client_id", "client-eko"), ("eko_secret", "secret-eko")], true)).await;
+    let q = p.clone();
+    let c10 = chef.clone();
+    let (connexion, depart, adm) = b(move || (get(&q, "/connexion", None), get(&q, "/auth/eko", None), get(&q, "/admin", Some(&c10)))).await;
+    assert!(connexion.corps.contains("avec Suite E-KO") && connexion.corps.contains("/auth/eko"));
+    assert!(!adm.corps.contains("secret-eko") && adm.corps.contains("client-eko") && adm.corps.contains("https://erp.exemple.fr"), "secret jamais réaffiché");
+    assert!(depart.lieu.starts_with("https://erp.exemple.fr/oauth/authorize?client_id=client-eko&redirect_uri=http%3A%2F%2Fplateforme.test%2Fauth%2Feko%2Fretour&response_type=code&scope=openid%20profile%20email"), "{}", depart.lieu);
+    assert!(depart.lieu.contains("&code_challenge=") && depart.lieu.ends_with("&code_challenge_method=S256"), "{}", depart.lieu);
+    let verificateur = depart.cookies[0].split(';').next().unwrap().split(':').nth(3).expect("vérificateur PKCE dans le cookie").to_string();
+    let defi = depart.lieu.split("code_challenge=").nth(1).unwrap().split('&').next().unwrap();
+    assert_eq!(defi, eko_rip_cloud::applis::defi_de(&verificateur));
 
     // Suspendre « autre » ferme sa session.
     let id_autre = {

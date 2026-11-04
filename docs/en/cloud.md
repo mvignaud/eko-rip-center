@@ -6,7 +6,7 @@ outgoing connection (HTTPS, port 443) to the platform, and the platform forwards
 workstations and the mobile app through it. Open to any E-KO RIP Center server: the **Free** plan
 (1 site, 1 printer, 1 cutter) has no time limit; paid plans add machines, sites and backup history.
 
-Status: **step 1** (tunnel and pairing). The portal (platform accounts, Google / Facebook, sites,
+Status: **step 1** (tunnel and pairing). The portal (platform accounts, Google / Facebook / E-KO Suite, sites,
 rights) comes in step 2; until then, remote users sign in with **the RIP server's accounts**.
 
 - **Link a server**: the server needs at least one account. In **System › E-KO RIP Cloud**, an
@@ -41,6 +41,14 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
   1 year of backups, 100 GB, restore to another site, +€4/month per extra machine); Enterprise
   (quote). Machines are counted from the inventory each RIP server reports. Terms of sale at
   `/cgv`.
+- **Sign-in with an E-KO Suite account**: next to Google and Facebook, the E-KO ERP is an OpenID
+  Connect provider (authorization code, confidential client, PKCE S256, scope
+  `openid profile email`). Platform accounts stay specific to the platform: this is just one more
+  way to sign in, create an account or link an existing one from "Mon compte". An existing e-mail
+  is taken over only if the ERP has verified it. On the ERP, create the client with
+  `php artisan eko:oidc:client "E-KO RIP Cloud" --redirect=<platform URL>/auth/eko/retour`, then
+  enter in Administration the ERP address (https, default `https://app.e-ko.fr`), the client ID
+  and the secret (never shown again). The button only appears once the ID and the secret are set.
 - **Subscription** page of the portal: subscribe (company details from the SIREN, billing
   contact, phone number with a country picker showing flag and dialling code, optional purchase
   order number, promo or partner code, terms of sale accepted), pay by

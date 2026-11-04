@@ -1,7 +1,7 @@
 ---
 titre: Feuille de route
 description: Ce que le RIP libre E-KO RIP Center a fait, ce qui est en cours et ce qui est planifié. Page publique, mise à jour à chaque version, sans date promise.
-maj: 2026-11-03
+maj: 2026-11-04
 ---
 La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à chaque version : une fonction passe de « Planifié » à « En cours », puis à « Fait ». Les dates ne sont pas promises, car beaucoup de points attendent un essai sur une vraie machine à l'atelier. Il vous manque une fonction ? Demandez-la par [/contact/](/contact/). Il vous manque une machine ? Dites-le sur [/compatibilite/](/compatibilite/). Le code et les tickets sont sur [GitHub](https://github.com/mvignaud/eko-rip-center).
 
@@ -104,6 +104,7 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 - **Réglages récents dans les clients** : lissage des images agrandies, empilement de couches et rappel de recalibration par machine.
 
 ### Cloud et accès à distance
+- **Connexion avec un compte Suite E-KO** : vous vous connectez au Cloud, créez un compte ou liez le vôtre avec votre compte Suite E-KO, comme avec Google ou Facebook.
 - **Support et discussion en direct dans le Cloud** : vous ouvrez une demande au support d'E-KO ou vous discutez en direct avec l'équipe depuis le portail, et les réponses arrivent par e-mail comme dans le portail.
 
 ### Rapports et coûts

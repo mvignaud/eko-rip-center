@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : connexion avec un compte Suite E-KO.** Troisième fournisseur de connexion
+  à côté de Google et Facebook (ERP en OpenID Connect, code d'autorisation avec PKCE S256) :
+  se connecter, créer un compte ou lier un compte existant depuis « Mon compte ». Les comptes du
+  Cloud restent propres au Cloud ; l'administration règle l'adresse de l'ERP, l'identifiant et le
+  secret du client.
+  *Cloud: sign in with an E-KO Suite account (OpenID Connect with PKCE), next to Google and Facebook.*
 - **Cloud E-KO RIP : offres payantes.** Gratuit à vie (1 site, 1 imprimante, 1 découpeur), puis
   À la machine, Atelier et Pro, facturés par GOLDEN PRINT. Page « Abonnement » du portail,
   souscription avec SIREN et code promo ou partenaire, paiement par carte sur la page (3-D Secure
