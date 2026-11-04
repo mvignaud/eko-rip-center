@@ -27,16 +27,15 @@ parité ; d'ici là, 0.Y.Z.
   sauvegarde chaque nuit, après chaque changement et à la demande ; conservation selon l'offre,
   alertes de quota et d'échec, restauration depuis le portail.
 - **CGV** de la plate-forme, CGU et politique de confidentialité mises à jour.
-- **Cloud E-KO RIP : support et discussion en direct.** Page « Support » du portail (mes
-  demandes, nouvelle demande avec pièces jointes, fil des messages, réponse, note de 1 à 5 après
-  résolution) et bulle de discussion en direct sur toutes les pages connectées (ouvert ou fermé,
-  choix du sujet, messages relus toutes les 3 s). Tout est traité dans l'ERP d'E-KO par son API ;
-  la plate-forme envoie elle-même les e-mails (demande reçue, réponse du support, demande résolue
-  avec le lien de notation, discussion transformée en demande avec la transcription) et notifie
-  dans le portail. « Enregistrer et configurer depuis l'ERP » abonne le webhook aux événements
-  `support.*` ; le jeton de l'ERP doit porter `support.view` et `support.create`.
-  *Cloud: support requests and live chat with the E-KO team, handled in the ERP; the platform
-  sends its own e-mails and notifications.*
+- **Cloud E-KO RIP : support en direct.** Bulle « Support E-KO RIP » en bas à droite de toutes
+  les pages connectées du portail (le lien « Support » du menu l'ouvre aussi) : le client est
+  reconnu sans rien saisir (identité signée par la plate-forme, nom, e-mail, société), l'historique
+  des échanges reste dans la bulle et les réponses arrivent par e-mail quand la page est fermée.
+  À la déconnexion, la discussion est retirée du navigateur. Les demandes encore ouvertes de
+  l'ancien support restent lisibles 30 jours sur la page « Support » (lecture seule). Widget
+  activé par `CHATWOOT_WEBSITE_TOKEN` et `CHATWOOT_HMAC_TOKEN` (posés par `deploy-cloud.yml`).
+  *Cloud: live support bubble on every signed-in page, with a signed identity; old open requests
+  stay readable for 30 days.*
 
 ### Corrigé
 - **App mobile : alertes des machines en français.** Les messages de l'imprimante (« printer

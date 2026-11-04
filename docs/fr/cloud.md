@@ -59,8 +59,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
-- **Support** : demandes, notes et discussion en direct avec l'équipe d'E-KO (voir « Support et
-  discussion en direct »).
+- **Support** : ouvre la bulle du support en direct (voir « Support en direct »).
 - **E-mails** : voir la section « E-mails de la plate-forme » ci-dessous.
 - **Pages légales** : `/mentions-legales`, `/cgu`, `/cgv`, `/confidentialite` (éditeur SAS GOLDEN PRINT ;
   RCS Auch 939 018 024, contact contact@e-ko.rip, pas de téléphone).
@@ -147,9 +146,6 @@ s'écrit au journal, sans secret) :
   minute au moins), durée hors ligne, plus longue coupure, alertes envoyées, et les apps connectées
   dans la semaine. Un seul envoi par semaine (mémorisé, y compris après un redémarrage) ; le
   premier démarrage mémorise la semaine sans rien envoyer.
-- **Support** : demande reçue, réponse du support, demande résolue (avec le lien de notation) et
-  discussion transformée en demande (avec la transcription), d'après les webhooks `support.*` de
-  l'ERP. Voir « Support et discussion en direct ».
 
 Dans « Mon compte », les cases **Recevoir les alertes** et **Recevoir le résumé hebdomadaire**
 (activées par défaut) règlent les deux derniers envois. Journal des coupures : table
@@ -322,74 +318,49 @@ tunnel, signé dans l'en-tête `X-EKO-Cloud-Service: t=<horodatage>,v1=<HMAC-SHA
 de la clé du site, message `<t>.<corps>`) ; le serveur refuse une signature fausse ou de plus de
 5 minutes.
 
-## Support et discussion en direct
+## Support en direct
 
-Les clients de la plate-forme ouvrent des demandes au support et discutent en direct avec
-l'équipe d'E-KO. **Tout est stocké et traité dans l'ERP** par son API (`/api/v1/support`) ; la plate-forme n'en garde qu'un index local. **L'ERP n'écrit
-jamais aux clients du Cloud** : la plate-forme envoie elle-même ses e-mails, aux couleurs d'E-KO
-RIP Cloud.
+Depuis le 2026-11-04, tout le support passe par le service de support en direct de la Suite E-KO
+(`https://help.suite-eko.com`, boîte « Plateforme E-KO RIP », équipe RIP, identité vérifiée
+obligatoire). La plate-forme ne stocke plus ni demandes ni discussions et n'envoie plus d'e-mails
+de support : le service envoie les siens. La facturation ne change pas.
 
-**Réglage** : rien de plus que la carte **Facturation (E-KO)** : même adresse d'API, même jeton,
-qui doit en plus porter `support.view` (lire les files, les demandes, les discussions) et
-`support.create` (ouvrir une demande ou une discussion, répondre, noter, terminer). Le bouton
-**Enregistrer et configurer depuis l'ERP** abonne le webhook existant (un seul, un seul secret)
-aux cinq événements `support.ticket.created`, `support.ticket.replied`,
-`support.ticket.status_changed`, `support.discussion.message` et `support.discussion.converted`,
-en plus de ceux de la facturation. Sans jeton `support.*`, les pages Support affichent le refus
-de l'ERP et rien d'autre ne change.
+**Réglage** : deux variables d'environnement, secrets de l'environnement GitHub `production`
+posés par `deploy-cloud.yml` dans `~/eko-rip-cloud/secrets.env` (lu par `app.js`) ; sur un VPS,
+dans `/etc/default/eko-rip-cloud`.
 
-**Le client dans l'ERP** : chaque compte est désigné par `account_reference` = `cloud-<id du
-compte>`. À la première écriture, l'ERP le lie à un tiers : par `tier_code` (le code client de
-l'abonnement, s'il y en a un), sinon par `tier_email` (l'adresse du compte). La personne qui écrit
-est un contact du tiers (`contact_email`, `contact_first_name`, `contact_last_name`, tirés du
-compte). Un compte sans tiers retrouvable reçoit le refus `422 tier_code` de l'ERP, traduit en
-message clair.
+- `CHATWOOT_WEBSITE_TOKEN` : jeton public de la boîte ;
+- `CHATWOOT_HMAC_TOKEN` : clé de vérification d'identité (Boîte › Paramètres › Configuration).
 
-**Pages** (barre latérale **Support**) : `GET /support` (mes demandes ; l'index local est remis à
-jour d'après `GET /tickets` à chaque visite), `/support/nouvelle` (file tirée de `GET /categories`,
-mise en cache 10 minutes ; sujet, message, 5 pièces de 10 Mo au plus envoyées en
-`multipart/form-data` ; `Idempotency-Key` posée par le formulaire, un renvoi ne crée rien de
-plus), `/support/<code>` (fil lu en direct dans l'ERP avec `account_reference`, réponse
-`POST /tickets/<code>/comments`, note de 1 à 5 `POST /tickets/<code>/satisfaction`). Le HTML des
-messages de l'ERP est réduit à du texte avant affichage. Toute route vérifie que la demande est
-bien au compte de la session (l'ERP répond `404` sinon).
+Si l'une manque (développement, tests, CI), aucune balise n'est posée et la page **Support**
+renvoie vers contact@e-ko.rip. Le journal du service dit au démarrage « support en direct :
+widget en service » ou « désactivé » ; la clé n'apparaît jamais dans une page ni un journal.
 
-**Bulle de discussion en direct** : `GET /support/bulle.js`, chargé par chaque page connectée
-(jeton anti-falsification en attribut). Pas de WebSocket : le frontal d'hébergement garde le sens
-montant. Le navigateur interroge `GET /support/direct/etat?uuid=…&apres=<dernier message>` **toutes
-les 3 secondes quand la bulle est ouverte** (20 secondes bulle fermée tant qu'une discussion est
-en cours, rien si l'onglet est caché) ; la réponse vient de la seule base locale (limite : 150
-requêtes par minute et par compte). Écritures en JSON avec l'en-tête `X-CSRF-Token` :
-`POST /support/direct/ouvrir` (`{categorie, message}` → `POST /discussions`, `locale` `fr`),
-`/support/direct/envoyer` (`POST /discussions/<uuid>/messages`) et `/support/direct/fermer`
-(`POST /discussions/<uuid>/close`). Une seule discussion à la fois par compte. L'indicateur
-**Ouvert / Fermé** est calculé ici d'après les horaires que l'ERP rend avec les files
-(`meta.opening_hours` de `GET /categories`, relus au plus toutes les 10 minutes ; seul le fuseau
-Europe/Paris est calculé, sinon on prend le `meta.open_now` de la dernière lecture). Fermé, la
-bulle affiche les horaires. « Nouvelle discussion » après une discussion terminée repart d'une
-bulle neuve (`POST /support/direct/congedier`).
+**Widget** : chaque page connectée porte `<script src="/assets/chat.js" defer data-jeton data-id
+data-hash data-nom data-email data-societe>`. L'identifiant est `cloud-<id du compte>` (la même
+`account_reference` que l'ancien support de l'ERP) et `data-hash` vaut
+`hex(HMAC-SHA256(CHATWOOT_HMAC_TOKEN, identifiant))`, calculé par le serveur. La société est la
+raison sociale saisie à la souscription. `/assets/chat.js` (aucun script en ligne) charge
+`https://help.suite-eko.com/packs/js/sdk.js`, lance `chatwootSDK.run`, puis sur `chatwoot:ready`
+appelle `setUser(id, {name, email, identifier_hash, company_name, custom_attributes: {societe,
+compte_rip, page}})` (attributs dans le même appel, pour ne pas les perdre à la fusion d'un
+contact anonyme). Le lien **Support** du menu (`data-support`) ouvre la bulle
+(`toggle('open')`) ; la déconnexion appelle `reset()` avant d'envoyer le formulaire.
 
-**Webhooks `support.*`** (même point d'arrivée `/api/erp/webhooks`, même signature
-`X-EKO-Signature`, même protection contre les rejeux) :
+**Politique de sécurité** : quand le widget est en service, la CSP des pages du portail (et celle
+des pages de paiement) ajoute `https://help.suite-eko.com` à `script-src`, `style-src`,
+`frame-src` et `img-src`, et `https://help.suite-eko.com wss://help.suite-eko.com` à
+`connect-src`.
 
-| Événement | Effet local | E-mail et notification |
-|---|---|---|
-| `support.ticket.created` | demande rangée dans l'index | **Demande reçue** si `ticket.origin` vaut `request` (une demande d'origine `discussion` reçoit l'e-mail de conversion à la place) |
-| `support.ticket.replied` | date de mise à jour | **Réponse du support** (extrait du message) si l'auteur n'est pas le client ; jamais pour une note interne |
-| `support.ticket.status_changed` | statut | **Demande résolue**, avec le lien `/support/<code>?note=1#note`, une fois par résolution |
-| `support.discussion.message` | message rangé (idempotent par identifiant) | aucun : le navigateur le lit |
-| `support.discussion.converted` | discussion marquée `convertie`, demande rangée | **Discussion transformée en demande**, avec la transcription des messages (hors messages système) |
-
-Les e-mails sont envoyés à l'adresse du compte, avec le gabarit de la plate-forme, et chaque
-envoi important a aussi son entrée dans le journal des notifications (genre `support`, lien vers
-la demande) et son push navigateur ou mobile. Ils ne suivent pas la case **Recevoir les alertes** :
-ils répondent à une demande du client. Aperçu : `eko-rip-cloud apercu-courriels <dossier>`
-(`support-demande-recue`, `support-reponse`, `support-resolue`, `support-discussion-convertie`).
-
-**Données** (`portail.sqlite`) : `support_demandes` (index des demandes, indicateurs d'envoi des
-e-mails), `support_discussions` et `support_messages` (discussions terminées oubliées après 30
-jours ; la demande, elle, reste dans l'ERP).
-Supprimer un compte supprime ces lignes.
+**Transition** : la date de bascule est notée au premier entretien après le déploiement (une
+minute après le démarrage, réglage `support_bascule_le`). Pendant 30 jours, `GET /support` liste en lecture seule les demandes de
+l'ancien support encore ouvertes (`support_demandes`, sans bouton « Nouvelle demande », avec le
+bandeau « Le support se fait désormais dans la bulle en bas à droite ») et `/support/<code>`
+relit leur fil dans l'ERP ; ensuite l'index est vidé. Les webhooks `support.*` ne sont plus
+demandés à l'ERP (« Enregistrer et configurer depuis l'ERP » ne déclare plus que les 11
+événements de facturation) et ceux qui arrivent encore sont ignorés. Les tables
+`support_demandes`, `support_discussions`, `support_messages` et ces deux pages seront retirées
+après les 30 jours.
 
 ## Régler la facturation et le stockage (administration)
 
@@ -412,9 +383,8 @@ carte a un bouton **Tester**.
   enregistre les codes `RIP-MACHINE-M`, `RIP-ATELIER-A`, `RIP-SUPP-M`… (`RIP-<OFFRE>-<M|A>`, SUPP
   pour les machines supplémentaires), crée le webhook avec tous ses événements et garde son
   secret sans l'afficher, puis supprime l'ancien webhook vers la même adresse. Après avoir
-  régénéré le jeton dans l'ERP, il suffit de le coller et de relancer la configuration. Pour le
-  support, le jeton porte aussi `support.view` et `support.create` (voir « Support et discussion
-  en direct ») et le webhook reçoit aussi les cinq événements `support.*`.
+  régénéré le jeton dans l'ERP, il suffit de le coller et de relancer la configuration. Le support ne passe
+  plus par l'ERP (voir « Support en direct »).
 - **Stockage** : point d'accès S3, région, compartiment, clé d'accès et clé secrète, chiffrement
   côté serveur ; et un compartiment séparé pour la copie quotidienne de la base du portail.
 - **Abonnements** : vue d'ensemble des comptes, de leur offre, de leurs machines et des
