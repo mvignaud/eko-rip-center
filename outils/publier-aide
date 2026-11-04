@@ -316,7 +316,14 @@ def publier(rub, arts, a_blanc, tout_publier):
                 champs["status"] = "published"
             elif statut == "archived":
                 champs["status"] = "draft"
-            change = any(str(ancien.get(k)) != str(champs[k]) for k in ("title", "description", "content", "position")) or champs.get("status", statut) != statut or ancien.get("category_id", champs["category_id"]) != champs["category_id"]
+            # L'API rend la catégorie imbriquée (category.id) et les mots-clés dans meta.tags.
+            categorie = (ancien.get("category") or {}).get("id", ancien.get("category_id"))
+            mots = sorted((ancien.get("meta") or {}).get("tags") or [])
+            change = (any(str(ancien.get(k)) != str(champs[k]) for k in ("title", "description", "content", "position"))
+                      or champs.get("status", statut) != statut
+                      or categorie != champs["category_id"]
+                      or mots != sorted(champs["meta"]["tags"])
+                      or (ancien.get("meta") or {}).get("description") != champs["meta"]["description"])
             if change and statut == "published" and not tout_publier:
                 # Un article en ligne ne change qu'avec l'ordre de publication de Mathieu.
                 bilan.append(f"article en ligne modifié, envoyé seulement avec --publier : {a['slug']}")
