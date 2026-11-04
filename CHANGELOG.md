@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : « Mes demandes ».** La page Support liste les demandes écrites du compte
+  (statut, type, réponse non lue), avec « Nouvelle demande » (type, urgence, objet, 5 pièces
+  jointes de 10 Mo), le fil de chaque demande, la réponse et « Marquer comme résolue ». E-mails
+  à chaque réponse et à la résolution, sans le texte de la réponse. La bulle suit la langue de
+  la page. *Cloud: "My requests" page (new request with attachments, thread, reply, mark as
+  resolved) and e-mail notices.*
 - **Cloud E-KO RIP : offres payantes.** Gratuit à vie (1 site, 1 imprimante, 1 découpeur), puis
   À la machine, Atelier et Pro, facturés par GOLDEN PRINT. Page « Abonnement » du portail,
   souscription avec SIREN et code promo ou partenaire, paiement par carte sur la page (3-D Secure

@@ -32,5 +32,6 @@ Vous n'avez aucun autre compte à créer.
 
 ## Voir aussi
 
+- [Ouvrir et suivre une demande](rip-cloud-ouvrir-et-suivre-une-demande.md)
 - [La bulle du support n'apparaît pas](rip-cloud-bulle-support-invisible.md)
 - [Je ne reçois pas les e-mails](rip-cloud-emails-non-recus.md)

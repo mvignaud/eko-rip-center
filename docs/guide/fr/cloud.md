@@ -190,11 +190,11 @@ Les apps demandent l'autorisation d'afficher des notifications juste après la p
 
 ## Support en direct
 
-Une question, un problème, une idée ? L'équipe d'E-KO se joint depuis le portail, sans autre compte à créer, dans la bulle bleue du support en direct, en bas à droite de chaque page du portail une fois connecté. Le lien **Support** de la barre latérale ouvre la même bulle.
+Une question, un problème, une idée ? L'équipe d'E-KO se joint depuis le portail, sans autre compte à créer, dans la bulle bleue du support en direct, en bas à droite de chaque page du portail une fois connecté. Le lien **Support** de la barre latérale ouvre la page **Mes demandes** ; son bouton **Discuter en direct** ouvre la même bulle.
 
 ![Page Support du portail : la bulle du support en direct en bas à droite](../images/cloud-support.png "Le support en direct")
 
-1. Cliquer sur la bulle bleue en bas à droite, ou sur **Support** dans la barre latérale.
+1. Cliquer sur la bulle bleue en bas à droite, ou sur **Discuter en direct** dans la page **Support**.
 2. Écrire le message et l'envoyer. Une copie d'écran ou un journal peut y être joint.
 3. Les réponses de l'équipe s'affichent dans la bulle. Fermer la bulle ne coupe pas la discussion.
 
@@ -202,8 +202,21 @@ Inutile de se présenter : le nom, l'adresse e-mail et la société du compte ac
 
 À la déconnexion du portail, la discussion est retirée de ce navigateur : la personne qui utilise ensuite le poste ne la voit pas.
 
+### Mes demandes
+
+Pour un sujet qui demande un suivi (une panne, une facture, un devis), la page **Support** liste les demandes écrites du compte : objet, numéro, type, statut (**Ouverte**, **En attente**, **Résolue**) et date du dernier message. Un point bleu signale une réponse non lue.
+
+![Page Mes demandes : trois demandes, ouverte, en attente et résolue](../images/cloud-mes-demandes.png "Mes demandes")
+
+1. Cliquer sur **Nouvelle demande**, choisir le type (question technique, facturation, commercial, autre) et l'urgence (normale, haute, bloquante), écrire l'objet, choisir ce que la demande concerne, puis décrire le problème.
+2. Joindre au besoin des fichiers : 5 au plus, 10 Mo chacun (images, PDF, journaux `.log`/`.txt`/`.json`, archives `.zip`).
+3. Cliquer sur **Envoyer la demande**. Le fil de la demande s'ouvre : vos messages à droite, ceux de l'équipe à gauche avec le prénom de la personne qui répond.
+4. Répondre dans le même fil, puis cliquer sur **Marquer comme résolue** quand le problème est réglé. Une nouvelle réponse rouvre la demande.
+
+Chaque réponse de l'équipe est annoncée par l'e-mail « Nouvelle réponse à votre demande n° … », avec un lien vers la demande ; le texte de la réponse ne figure pas dans l'e-mail. Un autre e-mail prévient quand la demande passe en **Résolue**. Seules les demandes du compte sont visibles.
+
 > [!NOTE]
-> Les demandes ouvertes avant l'arrivée du support en direct restent lisibles pendant 30 jours sur la page **Support**, en lecture seule. Pour y donner suite, écrire dans la bulle en rappelant leur référence (`TKT-…`). Il n'y a plus de page de demandes ni de bouton **Nouvelle demande** : tout passe par la bulle.
+> Les demandes ouvertes avant l'arrivée du support en direct (`TKT-…`) restent lisibles pendant 30 jours sur la page **Support**, en lecture seule. Pour y donner suite, ouvrir une nouvelle demande ou écrire dans la bulle en rappelant leur référence.
 
 ## Gérer son compte
 
