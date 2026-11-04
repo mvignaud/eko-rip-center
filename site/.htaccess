@@ -13,6 +13,42 @@ RewriteRule ^ https://e-ko.rip%{REQUEST_URI} [R=301,L]
 RewriteRule ^telecharger/(mac|windows)/?$ /telecharger/telecharger.php?os=$1 [L,QSA]
 RewriteRule ^telecharger/infos\.json$ /telecharger/telecharger.php?infos=1 [L]
 
+# --- Documentation → centre d'aide (outils/redirections-documentation, ne pas modifier à la main) ---
+# Toute la documentation est passée au centre d'aide : chaque page renvoie vers l'article qui la couvre.
+RewriteRule ^documentation/en/machines/roland\-versacamm/?$ https://help.suite-eko.com/hc/aide/articles/rip-connect-roland-versacamm [R=301,L]
+RewriteRule ^documentation/en/machines/epson\-sc\-s80600/?$ https://help.suite-eko.com/hc/aide/articles/rip-connect-epson-sc-s80600 [R=301,L]
+RewriteRule ^documentation/en/machines/graphtec\-fc7000/?$ https://help.suite-eko.com/hc/aide/articles/rip-connect-graphtec-fc7000 [R=301,L]
+RewriteRule ^documentation/machines/tables\-de\-decoupe/?$ https://help.suite-eko.com/hc/aide/articles/rip-preparer-une-planche-pour-une-table-de-decoupe [R=301,L]
+RewriteRule ^documentation/en/machines/cutting\-tables/?$ https://help.suite-eko.com/hc/aide/articles/rip-prepare-sheet-for-cutting-table [R=301,L]
+RewriteRule ^documentation/machines/roland\-versacamm/?$ https://help.suite-eko.com/hc/aide/articles/rip-brancher-roland-versacamm [R=301,L]
+RewriteRule ^documentation/machines/epson\-sc\-s80600/?$ https://help.suite-eko.com/hc/aide/articles/rip-brancher-epson-sc-s80600 [R=301,L]
+RewriteRule ^documentation/machines/graphtec\-fc7000/?$ https://help.suite-eko.com/hc/aide/articles/rip-brancher-graphtec-fc7000 [R=301,L]
+RewriteRule ^documentation/en/machines/mutoh\-kona/?$ https://help.suite-eko.com/hc/aide/articles/rip-connect-mutoh-kona-1650 [R=301,L]
+RewriteRule ^documentation/machines/mutoh\-kona/?$ https://help.suite-eko.com/hc/aide/articles/rip-brancher-mutoh-kona-1650 [R=301,L]
+RewriteRule ^documentation/application\-mobile/?$ https://help.suite-eko.com/hc/aide/articles/rip-installer-l-application-mobile [R=301,L]
+RewriteRule ^documentation/en/getting\-started/?$ https://help.suite-eko.com/hc/aide/articles/rip-set-up-a-rip-workshop-in-five-steps [R=301,L]
+RewriteRule ^documentation/en/troubleshooting/?$ https://help.suite-eko.com/hc/aide/articles/rip-fix-client-cannot-find-server [R=301,L]
+RewriteRule ^documentation/en/administration/?$ https://help.suite-eko.com/hc/aide/articles/rip-monitor-the-server-service [R=301,L]
+RewriteRule ^documentation/administration/?$ https://help.suite-eko.com/hc/aide/articles/rip-surveiller-le-service-du-serveur [R=301,L]
+RewriteRule ^documentation/en/mobile\-app/?$ https://help.suite-eko.com/hc/aide/articles/rip-install-the-e-ko-rip-mobile-app [R=301,L]
+RewriteRule ^documentation/utilisation/?$ https://help.suite-eko.com/hc/aide/articles/rip-prendre-en-main-l-ecran-du-client [R=301,L]
+RewriteRule ^documentation/en/glossary/?$ https://help.suite-eko.com/hc/aide/articles/rip-look-up-the-rip-glossary [R=301,L]
+RewriteRule ^documentation/en/machines/?$ https://help.suite-eko.com/hc/aide/articles/rip-know-supported-machines [R=301,L]
+RewriteRule ^documentation/en/clients/?$ https://help.suite-eko.com/hc/aide/articles/rip-understand-the-client-window-and-its-menus [R=301,L]
+RewriteRule ^documentation/demarrage/?$ https://help.suite-eko.com/hc/aide/articles/rip-installer-un-atelier-en-cinq-etapes [R=301,L]
+RewriteRule ^documentation/depannage/?$ https://help.suite-eko.com/hc/aide/articles/rip-client-ne-trouve-pas-le-serveur [R=301,L]
+RewriteRule ^documentation/glossaire/?$ https://help.suite-eko.com/hc/aide/articles/rip-consulter-le-glossaire [R=301,L]
+RewriteRule ^documentation/en/server/?$ https://help.suite-eko.com/hc/aide/articles/rip-install-the-rip-server [R=301,L]
+RewriteRule ^documentation/en/usage/?$ https://help.suite-eko.com/hc/aide/articles/rip-get-to-know-the-client-screen [R=301,L]
+RewriteRule ^documentation/machines/?$ https://help.suite-eko.com/hc/aide/articles/rip-connaitre-les-machines-prises-en-charge [R=301,L]
+RewriteRule ^documentation/en/cloud/?$ https://help.suite-eko.com/hc/aide/articles/rip-cloud-understand-e-ko-rip-cloud [R=301,L]
+RewriteRule ^documentation/serveur/?$ https://help.suite-eko.com/hc/aide/articles/rip-installer-le-serveur [R=301,L]
+RewriteRule ^documentation/clients/?$ https://help.suite-eko.com/hc/aide/articles/rip-comprendre-la-fenetre-du-client [R=301,L]
+RewriteRule ^documentation/cloud/?$ https://help.suite-eko.com/hc/aide/articles/rip-cloud-comprendre-le-cloud [R=301,L]
+RewriteRule ^documentation/en/?$ https://help.suite-eko.com/hc/aide/en/categories/rip [R=301,L]
+RewriteRule ^documentation/?$ https://help.suite-eko.com/hc/aide/fr/categories/rip [R=301,L]
+# --- Fin des redirections de la documentation ---
+
 ErrorDocument 404 /404.html
 
 <IfModule mod_headers.c>

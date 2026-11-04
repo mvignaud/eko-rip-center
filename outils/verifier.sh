@@ -21,6 +21,7 @@ python3 outils/generer-site.py --verifier
 
 echo "· articles du centre d'aide (docs/aide/, sans réseau)"
 python3 outils/publier-aide --verifier
+python3 outils/redirections-documentation --verifier
 
 echo "· clés de traduction en double"
 node outils/doublons-traductions.js serveur/static/index.html

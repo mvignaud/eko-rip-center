@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Redirige les pages de https://e-ko.rip/documentation/ vers le centre d'aide (301).
+
+    outils/redirections-documentation              réécrit le bloc des redirections dans site/.htaccess
+    outils/redirections-documentation --verifier   échoue si le bloc est en retard (outils/verifier.sh)
+
+Chaque page de la documentation (docs/guide/fr|en/sommaire.tsv) part vers l'article qui la couvre :
+la ligne « * » de docs/aide/couverture/*.tsv pour la page française, et la traduction anglaise de
+cet article (docs/aide/en/, champ traduction_de) pour la page anglaise. Bibliothèque standard seulement.
+"""
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+RACINE = Path(__file__).resolve().parent.parent
+HTACCESS = RACINE / "site" / ".htaccess"
+URL_ARTICLE = "https://help.suite-eko.com/hc/aide/articles/{slug}"
+# L'accueil de la documentation renvoie vers la catégorie E-KO RIP du centre d'aide, dans sa langue.
+URL_ACCUEIL = "https://help.suite-eko.com/hc/aide/{langue}/categories/rip"
+DEBUT = "# --- Documentation → centre d'aide (outils/redirections-documentation, ne pas modifier à la main) ---"
+FIN = "# --- Fin des redirections de la documentation ---"
+ANCRE = "ErrorDocument 404 /404.html"
+
+
+def sommaire(langue):
+    """Fichier de docs/ → adresse sous /documentation/ (fr) ou /documentation/en/ (en)."""
+    pages = {}
+    for ligne in (RACINE / "docs" / "guide" / langue / "sommaire.tsv").read_text(encoding="utf-8").splitlines():
+        if not ligne.strip() or ligne.startswith(("#", "==", "->")):
+            continue
+        ident, fichier = ligne.split("\t")[:2]
+        adresse = ident.split(":", 1)[1] if ":" in ident else ident
+        pages[fichier] = "" if adresse == "index" else adresse
+        pages.setdefault("#id:" + ident.split(":", 1)[0], fichier)
+    return pages
+
+
+def couverture():
+    """Fichier de docs/ (fr) → slug de l'article qui couvre toute la page."""
+    sortie = {}
+    for tsv in sorted((RACINE / "docs" / "aide" / "couverture").glob("*.tsv")):
+        for ligne in tsv.read_text(encoding="utf-8").splitlines():
+            morceaux = ligne.split("\t")
+            if len(morceaux) >= 3 and morceaux[1] == "*":
+                sortie[morceaux[0].removeprefix("docs/")] = morceaux[2]
+    return sortie
+
+
+def traductions():
+    """Slug français → slug anglais."""
+    sortie = {}
+    for chemin in (RACINE / "docs" / "aide" / "en").glob("*/*.md"):
+        texte = chemin.read_text(encoding="utf-8")
+        slug = re.search(r"^slug:\s*(\S+)", texte, re.M)
+        if slug:
+            sortie[chemin.stem] = slug.group(1)
+    return sortie
+
+
+def regles():
+    fr, en, couv, trad = sommaire("fr"), sommaire("en"), couverture(), traductions()
+    lignes, erreurs = [], []
+    # Ordre : les adresses les plus longues d'abord, pour que machines/ ne masque pas machines/x/.
+    for fichier, adresse in sorted(((f, a) for f, a in fr.items() if not f.startswith("#")), key=lambda x: -len(x[1])):
+        slug = couv.get(fichier)
+        if not slug:
+            erreurs.append(f"docs/{fichier} : aucune ligne « * » dans docs/aide/couverture/")
+            continue
+        lignes.append((f"documentation/{adresse}", URL_ACCUEIL.format(langue="fr") if not adresse else URL_ARTICLE.format(slug=slug)))
+        ident = next((k[4:] for k, v in fr.items() if k.startswith("#id:") and v == fichier), None)
+        fichier_en = en.get("#id:" + ident) if ident else None
+        if fichier_en:
+            if slug not in trad:
+                erreurs.append(f"docs/{fichier_en} : l'article {slug} n'a pas de traduction dans docs/aide/en/")
+                continue
+            lignes.append((f"documentation/en/{en[fichier_en]}", URL_ACCUEIL.format(langue="en") if not en[fichier_en] else URL_ARTICLE.format(slug=trad[slug])))
+    lignes.sort(key=lambda x: -len(x[0]))
+    texte = [DEBUT,
+             "# Toute la documentation est passée au centre d'aide : chaque page renvoie vers l'article qui la couvre."]
+    for chemin, url in lignes:
+        motif = "^" + re.escape(chemin.rstrip("/")).replace("\\/", "/") + "/?$"
+        texte.append(f"RewriteRule {motif} {url} [R=301,L]")
+    texte.append(FIN)
+    return "\n".join(texte) + "\n", erreurs
+
+
+def avec_bloc(actuel, bloc):
+    if DEBUT in actuel:
+        avant, reste = actuel.split(DEBUT, 1)
+        apres = reste.split(FIN, 1)[1].lstrip("\n")
+        return avant + bloc + "\n" + apres
+    if ANCRE not in actuel:
+        raise SystemExit(f"site/.htaccess : ligne « {ANCRE} » introuvable pour placer les redirections.")
+    return actuel.replace(ANCRE, bloc + "\n" + ANCRE, 1)
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--verifier", action="store_true")
+    o = p.parse_args()
+    bloc, erreurs = regles()
+    if erreurs:
+        print("\n".join(erreurs), file=sys.stderr)
+        raise SystemExit(f"{len(erreurs)} erreur(s) : redirections incomplètes.")
+    actuel = HTACCESS.read_text(encoding="utf-8")
+    nouveau = avec_bloc(actuel, bloc)
+    if o.verifier:
+        if nouveau != actuel:
+            raise SystemExit("site/.htaccess : redirections de la documentation en retard (lancer outils/redirections-documentation).")
+        print(f"Redirections de la documentation à jour ({bloc.count('RewriteRule')} pages).")
+        return
+    HTACCESS.write_text(nouveau, encoding="utf-8")
+    print(f"site/.htaccess : {bloc.count('RewriteRule')} redirections écrites.")
+
+
+if __name__ == "__main__":
+    main()

@@ -35,15 +35,23 @@ TABLE = AIDE / "televersements.json"
 API = os.environ.get("CHATWOOT_AIDE_API", "https://help.suite-eko.com/api/v1/accounts/1")
 PROFIL = os.environ.get("CHATWOOT_AIDE_PROFIL", "https://help.suite-eko.com/api/v1/profile")
 PORTAIL = "aide"
-LANGUE = "fr"
 # Adresse publique d'un article (liens entre articles).
 URL_ARTICLE = os.environ.get("CHATWOOT_AIDE_URL_ARTICLE", "https://help.suite-eko.com/hc/aide/articles/{slug}")
 MAITRES = {"rip": "rip-", "rip-cloud": "rip-cloud-"}
-# Identifiants attendus (directives du 04/11/2026) : un écart veut dire mauvais portail ou mauvais jeton.
-ID_MAITRES = {"rip": 3, "rip-cloud": 8}
 ID_AUTEUR = 4
 CHAMPS = ("titre", "description", "sous_rubrique", "position", "mots_cles")
-SECTIONS = ("## Avant de commencer", "## Étapes", "## Bon à savoir", "## Voir aussi")
+# Une arborescence par langue : docs/aide/ (fr) et docs/aide/en/ (traduction). Un article anglais
+# garde le nom de fichier et le dossier de l'article français (les liens restent les mêmes), donne
+# son slug anglais dans l'en-tête (`slug`, unique dans tout le centre d'aide) et l'article
+# d'origine (`traduction_de`), qui le relie à sa version française.
+# Identifiants attendus des catégories maîtres (lus en lecture seule le 04/11/2026) : un écart
+# veut dire mauvais portail ou mauvais jeton.
+LANGUES = {
+    "fr": {"dossier": AIDE, "maitres": {"rip": 3, "rip-cloud": 8},
+           "sections": ("## Avant de commencer", "## Étapes", "## Bon à savoir", "## Voir aussi")},
+    "en": {"dossier": AIDE / "en", "maitres": {"rip": 13, "rip-cloud": 25},
+           "sections": ("## Before you start", "## Steps", "## Good to know", "## See also")},
+}
 MAX_IMAGES = 5
 MAX_DESCRIPTION = 160
 INTERDITS = [
@@ -58,9 +66,12 @@ LIEN = re.compile(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)")
 
 # ————— Lecture du dépôt —————
 
-def rubriques():
+def rubriques(langue="fr"):
     sortie = {}
-    for n, ligne in enumerate((AIDE / "rubriques.tsv").read_text(encoding="utf-8").splitlines(), 1):
+    fichier = LANGUES[langue]["dossier"] / "rubriques.tsv"
+    if not fichier.is_file():
+        return sortie
+    for n, ligne in enumerate(fichier.read_text(encoding="utf-8").splitlines(), 1):
         if not ligne.strip() or ligne.startswith("#"):
             continue
         morceaux = ligne.split("\t")
@@ -84,20 +95,28 @@ def lire_article(chemin):
     return entete, m.group(2).strip() + "\n"
 
 
-def articles():
+def articles(langue="fr"):
     liste = []
-    for chemin in sorted(AIDE.glob("*/*.md")):
-        if chemin.parent.name == "images":
+    for chemin in sorted(LANGUES[langue]["dossier"].glob("*/*.md")):
+        if chemin.parent.name in ("images", "couverture") or chemin.parent.parent != LANGUES[langue]["dossier"]:
             continue
         entete, corps = lire_article(chemin)
-        liste.append({"chemin": chemin, "slug": chemin.stem, "dossier": chemin.parent.name, "entete": entete, "corps": corps})
+        slug = (entete or {}).get("slug") if langue != "fr" else chemin.stem
+        liste.append({"chemin": chemin, "slug": slug or "", "dossier": chemin.parent.name, "entete": entete, "corps": corps, "langue": langue})
     return liste
+
+
+def slugs_par_fichier(arts):
+    """Chemin résolu d'un article → son slug (les liens entre articles visent des fichiers)."""
+    return {a["chemin"].resolve(): a["slug"] for a in arts}
 
 
 # ————— Vérification —————
 
-def verifier(rub, arts):
+def verifier(rub, arts, langue="fr", originaux=None):
     erreurs = []
+    sections = LANGUES[langue]["sections"]
+    par_fichier = slugs_par_fichier(arts)
     for r in rub.values():
         if r["maitre"] not in MAITRES:
             erreurs.append(f"rubriques.tsv:{r['ligne']} : catégorie maître inconnue « {r['maitre']} »")
@@ -105,7 +124,6 @@ def verifier(rub, arts):
             erreurs.append(f"rubriques.tsv:{r['ligne']} : le slug doit commencer par « {r['maitre']}- »")
         elif r["maitre"] == "rip" and r["slug"].startswith("rip-cloud-"):
             erreurs.append(f"rubriques.tsv:{r['ligne']} : une sous-rubrique rip-cloud-… va sous rip-cloud")
-    slugs = {a["slug"] for a in arts}
     vus = set()
     for a in arts:
         ici = a["chemin"].relative_to(RACINE)
@@ -113,9 +131,14 @@ def verifier(rub, arts):
         if e is None:
             erreurs.append(f"{ici} : en-tête --- … --- absent")
             continue
-        for champ in CHAMPS:
+        for champ in CHAMPS + (("slug", "traduction_de") if langue != "fr" else ()):
             if not e.get(champ):
                 erreurs.append(f"{ici} : champ « {champ} » absent ou vide")
+        if langue != "fr" and originaux is not None:
+            if e.get("traduction_de") != a["chemin"].stem or a["chemin"].stem not in originaux:
+                erreurs.append(f"{ici} : traduction_de doit nommer l'article français du même nom")
+            elif a["slug"] in originaux:
+                erreurs.append(f"{ici} : slug déjà pris par un article français (unique dans tout le centre d'aide)")
         if a["slug"] in vus:
             erreurs.append(f"{ici} : slug en double")
         vus.add(a["slug"])
@@ -137,7 +160,7 @@ def verifier(rub, arts):
         titre = e.get("titre", "")
         if titre.endswith("?") or re.match(r"(?i)e-ko", titre):
             erreurs.append(f"{ici} : titre à l'infinitif, sans question ni nom de produit en tête")
-        for s in SECTIONS:
+        for s in sections:
             if not re.search(rf"^{re.escape(s)}\s*$", a["corps"], re.M):
                 erreurs.append(f"{ici} : section « {s} » absente")
         images = IMAGE.findall(a["corps"])
@@ -160,7 +183,7 @@ def verifier(rub, arts):
                 erreurs.append(f"{ici} : lien relatif inattendu {cible}")
                 continue
             vise = (a["chemin"].parent / cible_fichier).resolve()
-            if not vise.is_file() or Path(cible_fichier).stem not in slugs:
+            if vise not in par_fichier:
                 erreurs.append(f"{ici} : lien vers un article introuvable {cible}")
         texte = json.dumps(e, ensure_ascii=False) + a["corps"]
         for motif, quoi in INTERDITS:
@@ -245,10 +268,10 @@ def charge(r):
     return r.get("payload", r) if isinstance(r, dict) else r
 
 
-def lister_articles(api, categorie_slug):
+def lister_articles(api, langue, categorie_slug):
     tous, page = [], 1
     while page <= 50:
-        r = api.appel("GET", f"/portals/{PORTAIL}/articles?locale={LANGUE}&category_slug={categorie_slug}&page={page}")
+        r = api.appel("GET", f"/portals/{PORTAIL}/articles?locale={langue}&category_slug={categorie_slug}&page={page}")
         lot = charge(r)
         if not isinstance(lot, list) or not lot:
             break
@@ -270,7 +293,7 @@ def lire_table():
         return {}
 
 
-def contenu_publie(a, url_image):
+def contenu_publie(a, url_image, par_fichier):
     def image(m):
         return f"![{m.group(1)}]({url_image((a['chemin'].parent / m.group(2)).resolve())})"
 
@@ -278,13 +301,13 @@ def contenu_publie(a, url_image):
         cible = m.group(2)
         if re.match(r"(https?:|mailto:|#)", cible):
             return m.group(0)
-        slug = Path(cible.split("#", 1)[0]).stem
+        slug = par_fichier[(a["chemin"].parent / cible.split("#", 1)[0]).resolve()]
         return f"[{m.group(1)}]({URL_ARTICLE.format(slug=slug)})"
 
     return LIEN.sub(lien, IMAGE.sub(image, a["corps"]))
 
 
-def publier(rub, arts, a_blanc, tout_publier):
+def ouvrir_api():
     jeton = os.environ.get("CHATWOOT_DOC_TOKEN", "").strip()
     if not jeton:
         raise SystemExit("CHATWOOT_DOC_TOKEN absent : rien n'est envoyé.")
@@ -292,12 +315,19 @@ def publier(rub, arts, a_blanc, tout_publier):
     auteur = charge(api.appel("GET", PROFIL)).get("id")
     if auteur != ID_AUTEUR:
         raise SystemExit(f"Le jeton n'est pas celui du compte « Documentation Suite E-KO » (auteur {auteur!r}, attendu {ID_AUTEUR}).")
-    categories = {c["slug"]: c for c in charge(api.appel("GET", f"/portals/{PORTAIL}/categories?locale={LANGUE}"))}
-    for m in MAITRES:
+    return api, auteur
+
+
+def publier(api, auteur, langue, rub, arts, a_blanc, tout_publier, ids_fr=None):
+    """Envoie une langue. Rend slug → id des articles de cette langue (pour relier les traductions)."""
+    categories = {c["slug"]: c for c in charge(api.appel("GET", f"/portals/{PORTAIL}/categories?locale={langue}"))}
+    for m, attendu in LANGUES[langue]["maitres"].items():
         if m not in categories:
-            raise SystemExit(f"Catégorie maître « {m} » absente du portail : on ne la crée pas.")
-        if categories[m].get("id") != ID_MAITRES[m]:
-            raise SystemExit(f"Catégorie maître « {m} » : id {categories[m].get('id')!r}, attendu {ID_MAITRES[m]}.")
+            raise SystemExit(f"Catégorie maître « {m} » ({langue}) absente du portail : on ne la crée pas.")
+        if categories[m].get("id") != attendu:
+            raise SystemExit(f"Catégorie maître « {m} » ({langue}) : id {categories[m].get('id')!r}, attendu {attendu}.")
+    par_fichier = slugs_par_fichier(arts)
+    ids = {}
     bilan = []
 
     # 1. Sous-rubriques manquantes.
@@ -306,7 +336,7 @@ def publier(rub, arts, a_blanc, tout_publier):
             continue
         bilan.append(f"sous-rubrique créée : {r['slug']}")
         if not a_blanc:
-            c = charge(api.appel("POST", f"/portals/{PORTAIL}/categories", {"category": {"name": r["nom"], "slug": r["slug"], "description": r["description"], "locale": LANGUE, "parent_category_id": categories[r["maitre"]]["id"], "position": r["position"]}}))
+            c = charge(api.appel("POST", f"/portals/{PORTAIL}/categories", {"category": {"name": r["nom"], "slug": r["slug"], "description": r["description"], "locale": langue, "parent_category_id": categories[r["maitre"]]["id"], "position": r["position"]}}))
             categories[r["slug"]] = c
 
     # 2. Images (table empreinte → file_url).
@@ -335,7 +365,7 @@ def publier(rub, arts, a_blanc, tout_publier):
     existants = {}
     for slug in rub:
         if slug in categories:
-            for art in lister_articles(api, slug):
+            for art in lister_articles(api, langue, slug):
                 # Garde-fou : jamais un article d'un autre produit, même si le filtre était ignoré.
                 rangé = (art.get("category") or {}).get("slug", slug)
                 if str(art.get("slug", "")).startswith(tuple(MAITRES.values())) and rangé in rub:
@@ -347,20 +377,25 @@ def publier(rub, arts, a_blanc, tout_publier):
             "title": e["titre"],
             "slug": a["slug"],
             "description": e["description"],
-            "content": contenu_publie(a, url_image),
+            "content": contenu_publie(a, url_image, par_fichier),
             "category_id": categories.get(a["dossier"], {}).get("id"),
             "author_id": auteur,
-            "locale": LANGUE,
+            "locale": langue,
             "position": int(e["position"]),
             "meta": {"title": e["titre"], "description": e["description"], "tags": [t.strip() for t in e["mots_cles"].split(",") if t.strip()]},
         }
+        if ids_fr is not None and ids_fr.get(e.get("traduction_de")):
+            # Version anglaise reliée à l'article français (sélecteur de langue du centre d'aide).
+            champs["associated_article_id"] = ids_fr[e["traduction_de"]]
         ancien = existants.get(a["slug"])
         if ancien is None:
             champs["status"] = "published" if tout_publier else "draft"
             bilan.append(f"article créé ({champs['status']}) : {a['slug']}")
             if not a_blanc:
-                api.appel("POST", f"/portals/{PORTAIL}/articles", {"article": champs})
+                cree = charge(api.appel("POST", f"/portals/{PORTAIL}/articles", {"article": champs}))
+                ids[a["slug"]] = cree.get("id") if isinstance(cree, dict) else None
         else:
+            ids[a["slug"]] = ancien.get("id")
             statut = ancien.get("status")
             if tout_publier:
                 champs["status"] = "published"
@@ -373,7 +408,8 @@ def publier(rub, arts, a_blanc, tout_publier):
                       or champs.get("status", statut) != statut
                       or categorie != champs["category_id"]
                       or mots != sorted(champs["meta"]["tags"])
-                      or (ancien.get("meta") or {}).get("description") != champs["meta"]["description"])
+                      or (ancien.get("meta") or {}).get("description") != champs["meta"]["description"]
+                      or ("associated_article_id" in champs and ancien.get("associated_article_id") != champs["associated_article_id"]))
             if change and statut == "published" and not tout_publier:
                 # Un article en ligne ne change qu'avec l'ordre de publication de Mathieu.
                 bilan.append(f"article en ligne modifié, envoyé seulement avec --publier : {a['slug']}")
@@ -393,8 +429,10 @@ def publier(rub, arts, a_blanc, tout_publier):
     if not a_blanc and envoyees:
         enregistrer_table(table)
     bilan += [f"image envoyée : {n}" for n in envoyees]
+    print(f"— {langue} —")
     print("\n".join(bilan) if bilan else "Centre d'aide déjà à jour.")
-    print(f"{len(arts)} articles dans le dépôt, {len(existants)} déjà dans le centre d'aide.")
+    print(f"{len(arts)} articles dans le dépôt ({langue}), {len(existants)} déjà dans le centre d'aide.")
+    return ids
 
 
 def main():
@@ -404,15 +442,31 @@ def main():
     g.add_argument("--a-blanc", action="store_true", help="lit le centre d'aide, n'écrit rien")
     g.add_argument("--publier", action="store_true", help="passe les articles en published (sur ordre de Mathieu)")
     o = p.parse_args()
-    rub, arts = rubriques(), articles()
-    erreurs = verifier(rub, arts)
+    lots, erreurs = {}, []
+    for langue in LANGUES:
+        rub, arts = rubriques(langue), articles(langue)
+        originaux = {a["slug"] for a in lots["fr"][1]} if langue != "fr" else None
+        if langue != "fr" and arts and not rub:
+            erreurs.append(f"{LANGUES[langue]['dossier'].relative_to(RACINE)}/rubriques.tsv absent")
+        erreurs += verifier(rub, arts, langue, originaux)
+        lots[langue] = (rub, arts)
+    tous = [a["slug"] for _, arts in lots.values() for a in arts]
+    erreurs += [f"slug « {s} » en double entre langues" for s in sorted({s for s in tous if tous.count(s) > 1})
+                if sum(1 for _, arts in lots.values() if any(a["slug"] == s for a in arts)) > 1]
     if erreurs:
         print("\n".join(erreurs), file=sys.stderr)
         raise SystemExit(f"{len(erreurs)} erreur(s) dans docs/aide/.")
     if o.verifier:
-        print(f"Aide à jour : {len(arts)} articles, {len(rub)} sous-rubriques.")
+        print("Aide à jour : " + " ; ".join(f"{l} {len(a)} articles, {len(r)} sous-rubriques" for l, (r, a) in lots.items()) + ".")
         return
-    publier(rub, arts, o.a_blanc, o.publier)
+    api, auteur = ouvrir_api()
+    ids_fr = None
+    for langue, (rub, arts) in lots.items():
+        if not arts:
+            continue
+        ids = publier(api, auteur, langue, rub, arts, o.a_blanc, o.publier, ids_fr)
+        if langue == "fr":
+            ids_fr = ids
 
 
 if __name__ == "__main__":

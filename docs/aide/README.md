@@ -42,7 +42,26 @@ script les transforme en adresses du centre d'aide.
 - **Captures** : données fictives uniquement, thème clair, PNG, texte alternatif qui décrit l'écran.
 - **Interdits** : aucun nom d'hébergeur, d'outil interne ou de logiciel tiers du support, aucun nom
   de concurrent, aucune date promise, aucun secret, aucune adresse IP.
-- Français seulement pour l'instant.
+- Deux langues : le français (`docs/aide/<sous-rubrique>/`) et l'anglais (`docs/aide/en/`).
+
+## Version anglaise
+
+`docs/aide/en/` reprend l'arborescence française : même dossier et même nom de fichier pour chaque
+article (les liens entre articles restent donc identiques), sous-rubriques dans `en/rubriques.tsv`
+(mêmes slugs qu'en français, une catégorie étant unique par langue). L'en-tête ajoute `slug`, le slug
+anglais (unique dans tout le centre d'aide, préfixé `rip-` ou `rip-cloud-`), et `traduction_de`, le
+nom de l'article français, qui relie les deux versions dans le centre d'aide. Sections : `## Before
+you start`, `## Steps`, `## Good to know`, `## See also`. L'interface du RIP n'existe qu'en
+français : un libellé d'écran s'écrit en anglais en gras puis, à sa première mention, en français
+en italique entre parenthèses (**Print** (*Imprimer*)). Les captures sont communes aux deux langues
+(`../../images/`). Un article français modifié ou ajouté l'est aussi en anglais, dans la même PR.
+
+## Ancienne documentation d'e-ko.rip
+
+Les pages de https://e-ko.rip/documentation/ (FR et EN) renvoient en 301 vers les articles qui les
+couvrent (`docs/aide/couverture/*.tsv`, ligne `*`), grâce au bloc que `outils/redirections-documentation`
+écrit dans `site/.htaccess` ; `--verifier` (dans `outils/verifier.sh`) échoue s'il est en retard. Le
+bloc est mis en ligne par la publication du site.
 
 ## Publier
 
