@@ -88,42 +88,37 @@ rights) comes in step 2; until then, remote users sign in with **the RIP server'
 
 Full details (installation on a VPS or on o2switch, Caddy, protocol) in the French page: [docs/fr/cloud.md](../fr/cloud.md).
 
-## Support and live chat
+## Live support
 
-Cloud customers open support requests and chat live with the E-KO team. **Everything is stored
-and handled in the ERP** through its API (`/api/v1/support`); the platform keeps only a local
-index. **The ERP never writes to Cloud customers**: the platform sends its own e-mails, in E-KO
-RIP Cloud colours.
+Since 2026-11-04, all support goes through the Suite E-KO live support service
+(`https://help.suite-eko.com`, "Plateforme E-KO RIP" inbox, RIP team, identity verification
+required). The platform no longer stores requests or chats and no longer sends support e-mails:
+the service sends its own. Billing is unchanged.
 
-- **Setting up**: nothing beyond the **Facturation (E-KO)** card in Administration. The same API
-  address and token, which also needs `support.view` and `support.create`. **Enregistrer et
-  configurer depuis l'ERP** subscribes the existing webhook (one webhook, one secret) to
-  `support.ticket.created`, `support.ticket.replied`, `support.ticket.status_changed`,
-  `support.discussion.message` and `support.discussion.converted`, besides the billing events.
-- **The customer in the ERP**: each account is `account_reference` = `cloud-<account id>`, linked
-  on first write to a third party by `tier_code` (the subscription's customer code) or else by
-  `tier_email` (the account's address); the person writing is a contact of that third party.
-- **Pages** (sidebar **Support**): the list of requests, a new request (queue from
-  `GET /categories`, up to 5 attachments of 10 MB, a form `Idempotency-Key` so a resubmission
-  creates nothing more), the thread, a reply, and a 1 to 5 rating once resolved. The ERP's HTML
-  is reduced to text before display.
-- **Live chat bubble**: loaded on every signed-in page. No WebSocket (the hosting front end keeps
-  the upstream direction): the browser polls the platform's local store every **3 seconds while
-  the bubble is open** (every 20 seconds closed, while a chat is running). Writes are JSON with
-  an `X-CSRF-Token` header. One chat at a time per account. The **Open / Closed** indicator is computed
-  here from the opening hours the ERP returns with the queues (`meta.opening_hours` of
-  `GET /categories`, re-read at most every 10 minutes; only Europe/Paris is computed, otherwise the
-  last `meta.open_now` is used). When closed, the bubble shows the hours. "New chat" after a
-  finished chat starts a fresh bubble.
-- **Webhooks** (same `/api/erp/webhooks` endpoint, same signature and replay protection): a
-  created request e-mails **Request received** (when opened here); a reply from the team e-mails
-  **Support reply** (never for internal notes, never for the customer's own messages); a
-  resolution e-mails **Request resolved** with the rating link, once per resolution; a chat
-  message is stored for the browser, with no e-mail; a chat turned into a request e-mails **Chat
-  turned into a request** with the transcript. The portal's notification journal and pushes carry
-  the same events. These e-mails do not follow the **Receive alerts** box.
-- **Preview**: `eko-rip-cloud apercu-courriels <folder>` writes `support-demande-recue`,
-  `support-reponse`, `support-resolue` and `support-discussion-convertie`.
+- **Settings**: two environment variables, secrets of the GitHub `production` environment, written
+  by `deploy-cloud.yml` to `~/eko-rip-cloud/secrets.env` (read by `app.js`); on a VPS, in
+  `/etc/default/eko-rip-cloud`. `CHATWOOT_WEBSITE_TOKEN` is the inbox's public token,
+  `CHATWOOT_HMAC_TOKEN` its identity verification key. If either is missing (development, tests,
+  CI), no tag is added and the **Support** page points to contact@e-ko.rip. The key never appears
+  in a page or a log.
+- **Widget**: every signed-in page carries `<script src="/assets/chat.js" defer data-jeton data-id
+  data-hash data-nom data-email data-societe>`. The identifier is `cloud-<account id>` (the same
+  `account_reference` as the ERP's former support) and `data-hash` is
+  `hex(HMAC-SHA256(CHATWOOT_HMAC_TOKEN, identifier))`, computed by the server. `/assets/chat.js`
+  loads `https://help.suite-eko.com/packs/js/sdk.js`, runs `chatwootSDK.run`, then on
+  `chatwoot:ready` calls `setUser` with name, e-mail, `identifier_hash`, `company_name` and
+  `custom_attributes` (`societe`, `compte_rip`, `page`) in one call. The sidebar **Support** link opens the bubble; signing out
+  calls `reset()` before the form is sent.
+- **Security policy**: when the widget is on, the portal CSP (and the payment pages' one) adds
+  `https://help.suite-eko.com` to `script-src`, `style-src`, `frame-src` and `img-src`, and
+  `https://help.suite-eko.com wss://help.suite-eko.com` to `connect-src`.
+- **Transition**: the switch date is stored at the first maintenance run after deployment
+  (`support_bascule_le` setting). For 30 days, `GET /support` lists, read-only, the former
+  support's requests that are still open, with the banner "Le support se fait désormais dans la
+  bulle en bas à droite", and `/support/<code>` reads their thread from the ERP; then the index is
+  emptied. The `support.*` webhooks are no longer requested from the ERP (11 billing events only)
+  and any that still arrive are ignored. The old tables and these two pages will be removed after
+  the 30 days.
 
 ## Per-machine subscription and online backups
 

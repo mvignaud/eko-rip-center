@@ -70,13 +70,17 @@ pub(crate) fn ip(entetes: &HeaderMap) -> String {
 pub(crate) struct Session {
     pub(crate) compte: Compte,
     pub(crate) csrf: String,
+    /// Raison sociale saisie à la souscription (présentée au support en direct).
+    pub(crate) societe: String,
     jeton: String,
 }
 
 pub(crate) fn session(r: &Partage, entetes: &HeaderMap) -> Option<Session> {
     let jeton = cookie(entetes, &nom_cookie(r, COOKIE_SESSION))?;
-    let (compte, csrf) = base::session(&r.base(), &jeton).ok().flatten()?;
-    Some(Session { compte, csrf, jeton })
+    let c = r.base();
+    let (compte, csrf) = base::session(&c, &jeton).ok().flatten()?;
+    let societe = crate::support::societe(&c, compte.id);
+    Some(Session { compte, csrf, societe, jeton })
 }
 
 /// Requête POST venue d'une page de la plate-forme.
@@ -235,11 +239,11 @@ pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String
                 r#"{tete}<body><div class="app"><nav class="laterale" aria-label="Navigation"><a class="marque" href="/sites">{ROSACE}<span>E-KO RIP Cloud</span></a><div class="rubrique">Atelier</div>{}{}{}{}{admin}<div class="bas"><form method="post" action="/deconnexion"><input type="hidden" name="csrf" value="{}"><button class="discret" type="submit">Se déconnecter</button></form><div class="liens">{LIENS_LEGAUX}</div></div></nav><div class="contenu"><div class="outils">{}</div><main>{corps}</main><div class="pied-mobile liens">{LIENS_LEGAUX}</div></div></div>{bulle}</body></html>"#,
                 entree("/sites", "Mes sites", ICONE_SITES),
                 entree("/abonnement", "Abonnement", ICONE_ABONNEMENT),
-                entree("/support", "Support", ICONE_SUPPORT),
+                entree("/support", "Support", ICONE_SUPPORT).replacen("<a ", "<a data-support ", 1),
                 entree("/compte", "Mon compte", ICONE_COMPTE),
                 echapper(&s.csrf),
                 echapper(titre),
-                bulle = crate::support::balise_bulle(&s.csrf),
+                bulle = crate::support::balise_chatwoot(s),
             )
         }
         None => format!(

@@ -57,6 +57,21 @@ La documentation utilisateur est publiée sur `https://e-ko.rip/documentation/` 
   renommer une page ou un titre cité sans les mettre à jour.
 - Jamais de nom de RIP concurrent ni de détail d'hébergement interne dans la doc.
 
+## Centre d'aide (help.suite-eko.com) : articles courts, brouillon par défaut
+
+Les articles d'aide des catégories « E-KO RIP » et « E-KO RIP Cloud » du centre d'aide de la Suite
+E-KO viennent de `docs/aide/` (format et style dans `docs/aide/README.md`). Ils complètent la
+documentation d'e-ko.rip, qui reste la référence détaillée.
+
+- Une PR qui change un écran ou un parcours décrit dans un article met l'article et sa capture à
+  jour dans la même PR. `python3 outils/publier-aide --verifier` (dans `outils/verifier.sh`) contrôle
+  en-têtes, slugs préfixés `rip-` / `rip-cloud-`, images et liens.
+- Envoi par le workflow `publier-aide.yml`, sur ordre de Mathieu seulement : en brouillon par
+  défaut ; entrée `publier` seulement après « Publie l'aide ». Ne jamais toucher aux catégories
+  maîtres, aux réglages du portail ni au reste du support. Jeton `CHATWOOT_DOC_TOKEN` (environnement
+  `production`) : jamais dans le dépôt, un journal, une PR ou le chat.
+- Après un envoi, commiter `docs/aide/televersements.json` (artefact du workflow).
+
 ## Feuille de route publique : on s'y tient (obligatoire)
 
 La feuille de route publique est en ligne sur `https://e-ko.rip/feuille-de-route/`. Source :

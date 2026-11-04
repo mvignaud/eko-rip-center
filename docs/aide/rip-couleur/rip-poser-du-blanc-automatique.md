@@ -1,0 +1,36 @@
+---
+titre: Poser du blanc automatiquement
+description: Faites générer une sous-couche ou un aplat de blanc par le RIP pour imprimer sur un support transparent ou coloré.
+sous_rubrique: rip-couleur
+position: 4
+mots_cles: blanc, sous-couche, aplat, rétraction, white, transparent, vitrophanie
+---
+
+Le blanc évite que la couleur se perde sur un support transparent ou coloré. Le RIP peut le générer lui-même après le rendu.
+
+## Avant de commencer
+
+L'imprimante a une encre blanche. Le travail est en mode **Imprimer**. Sachez que le blanc et l'argent ne passent pas encore par le pilote direct de l'Epson : voir [Brancher l'Epson SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md).
+
+## Étapes
+
+1. Dans le panneau d'envoi, ouvrez le bloc **Blanc**.
+2. Choisissez **Sous-couche sous l'encre** pour du blanc partout où une encre dépasse l'**encre minimale** (5 % par défaut), ou **Aplat sur toute la page** pour du blanc sur toute la page.
+3. Réglez la **Rétraction** (0,2 mm par défaut, jusqu'à 5 mm) : le blanc recule depuis le bord de l'encre pour ne pas dépasser de la couleur.
+4. Choisissez de poser le blanc sous la couleur ou dessus (vitrophanie).
+5. Envoyez le travail, puis regardez la plaque `White` dans l'inspecteur.
+6. Pour garder ce choix, cliquez **Enregistrer…** pour l'ajouter à un réglage.
+
+## Bon à savoir
+
+- Le blanc déjà dessiné dans le fichier (ton direct `White`) est gardé : le blanc final réunit les deux.
+- Les noms reconnus sont `White`, `Blanc` ou `WH` pour le blanc ; `Metallic`, `Silver`, `Argent` ou `MS` pour l'argent.
+- Sur une plaque, le noir est l'encre et le blanc l'absence d'encre.
+- Pour un PNG ou un TIFF détouré, le réglage **Canal alpha** peut donner une plaque `White` ou `Varnish` qui suit le détourage.
+
+## Voir aussi
+
+- [Déclarer les tons directs de l'atelier](rip-declarer-les-tons-directs.md)
+- [Brancher l'Epson SureColor SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md)
+- [La sortie vers la machine a échoué](../rip-depannage/rip-sortie-vers-la-machine-echouee.md)
+- Page détaillée : https://e-ko.rip/documentation/utilisation/

@@ -10,7 +10,10 @@ name: Déployer le Cloud
 # redémarrage de l'app Node. Si /sante ne répond pas « ok », retour au binaire précédent.
 #
 # Prérequis : l'IP du serveur CI (15.235.86.71) déclarée dans cPanel → « Autorisation SSH ».
-# Secrets de l'environnement `production` : O2SWITCH_SSH_KEY, O2SWITCH_KNOWN_HOSTS.
+# Secrets de l'environnement `production` : O2SWITCH_SSH_KEY, O2SWITCH_KNOWN_HOSTS ; pour le
+# support en direct, CHATWOOT_WEBSITE_TOKEN et CHATWOOT_HMAC_TOKEN (écrits dans
+# ~/eko-rip-cloud/secrets.env, lu par app.js ; absents : fichier gardé tel quel, sans bulle s'il
+# n'existe pas).
 on:
   workflow_dispatch:
 
@@ -78,10 +81,21 @@ jobs:
 
       - name: Envoi et bascule
         id: bascule
+        env:
+          CHATWOOT_WEBSITE_TOKEN: ${{ secrets.CHATWOOT_WEBSITE_TOKEN }}
+          CHATWOOT_HMAC_TOKEN: ${{ secrets.CHATWOOT_HMAC_TOKEN }}
         run: |
           set -euo pipefail
           scp target/x86_64-unknown-linux-musl/release/eko-rip-cloud "$HOTE:eko-rip-cloud/eko-rip-cloud.nouveau"
           scp cloud/o2switch/app.js "$HOTE:eko-rip-cloud/app.js.nouveau"
+          # Secrets du support en direct : par l'entrée standard de ssh, jamais en argument.
+          if [ -n "$CHATWOOT_WEBSITE_TOKEN" ] && [ -n "$CHATWOOT_HMAC_TOKEN" ]; then
+              printf 'CHATWOOT_WEBSITE_TOKEN=%s\nCHATWOOT_HMAC_TOKEN=%s\n' "$CHATWOOT_WEBSITE_TOKEN" "$CHATWOOT_HMAC_TOKEN" \
+                  | ssh "$HOTE" 'umask 077 && cat > eko-rip-cloud/secrets.env.nouveau && mv eko-rip-cloud/secrets.env.nouveau eko-rip-cloud/secrets.env'
+              echo "Support en direct : secrets.env mis à jour."
+          else
+              echo "::warning::CHATWOOT_WEBSITE_TOKEN ou CHATWOOT_HMAC_TOKEN absent de l'environnement production : secrets.env inchangé (sans lui, pas de bulle de support)."
+          fi
           ssh "$HOTE" VERSION="$VERSION" bash -s <<'DISTANT'
           set -euo pipefail
           cd ~/eko-rip-cloud

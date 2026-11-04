@@ -1,0 +1,66 @@
+name: Publier l'aide
+
+# Envoie les articles de docs/aide/ dans le centre d'aide de la Suite E-KO (catégories maîtres
+# « rip » et « rip-cloud »), sur ordre de Mathieu seulement. Lancé par Claude via l'API GitHub
+# (workflow_dispatch sur main) :
+# - sans entrée : création et mise à jour en brouillon (draft) ;
+# - publier=true : passage en published, seulement après « Publie l'aide » écrit par Mathieu.
+# Le script ne supprime rien : un article retiré du dépôt passe en archived.
+#
+# Secret de l'environnement `production` : CHATWOOT_DOC_TOKEN (compte « Documentation Suite
+# E-KO »). Il n'est jamais affiché : le script ne l'écrit dans aucun journal.
+# La table des images envoyées (docs/aide/televersements.json) revient en artefact : la
+# commiter ensuite dans une PR, pour ne pas renvoyer les mêmes images au prochain passage.
+on:
+  workflow_dispatch:
+    inputs:
+      publier:
+        description: "Passer les articles en published (ordre « Publie l'aide » de Mathieu)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: publier-aide
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  aide:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, eko-ci-rip]
+    container: ubuntu:24.04
+    environment: production
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Outillage
+        run: |
+          apt-get update -q
+          apt-get install -yq --no-install-recommends ca-certificates python3
+      - uses: actions/checkout@v4
+      - name: Contrôle
+        run: python3 outils/publier-aide --verifier
+      - name: Envoi en brouillon
+        env:
+          CHATWOOT_DOC_TOKEN: ${{ secrets.CHATWOOT_DOC_TOKEN }}
+        run: |
+          [ -n "$CHATWOOT_DOC_TOKEN" ] || { echo "::error::Secret CHATWOOT_DOC_TOKEN absent de l'environnement production."; exit 1; }
+          python3 outils/publier-aide
+      - name: Publication
+        if: inputs.publier
+        env:
+          CHATWOOT_DOC_TOKEN: ${{ secrets.CHATWOOT_DOC_TOKEN }}
+        run: python3 outils/publier-aide --publier
+      - name: Table des images envoyées
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: televersements
+          path: docs/aide/televersements.json
+          if-no-files-found: ignore
