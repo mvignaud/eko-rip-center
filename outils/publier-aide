@@ -188,24 +188,30 @@ class Api:
             donnees = json.dumps(corps).encode()
             entetes["Content-Type"] = "application/json"
         requete = urllib.request.Request(url if url.startswith("http") else API + url, data=donnees, method=methode, headers=entetes)
-        # Le support limite le débit (HTTP 429) : on attend (Retry-After, sinon 5, 10, 20… s,
-        # 2 min au plus) puis on réessaie, 8 fois au plus. Une erreur 5xx n'est réessayée qu'en
-        # lecture : une écriture a pu passer, la refaire créerait un doublon.
-        for essai in range(9):
+        # Le support limite le débit (HTTP 429), notamment les envois d'images (environ 60 par
+        # heure, partagés avec les autres applis) : on attend (Retry-After, sinon 5, 10, 20… s,
+        # 5 min au plus) et on réessaie, jusqu'à 75 min d'attente cumulée pour un même appel,
+        # le temps que la fenêtre se libère. Une erreur 5xx n'est réessayée qu'en lecture, 8 fois
+        # au plus : une écriture a pu passer, la refaire créerait un doublon.
+        attendu, essai = 0.0, 0
+        while True:
             try:
                 with urllib.request.urlopen(requete, timeout=60) as r:
                     brut = r.read()
                 return json.loads(brut) if brut else {}
             except urllib.error.HTTPError as e:
                 detail = e.read()[:300].decode("utf-8", "replace")
-                if (e.code == 429 or (e.code >= 500 and methode == "GET")) and essai < 8:
+                reessai = (e.code == 429 and attendu < 75 * 60) or (e.code >= 500 and methode == "GET" and essai < 8)
+                if reessai:
                     try:
                         attente = float(e.headers.get("Retry-After") or 0)
                     except ValueError:
                         attente = 0
-                    attente = min(max(attente, 5 * 2 ** essai), 120)
+                    attente = min(max(attente, 5 * 2 ** min(essai, 6)), 300)
                     print(f"{methode} {url.split('?')[0]} : HTTP {e.code}, nouvel essai dans {attente:.0f} s", flush=True)
                     time.sleep(attente)
+                    attendu += attente
+                    essai += 1
                     continue
                 raise SystemExit(f"{methode} {url.split('?')[0]} : HTTP {e.code} {detail}")
 
