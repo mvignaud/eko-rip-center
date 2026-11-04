@@ -1358,15 +1358,16 @@ pub async fn regler_oauth(State(r): State<Partage>, h: HeaderMap, Form(f): Champ
     if !csrf_ok(&s, &f) {
         return refuse_origine();
     }
-    let b = r.base();
-    let mut ok = base::regler(&b, "google_client_id", &champ(&f, "google_client_id")).is_ok() && base::regler(&b, "facebook_app_id", &champ(&f, "facebook_app_id")).is_ok();
-    ok &= base::regler(&b, "eko_client_id", &champ(&f, "eko_client_id")).is_ok();
     // Adresse de l'ERP : https exigé, sans « / » final ; vide = adresse par défaut.
+    // Vérifiée avant toute écriture : un formulaire refusé ne change rien.
     let eko_url = champ(&f, "eko_url");
     let eko_url = eko_url.trim().trim_end_matches('/');
     if !eko_url.is_empty() && url_eko_valide(eko_url).is_none() {
         return erreur_page(&r, Some(&s), "Adresse de l'ERP invalide : https:// exigé, sans chemin.");
     }
+    let b = r.base();
+    let mut ok = base::regler(&b, "google_client_id", &champ(&f, "google_client_id")).is_ok() && base::regler(&b, "facebook_app_id", &champ(&f, "facebook_app_id")).is_ok();
+    ok &= base::regler(&b, "eko_client_id", &champ(&f, "eko_client_id")).is_ok();
     ok &= base::regler(&b, "eko_url", eko_url).is_ok();
     for cle in ["google_secret", "facebook_secret", "eko_secret"] {
         let v = champ(&f, cle);
@@ -1525,7 +1526,9 @@ fn identite(f: &Fournisseur, id: &str, secret: &str, retour: &str, code: &str, b
         let jeton = lire_json(a.post(&format!("{base_erp}/oauth/token")).send_form([("grant_type", "authorization_code"), ("code", code), ("redirect_uri", retour), ("client_id", id), ("client_secret", secret), ("code_verifier", verificateur)]))?;
         let acces = jeton["access_token"].as_str()?;
         let moi = lire_json(a.get(&format!("{base_erp}/oauth/userinfo")).header("Authorization", &format!("Bearer {acces}")).call())?;
-        let ident = moi["sub"].as_str().filter(|v| !v.is_empty())?.to_string();
+        // Identité liée à l'ERP émetteur : changer `eko_url` ne peut pas relier
+        // un compte Cloud existant à l'utilisateur d'une autre instance.
+        let ident = format!("{base_erp}|{}", moi["sub"].as_str().filter(|v| !v.is_empty())?);
         Some(Identite { ident, email: moi["email"].as_str().map(str::to_string), email_verifie: moi["email_verified"].as_bool().unwrap_or(false), nom: moi["name"].as_str().unwrap_or("").to_string() })
     } else if f.nom == "google" {
         let jeton = lire_json(a.post("https://oauth2.googleapis.com/token").send_form([("code", code), ("client_id", id), ("client_secret", secret), ("redirect_uri", retour), ("grant_type", "authorization_code")]))?;
