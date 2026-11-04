@@ -22,7 +22,7 @@ ErrorDocument 404 /404.html
   Header always set X-Frame-Options "DENY"
   Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   # Seules ressources externes : le journal et l'abonnement, servis par l'ERP.
-  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://app.e-ko.fr; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://app.e-ko.fr"
+  Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https://help.suite-eko.com; style-src 'self' 'unsafe-inline'; script-src 'self' https://help.suite-eko.com; connect-src 'self' https://app.e-ko.fr https://help.suite-eko.com wss://help.suite-eko.com; frame-src https://help.suite-eko.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://app.e-ko.fr"
 </IfModule>
 
 <IfModule mod_expires.c>
