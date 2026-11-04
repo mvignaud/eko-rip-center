@@ -35,4 +35,4 @@ Vous avez un terminal sur le serveur et un accès `sudo`. Chaque dossier se trou
 - [Déposer un fichier dans un dossier surveillé](../rip-travaux/rip-deposer-un-fichier-dans-un-dossier-surveille.md)
 - [Sauvegarder la configuration du serveur](rip-sauvegarder-la-configuration.md)
 - [Gérer les comptes du serveur](rip-gerer-les-comptes.md)
-- Page détaillée : https://e-ko.rip/documentation/administration/
+- [Connaître les ports réseau du serveur](../rip-premiers-pas/rip-connaitre-les-ports-reseau-du-serveur.md)

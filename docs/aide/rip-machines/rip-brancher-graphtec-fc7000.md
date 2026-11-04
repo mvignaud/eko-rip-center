@@ -17,9 +17,11 @@ Il vous faut un compte administrateur. La machine est en réseau avec une adress
 1. Sur la Graphtec, réglez les commandes en **HP-GL** : Menu > Interface > Command.
 2. Réglez le repérage **ARMS** au panneau de la machine.
 3. Réservez une adresse fixe pour la machine.
-4. Dans le client, ouvrez **Administration… › Système › Machines** et ajoutez la Graphtec FC7000.
-5. Choisissez la connexion **Réseau (TCP)** (ou série / USB-série) et saisissez l'adresse et le port.
-6. Vérifiez le pas de découpe (0,025 mm), les réglages de coupe et le **Décalage X / Y**, puis enregistrez.
+4. Dans le client, ouvrez **Administration…**, vue **Système**, section **Machines**, cliquez **Ajouter une machine** et choisissez le modèle **Graphtec FC7000 (découpe)**.
+5. Dans **Connexion**, choisissez **Réseau (TCP)** (ou **Série / USB-série**) et saisissez l'adresse dans **Adresse IP** et le **Port TCP**.
+
+   ![Fiche de la Graphtec FC7000 avec le modèle, la connexion Réseau (TCP), l'adresse et le port entourés](../images/rip-machine-graphtec.png)
+6. Vérifiez le **Pas de découpe (mm)** (0,025 mm), les réglages de coupe et le **Décalage X / Y**, puis cliquez **Enregistrer**.
 7. Vérifiez depuis le serveur : `nc -vz <adresse-de-la-graphtec> <port>`.
 
 ## Bon à savoir
@@ -33,4 +35,3 @@ Il vous faut un compte administrateur. La machine est en réseau avec une adress
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [La découpe est décalée par rapport à l'impression](../rip-depannage/rip-decoupe-decalee.md)
 - [Choisir la connexion d'une machine](rip-choisir-la-connexion-d-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/graphtec-fc7000/

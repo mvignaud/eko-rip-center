@@ -1,0 +1,46 @@
+docs/guide/fr/clients.md	*	rip-comprendre-la-fenetre-du-client	
+docs/guide/fr/clients.md	Ce que fait le client	rip-comprendre-la-fenetre-du-client	
+docs/guide/fr/clients.md	Client Mac	rip-installer-le-client-mac	
+docs/guide/fr/clients.md	Client Linux	rip-installer-le-client-linux	
+docs/guide/fr/clients.md	Client Windows	rip-installer-le-client-windows	
+docs/guide/fr/clients.md	Se connecter au serveur	rip-se-connecter-au-serveur	
+docs/guide/fr/clients.md	Depuis l'extérieur de l'atelier	rip-se-connecter-au-cloud-depuis-le-client	
+docs/guide/fr/clients.md	Plusieurs serveurs	rip-se-connecter-au-serveur	
+docs/guide/fr/application-mobile.md	*	rip-installer-l-application-mobile	
+docs/guide/fr/application-mobile.md	Ce que l'application permet	rip-installer-l-application-mobile	
+docs/guide/fr/application-mobile.md	Installer l'application	rip-installer-l-application-mobile	
+docs/guide/fr/application-mobile.md	Se connecter à un serveur	rip-connecter-l-application-mobile-a-l-atelier	
+docs/guide/fr/application-mobile.md	À l'atelier : adresse locale	rip-connecter-l-application-mobile-a-l-atelier	
+docs/guide/fr/application-mobile.md	Hors de l'atelier : cloud E-KO RIP	rip-connecter-l-application-mobile-via-le-cloud	
+docs/guide/fr/application-mobile.md	Les onglets de l'application	rip-suivre-la-production-sur-mobile	
+docs/guide/fr/application-mobile.md	File	rip-suivre-la-file-sur-l-application-mobile	
+docs/guide/fr/application-mobile.md	Machines	rip-suivre-les-machines-sur-l-application-mobile	
+docs/guide/fr/application-mobile.md	Alertes	rip-consulter-les-alertes-de-l-application-mobile	
+docs/guide/fr/application-mobile.md	Réglages	rip-activer-les-notifications-de-l-application-mobile	
+docs/guide/fr/application-mobile.md	Notifications	rip-activer-les-notifications-de-l-application-mobile	
+docs/guide/fr/application-mobile.md	Activer les notifications	rip-activer-les-notifications-de-l-application-mobile	
+docs/guide/fr/application-mobile.md	Événements notifiés	rip-comprendre-les-evenements-notifies	
+docs/guide/fr/application-mobile.md	Notifications du cloud	rip-connecter-l-application-mobile-via-le-cloud	
+docs/guide/fr/application-mobile.md	Mode démo	rip-essayer-l-application-mobile-en-mode-demo	
+docs/guide/fr/application-mobile.md	Confidentialité	rip-ce-que-l-application-mobile-transmet	
+docs/guide/fr/application-mobile.md	Questions fréquentes	rip-application-mobile-sans-serveur	
+docs/guide/fr/application-mobile.md	Quelle adresse saisir pour me connecter ?	rip-connecter-l-application-mobile-a-l-atelier	
+docs/guide/fr/application-mobile.md	L'application n'arrive pas à joindre le serveur	rip-application-mobile-sans-serveur	
+docs/guide/fr/application-mobile.md	Le site est « hors ligne » dans la liste	rip-site-hors-ligne-dans-l-application-mobile	
+docs/guide/fr/application-mobile.md	Je ne reçois pas les notifications	rip-notifications-mobile-absentes	
+docs/guide/fr/application-mobile.md	Puis-je envoyer un fichier à imprimer depuis le téléphone ?	rip-installer-l-application-mobile	
+docs/guide/fr/application-mobile.md	Pourquoi l'impression continue-t-elle après Stop ?	rip-impression-continue-apres-stop	
+docs/guide/fr/application-mobile.md	Une question, un problème ?	rip-installer-l-application-mobile	
+docs/fr/installation-client.md	*	rip-installer-le-client-mac	
+docs/fr/installation-client.md	Installer le client	rip-comprendre-la-fenetre-du-client	
+docs/fr/installation-client.md	Linux : par le dépôt APT (mises à jour par apt)	rip-installer-le-client-linux	
+docs/fr/installation-client.md	Premier lancement	rip-se-connecter-au-serveur	
+docs/fr/installation-client.md	Se connecter au cloud (Mac)	rip-se-connecter-au-cloud-depuis-le-client	
+docs/fr/installation-client.md	Se connecter au cloud (Linux)	rip-se-connecter-au-cloud-depuis-le-client	
+docs/fr/installation-client.md	Avertissement au premier lancement	rip-windows-protege-votre-ordinateur	
+docs/fr/application-mobile.md	*	rip-installer-l-application-mobile	
+docs/fr/application-mobile.md	Application mobile de suivi	rip-installer-l-application-mobile	
+docs/fr/application-mobile.md	Ce qu'elle fait	rip-suivre-la-production-sur-mobile	
+docs/fr/application-mobile.md	Connexion	rip-connecter-l-application-mobile-a-l-atelier	
+docs/fr/application-mobile.md	Notifications	rip-comprendre-les-evenements-notifies	
+docs/fr/application-mobile.md	API	-	Section destinée aux développeurs (routes /api/mobile) ; hors centre d'aide

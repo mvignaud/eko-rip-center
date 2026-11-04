@@ -26,11 +26,14 @@ Le client est installé et le serveur tourne. Si le serveur a des comptes, munis
 - Un client ne parle qu'à un serveur à la fois.
 - La session dure 12 heures.
 - La découverte automatique ne traverse ni les routeurs ni les VPN : saisissez alors l'adresse.
+- La découverte utilise le service d'annonce du réseau local (DNS-SD, port UDP 5353). Sur Mac, macOS demande d'autoriser l'accès au réseau local au premier lancement. Le serveur s'annonce sous le nom de la machine.
+- Un navigateur ouvert sur l'adresse du serveur n'affiche qu'une page d'état (version, machines, adresse à saisir dans le client) : l'interface est réservée au client.
 - De l'extérieur de l'atelier, saisissez l'adresse du site sur le Cloud, ou utilisez le bouton **Se connecter au cloud** (clients Mac et Linux).
 
 ## Voir aussi
 
 - [Le client ne trouve pas le serveur](../rip-depannage/rip-client-ne-trouve-pas-le-serveur.md)
 - [Relier le serveur au Cloud](../rip-cloud-premiers-pas/rip-cloud-relier-un-serveur.md)
+- [Comprendre la fenêtre du client et ses menus](rip-comprendre-la-fenetre-du-client.md)
 - [Créer les comptes du serveur](../rip-administration/rip-creer-les-comptes.md)
-- Page détaillée : https://e-ko.rip/documentation/clients/
+- [Se connecter au cloud depuis le client Mac ou Linux](rip-se-connecter-au-cloud-depuis-le-client.md)

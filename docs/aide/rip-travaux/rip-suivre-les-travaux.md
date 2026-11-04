@@ -27,6 +27,10 @@ Un fichier a été envoyé (voir [Envoyer un travail](rip-envoyer-un-travail.md)
 
 - Le badge à côté de chaque bouton donne l'état de la dernière sortie.
 - La case **Imprimer cette page** est cochée par défaut. Décochée, la page n'entre ni dans la file ni dans une planche.
+- À droite du tableau, l'inspecteur a quatre onglets (**Travail**, **Machine**, **Réglages**, **Journal**) : voir [Lire l'écran Production](rip-lire-l-ecran-production.md).
+- L'inspecteur montre une partie par page avec le nombre de tracés de découpe, l'aperçu composite (avec l'épreuve du profil de support) et, derrière le bouton **Couches**, la découpe et une vignette par plaque. Sur un travail à découper, il ajoute les panneaux **Couches de découpe** et **Mise en coupe**.
+- Les alertes et la fiche travail ont leurs articles : [Lire les alertes d'un travail](rip-lire-les-alertes-d-un-travail.md) et [Renseigner la fiche travail](rip-renseigner-la-fiche-travail.md).
+- **Fichier .plt** télécharge la découpe : HP-GL, 0,010 mm par pas, origine au coin bas gauche de la page.
 - **Relancer** refait un travail en échec. **Supprimer** efface un travail fini, mais pas tant qu'une sortie l'attend dans la file.
 - **Fichier .plt** télécharge la découpe en HP-GL.
 - Pour imprimer et découper sans intervention, cochez **Mise en file automatique** à l'envoi. **Ajouter en suspendu** met les sorties en attente, pour les libérer ensuite depuis la file.
@@ -37,4 +41,4 @@ Un fichier a été envoyé (voir [Envoyer un travail](rip-envoyer-un-travail.md)
 - [Gérer la file d'une machine](rip-gerer-la-file-d-une-machine.md)
 - [Valider un BAT avec le client](rip-valider-un-bat.md)
 - [Suivre la production depuis l'application mobile](rip-suivre-la-production-sur-mobile.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/
+- [Lire l'écran Production](rip-lire-l-ecran-production.md)

@@ -190,11 +190,11 @@ The apps ask for permission to show notifications right after the first sign-in 
 
 ## Live support
 
-A question, a problem, an idea? You can reach the E-KO team from the portal, with no other account to create, in the blue live support bubble at the bottom right of every portal page once signed in. The **Support** link in the sidebar opens the same bubble.
+A question, a problem, an idea? You can reach the E-KO team from the portal, with no other account to create, in the blue live support bubble at the bottom right of every portal page once signed in. The **Support** link in the sidebar opens the **My requests** (*Mes demandes*) page; its **Chat live** (*Discuter en direct*) button opens the same bubble.
 
 ![Portal Support page: the live support bubble at the bottom right](../images/cloud-support.png "Live support")
 
-1. Click the blue bubble at the bottom right, or **Support** in the sidebar.
+1. Click the blue bubble at the bottom right, or **Chat live** (*Discuter en direct*) on the **Support** page.
 2. Write your message and send it. You can attach a screenshot or a log.
 3. The team's replies show up in the bubble. Closing the bubble does not end the conversation.
 
@@ -202,8 +202,21 @@ No need to introduce yourself: the account's name, e-mail address and company co
 
 When you sign out of the portal, the conversation is removed from this browser: the next person using the computer does not see it.
 
+### My requests
+
+For a topic that needs follow-up (a breakdown, an invoice, a quote), the **Support** page lists the account's written requests: subject, number, type, status (**Open**, **Waiting**, **Resolved** — *Ouverte*, *En attente*, *Résolue*) and date of the last message. A blue dot flags an unread reply.
+
+![My requests page: three requests, open, waiting and resolved](../images/cloud-mes-demandes.png "My requests")
+
+1. Click **New request** (*Nouvelle demande*), choose the type (technical question, billing, sales, other) and the urgency (normal, high, blocking), write the subject, choose what the request is about, then describe the problem.
+2. Attach files if needed: 5 at most, 10 MB each (images, PDFs, `.log`/`.txt`/`.json` logs, `.zip` archives).
+3. Click **Send request** (*Envoyer la demande*). The request thread opens: your messages on the right, the team's on the left with the first name of the person replying.
+4. Reply in the same thread, then click **Mark as resolved** (*Marquer comme résolue*) once the problem is fixed. A new reply reopens the request.
+
+Each reply from the team is announced by the e-mail "Nouvelle réponse à votre demande n° …" (new reply to your request) with a link to the request; the reply text is not included in the e-mail. Another e-mail tells you when the request becomes **Resolved**. Only the account's own requests are visible.
+
 > [!NOTE]
-> Requests opened before live support arrived stay readable for 30 days on the **Support** page, read-only. To follow one up, write in the bubble and quote its reference (`TKT-…`). There is no requests page or **New request** (*Nouvelle demande*) button any more: everything goes through the bubble.
+> Requests opened before live support arrived (`TKT-…`) stay readable for 30 days on the **Support** page, read-only. To follow one up, open a new request or write in the bubble and quote its reference.
 
 ## Managing your account
 

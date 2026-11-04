@@ -1,0 +1,110 @@
+docs/guide/fr/demarrage.md	*	rip-installer-un-atelier-en-cinq-etapes	
+docs/guide/fr/serveur.md	*	rip-installer-le-serveur	
+docs/guide/fr/administration.md	*	rip-surveiller-le-service-du-serveur	
+docs/guide/fr/depannage.md	*	rip-client-ne-trouve-pas-le-serveur	
+docs/guide/fr/index.md	*	rip-comprendre-les-pieces-du-rip	
+docs/guide/fr/demarrage.md	Les pièces du RIP	rip-comprendre-les-pieces-du-rip	
+docs/guide/fr/demarrage.md	Installer un atelier en cinq étapes	rip-installer-un-atelier-en-cinq-etapes	
+docs/guide/fr/demarrage.md	1. Préparer le serveur	rip-choisir-le-poste-serveur	
+docs/guide/fr/demarrage.md	2. Installer le serveur	rip-installer-le-serveur	
+docs/guide/fr/demarrage.md	3. Créer les comptes	rip-creer-les-comptes	
+docs/guide/fr/demarrage.md	4. Installer les clients	rip-se-connecter-au-serveur	
+docs/guide/fr/demarrage.md	5. Déclarer les machines	rip-ajouter-une-machine	
+docs/guide/fr/demarrage.md	Et ensuite	rip-installer-un-atelier-en-cinq-etapes	
+docs/guide/fr/demarrage.md	Ce dont le serveur a besoin sur le réseau	rip-connaitre-les-ports-reseau-du-serveur	
+docs/guide/fr/serveur.md	Choisir le poste serveur	rip-choisir-le-poste-serveur	
+docs/guide/fr/serveur.md	Installer par le dépôt APT	rip-installer-le-serveur	
+docs/guide/fr/serveur.md	Sans dépôt : le paquet .deb	rip-installer-le-serveur-sans-depot	
+docs/guide/fr/serveur.md	Ubuntu 26.04	rip-installer-le-serveur	
+docs/guide/fr/serveur.md	Créer les comptes	rip-creer-les-comptes	
+docs/guide/fr/serveur.md	Brancher les machines	rip-choisir-la-connexion-d-une-machine	
+docs/guide/fr/serveur.md	Dossiers surveillés	rip-partager-les-dossiers-surveilles	
+docs/guide/fr/serveur.md	Réglages du serveur	rip-modifier-les-reglages-avances-du-serveur	
+docs/guide/fr/serveur.md	PC dédié : image d'installation	rip-installer-le-serveur-avec-l-image-ubuntu	
+docs/guide/fr/administration.md	Au quotidien	rip-surveiller-le-service-du-serveur	
+docs/guide/fr/administration.md	Comptes	rip-gerer-les-comptes	
+docs/guide/fr/administration.md	Sauvegarder	rip-sauvegarder-la-configuration	
+docs/guide/fr/administration.md	Remonter un serveur	rip-remonter-un-serveur	
+docs/guide/fr/administration.md	Mettre à jour	rip-mettre-a-jour-le-serveur	
+docs/guide/fr/administration.md	Partager les dossiers surveillés	rip-partager-les-dossiers-surveilles	
+docs/guide/fr/administration.md	Réglages avancés	rip-modifier-les-reglages-avances-du-serveur	
+docs/guide/fr/administration.md	Où sont les données	rip-savoir-ou-sont-les-donnees-du-serveur	
+docs/guide/fr/administration.md	Statistiques et rapports de bug	rip-comprendre-les-statistiques-anonymes	
+docs/guide/fr/administration.md	Statistiques et rapports de bug	rip-autoriser-les-rapports-d-erreur-automatiques	article complémentaire (rapports) ; signalement : rip-signaler-un-probleme
+docs/guide/fr/depannage.md	Connexion	rip-client-ne-trouve-pas-le-serveur	
+docs/guide/fr/depannage.md	Le client ne trouve pas le serveur	rip-client-ne-trouve-pas-le-serveur	
+docs/guide/fr/depannage.md	Le navigateur n'affiche qu'une page d'état	rip-comprendre-la-page-d-etat-du-navigateur	
+docs/guide/fr/depannage.md	« Accès libre » en rouge	rip-connexion-refusee	
+docs/guide/fr/depannage.md	« Trop d'essais pour cet utilisateur. »	rip-connexion-refusee	
+docs/guide/fr/depannage.md	« Réservé à l'administrateur du RIP. »	rip-connexion-refusee	
+docs/guide/fr/depannage.md	Envoi et rendu	rip-un-rendu-echoue	
+docs/guide/fr/depannage.md	« Fichier trop volumineux pour le serveur. »	rip-un-rendu-echoue	
+docs/guide/fr/depannage.md	Un rendu échoue	rip-un-rendu-echoue	
+docs/guide/fr/depannage.md	Un très grand format est long	rip-comprendre-le-rendu-par-bandes	
+docs/guide/fr/depannage.md	« Disque presque plein »	rip-un-rendu-echoue	
+docs/guide/fr/depannage.md	Impression et découpe	rip-sortie-vers-la-machine-echouee	
+docs/guide/fr/depannage.md	« La sortie vers la machine a échoué. »	rip-sortie-vers-la-machine-echouee	
+docs/guide/fr/depannage.md	« L'imprimante signale une alerte : impression arrêtée. »	rip-sortie-vers-la-machine-echouee	
+docs/guide/fr/depannage.md	« Envoi à l'imprimante impossible » (Epson)	rip-sortie-vers-la-machine-echouee	
+docs/guide/fr/depannage.md	La découpe est décalée par rapport à l'impression	rip-decoupe-decalee	
+docs/guide/fr/depannage.md	Une machine ne peut pas être retirée	rip-retirer-une-machine-qu-une-sortie-attend	
+docs/guide/fr/depannage.md	La durée estimée ne correspond pas	rip-duree-estimee-incorrecte	
+docs/guide/fr/depannage.md	Application mobile et Cloud	rip-notifications-mobile-absentes	
+docs/guide/fr/depannage.md	L'application ne reçoit pas d'alertes	rip-notifications-mobile-absentes	
+docs/guide/fr/depannage.md	Le site est « hors ligne » sur le Cloud	rip-cloud-site-hors-ligne	
+docs/guide/fr/depannage.md	Toujours bloqué ?	rip-signaler-un-probleme	
+docs/guide/fr/index.md	Par où commencer	rip-comprendre-les-pieces-du-rip	
+docs/guide/fr/index.md	Ce qu'il faut savoir d'abord	rip-comprendre-les-pieces-du-rip	
+docs/guide/fr/index.md	Obtenir de l'aide	rip-signaler-un-probleme	
+docs/fr/installation-serveur.md	*	rip-installer-le-serveur	
+docs/fr/administration.md	*	rip-surveiller-le-service-du-serveur	
+docs/fr/pont-erp.md	*	rip-comprendre-le-pont-erp	
+docs/fr/rapports-de-bug.md	*	rip-signaler-un-probleme	
+docs/fr/statistiques-anonymes.md	*	rip-comprendre-les-statistiques-anonymes	
+docs/fr/glossaire.md	*	rip-consulter-le-glossaire	
+docs/fr/installation-serveur.md	Exigences du poste serveur	rip-choisir-le-poste-serveur	
+docs/fr/installation-serveur.md	0. PC dédié : image d'installation Ubuntu	rip-installer-le-serveur-avec-l-image-ubuntu	
+docs/fr/installation-serveur.md	1. Paquet Debian (recommandé)	rip-installer-le-serveur-sans-depot	
+docs/fr/installation-serveur.md	2. Docker	rip-installer-le-serveur-sans-depot	
+docs/fr/installation-serveur.md	3. Binaire seul	rip-installer-le-serveur-sans-depot	
+docs/fr/installation-serveur.md	Réglages	rip-modifier-les-reglages-avances-du-serveur	
+docs/fr/installation-serveur.md	Partager les dossiers surveillés (Samba)	rip-partager-les-dossiers-surveilles	
+docs/fr/installation-serveur.md	Sécurité	rip-creer-les-comptes	
+docs/fr/installation-serveur.md	Comptes	rip-creer-les-comptes	
+docs/fr/installation-serveur.md	Sauvegarde de la configuration	rip-sauvegarder-la-configuration	
+docs/fr/installation-serveur.md	Réseau	rip-connaitre-les-ports-reseau-du-serveur	
+docs/fr/administration.md	Au quotidien	rip-surveiller-le-service-du-serveur	
+docs/fr/administration.md	Où sont les données	rip-savoir-ou-sont-les-donnees-du-serveur	
+docs/fr/administration.md	Sauvegarder	rip-sauvegarder-la-configuration	
+docs/fr/administration.md	Mettre à jour	rip-mettre-a-jour-le-serveur	
+docs/fr/administration.md	Publier sur le dépôt APT	-	procédure de release réservée à l'équipe de développement (publication des paquets), sans objet pour un atelier
+docs/fr/administration.md	Comptes	rip-gerer-les-comptes	
+docs/fr/administration.md	Machines	rip-choisir-la-connexion-d-une-machine	Epson et SNMP : rip-epson-ne-repond-pas
+docs/fr/administration.md	Pont ERP	rip-resoudre-un-pont-erp-en-erreur	
+docs/fr/administration.md	Questions fréquentes	rip-un-rendu-echoue	chaque question est reprise par un article de la rubrique Dépannage (voir depannage.md)
+docs/fr/pont-erp.md	(introduction et principes)	rip-comprendre-le-pont-erp	
+docs/fr/pont-erp.md	1. Version du contrat	rip-comprendre-le-pont-erp	
+docs/fr/pont-erp.md	2. Identifiants	rip-comprendre-les-identifiants-du-pont-erp	
+docs/fr/pont-erp.md	3. Accès machine à machine	rip-creer-le-jeton-et-le-secret-du-pont-erp	
+docs/fr/pont-erp.md	4. Signature des événements (RIP → ERP)	rip-verifier-la-signature-des-evenements-du-pont-erp	
+docs/fr/pont-erp.md	5. Modèle d'états	rip-comprendre-les-etats-des-travaux-et-des-sorties	
+docs/fr/pont-erp.md	6. Canal et événements (lot R2, côté RIP)	rip-comprendre-les-echanges-du-pont-erp	
+docs/fr/pont-erp.md	6.1 Réglage	rip-activer-le-pont-erp	
+docs/fr/pont-erp.md	6.2 Journal	rip-comprendre-les-echanges-du-pont-erp	
+docs/fr/pont-erp.md	6.3 Échanges	rip-comprendre-les-echanges-du-pont-erp	
+docs/fr/pont-erp.md	6.4 Instances	rip-comprendre-les-instances-du-pont-erp	
+docs/fr/pont-erp.md	6.5 Événements	rip-consulter-les-evenements-envoyes-a-l-erp	
+docs/fr/pont-erp.md	7. Travaux envoyés par l'ERP (lot R3)	rip-recevoir-les-travaux-envoyes-par-l-erp	
+docs/fr/pont-erp.md	8. Actions de l'ERP sur la file (lot R3.2)	rip-piloter-la-file-depuis-l-erp	
+docs/fr/pont-erp.md	9. Estimation d'un dossier (lot R4)	rip-estimer-un-dossier-depuis-l-erp	
+docs/fr/rapports-de-bug.md	Signaler un problème	rip-signaler-un-probleme	
+docs/fr/rapports-de-bug.md	Rapports automatiques (sur accord)	rip-autoriser-les-rapports-d-erreur-automatiques	
+docs/fr/rapports-de-bug.md	Côté plate-forme	-	exploitation de la plate-forme E-KO RIP (équipe E-KO) : seules les limites utiles à l'atelier sont reprises
+docs/fr/statistiques-anonymes.md	Ce qui est envoyé	rip-comprendre-les-statistiques-anonymes	
+docs/fr/statistiques-anonymes.md	Désactiver	rip-comprendre-les-statistiques-anonymes	
+docs/fr/statistiques-anonymes.md	Côté plate-forme	-	exploitation de la plate-forme E-KO RIP (registre, route de statistiques, commande d'administration) : destiné à l'équipe E-KO, sans objet pour un atelier
+docs/fr/glossaire.md	Travaux et file	rip-consulter-le-glossaire	
+docs/fr/glossaire.md	Encre et couleur	rip-consulter-le-glossaire	
+docs/fr/glossaire.md	Support et mise en page	rip-consulter-le-glossaire	
+docs/fr/glossaire.md	Découpe	rip-consulter-le-glossaire	
+docs/fr/glossaire.md	Machines et serveur	rip-consulter-le-glossaire	

@@ -25,8 +25,10 @@ Il vous faut Windows 10 ou 11, 64 bits. Aucun droit d'administrateur n'est néce
 
 ## Bon à savoir
 
+- L'installateur existe en `E-KO.RIP.Center_<version>_x64-setup.exe` ou en `.msi`.
 - L'avertissement de Windows n'apparaît qu'une fois par poste.
 - Le client Windows ne cherche pas encore les serveurs sur le réseau : saisissez toujours l'adresse du serveur, sous la forme `<adresse-du-serveur>:8640`.
+- Le client reprend l'interface des clients Mac et Linux, avec la notification Windows quand un travail est prêt ; voir [Comprendre la fenêtre du client et ses menus](rip-comprendre-la-fenetre-du-client.md).
 - Pour mettre à jour, téléchargez et lancez le nouvel installateur : il remplace l'ancienne version.
 - Le menu (bouton **…**) donne **Actualiser**, **Administration…**, **Changer de serveur…**, **Se déconnecter**, **Aide / Documentation** et **À propos d'E-KO RIP Center**.
 
@@ -35,4 +37,4 @@ Il vous faut Windows 10 ou 11, 64 bits. Aucun droit d'administrateur n'est néce
 - [Se connecter au serveur depuis un poste](rip-se-connecter-au-serveur.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
 - [Le client ne trouve pas le serveur](../rip-depannage/rip-client-ne-trouve-pas-le-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/clients/
+- [Windows affiche « Windows a protégé votre ordinateur »](../rip-depannage/rip-windows-protege-votre-ordinateur.md)

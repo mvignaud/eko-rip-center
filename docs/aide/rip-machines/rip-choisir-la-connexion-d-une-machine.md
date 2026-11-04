@@ -21,7 +21,10 @@ Vous êtes administrateur et la machine est en cours d'ajout (voir [Ajouter une 
    - **Dossier** : logiciel tiers qui surveille un dossier ;
    - **IPP** : file CUPS **raw** ou imprimante IPP ;
    - **Renvoi vers un autre RIP E-KO** : machine branchée sur un autre serveur E-KO RIP Center.
-2. Renseignez l'hôte et le port, ou le chemin, dans la fiche de la machine.
+
+   ![Liste Connexion de la fiche d'une machine, avec les six types de connexion](../images/rip-machine-connexions.png)
+
+2. Renseignez l'**Adresse IP** et le **Port TCP**, ou le chemin, dans la fiche de la machine.
 3. Pour une machine en réseau, vérifiez qu'elle répond depuis le serveur : `nc -vz <adresse-de-la-machine> <port>`.
 4. Pour un port USB, vérifiez qu'il existe : `ls -l <port>`.
 5. Pour IPP, créez d'abord une file **raw** dans CUPS (`lpadmin -p epson -v socket://<adresse-de-l-imprimante>:9100 -E`), puis saisissez le chemin `/printers/epson` et le port 631. Vérifiez avec `lpstat -h <hôte> -p`.
@@ -39,4 +42,3 @@ Vous êtes administrateur et la machine est en cours d'ajout (voir [Ajouter une 
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [La sortie vers la machine a échoué](../rip-depannage/rip-sortie-vers-la-machine-echouee.md)
 - [Brancher la Mutoh Kona 1650](rip-brancher-mutoh-kona-1650.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/

@@ -15,7 +15,8 @@
 //     requêtes POST (eko-tunnel/2). 0 pour revenir au WebSocket dans les deux sens.
 //   secrets.env  fichier facultatif à côté de ce fichier (lignes NOM=valeur, droits 600),
 //     écrit par deploy-cloud.yml depuis les secrets GitHub (CHATWOOT_WEBSITE_TOKEN,
-//     CHATWOOT_HMAC_TOKEN du support en direct) ; transmis au relais, jamais journalisé.
+//     CHATWOOT_HMAC_TOKEN du support en direct,
+//     CHATWOOT_DEMANDES_* de « Mes demandes ») ; transmis au relais, jamais journalisé.
 //
 // Journal du relais : relais.log, à côté de ce fichier (la sortie de l'application, elle,
 // part dans les journaux de l'hébergeur, illisibles depuis le compte).

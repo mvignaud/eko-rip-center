@@ -23,10 +23,10 @@ Le travail à l'atelier n'a pas été interrompu.
 ## Bon à savoir
 
 - L'accès revient dès la régularisation.
+- Une page explicative s'affiche dans le navigateur quand l'accès est suspendu ; les apps reçoivent la réponse « offre dépassée ».
 - L'utilisation à l'atelier n'est jamais touchée : le serveur continue d'imprimer et de découper.
 
 ## Voir aussi
 
 - [Régulariser un parc qui dépasse l'offre](../rip-cloud-abonnement/rip-cloud-parc-depasse-l-offre.md)
 - [Choisir une offre](../rip-cloud-abonnement/rip-cloud-choisir-une-offre.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

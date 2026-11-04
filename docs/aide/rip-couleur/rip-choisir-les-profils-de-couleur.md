@@ -14,13 +14,15 @@ Vous avez le profil `.icc` ou `.icm` du support, fourni par son fabricant ou pro
 
 ## Étapes
 
-1. Ouvrez le panneau d'envoi, mode **Imprimer**, puis le bloc **Couleur**.
+1. Dans **Administration…**, vue **Production**, cliquez **Importer**, puis ouvrez le bloc **Couleur**.
 2. Cliquez **Ajouter un profil ICC…** et choisissez le fichier. Il est déposé sur le serveur.
+
+   ![Bloc Couleur de la fenêtre Nouveau travail, avec les profils d'entrée, le profil du support, l'intention et le lien Ajouter un profil ICC… entouré](../images/rip-couleur-profils.png)
 3. Choisissez l'**Entrée CMJN** et l'**Entrée RVB** : le profil appliqué aux données qui n'en ont pas.
-4. Cochez **Ignorer les profils du PDF** pour appliquer ces profils à toutes les données.
-5. Choisissez le profil **Support (sortie)** : l'aperçu simule le rendu du support imprimé.
-6. Choisissez l'**Intention** : perceptuelle, colorimétrique relative, saturation ou absolue.
-7. Si vous voulez réutiliser ces choix, cliquez **Enregistrer…** pour les garder dans un réglage.
+4. Choisissez le profil **Support (sortie)** : l'aperçu simule le rendu du support imprimé.
+5. Choisissez l'**Intention** : perceptuelle, colorimétrique relative, saturation ou absolue.
+6. Cochez **Ignorer les profils du PDF** pour appliquer ces profils à toutes les données.
+7. Si vous voulez réutiliser ces choix, cliquez **Enregistrer…**, à côté de **Réglage**, pour les garder dans un réglage.
 
 ## Bon à savoir
 
@@ -33,4 +35,3 @@ Vous avez le profil `.icc` ou `.icm` du support, fourni par son fabricant ou pro
 - [Déclarer les tons directs de l'atelier](rip-declarer-les-tons-directs.md)
 - [Régler un support et ses modes d'impression](rip-regler-un-support-et-ses-modes.md)
 - [Faire une épreuve TIFF](rip-faire-une-epreuve-tiff.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

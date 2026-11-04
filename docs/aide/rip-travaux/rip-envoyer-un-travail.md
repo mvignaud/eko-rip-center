@@ -31,6 +31,9 @@ Le client est connecté au serveur. Votre fichier est un PDF, un AI enregistré 
 - Une image est posée à sa taille réelle, d'après la résolution enregistrée dans le fichier. Sans résolution, le RIP compte 72 ppi et le travail le signale.
 - Si la page est plus large que la laize mais tient tournée de 90°, le RIP la tourne et l'indique par une alerte (case **Tourner seul si le visuel dépasse la laize**, cochée par défaut).
 - Le bouton **Réglages** rouvre ces choix sur un travail existant ; **Appliquer et refaire le rendu** repart de l'original sans renvoyer le fichier.
+- Formats, canaux de tons directs et canal alpha : voir [Connaître les formats de fichier acceptés](rip-connaitre-les-formats-de-fichier-acceptes.md).
+- Le panneau d'envoi a aussi les blocs **Couleur**, **Édition rapide**, **Mise en file automatique**, **Blanc**, **Fond sous les repères**, **Tolérance de découpe** et **Mosaïque**, qui s'ouvrent d'un clic : voir [Régler l'édition rapide d'un travail](rip-regler-l-edition-rapide-d-un-travail.md) et [Mettre les pages en file automatiquement](rip-mettre-en-file-automatiquement.md).
+- Le **Repérage Kona** ajoute des repères autour de l'image : voir [Choisir le repérage Kona](../rip-machines/rip-choisir-le-reperage-kona.md).
 - Message « Fichier trop volumineux pour le serveur. » : voir [Un rendu échoue](../rip-depannage/rip-un-rendu-echoue.md).
 
 ## Voir aussi
@@ -38,4 +41,4 @@ Le client est connecté au serveur. Votre fichier est un PDF, un AI enregistré 
 - [Suivre les travaux et lancer l'impression](rip-suivre-les-travaux.md)
 - [Déposer un fichier dans un dossier surveillé](rip-deposer-un-fichier-dans-un-dossier-surveille.md)
 - [Régler un support et ses modes d'impression](../rip-couleur/rip-regler-un-support-et-ses-modes.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/
+- [Prendre en main l'écran du client](rip-prendre-en-main-l-ecran-du-client.md)

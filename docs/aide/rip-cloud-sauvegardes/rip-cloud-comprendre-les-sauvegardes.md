@@ -26,11 +26,12 @@ Elle sert à retrouver vos réglages après un incident.
 
 - Une sauvegarde part chaque nuit si la configuration a changé, environ 2 minutes après une modification, et à la demande d'un administrateur.
 - Durée de conservation : dernière version (Gratuit), 30 versions (À la machine), 90 jours (Atelier), 1 an (Pro). La plus récente est toujours gardée.
+- Les versions se téléchargent et se restaurent depuis cette page : voir [Télécharger une sauvegarde en ligne](rip-cloud-telecharger-une-sauvegarde.md).
+- Les règles de conservation et de quota sont dans [Comprendre la durée de conservation et la place des sauvegardes](rip-cloud-duree-de-conservation.md).
 - Si la sauvegarde est ancienne, vérifiez que le site est en ligne et que le quota n'est pas plein.
 
 ## Voir aussi
 
 - [Restaurer une sauvegarde](rip-cloud-restaurer-une-sauvegarde.md)
-- [Alertes de place et d'échec](rip-cloud-alertes-de-sauvegarde.md)
+- [Vérifier que la sauvegarde en ligne fonctionne](rip-cloud-lire-l-etat-de-la-sauvegarde.md)
 - [Choisir une offre](../rip-cloud-abonnement/rip-cloud-choisir-une-offre.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

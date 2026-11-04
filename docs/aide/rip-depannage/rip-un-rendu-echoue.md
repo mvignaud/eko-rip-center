@@ -22,6 +22,8 @@ Vous voyez le travail en échec dans le client. Pour modifier un réglage du ser
 6. Redémarrez le service : `sudo systemctl restart eko-rip-serveur`.
 7. Dans le client, cliquez **Relancer** sur le travail.
 
+   ![Travail en échec : l'inspecteur affiche « Le rendu a échoué » avec la cause, et le bouton Relancer est entouré](../images/rip-rendu-en-echec.png)
+
 ## Bon à savoir
 
 - « Disque presque plein » : il reste moins de 20 Go. Supprimez de vieux travaux, réduisez la durée de conservation (`EKO_RIP_CONSERVATION_JOURS`) ou agrandissez le disque. Sous 5 Go, le serveur efface lui-même les plus vieux travaux inactifs.
@@ -35,4 +37,4 @@ Vous voyez le travail en échec dans le client. Pour modifier un réglage du ser
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
 - [Mettre à jour le serveur](../rip-administration/rip-mettre-a-jour-le-serveur.md)
 - [Choisir le poste serveur](../rip-premiers-pas/rip-choisir-le-poste-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Comprendre le rendu par bandes d'un très grand format](rip-comprendre-le-rendu-par-bandes.md)

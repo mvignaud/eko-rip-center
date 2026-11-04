@@ -176,7 +176,7 @@ class Api:
         self._jeton = jeton
 
     def appel(self, methode, url, corps=None, multipart=None):
-        entetes = {"api_access_token": self._jeton, "Accept": "application/json"}
+        entetes = {"Authorization": f"Bearer {self._jeton}", "Accept": "application/json"}
         donnees = None
         if multipart is not None:
             limite = uuid.uuid4().hex

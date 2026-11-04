@@ -250,6 +250,11 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
     if !a("notifications_proposees") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN notifications_proposees INTEGER NOT NULL DEFAULT 0;")?;
     }
+    // Contact du compte dans la boîte « Demandes » du support (identifiant interne, jamais affiché).
+    if !a("support_source_id") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN support_source_id TEXT;")?;
+    }
+    c.execute_batch("CREATE TABLE IF NOT EXISTS webhooks_support (empreinte TEXT PRIMARY KEY, recu_le INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS demandes_support (conversation INTEGER PRIMARY KEY, compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE, attributs TEXT NOT NULL, cree_le INTEGER NOT NULL);")?;
     if !a("eko") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN eko TEXT;")?;
     }

@@ -36,9 +36,14 @@ Le serveur s'installe en deux commandes sur un PC Ubuntu. Il démarre seul et re
 - Sous Ubuntu 26.04, une version trop ancienne du serveur échoue sur chaque rendu avec « Permission denied » : mettez-la à jour.
 - Tant qu'aucun compte n'existe, tout le réseau a un accès libre. Créez ensuite les comptes.
 
+- Un PC qui sert à la fois de serveur et de poste de travail peut utiliser le script d'installation du client (`wget -qO- https://apt.e-ko.fr/rip/installer | sudo sh`), qui ajoute le même dépôt : il suffit ensuite de faire `sudo apt install eko-rip-serveur`.
+- Les réglages avancés (port, dossier des données, conservation…) se font dans `/etc/default/eko-rip-serveur` : voir [Modifier les réglages avancés du serveur](../rip-administration/rip-modifier-les-reglages-avances-du-serveur.md).
+- Les ports à laisser passer sont décrits dans [Connaître les ports réseau du serveur](rip-connaitre-les-ports-reseau-du-serveur.md).
+
 ## Voir aussi
 
 - [Créer les comptes du serveur](../rip-administration/rip-creer-les-comptes.md)
 - [Installer le client sur Linux](rip-installer-le-client-linux.md)
 - [Mettre à jour le serveur](../rip-administration/rip-mettre-a-jour-le-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/serveur/
+- [Installer le serveur sans le dépôt (paquet, Docker, binaire)](rip-installer-le-serveur-sans-depot.md)
+- [Installer le serveur avec l'image d'installation Ubuntu](rip-installer-le-serveur-avec-l-image-ubuntu.md)

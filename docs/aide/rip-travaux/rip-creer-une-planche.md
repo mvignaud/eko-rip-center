@@ -14,9 +14,13 @@ Vos travaux sont des PDF dont les pages sont plus étroites que la laize. Vous c
 
 ## Étapes
 
-1. Sur chaque page imprimable, cochez **Ajouter à la planche** et indiquez le nombre de copies.
-2. Dans le panneau **Planche**, au-dessus de la liste, réglez la **laize** (1600 mm par défaut) et l'**espacement**.
+1. Sur chaque page imprimable, cliquez le travail, cochez **Ajouter à la planche** dans l'inspecteur et indiquez le nombre de copies.
+
+   ![Inspecteur d'un travail avec la case Ajouter à la planche cochée et le nombre de copies entouré](../images/rip-planche-ajouter.png)
+2. Dans le panneau **Planche**, au-dessus de la liste, réglez la **Laize (mm)** (1600 par défaut) et l'**Espacement (mm)**.
 3. Regardez l'imposition dessinée : chaque élément à sa place, la longueur de rouleau et la part de surface utilisée.
+
+   ![Panneau Planche avec l'imposition dessinée, la longueur de rouleau et la surface utilisée](../images/rip-planche-reglages.png)
 4. Cochez **Tourner de 90° si la planche est plus courte** si vous acceptez la rotation des éléments.
 5. Au besoin, cochez **Imbriquer sur la forme des contours de découpe** pour serrer les pièces.
 6. Pour une destination de table de découpe, réglez **Marge haute (mm)** et **Marge basse (mm)**, ou cochez **Contour de toute la planche (couche NestTrimBox)**.
@@ -32,6 +36,6 @@ Vos travaux sont des PDF dont les pages sont plus étroites que la laize. Vous c
 ## Voir aussi
 
 - [Préparer une planche pour une table de découpe](../rip-machines/rip-preparer-une-planche-pour-une-table-de-decoupe.md)
-- [Gérer la file d'une machine](rip-gerer-la-file-d-une-machine.md)
+- [Affiner une planche : formes, répétition et contour global](rip-affiner-une-planche.md)
+- [Suivre une planche en préparation dans la file](rip-suivre-une-planche-dans-la-file.md)
 - [Envoyer un travail au RIP](rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

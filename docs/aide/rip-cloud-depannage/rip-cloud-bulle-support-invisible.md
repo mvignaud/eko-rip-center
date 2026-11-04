@@ -24,9 +24,9 @@ Une extension du navigateur peut la masquer.
 
 - Le lien **Support** de la barre latérale ouvre la même bulle.
 - À défaut, écrivez à contact@e-ko.rip.
+- La bulle n'est présente que sur les pages du portail, une fois connecté.
 
 ## Voir aussi
 
 - [Joindre le support en direct](rip-cloud-joindre-le-support.md)
 - [Je ne reçois pas les e-mails](rip-cloud-emails-non-recus.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

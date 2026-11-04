@@ -16,6 +16,8 @@ Vous êtes sur le réseau de l'atelier. Si vous avez un accès au serveur, ouvre
 
 1. Vérifiez que le serveur tourne : `systemctl status eko-rip-serveur` sur le serveur.
 2. Depuis votre poste, ouvrez `http://<adresse-du-serveur>:8640` dans un navigateur. La page d'état doit s'afficher.
+
+   ![Page d'état du serveur, avec sa version, ses machines et l'adresse à saisir dans le client](../images/serveur-page-etat.png)
 3. Sur Mac, autorisez le client à accéder au **réseau local** : Réglages Système › Confidentialité et sécurité › Réseau local.
 4. Dans le client, cliquez **Rechercher à nouveau**.
 5. Toujours rien : saisissez l'adresse sous **Saisir une adresse**, sous la forme `<adresse-du-serveur>:8640`.
@@ -24,6 +26,7 @@ Vous êtes sur le réseau de l'atelier. Si vous avez un accès au serveur, ouvre
 ## Bon à savoir
 
 - La découverte automatique ne traverse ni les routeurs, ni les VPN, ni certains réseaux Wi-Fi invités.
+- Sur le serveur, la variable `EKO_RIP_ANNONCE=0` désactive l'annonce du serveur sur le réseau : si elle est réglée, le serveur n'apparaît jamais dans la liste. `EKO_RIP_CLOUD_NOM` choisit le nom sous lequel il s'annonce (par défaut, le nom de la machine).
 - Le client Windows ne cherche pas encore les serveurs : il faut toujours saisir l'adresse.
 - Le navigateur n'affiche qu'une page d'état : c'est voulu. Pour l'interface complète, utilisez le client.
 - Ne jamais ouvrir le port 8640 sur Internet : la connexion n'est pas chiffrée. Pour travailler à distance, utilisez le Cloud.
@@ -33,4 +36,4 @@ Vous êtes sur le réseau de l'atelier. Si vous avez un accès au serveur, ouvre
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
 - [Connexion refusée](rip-connexion-refusee.md)
 - [Relier le serveur au Cloud](../rip-cloud-premiers-pas/rip-cloud-relier-un-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Se connecter au cloud depuis le client Mac ou Linux](../rip-premiers-pas/rip-se-connecter-au-cloud-depuis-le-client.md)

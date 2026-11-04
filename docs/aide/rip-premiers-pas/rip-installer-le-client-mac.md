@@ -26,7 +26,9 @@ Il vous faut macOS 14 (Sonoma) ou plus récent, sur un Mac Apple Silicon ou Inte
 ## Bon à savoir
 
 - Sans l'accès au réseau local, le client ne trouve pas le serveur. Vous pouvez l'accorder après coup dans Réglages Système › Confidentialité et sécurité › Réseau local.
+- Le fichier à télécharger s'appelle `E-KO.RIP.Center_<version>_universal.dmg` : il convient aux Mac Apple Silicon et Intel.
 - Pour mettre à jour, téléchargez la nouvelle version et remplacez l'application. Un client un peu plus ancien que le serveur continue de fonctionner.
+- Pour travailler à distance, voir [Se connecter au cloud depuis le client Mac ou Linux](rip-se-connecter-au-cloud-depuis-le-client.md).
 - Menus utiles : **Serveur › Changer de serveur…**, **Serveur › Administration…**, **Serveur › Se déconnecter** et **Aide › Signaler un problème…**.
 
 ## Voir aussi
@@ -34,4 +36,4 @@ Il vous faut macOS 14 (Sonoma) ou plus récent, sur un Mac Apple Silicon ou Inte
 - [Se connecter au serveur depuis un poste](rip-se-connecter-au-serveur.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
 - [Le client ne trouve pas le serveur](../rip-depannage/rip-client-ne-trouve-pas-le-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/clients/
+- [Comprendre la fenêtre du client et ses menus](rip-comprendre-la-fenetre-du-client.md)

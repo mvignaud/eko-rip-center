@@ -14,11 +14,15 @@ Vous voyez la sortie en échec dans la file de la machine. Accédez à la machin
 
 ## Étapes
 
-1. Lisez le message affiché sous la sortie.
+1. Ouvrez **Imprimés** (vue **Production**) et cliquez la sortie en échec : le message s'affiche dans la colonne **Relevé**.
 2. Pour **« La sortie vers la machine a échoué. »** : vérifiez que la machine est allumée, joignable, que son port USB existe et que le droit d'écriture est accordé.
 3. Pour **« L'imprimante signale une alerte : impression arrêtée. »** : levez l'alerte sur la machine (capot ouvert, cartouche vide…).
-4. Pour **« Envoi à l'imprimante impossible »** sur l'Epson : renommez le ton direct `White` ou `Metallic`, convertissez-le en CMJN, ou ajoutez-le à la table des tons directs (**Système › Tons directs**). Puis relancez le travail.
-5. Ouvrez l'**Historique** de la machine et cliquez **Refaire** sur la sortie.
+4. Pour **« Envoi à l'imprimante impossible. »** sur l'Epson, un message rouge s'affiche au moment de l'envoi : renommez le ton direct `White` ou `Metallic`, convertissez-le en CMJN, ou ajoutez-le à la table des tons directs (**Système › Tons directs**). Puis relancez le travail.
+
+   ![Message rouge « Envoi à l'imprimante impossible. » indiquant un ton direct sans encre sur l'Epson](../images/rip-envoi-impossible.png)
+5. Une fois la cause réglée, cliquez la sortie dans **Imprimés**, puis **Refaire** (↻), dans la colonne de boutons à gauche de la liste.
+
+   ![Sortie en échec dans Imprimés avec son message, et le bouton Refaire entouré](../images/rip-sortie-echec.png)
 
 ## Bon à savoir
 
@@ -27,9 +31,12 @@ Vous voyez la sortie en échec dans la file de la machine. Accédez à la machin
 - Si la durée estimée ne correspond pas à la réalité, mesurez la cadence réelle (m² par heure sur la laize) et saisissez-la en **Cadence** de la machine.
 - Pas de notification sur le téléphone : vérifiez l'autorisation dans les réglages du téléphone et l'interrupteur **Notifications** de l'application.
 
+- En connexion réseau directe (pilote direct), le blanc et l'argent sont pour l'instant refusés : passez par une machine en connexion **Dossier**. Une page qui porte à la fois du blanc et de l'argent provoque aussi « Envoi à l'imprimante impossible. ».
+- Le message « L'imprimante signale une alerte : impression arrêtée. » vient d'une alerte bloquante lue par SNMP (capot ouvert, cartouche vide…) : levez-la sur la machine puis **Refaire**.
+
 ## Voir aussi
 
 - [Gérer la file d'une machine](../rip-travaux/rip-gerer-la-file-d-une-machine.md)
 - [Choisir la connexion d'une machine](../rip-machines/rip-choisir-la-connexion-d-une-machine.md)
 - [Brancher l'Epson SureColor SC-S80600](../rip-machines/rip-brancher-epson-sc-s80600.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Résoudre une Epson qui ne répond pas ou sans largeur de média](rip-epson-ne-repond-pas.md)

@@ -1,0 +1,67 @@
+docs/guide/fr/cloud.md	*	rip-cloud-comprendre-le-cloud	
+docs/guide/fr/cloud.md	(introduction et schéma)	rip-cloud-comprendre-le-cloud	
+docs/guide/fr/cloud.md	À quoi sert le cloud	rip-cloud-comprendre-le-cloud	
+docs/guide/fr/cloud.md	Créer un compte	rip-cloud-creer-un-compte	
+docs/guide/fr/cloud.md	Confirmer l'adresse e-mail	rip-cloud-confirmer-adresse-email	
+docs/guide/fr/cloud.md	Rattacher un serveur RIP	rip-cloud-relier-un-serveur	
+docs/guide/fr/cloud.md	Avant de commencer (rattacher)	rip-cloud-relier-un-serveur	
+docs/guide/fr/cloud.md	Pas à pas (rattacher)	rip-cloud-relier-un-serveur	
+docs/guide/fr/cloud.md	Utiliser l'accès à distance	rip-cloud-acceder-a-distance	
+docs/guide/fr/cloud.md	Dans un client de bureau	rip-cloud-acceder-a-distance	
+docs/guide/fr/cloud.md	Dans un navigateur	rip-cloud-acceder-a-distance	
+docs/guide/fr/cloud.md	Dans l'application mobile	rip-cloud-acceder-a-distance	
+docs/guide/fr/cloud.md	Se connecter au cloud depuis les apps	rip-cloud-connecter-une-app	
+docs/guide/fr/cloud.md	Déconnecter une app	rip-cloud-deconnecter-les-apps	
+docs/guide/fr/cloud.md	E-mails de la plate-forme	rip-cloud-comprendre-les-emails	
+docs/guide/fr/cloud.md	Choisir les e-mails reçus	rip-cloud-choisir-les-emails	
+docs/guide/fr/cloud.md	Mot de passe oublié	rip-cloud-mot-de-passe-oublie	
+docs/guide/fr/cloud.md	Notifications	rip-cloud-comprendre-les-notifications	
+docs/guide/fr/cloud.md	Dans le navigateur (notifications)	rip-cloud-activer-les-notifications	
+docs/guide/fr/cloud.md	Dans les apps Mac, Linux et mobile	rip-cloud-comprendre-les-notifications	
+docs/guide/fr/cloud.md	Support en direct	rip-cloud-joindre-le-support	
+docs/guide/fr/cloud.md	Gérer son compte	rip-cloud-gerer-son-compte	
+docs/guide/fr/cloud.md	Supprimer son compte	rip-cloud-supprimer-son-compte	
+docs/guide/fr/cloud.md	Détacher un serveur	rip-cloud-detacher-un-serveur	
+docs/guide/fr/cloud.md	Depuis le serveur	rip-cloud-detacher-un-serveur	
+docs/guide/fr/cloud.md	Depuis le portail	rip-cloud-detacher-un-serveur	
+docs/guide/fr/cloud.md	Offres et abonnement	rip-cloud-choisir-une-offre	
+docs/guide/fr/cloud.md	Souscrire une offre	rip-cloud-souscrire-une-offre	
+docs/guide/fr/cloud.md	Gérer son abonnement	rip-cloud-changer-ou-resilier	
+docs/guide/fr/cloud.md	Si le parc dépasse l'offre	rip-cloud-parc-depasse-l-offre	
+docs/guide/fr/cloud.md	Sauvegardes en ligne	rip-cloud-comprendre-les-sauvegardes	
+docs/guide/fr/cloud.md	Restaurer une sauvegarde	rip-cloud-restaurer-une-sauvegarde	
+docs/guide/fr/cloud.md	Ce qui ne passe jamais par le cloud	rip-cloud-ce-qui-reste-reserve-a-l-atelier	
+docs/guide/fr/cloud.md	Sécurité en bref	rip-cloud-securite	
+docs/guide/fr/cloud.md	Questions fréquentes	rip-cloud-comprendre-les-messages-d-erreur	
+docs/guide/fr/cloud.md	Le site est « hors ligne »	rip-cloud-site-hors-ligne	
+docs/guide/fr/cloud.md	Le code a expiré ou est refusé	rip-cloud-code-expire	
+docs/guide/fr/cloud.md	Le cloud ne s'ouvre pas : « au moins un compte »	rip-cloud-cloud-demande-un-compte	
+docs/guide/fr/cloud.md	J'ai oublié mon mot de passe	rip-cloud-mot-de-passe-oublie	
+docs/guide/fr/cloud.md	Mon accès à distance est suspendu	rip-cloud-acces-suspendu	
+docs/guide/fr/cloud.md	Je ne trouve pas mes sauvegardes en ligne	rip-cloud-comprendre-les-sauvegardes	
+docs/guide/fr/cloud.md	Je ne reçois pas les e-mails	rip-cloud-emails-non-recus	
+docs/guide/fr/cloud.md	Je ne vois pas la bulle du support	rip-cloud-bulle-support-invisible	
+docs/guide/fr/cloud.md	Informations légales	rip-cloud-consulter-les-informations-legales	
+docs/fr/cloud.md	*	rip-cloud-comprendre-le-cloud	
+docs/fr/cloud.md	(introduction et schéma)	rip-cloud-comprendre-le-cloud	
+docs/fr/cloud.md	Rattacher un serveur RIP	rip-cloud-relier-un-serveur	Commande de secours sur le serveur de la plate-forme (valider un code) non reprise : réservée à l'exploitant.
+docs/fr/cloud.md	Le portail	rip-cloud-decouvrir-le-portail	Rubrique Administration (clés Google/Facebook, comptes, sites) et détails d'implémentation (cookies, CSP, base de données) réservés à l'exploitant ou aux développeurs ; protections résumées dans rip-cloud-securite.
+docs/fr/cloud.md	Utiliser l'accès à distance	rip-cloud-acceder-a-distance	
+docs/fr/cloud.md	Se connecter au cloud depuis les apps	rip-cloud-connecter-une-app	Protocole OAuth détaillé (adresses, paramètres, en-têtes) : section destinée aux développeurs, non reprise.
+docs/fr/cloud.md	E-mails de la plate-forme	rip-cloud-comprendre-les-emails	Réglages SMTP et variables d'environnement : réservés à l'exploitant de la plate-forme, non repris.
+docs/fr/cloud.md	Notifications	rip-cloud-comprendre-les-notifications	
+docs/fr/cloud.md	Pour les apps (Bearer ekoa_…)	rip-cloud-comprendre-les-notifications	API du journal et du push mobile : destinée aux développeurs ; les comportements visibles (journal 30 jours, rattachement du téléphone) sont repris.
+docs/fr/cloud.md	Web Push (navigateur)	rip-cloud-activer-les-notifications	Normes et clés VAPID : destinées aux développeurs ; limite de 10 navigateurs et refus/blocage repris.
+docs/fr/cloud.md	Offres et abonnement	rip-cloud-choisir-une-offre	
+docs/fr/cloud.md	Souscrire	rip-cloud-souscrire-une-offre	
+docs/fr/cloud.md	Changer d'offre, résilier, impayés	rip-cloud-changer-ou-resilier	
+docs/fr/cloud.md	Dépassement de l'offre	rip-cloud-parc-depasse-l-offre	
+docs/fr/cloud.md	Sauvegardes en ligne	rip-cloud-comprendre-les-sauvegardes	Requêtes entre serveur RIP et plate-forme (API, signature) : destinées aux développeurs ; comportement repris.
+docs/fr/cloud.md	Support en direct	rip-cloud-joindre-le-support	Réglage du service (jetons, politique de sécurité, calendrier de transition) : réservé à l'exploitant ; ancien support repris dans rip-cloud-ancienne-demande-de-support.
+docs/fr/cloud.md	Régler la facturation et le stockage (administration)	-	Section réservée à l'exploitant de la plate-forme (cartes Facturation et Stockage de l'Administration) : ni les clients ni les utilisateurs de l'atelier n'y ont accès.
+docs/fr/cloud.md	Côté serveur RIP : inventaire, sauvegarde et restauration	rip-cloud-comprendre-les-machines-comptees	Complété par rip-cloud-duree-de-conservation, rip-cloud-lire-l-etat-de-la-sauvegarde et rip-cloud-restaurer-une-sauvegarde ; détails d'API non repris.
+docs/fr/cloud.md	Ce qui ne passe jamais par le cloud	rip-cloud-ce-qui-reste-reserve-a-l-atelier	
+docs/fr/cloud.md	Sécurité côté plate-forme	rip-cloud-securite	
+docs/fr/cloud.md	Installer la plate-forme (VPS)	-	Installation et exploitation de la plate-forme : section destinée à l'exploitant et aux développeurs.
+docs/fr/cloud.md	Installer la plate-forme (hébergement mutualisé)	-	Installation et exploitation de la plate-forme : section destinée à l'exploitant et aux développeurs.
+docs/fr/cloud.md	Protocole du tunnel	-	Protocole technique de la connexion entre le serveur RIP et la plate-forme : section destinée aux développeurs.

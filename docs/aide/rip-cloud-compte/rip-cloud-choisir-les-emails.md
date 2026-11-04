@@ -27,11 +27,12 @@ Vous choisissez ce que vous recevez.
 - Les deux cases sont cochées par défaut.
 - Une alerte « hors ligne » part quand le serveur est injoignable depuis 15 minutes, au plus une fois par heure et par site. Un e-mail de retour en ligne suit.
 - Le résumé arrive chaque lundi vers 8 h : coupures, durée hors ligne, plus longue coupure, alertes et apps connectées.
-- L'e-mail « nouvelle app connectée » est toujours envoyé : c'est une mesure de sécurité.
+- L'e-mail « nouvelle app connectée » est toujours envoyé : c'est une mesure de sécurité, comme les e-mails de mot de passe oublié et de confirmation d'adresse.
+- Les cases ne règlent ni les e-mails de facturation, ni les alertes de sauvegarde, ni les réponses du support.
+- Les alertes suivent aussi les notifications du navigateur et des apps : voir [Comprendre les notifications du cloud](rip-cloud-comprendre-les-notifications.md).
 
 ## Voir aussi
 
+- [Consulter la liste des e-mails de la plate-forme](rip-cloud-comprendre-les-emails.md)
 - [Activer les notifications](rip-cloud-activer-les-notifications.md)
 - [Le site est hors ligne](../rip-cloud-depannage/rip-cloud-site-hors-ligne.md)
-- [Je ne reçois pas les e-mails](../rip-cloud-depannage/rip-cloud-emails-non-recus.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

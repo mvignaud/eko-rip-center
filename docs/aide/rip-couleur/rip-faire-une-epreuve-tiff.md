@@ -14,12 +14,16 @@ Le rendu du travail est fini. Aucun droit particulier n'est requis.
 
 ## Étapes
 
-1. Dans le panneau d'envoi, ouvrez la section **Épreuve TIFF**.
-2. Choisissez la **Couleur** : **Machine (CMJN)** pour les valeurs d'encre telles qu'envoyées, ou **Colorimétrique (RVB)** pour voir le rendu à l'écran.
-3. Choisissez le sort des **Tons directs** : gardés en canaux, aplatis dans la couleur, ou supprimés.
-4. Réglez la **Taille maximale** (1 à 3500 Mo, non compressée).
-5. Cochez **Faire l'épreuve TIFF de chaque page après le rendu** pour l'avoir dès la fin du rendu.
-6. Sinon, cliquez **Épreuve TIFF** dans la barre d'outils, travail choisi, pour la faire à la demande et la télécharger.
+1. Dans **Administration…**, vue **Production**, cliquez **Importer**, puis ouvrez le bloc **Épreuve TIFF**.
+2. Cochez **Faire l'épreuve TIFF de chaque page après le rendu** pour l'avoir dès la fin du rendu.
+
+   ![Bloc Épreuve TIFF avec la case Faire l'épreuve TIFF de chaque page après le rendu entourée](../images/rip-epreuve-tiff-reglages.png)
+3. Choisissez la **Couleur** : **Machine (CMJN)** pour les valeurs d'encre telles qu'envoyées, ou **Colorimétrique (RVB)** pour voir le rendu à l'écran.
+4. Choisissez le sort des **Tons directs** : **Gardés en canaux**, **Aplatis dans la couleur** ou **Supprimés**.
+5. Réglez la **Taille maximale (Mo)** (1 à 3500 Mo, non compressée).
+6. Pour un travail déjà reçu, cliquez-le dans le tableau, puis cliquez **Épreuve TIFF** dans la barre d'outils : l'épreuve se fait à la demande et se télécharge.
+
+   ![Barre d'outils avec le bouton Épreuve TIFF entouré, un travail terminé étant sélectionné](../images/rip-epreuve-bouton.png)
 
 ## Bon à savoir
 
@@ -34,4 +38,3 @@ Le rendu du travail est fini. Aucun droit particulier n'est requis.
 - [Valider un BAT avec le client](../rip-travaux/rip-valider-un-bat.md)
 - [Choisir les profils de couleur d'un travail](rip-choisir-les-profils-de-couleur.md)
 - [Envoyer un travail au RIP](../rip-travaux/rip-envoyer-un-travail.md)
-- Page détaillée : https://e-ko.rip/documentation/utilisation/

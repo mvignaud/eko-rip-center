@@ -148,7 +148,8 @@ const SCRIPT_CHAT: &str = r##"(function () {
   if (!balise || !balise.dataset.jeton) return;
   var d = balise.dataset;
   var ORIGINE = "https://help.suite-eko.com";
-  window.chatwootSettings = { locale: "fr", position: "right", type: "standard" };
+  var langue = (document.documentElement.lang || "fr").slice(0, 2).toLowerCase();
+  window.chatwootSettings = { locale: langue === "en" ? "en" : "fr", position: "right", type: "standard" };
   window.addEventListener("chatwoot:ready", function () {
     if (!window.$chatwoot) return;
     // Attributs dans le même appel que l'identité : un setCustomAttributes séparé partirait
@@ -341,6 +342,9 @@ pub async fn liste(State(r): State<Partage>, h: HeaderMap) -> Response {
             .collect();
         format!(r#"<div class="carte"><h2>Vos demandes en cours</h2><p class="meta">Ouvertes avant l'arrivée du support en direct : elles restent lisibles ici pendant 30 jours. Pour y donner suite, écrivez dans la bulle en rappelant leur référence.</p><div class="tableau"><table><thead><tr><th>Demande</th><th>File</th><th>État</th><th>Mise à jour</th></tr></thead><tbody>{lignes}</tbody></table></div></div>"#)
     };
+    if crate::demandes::actif() {
+        return crate::demandes::liste(r, s, anciennes).await;
+    }
     page_support(&s, &format!("{}{anciennes}", bandeau()))
 }
 
@@ -351,6 +355,9 @@ pub async fn demande(State(r): State<Partage>, h: HeaderMap, Chemin(code): Chemi
         Ok(s) => s,
         Err(rep) => return *rep,
     };
+    if crate::demandes::actif() && let Ok(numero) = code.parse::<u64>() {
+        return crate::demandes::demande(r, s, numero, "").await;
+    }
     let id = s.compte.id;
     let connue = {
         let c = r.base();

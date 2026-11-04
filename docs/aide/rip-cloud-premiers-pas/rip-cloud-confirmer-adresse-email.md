@@ -24,11 +24,13 @@ Cela concerne tout compte créé avec un mot de passe.
 - Tant que l'adresse n'est pas confirmée, un bandeau l'indique sur **Mes sites** et **Mon compte**. Il propose **Renvoyer l'e-mail**.
 - Relier un serveur est refusé jusqu'à la confirmation. Le reste du portail fonctionne.
 - Si l'e-mail n'arrive pas, regardez dans les courriers indésirables, puis demandez un nouvel envoi depuis le bandeau.
-- Un compte créé avec Google est confirmé d'office.
+- Un compte créé avec Google est confirmé d'office, ainsi que les comptes plus anciens.
+- Le simple fait d'ouvrir le lien ne confirme rien : c'est le clic sur le bouton de la page qui valide.
+- Vous pouvez demander au plus 3 renvois par heure.
+- Si le lien est expiré, cliquez sur **Renvoyer l'e-mail** : voir [Résoudre un lien expiré ou invalide](../rip-cloud-depannage/rip-cloud-lien-expire.md).
 
 ## Voir aussi
 
 - [Créer un compte](rip-cloud-creer-un-compte.md)
 - [Relier un serveur RIP au cloud](rip-cloud-relier-un-serveur.md)
 - [Je ne reçois pas les e-mails](../rip-cloud-depannage/rip-cloud-emails-non-recus.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

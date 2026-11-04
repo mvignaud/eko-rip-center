@@ -26,10 +26,13 @@ Le propriétaire et les administrateurs du site peuvent le faire depuis le porta
 ## Bon à savoir
 
 - Avec l'offre **Pro**, une sauvegarde peut aussi être restaurée vers un **autre site** du même propriétaire.
-- La sauvegarde ne contient ni les travaux ni les comptes.
+- Voir [Restaurer une sauvegarde vers un autre site](rip-cloud-restaurer-vers-un-autre-site.md) pour cet usage.
+- La sauvegarde ne contient ni les travaux ni les comptes : après une restauration, les comptes du serveur ne changent pas.
+- Le serveur reçoit l'ordre par la connexion avec la plate-forme, vérifie qu'il en vient bien (ordre signé, valable quelques minutes, utilisable une seule fois), télécharge l'archive et l'applique. Un ordre sans signature valide est refusé avec le message « Ordre du cloud refusé : signature absente, fausse ou périmée. »
+- Un e-mail « Sauvegarde restaurée » prévient le propriétaire et les administrateurs.
+- Le serveur doit être en ligne : voir [Résoudre un site hors ligne](../rip-cloud-depannage/rip-cloud-site-hors-ligne.md).
 
 ## Voir aussi
 
 - [Comprendre les sauvegardes en ligne](rip-cloud-comprendre-les-sauvegardes.md)
 - [Alertes de place et d'échec](rip-cloud-alertes-de-sauvegarde.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

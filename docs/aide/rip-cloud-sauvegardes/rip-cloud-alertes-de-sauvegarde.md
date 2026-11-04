@@ -24,6 +24,8 @@ Voici comment réagir.
 
 - À 100 %, les nouvelles sauvegardes sont refusées jusqu'à ce que de la place se libère ou que l'offre change.
 - L'alerte d'échec part si aucune sauvegarde de nuit n'arrive pendant deux nuits.
+- L'alerte de place arrive à 80 % puis à 100 % d'utilisation du stockage de l'offre.
+- Le résumé hebdomadaire reprend l'état des sauvegardes de chaque site.
 - Ces alertes sont indépendantes des cases d'e-mails de **Mon compte**.
 
 ## Voir aussi
@@ -31,4 +33,4 @@ Voici comment réagir.
 - [Comprendre les sauvegardes en ligne](rip-cloud-comprendre-les-sauvegardes.md)
 - [Changer d'offre ou résilier](../rip-cloud-abonnement/rip-cloud-changer-ou-resilier.md)
 - [Le site est hors ligne](../rip-cloud-depannage/rip-cloud-site-hors-ligne.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)
+- [Comprendre la durée de conservation et la place des sauvegardes](rip-cloud-duree-de-conservation.md)

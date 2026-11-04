@@ -14,13 +14,20 @@ Le serveur est installé (voir [Installer le serveur RIP](../rip-premiers-pas/ri
 
 ## Étapes
 
-1. Sur le serveur, créez le premier compte, qui sera administrateur :
+1. Dans le client, ouvrez **Administration…** : tant qu'aucun compte n'existe, un bandeau rouge **Accès libre** s'affiche sous la barre d'outils.
+
+   ![Bandeau rouge « Accès libre » sous la barre d'outils de la fenêtre Administration](../images/rip-acces-libre.png)
+2. Sur le serveur, créez le premier compte, qui sera administrateur :
    `sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter marie`
-2. Saisissez le mot de passe deux fois. Il ne s'affiche pas.
-3. Créez un compte par opérateur :
+3. Saisissez le mot de passe deux fois. Il ne s'affiche pas.
+4. Créez un compte par opérateur :
    `sudo -u eko-rip env EKO_RIP_DATA=/var/lib/eko-rip eko-rip-serveur utilisateur ajouter julie operateur`
-4. Dans le client, vérifiez que « Accès libre » en rouge a disparu de l'écran.
-5. Connectez-vous avec chaque compte pour contrôler les droits.
+5. Rechargez **Administration…** : l'écran **Connexion à E-KO RIP Center** demande l'**Utilisateur** et le **Mot de passe**.
+
+   ![Fenêtre « Connexion à E-KO RIP Center » avec les champs Utilisateur et Mot de passe](../images/rip-connexion-compte.png)
+6. Connectez-vous avec chaque compte pour contrôler les droits : le bandeau rouge a disparu et l'en-tête affiche **Connecté : <nom>**.
+
+   ![Barre d'outils après connexion, avec « Connecté : marie » et le bouton Se déconnecter](../images/rip-compte-connecte.png)
 
 ## Bon à savoir
 
@@ -35,4 +42,4 @@ Le serveur est installé (voir [Installer le serveur RIP](../rip-premiers-pas/ri
 - [Gérer les comptes du serveur](rip-gerer-les-comptes.md)
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
 - [Connexion refusée](../rip-depannage/rip-connexion-refusee.md)
-- Page détaillée : https://e-ko.rip/documentation/serveur/
+- [Modifier les réglages avancés du serveur](rip-modifier-les-reglages-avances-du-serveur.md)

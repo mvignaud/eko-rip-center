@@ -36,10 +36,11 @@ Les prix sont hors taxes, avec un nombre d'utilisateurs illimité.
 - **Abonnement annuel** : 10 mois payés pour 12 mois de service.
 - **Essai** : si votre première souscription payante est l'offre Atelier, vous avez 30 jours d'essai, sans facture avant la fin. Une carte est seulement vérifiée, sans débit. L'essai n'est offert qu'une fois par compte.
 - **Entreprise** : pour un besoin plus large, écrivez à contact@e-ko.rip.
+- Comptez les machines avec [Comprendre les machines comptées dans l'offre](rip-cloud-comprendre-les-machines-comptees.md).
 - Les conditions complètes sont dans les [CGV](https://platform.e-ko.rip/cgv).
 
 ## Voir aussi
 
 - [Souscrire une offre](rip-cloud-souscrire-une-offre.md)
+- [Profiter des 30 jours d'essai de l'offre Atelier](rip-cloud-essai-atelier.md)
 - [Quand le parc dépasse l'offre](rip-cloud-parc-depasse-l-offre.md)
-- [Documentation du cloud](https://e-ko.rip/documentation/cloud/)

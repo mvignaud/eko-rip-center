@@ -15,10 +15,12 @@ Il vous faut un compte administrateur et la Roland branchée au réseau du serve
 ## Étapes
 
 1. Réservez une adresse fixe pour la Roland sur votre routeur.
-2. Dans le client, ouvrez **Administration… › Système › Machines** et cliquez **Ajouter**.
-3. Choisissez le modèle Roland VersaCAMM VP et la laize (762 ou 1371 mm).
-4. Choisissez la connexion **Réseau (TCP)** et saisissez l'adresse et le port de la machine.
-5. Enregistrez.
+2. Dans le client, ouvrez **Administration…**, vue **Système**, section **Machines**, et cliquez **Ajouter une machine**.
+3. Choisissez le modèle **Roland VersaCAMM VP (impression + découpe)** et la **Laize (mm)** (762 ou 1371 mm).
+4. Dans **Connexion**, choisissez **Réseau (TCP)** et saisissez l'adresse dans **Adresse IP** et le **Port TCP** de la machine.
+
+   ![Fiche de la Roland VersaCAMM avec le modèle, la laize, la connexion Réseau (TCP), l'adresse et le port entourés](../images/rip-machine-roland.png)
+5. Cliquez **Enregistrer**, en bas de la section **Machines**.
 6. Vérifiez depuis le serveur : `nc -vz <adresse-de-la-roland> <port>`.
 
 ## Bon à savoir
@@ -32,4 +34,3 @@ Il vous faut un compte administrateur et la Roland branchée au réseau du serve
 - [Ajouter une machine au RIP](rip-ajouter-une-machine.md)
 - [La découpe est décalée par rapport à l'impression](../rip-depannage/rip-decoupe-decalee.md)
 - [Choisir la connexion d'une machine](rip-choisir-la-connexion-d-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/machines/roland-versacamm/

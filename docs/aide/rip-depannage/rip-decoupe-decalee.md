@@ -16,9 +16,11 @@ Il vous faut un compte administrateur et un support pour une coupe d'essai.
 
 1. Envoyez un petit travail imprimé et découpé.
 2. Mesurez l'écart entre la découpe et l'impression.
-3. Dans le client, ouvrez **Administration… › Système › Machines** et la fiche de la découpeuse.
-4. Saisissez l'écart en **Décalage X / Y** (de −20 à 20 mm).
-5. Cliquez **Enregistrer**.
+3. Dans le client, ouvrez **Administration…**, vue **Système**, section **Machines**, puis la fiche de la découpeuse.
+4. Saisissez l'écart dans **Décalage X (mm)** et **Décalage Y (mm)** (de −20 à 20 mm).
+
+   ![Fiche d'une découpeuse avec les champs Décalage X et Décalage Y entourés](../images/rip-decalage-decoupe.png)
+5. Cliquez **Enregistrer**, en bas de la section **Machines**.
 6. Refaites une coupe d'essai et ajustez si besoin.
 
 ## Bon à savoir
@@ -34,4 +36,4 @@ Il vous faut un compte administrateur et un support pour une coupe d'essai.
 - [Brancher la Mutoh Kona 1650](../rip-machines/rip-brancher-mutoh-kona-1650.md)
 - [Brancher la Graphtec FC7000](../rip-machines/rip-brancher-graphtec-fc7000.md)
 - [Ajouter une machine au RIP](../rip-machines/rip-ajouter-une-machine.md)
-- Page détaillée : https://e-ko.rip/documentation/depannage/
+- [Signaler un problème à l'équipe](rip-signaler-un-probleme.md)

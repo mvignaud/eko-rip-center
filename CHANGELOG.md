@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP : « Mes demandes ».** La page Support liste les demandes écrites du compte
+  (statut, type, réponse non lue), avec « Nouvelle demande » (type, urgence, objet, 5 pièces
+  jointes de 10 Mo), le fil de chaque demande, la réponse et « Marquer comme résolue ». E-mails
+  à chaque réponse et à la résolution, sans le texte de la réponse. La bulle suit la langue de
+  la page. *Cloud: "My requests" page (new request with attachments, thread, reply, mark as
+  resolved) and e-mail notices.*
 - **Cloud E-KO RIP : connexion avec un compte Suite E-KO.** Troisième fournisseur de connexion
   à côté de Google et Facebook (ERP en OpenID Connect, code d'autorisation avec PKCE S256) :
   se connecter, créer un compte ou lier un compte existant depuis « Mon compte ». Les comptes du

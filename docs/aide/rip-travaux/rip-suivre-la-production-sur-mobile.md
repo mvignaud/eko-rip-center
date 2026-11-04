@@ -29,16 +29,17 @@ Le téléphone est sur le Wi-Fi de l'atelier. Vous avez l'adresse du serveur et,
 
 ## Bon à savoir
 
+- Chaque onglet a son article : [File](rip-suivre-la-file-sur-l-application-mobile.md), [Machines](rip-suivre-les-machines-sur-l-application-mobile.md), [Alertes](rip-consulter-les-alertes-de-l-application-mobile.md).
 - Pour agir sur une sortie, touchez-la puis choisissez l'action : **Pause**, **Passer en tête**, **Stop**, **Lancer** ou **Reprendre**, **Relancer**.
 - **Pause** et **Stop** n'agissent que sur une sortie qui n'est pas encore partie vers la machine. Une impression déjà envoyée ne s'arrête pas depuis l'application.
 - Dans **Réglages**, **Erreurs machine** prévient des alertes, de l'encre presque vide, des échecs et des machines injoignables. **Fins d'impression** est désactivé par défaut.
-- Hors de l'atelier, touchez **Se connecter au cloud** (voir la page Cloud).
+- Hors de l'atelier, touchez **Se connecter au cloud** (voir [Se connecter au serveur depuis l'extérieur avec l'application mobile](../rip-premiers-pas/rip-connecter-l-application-mobile-via-le-cloud.md)).
 - Sans notification : vérifiez l'autorisation dans les réglages du téléphone, puis l'interrupteur **Notifications**. Se déconnecter puis se reconnecter renouvelle l'inscription.
 - Pour découvrir l'application sans serveur, touchez **Essayer le mode démo**.
 
 ## Voir aussi
 
 - [Gérer la file d'une machine](rip-gerer-la-file-d-une-machine.md)
-- [Relier le serveur au Cloud](../rip-cloud-premiers-pas/rip-cloud-relier-un-serveur.md)
 - [Se connecter au serveur depuis un poste](../rip-premiers-pas/rip-se-connecter-au-serveur.md)
-- Page détaillée : https://e-ko.rip/documentation/application-mobile/
+- [Installer l'application mobile E-KO RIP](../rip-premiers-pas/rip-installer-l-application-mobile.md)
+- [Activer et régler les notifications de l'application mobile](rip-activer-les-notifications-de-l-application-mobile.md)
