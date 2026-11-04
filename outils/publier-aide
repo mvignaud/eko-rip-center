@@ -22,6 +22,7 @@ import mimetypes
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -187,13 +188,26 @@ class Api:
             donnees = json.dumps(corps).encode()
             entetes["Content-Type"] = "application/json"
         requete = urllib.request.Request(url if url.startswith("http") else API + url, data=donnees, method=methode, headers=entetes)
-        try:
-            with urllib.request.urlopen(requete, timeout=60) as r:
-                brut = r.read()
-        except urllib.error.HTTPError as e:
-            detail = e.read()[:300].decode("utf-8", "replace")
-            raise SystemExit(f"{methode} {url.split('?')[0]} : HTTP {e.code} {detail}")
-        return json.loads(brut) if brut else {}
+        # Le support limite le débit (HTTP 429) : on attend (Retry-After, sinon 5, 10, 20… s,
+        # 2 min au plus) puis on réessaie, 8 fois au plus. Une erreur 5xx n'est réessayée qu'en
+        # lecture : une écriture a pu passer, la refaire créerait un doublon.
+        for essai in range(9):
+            try:
+                with urllib.request.urlopen(requete, timeout=60) as r:
+                    brut = r.read()
+                return json.loads(brut) if brut else {}
+            except urllib.error.HTTPError as e:
+                detail = e.read()[:300].decode("utf-8", "replace")
+                if (e.code == 429 or (e.code >= 500 and methode == "GET")) and essai < 8:
+                    try:
+                        attente = float(e.headers.get("Retry-After") or 0)
+                    except ValueError:
+                        attente = 0
+                    attente = min(max(attente, 5 * 2 ** essai), 120)
+                    print(f"{methode} {url.split('?')[0]} : HTTP {e.code}, nouvel essai dans {attente:.0f} s", flush=True)
+                    time.sleep(attente)
+                    continue
+                raise SystemExit(f"{methode} {url.split('?')[0]} : HTTP {e.code} {detail}")
 
 
 def charge(r):
@@ -213,6 +227,10 @@ def lister_articles(api, categorie_slug):
             break
         page += 1
     return tous
+
+
+def enregistrer_table(table):
+    TABLE.write_text(json.dumps(table, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def lire_table():
@@ -279,6 +297,8 @@ def publier(rub, arts, a_blanc, tout_publier):
             raise SystemExit(f"Envoi de {chemin.name} : pas de file_url dans la réponse.")
         table[empreinte] = url
         envoyees.append(chemin.name)
+        # Table écrite après chaque image : un envoi interrompu ne renverra pas les précédentes.
+        enregistrer_table(table)
         return url
 
     # 3. Articles existants dans nos sous-rubriques, par slug.
@@ -341,7 +361,7 @@ def publier(rub, arts, a_blanc, tout_publier):
                 api.appel("PATCH", f"/portals/{PORTAIL}/articles/{art['id']}", {"article": {"status": "archived"}})
 
     if not a_blanc and envoyees:
-        TABLE.write_text(json.dumps(table, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
+        enregistrer_table(table)
     bilan += [f"image envoyée : {n}" for n in envoyees]
     print("\n".join(bilan) if bilan else "Centre d'aide déjà à jour.")
     print(f"{len(arts)} articles dans le dépôt, {len(existants)} déjà dans le centre d'aide.")
