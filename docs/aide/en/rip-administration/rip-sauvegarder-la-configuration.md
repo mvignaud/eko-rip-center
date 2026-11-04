@@ -27,7 +27,7 @@ You need an administrator account. Plan a place away from the server to keep the
 ## Good to know
 
 - Before each update, the package copies the configuration by itself into `/var/lib/eko-rip/sauvegardes/`; the last 10 are kept.
-- To back up everything, accounts included, copy the `/var/lib/eko-rip` folder with the service stopped. Jobs are large and can be redone from their source files: the configuration and the accounts file (`utilisateurs.json`) are often enough.
+- To back up everything, accounts included, copy the `/var/lib/eko-rip` folder (or the one set by `EKO_RIP_DATA`, if it was changed) with the service stopped. It holds the server's accounts and secrets: keep this copy encrypted, somewhere safe. Jobs are large and can be redone from their source files: the configuration and the accounts file (`utilisateurs.json`) are often enough.
 - **Export the presets** (*Exporter les réglages*) downloads only the saved presets, to take them up on another server with **Import presets** (*Importer des réglages*).
 
 - The downloaded file is in JSON format: machine catalogue, rates, saved presets, cutting, spot colours and uploaded ICC profiles. Accounts are not in it (recreate them on the server), nor are the jobs or the queue.

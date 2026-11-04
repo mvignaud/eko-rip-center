@@ -10,17 +10,18 @@ Chaque réglage enregistré a un dossier sur le serveur. En le partageant, les p
 
 ## Avant de commencer
 
-Vous avez un terminal sur le serveur et un accès `sudo`. Chaque dossier se trouve sous `/var/lib/eko-rip/entrees/<réglage>/`.
+Vous avez un terminal sur le serveur et un accès `sudo`. Chaque dossier se trouve sous `/var/lib/eko-rip/entrees/<réglage>/` (ou sous `entrees/` du dossier choisi par `EKO_RIP_DATA`, s'il a été changé : adaptez alors le chemin ci-dessous).
 
 ## Étapes
 
 1. Installez Samba : `sudo apt install samba`.
 2. Ajoutez à la fin de `/etc/samba/smb.conf` :
    `[eko-rip]`, puis `path = /var/lib/eko-rip/entrees`, `writable = yes`, `force user = eko-rip` et `valid users = eko`, une ligne chacun.
-3. Créez le mot de passe du partage : `sudo smbpasswd -a eko`.
-4. Redémarrez le partage : `sudo systemctl restart smbd`.
-5. Sur Mac ou Linux, ouvrez `smb://<adresse-du-serveur>/eko-rip`. Sous Windows, ouvrez `\\<adresse-du-serveur>\eko-rip`.
-6. Déposez un fichier dans le dossier d'un réglage et vérifiez qu'un travail apparaît dans le client.
+3. Créez le compte système du partage, s'il n'existe pas : `sudo adduser --system --no-create-home eko`.
+4. Donnez-lui un mot de passe de partage : `sudo smbpasswd -a eko`.
+5. Redémarrez le partage : `sudo systemctl restart smbd`.
+6. Sur Mac ou Linux, ouvrez `smb://<adresse-du-serveur>/eko-rip`. Sous Windows, ouvrez `\\<adresse-du-serveur>\eko-rip`.
+7. Déposez un fichier dans le dossier d'un réglage et vérifiez qu'un travail apparaît dans le client.
 
 ![Liste des réglages enregistrés, chacun avec son dossier surveillé](../images/interface-reglages.png)
 

@@ -12,17 +12,18 @@ Each saved preset has a folder on the server. By sharing it, workstations drop f
 
 ## Before you start
 
-You have a terminal on the server and `sudo` access. Each folder is located under `/var/lib/eko-rip/entrees/<preset>/`.
+You have a terminal on the server and `sudo` access. Each folder is located under `/var/lib/eko-rip/entrees/<preset>/` (or under `entrees/` in the folder set by `EKO_RIP_DATA`, if it was changed: then adapt the path below).
 
 ## Steps
 
 1. Install Samba: `sudo apt install samba`.
 2. Add to the end of `/etc/samba/smb.conf`:
    `[eko-rip]`, then `path = /var/lib/eko-rip/entrees`, `writable = yes`, `force user = eko-rip` and `valid users = eko`, one line each.
-3. Create the share password: `sudo smbpasswd -a eko`.
-4. Restart the share: `sudo systemctl restart smbd`.
-5. On Mac or Linux, open `smb://<server-address>/eko-rip`. On Windows, open `\\<server-address>\eko-rip`.
-6. Drop a file into a preset's folder and check that a job appears in the client.
+3. Create the share's system account if it does not exist: `sudo adduser --system --no-create-home eko`.
+4. Give it a share password: `sudo smbpasswd -a eko`.
+5. Restart the share: `sudo systemctl restart smbd`.
+6. On Mac or Linux, open `smb://<server-address>/eko-rip`. On Windows, open `\\<server-address>\eko-rip`.
+7. Drop a file into a preset's folder and check that a job appears in the client.
 
 ![List of saved presets, each with its hot folder](../../images/interface-reglages.png)
 
