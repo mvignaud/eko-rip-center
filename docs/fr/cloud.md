@@ -46,9 +46,16 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
 ## Le portail
 
 - **Inscription** libre (e-mail + mot de passe de 10 caractères au moins, CGU acceptées), ou
-  **Google** / **Facebook** une fois leurs clés saisies en administration. Un e-mail déjà inscrit
-  n'est lié à Google que si Google l'a vérifié ; jamais à Facebook sans connexion préalable
-  (liaison depuis « Mon compte »).
+  **Google** / **Facebook** / **Suite E-KO** une fois leurs clés saisies en administration. Un
+  e-mail déjà inscrit n'est lié à Google ou à la Suite E-KO que s'ils l'ont vérifié ; jamais à
+  Facebook sans connexion préalable (liaison depuis « Mon compte »). Les comptes du Cloud restent
+  propres au Cloud : « Suite E-KO » n'est qu'un moyen de plus de s'y connecter.
+- **Connexion Suite E-KO** : l'ERP E-KO est un fournisseur OpenID Connect (code d'autorisation,
+  client confidentiel, PKCE S256, portée `openid profile email`). Côté ERP, créer le client avec
+  `php artisan eko:oidc:client "E-KO RIP Cloud" --redirect=<url de la plate-forme>/auth/eko/retour`,
+  puis saisir en administration l'adresse de l'ERP (https, par défaut `https://app.e-ko.fr`),
+  l'identifiant et le secret du client. Le bouton n'apparaît que lorsque l'identifiant et le
+  secret sont réglés.
 - **Mes sites** : état en ligne / hors ligne, adresse à distance, rôle, lien **Sauvegardes** ;
   rattacher (autant de sites que l'offre en comprend), retirer (le propriétaire ; tunnel coupé
   aussitôt).
@@ -56,7 +63,7 @@ Réglages (`/etc/default/eko-rip-serveur`) : `EKO_RIP_CLOUD_URL` (autre plate-fo
   d'offre ou résilier. Voir « Offres et abonnement ».
 - **Mon compte** : connexions liées, suppression du compte (et des sites possédés).
 - **Administration** (super-administrateur, donné par `eko-rip-cloud admin <e-mail>` sur le VPS) :
-  clés Google et Facebook (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
+  clés Google, Facebook et Suite E-KO (les secrets ne sont jamais réaffichés), avec les URL à déclarer chez
   eux (redirection, confidentialité, CGU, suppression des données) ; liste des sites (retirer) et
   des comptes (suspendre : ses sessions sont fermées).
 - **Support** : ouvre la bulle du support en direct (voir « Support en direct »).
@@ -82,7 +89,7 @@ une page y est isolée (`sandbox`, pas de script) : préférer l'adresse propre 
 ## Se connecter au cloud depuis les apps
 
 Sur l'écran de connexion, une app propose **Serveur local** ou **Se connecter au cloud**. Le
-second ouvre le navigateur sur la plate-forme (mot de passe, Google ou Facebook), demande
+second ouvre le navigateur sur la plate-forme (mot de passe, Google, Facebook ou Suite E-KO), demande
 d'autoriser l'app, puis revient à l'app, qui affiche les sites du compte : un clic ouvre le
 serveur RIP, **sans second mot de passe**. Les droits viennent du rôle sur le site, donné dans
 le portail : propriétaire ou administrateur → administrateur du RIP ; opérateur → opérateur ;
@@ -135,7 +142,7 @@ s'écrit au journal, sans secret) :
   (24 heures, usage unique ; le clic sur la page confirme, la simple ouverture ne consomme rien).
   Tant qu'elle n'est pas confirmée, un bandeau sur « Mes sites » et « Mon compte » propose de
   renvoyer l'e-mail (3 par heure) et rattacher un serveur est refusé ; le reste fonctionne.
-  Les comptes existants et ceux créés par Google (e-mail vérifié) sont confirmés d'office.
+  Les comptes existants et ceux créés par Google ou la Suite E-KO (e-mail vérifié) sont confirmés d'office.
 - **Site hors ligne** : le tunnel est fermé depuis 15 minutes → e-mail aux propriétaires et
   administrateurs du site, puis « de retour en ligne » (seulement si l'alerte est partie). Au plus
   une alerte par site et par heure.
@@ -166,7 +173,7 @@ pushs partent même sans SMTP réglé.
 
 **Première connexion** : sur chaque poste, les apps demandent l'autorisation d'afficher des
 notifications juste après la première connexion au cloud (Mac, Linux, Windows, mobile). Sur le
-portail, après la première connexion (mot de passe, Google ou Facebook, et juste après
+portail, après la première connexion (mot de passe, Google, Facebook ou Suite E-KO, et juste après
 l'inscription), « Mes sites » propose **Recevoir les alertes sur cet ordinateur ?** avec
 **Activer** (le navigateur demande l'autorisation, puis s'inscrit) et **Plus tard**. Le bandeau
 n'apparaît que si le navigateur gère le Web Push et que l'autorisation n'a pas encore été

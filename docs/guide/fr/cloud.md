@@ -27,7 +27,7 @@ Le portail de la plate-forme se trouve à l'adresse <https://platform.e-ko.rip>.
 3. Saisir le nom (ou le nom de l'atelier), l'adresse e-mail et un mot de passe d'au moins 10 caractères.
 4. Accepter les conditions d'utilisation, puis valider.
 
-Si la page propose **Google** ou **Facebook**, ces boutons permettent aussi de s'inscrire sans mot de passe.
+Si la page propose **Google**, **Facebook** ou **Suite E-KO**, ces boutons permettent aussi de s'inscrire sans mot de passe. Le compte créé reste un compte de la plate-forme, distinct de celui de la Suite E-KO.
 
 ### Confirmer l'adresse e-mail
 
@@ -39,7 +39,7 @@ Un e-mail de confirmation est envoyé à l'inscription par mot de passe.
 
 Tant que l'adresse n'est pas confirmée, un bandeau l'indique sur **Mes sites** et **Mon compte**. Il propose **Renvoyer l'e-mail**. Rattacher un serveur est refusé jusqu'à la confirmation. Le reste du portail fonctionne.
 
-Un compte créé avec Google est confirmé d'office.
+Un compte créé avec Google ou avec la Suite E-KO est confirmé d'office.
 
 > [!TIP]
 > Si l'e-mail n'arrive pas, regarder dans les courriers indésirables, puis demander un nouvel envoi depuis le bandeau.
@@ -112,7 +112,7 @@ Saisir l'adresse du site dans le champ **Serveur**, ou utiliser **Se connecter a
 Les apps Mac, Linux et mobile proposent un bouton **Se connecter au cloud** sur leur écran de connexion. Il évite de saisir une adresse et un second mot de passe.
 
 1. Cliquer sur **Se connecter au cloud**. Le navigateur s'ouvre sur la plate-forme.
-2. Se connecter avec son compte (mot de passe, Google ou Facebook).
+2. Se connecter avec son compte (mot de passe, Google, Facebook ou Suite E-KO).
 3. Autoriser l'application quand le portail le demande.
 4. Revenir à l'application : elle affiche la liste des sites du compte, en ligne ou non.
 5. Choisir le site voulu.
@@ -223,7 +223,7 @@ Chaque réponse de l'équipe est annoncée par l'e-mail « Nouvelle réponse à 
 **Mon compte** regroupe :
 
 - le nom, l'adresse e-mail et la date d'inscription ;
-- les connexions liées (mot de passe, Google, Facebook) ;
+- les connexions liées (mot de passe, Google, Facebook, Suite E-KO) ; un compte existant se lie depuis **Mon compte**, avec **lier mon compte Suite E-KO** ;
 - les cases d'e-mails et la carte **Notifications sur cet appareil** ;
 - la liste des **Apps connectées** ;
 - la suppression du compte.

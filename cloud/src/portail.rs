@@ -1,6 +1,6 @@
 //! Portail web de la plate-forme (`platform.e-ko.rip`) : inscription, connexion (mot de passe,
-//! Google, Facebook), « Mes sites » (rattacher un serveur par son code, retirer), compte,
-//! espace super-administrateur (clés Google / Facebook, comptes, sites), pages légales.
+//! Google, Facebook, Suite E-KO), « Mes sites » (rattacher un serveur par son code, retirer), compte,
+//! espace super-administrateur (clés Google / Facebook / Suite E-KO, comptes, sites), pages légales.
 //!
 //! Pages rendues côté serveur, sans script (sauf l'inscription aux notifications du navigateur,
 //! qui a besoin de l'API Push). Toute requête POST doit venir de la plate-forme
@@ -318,7 +318,10 @@ fn boutons_fournisseurs(r: &Partage, verbe: &str, suite: &str) -> String {
     if base::reglage(&b, "facebook_app_id").ok().flatten().is_some() && base::reglage(&b, "facebook_secret").ok().flatten().is_some() {
         html.push_str(&format!(r#"<a class="bouton discret" href="/auth/facebook{suite}">{verbe} avec Facebook</a>"#));
     }
-    if html.is_empty() { String::new() } else { format!(r#"<div class="fournisseurs">{html}</div><p class="meta">En continuant avec Google ou Facebook, vous acceptez les <a href="/cgu">CGU</a> et la <a href="/confidentialite">politique de confidentialité</a>.</p>"#) }
+    if base::reglage(&b, "eko_client_id").ok().flatten().is_some() && base::reglage(&b, "eko_secret").ok().flatten().is_some() {
+        html.push_str(&format!(r#"<a class="bouton discret" href="/auth/eko{suite}">{verbe} avec Suite E-KO</a>"#));
+    }
+    if html.is_empty() { String::new() } else { format!(r#"<div class="fournisseurs">{html}</div><p class="meta">En continuant avec un compte externe, vous acceptez les <a href="/cgu">CGU</a> et la <a href="/confidentialite">politique de confidentialité</a>.</p>"#) }
 }
 
 fn formulaire_inscription(r: &Partage, erreur: &str, email: &str, nom: &str) -> String {
@@ -950,13 +953,14 @@ pub async fn mon_compte(State(r): State<Partage>, h: HeaderMap, Query(q): Query<
     };
     let message = if q.get("ok").map(String::as_str) == Some("applis") { r#"<p class="ok">Toutes les apps ont été déconnectées.</p>"# } else { message };
     let corps = format!(
-        r#"<h1>Mon compte</h1>{message}{bandeau}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}</ul></div>{carte_emails}{carte_navigateurs}{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
+        r#"<h1>Mon compte</h1>{message}{bandeau}<div class="carte"><p><strong>{}</strong><br>{}</p><p class="meta">Inscrit le {}</p><h2>Connexions</h2><ul><li>Mot de passe : {}</li>{}{}{}</ul></div>{carte_emails}{carte_navigateurs}{carte_applis}<div class="carte"><h2>Supprimer mon compte</h2><p>Le compte, ses droits et <strong>les sites dont vous êtes propriétaire</strong> sont effacés ; leur accès à distance s'arrête aussitôt. Irréversible.</p><form method="post" action="/compte/supprimer">{}<label class="case"><input type="checkbox" name="confirmer" value="1" required> <span>Je confirme la suppression définitive de mon compte.</span></label><button class="danger" type="submit">Supprimer mon compte</button></form></div>"#,
         echapper(&c.nom),
         echapper(&c.email),
         date(Some(c.cree_le)),
-        if c.a_mot_de_passe { "oui" } else { "non (connexion par Google ou Facebook)" },
+        if c.a_mot_de_passe { "oui" } else { "non (connexion par un compte externe)" },
         lien("google", "Google", c.google),
         lien("facebook", "Facebook", c.facebook),
+        lien("eko", "Suite E-KO", c.eko),
         hidden_csrf(&s),
         bandeau = bandeau_confirmation(&r, &s, "/compte"),
         carte_emails = carte_emails(&s),
@@ -1096,6 +1100,13 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
 <p class="meta">Paramètres de base : URL de la politique de confidentialité <code>{url}/confidentialite</code>, URL des conditions de service <code>{url}/cgu</code>, URL des instructions de suppression des données <code>{url}/confidentialite#suppression</code>. Autorisations : <code>email</code>, <code>public_profile</code>.</p>
 <label>ID de l'app<input type="text" name="facebook_app_id" value="{fid}" autocomplete="off"></label>
 <label>Clé secrète de l'app ({fs})<input type="password" name="facebook_secret" autocomplete="new-password"></label>
+<h2>Connexion Suite E-KO</h2>
+<p class="meta">ERP E-KO (fournisseur OpenID Connect, code d'autorisation avec secret). Sur le serveur de l'ERP, créer le client :</p>
+<p><code>php artisan eko:oidc:client "E-KO RIP Cloud" --redirect={url}/auth/eko/retour</code></p>
+<p>URI de redirection à déclarer : <code>{url}/auth/eko/retour</code>. Portée demandée : <code>openid profile email</code>. Recopier ici l'identifiant et le secret affichés par la commande.</p>
+<label>Adresse de l'ERP (https, par défaut <code>https://app.e-ko.fr</code>)<input type="url" name="eko_url" value="{eurl}" placeholder="https://app.e-ko.fr" autocomplete="off"></label>
+<label>Identifiant du client<input type="text" name="eko_client_id" value="{eid}" autocomplete="off"></label>
+<label>Secret du client ({es})<input type="password" name="eko_secret" autocomplete="new-password"></label>
 <label class="case"><input type="checkbox" name="effacer" value="1"> <span>Effacer les codes secrets enregistrés</span></label>
 <button type="submit">Enregistrer</button></form></div>
 <div class="carte"><h2>Sites ({ns})</h2><div class="tableau"><table><thead><tr><th>Site</th><th>Propriétaire</th><th>État</th><th>Dernière connexion</th><th></th></tr></thead><tbody>{lignes_sites}</tbody></table></div></div>
@@ -1105,6 +1116,9 @@ pub async fn admin(State(r): State<Partage>, h: HeaderMap, Query(q): Query<HashM
         gs = secret("google_secret"),
         fid = echapper(&valeur("facebook_app_id")),
         fs = secret("facebook_secret"),
+        eurl = echapper(&valeur("eko_url")),
+        eid = echapper(&valeur("eko_client_id")),
+        es = secret("eko_secret"),
         domaine = echapper(r.config.url_publique.split("://").nth(1).unwrap_or("")),
         ns = tous.len(),
         installations = carte_installations(&r.statistiques_installations()),
@@ -1348,9 +1362,18 @@ pub async fn regler_oauth(State(r): State<Partage>, h: HeaderMap, Form(f): Champ
     if !csrf_ok(&s, &f) {
         return refuse_origine();
     }
+    // Adresse de l'ERP : https exigé, sans « / » final ; vide = adresse par défaut.
+    // Vérifiée avant toute écriture : un formulaire refusé ne change rien.
+    let eko_url = champ(&f, "eko_url");
+    let eko_url = eko_url.trim().trim_end_matches('/');
+    if !eko_url.is_empty() && url_eko_valide(eko_url).is_none() {
+        return erreur_page(&r, Some(&s), "Adresse de l'ERP invalide : https:// exigé, sans chemin.");
+    }
     let b = r.base();
     let mut ok = base::regler(&b, "google_client_id", &champ(&f, "google_client_id")).is_ok() && base::regler(&b, "facebook_app_id", &champ(&f, "facebook_app_id")).is_ok();
-    for cle in ["google_secret", "facebook_secret"] {
+    ok &= base::regler(&b, "eko_client_id", &champ(&f, "eko_client_id")).is_ok();
+    ok &= base::regler(&b, "eko_url", eko_url).is_ok();
+    for cle in ["google_secret", "facebook_secret", "eko_secret"] {
         let v = champ(&f, cle);
         if champ(&f, "effacer") == "1" {
             ok &= base::regler(&b, cle, "").is_ok();
@@ -1396,20 +1419,52 @@ pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<S
 
 // ————— Google et Facebook —————
 
+/// Adresse de l'ERP par défaut (fournisseur Suite E-KO).
+const ERP_PAR_DEFAUT: &str = "https://app.e-ko.fr";
+
 struct Fournisseur {
     nom: &'static str,
+    /// Libellé dans les messages.
+    libelle: &'static str,
+    /// URL d'autorisation ; pour `eko`, chemin à ajouter à l'adresse de l'ERP.
     autorisation: &'static str,
     portee: &'static str,
     cle_id: &'static str,
     cle_secret: &'static str,
+    /// Fournisseur OpenID Connect dont l'adresse est un réglage (`eko_url`), avec PKCE (S256).
+    erp: bool,
 }
 
 fn fournisseur(nom: &str) -> Option<Fournisseur> {
     match nom {
-        "google" => Some(Fournisseur { nom: "google", autorisation: "https://accounts.google.com/o/oauth2/v2/auth", portee: "openid email profile", cle_id: "google_client_id", cle_secret: "google_secret" }),
-        "facebook" => Some(Fournisseur { nom: "facebook", autorisation: "https://www.facebook.com/dialog/oauth", portee: "email,public_profile", cle_id: "facebook_app_id", cle_secret: "facebook_secret" }),
+        "google" => Some(Fournisseur { nom: "google", libelle: "Google", autorisation: "https://accounts.google.com/o/oauth2/v2/auth", portee: "openid email profile", cle_id: "google_client_id", cle_secret: "google_secret", erp: false }),
+        "facebook" => Some(Fournisseur { nom: "facebook", libelle: "Facebook", autorisation: "https://www.facebook.com/dialog/oauth", portee: "email,public_profile", cle_id: "facebook_app_id", cle_secret: "facebook_secret", erp: false }),
+        "eko" => Some(Fournisseur { nom: "eko", libelle: "Suite E-KO", autorisation: "/oauth/authorize", portee: "openid profile email", cle_id: "eko_client_id", cle_secret: "eko_secret", erp: true }),
         _ => None,
     }
+}
+
+/// Adresse de l'ERP si elle est acceptable : `https://hôte[:port]`, sans chemin ni `/` final.
+fn url_eko_valide(url: &str) -> Option<String> {
+    let url = url.trim().trim_end_matches('/');
+    let hote = url.strip_prefix("https://")?;
+    let ok = !hote.is_empty() && hote.bytes().all(|o| o.is_ascii_alphanumeric() || matches!(o, b'.' | b'-' | b':'));
+    ok.then(|| url.to_string())
+}
+
+/// Adresse de l'ERP réglée (par défaut `https://app.e-ko.fr`) ; `None` si le réglage est invalide.
+fn url_eko(b: &rusqlite::Connection) -> Option<String> {
+    match base::reglage(b, "eko_url").ok().flatten().filter(|v| !v.trim().is_empty()) {
+        Some(v) => url_eko_valide(&v),
+        None => Some(ERP_PAR_DEFAUT.to_string()),
+    }
+}
+
+/// Vérificateur PKCE : 32 octets aléatoires en base64url (43 caractères).
+fn verificateur_pkce() -> String {
+    let mut o = [0u8; 32];
+    getrandom::fill(&mut o).expect("générateur aléatoire");
+    crate::base64url(&o)
 }
 
 fn retour(r: &Partage, f: &Fournisseur) -> String {
@@ -1422,18 +1477,27 @@ pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>,
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
     let Some(id) = base::reglage(&r.base(), f.cle_id).ok().flatten() else { return erreur_page(&r, None, "Connexion non configurée.") };
     let etat = crate::aleatoire_hex(16);
+    let (autorisation, pkce) = if f.erp {
+        let Some(base_erp) = url_eko(&r.base()) else { return erreur_page(&r, None, "Adresse de l'ERP invalide : connexion non configurée.") };
+        (format!("{base_erp}{}", f.autorisation), Some(verificateur_pkce()))
+    } else {
+        (f.autorisation.to_string(), None)
+    };
     let url = format!(
-        "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}{}",
-        f.autorisation,
+        "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}{}{}",
+        autorisation,
         encoder(&id),
         encoder(&retour(&r, &f)),
         encoder(f.portee),
         etat,
-        if f.nom == "google" { "&prompt=select_account" } else { "" }
+        if f.nom == "google" { "&prompt=select_account" } else { "" },
+        pkce.as_deref().map_or(String::new(), |v| format!("&code_challenge={}&code_challenge_method=S256", crate::applis::defi_de(v)))
     );
     let mut rep = Redirect::to(&url).into_response();
     let secure = if https(&r) { "; Secure" } else { "" };
-    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}:{}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom, encoder(&suite))).expect("cookie"));
+    // Cookie : `<fournisseur>:<état>:<suite encodée>[:<vérificateur PKCE>]` (4e champ pour `eko` seulement).
+    let pkce = pkce.map_or(String::new(), |v| format!(":{v}"));
+    rep.headers_mut().append(header::SET_COOKIE, HeaderValue::from_str(&format!("{}={}:{etat}:{}{pkce}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600{secure}", nom_cookie(&r, COOKIE_OAUTH), f.nom, encoder(&suite))).expect("cookie"));
     rep
 }
 
@@ -1441,7 +1505,7 @@ pub async fn partir_oauth(State(r): State<Partage>, Chemin(nom): Chemin<String>,
 pub struct Identite {
     pub ident: String,
     pub email: Option<String>,
-    /// E-mail confirmé par le fournisseur (Google : `email_verified`).
+    /// E-mail confirmé par le fournisseur (Google, Suite E-KO : `email_verified`).
     pub email_verifie: bool,
     pub nom: String,
 }
@@ -1459,9 +1523,18 @@ fn lire_json(r: Result<ureq::http::Response<ureq::Body>, ureq::Error>) -> Option
 }
 
 /// Échange le code contre l'identité (bloquant).
-fn identite(f: &Fournisseur, id: &str, secret: &str, retour: &str, code: &str) -> Option<Identite> {
+fn identite(f: &Fournisseur, id: &str, secret: &str, retour: &str, code: &str, base_erp: Option<&str>, verificateur: Option<&str>) -> Option<Identite> {
     let a = agent();
-    if f.nom == "google" {
+    if f.erp {
+        let (base_erp, verificateur) = (base_erp?, verificateur?);
+        let jeton = lire_json(a.post(&format!("{base_erp}/oauth/token")).send_form([("grant_type", "authorization_code"), ("code", code), ("redirect_uri", retour), ("client_id", id), ("client_secret", secret), ("code_verifier", verificateur)]))?;
+        let acces = jeton["access_token"].as_str()?;
+        let moi = lire_json(a.get(&format!("{base_erp}/oauth/userinfo")).header("Authorization", &format!("Bearer {acces}")).call())?;
+        // Identité liée à l'ERP émetteur : changer `eko_url` ne peut pas relier
+        // un compte Cloud existant à l'utilisateur d'une autre instance.
+        let ident = format!("{base_erp}|{}", moi["sub"].as_str().filter(|v| !v.is_empty())?);
+        Some(Identite { ident, email: moi["email"].as_str().map(str::to_string), email_verifie: moi["email_verified"].as_bool().unwrap_or(false), nom: moi["name"].as_str().unwrap_or("").to_string() })
+    } else if f.nom == "google" {
         let jeton = lire_json(a.post("https://oauth2.googleapis.com/token").send_form([("code", code), ("client_id", id), ("client_secret", secret), ("redirect_uri", retour), ("grant_type", "authorization_code")]))?;
         let acces = jeton["access_token"].as_str()?;
         let moi = lire_json(a.get("https://openidconnect.googleapis.com/v1/userinfo").header("Authorization", &format!("Bearer {acces}")).call())?;
@@ -1485,12 +1558,12 @@ pub enum Issue {
 /// - identité déjà liée : connexion (sauf compte suspendu) ;
 /// - déjà connecté : liaison au compte ouvert ;
 /// - e-mail inconnu : nouveau compte ;
-/// - e-mail d'un compte existant : si le fournisseur l'a vérifié (Google), son titulaire
+/// - e-mail d'un compte existant : si le fournisseur l'a vérifié (Google, Suite E-KO), son titulaire
 ///   reprend le compte et tout autre accès est retiré (mot de passe, sessions) ; sinon refus.
 pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja: Option<&Compte>) -> Issue {
     if let Ok(Some(c)) = base::compte_par_fournisseur(b, fournisseur, &id.ident) {
         if deja.is_some_and(|d| d.id != c.id) {
-            return Issue::Refus("Ce compte Google ou Facebook est déjà lié à un autre compte de la plate-forme.");
+            return Issue::Refus("Ce compte externe est déjà lié à un autre compte de la plate-forme.");
         }
         return if c.suspendu { Issue::Refus("Ce compte est suspendu.") } else { Issue::Connecter(c.id) };
     }
@@ -1527,10 +1600,11 @@ pub fn resoudre(b: &rusqlite::Connection, fournisseur: &str, id: Identite, deja:
 pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<String>, Query(q): Query<HashMap<String, String>>) -> Response {
     let Some(f) = fournisseur(&nom) else { return StatusCode::NOT_FOUND.into_response() };
     let valeur = cookie(&h, &nom_cookie(&r, COOKIE_OAUTH));
-    // Cookie : `<fournisseur>:<état>:<suite encodée>`.
-    let (attendu, suite) = match valeur.as_deref().map(|v| v.splitn(3, ':').collect::<Vec<_>>()) {
-        Some(p) if p.len() >= 2 => (Some(format!("{}:{}", p[0], p[1])), suite_sure(p.get(2).map(|s| decoder(s)).as_ref())),
-        _ => (None, "/sites".to_string()),
+    // Cookie : `<fournisseur>:<état>:<suite encodée>[:<vérificateur PKCE>]` (les anciens cookies,
+    // à trois champs, restent lus).
+    let (attendu, suite, verificateur) = match valeur.as_deref().map(|v| v.splitn(4, ':').collect::<Vec<_>>()) {
+        Some(p) if p.len() >= 2 => (Some(format!("{}:{}", p[0], p[1])), suite_sure(p.get(2).map(|s| decoder(s)).as_ref()), p.get(3).filter(|v| !v.is_empty()).map(|v| v.to_string())),
+        _ => (None, "/sites".to_string(), None),
     };
     let recu = q.get("state").map(|s| format!("{}:{s}", f.nom));
     let etat_ok = matches!((&attendu, &recu), (Some(a), Some(b)) if crate::egal_constant(a, b));
@@ -1553,9 +1627,13 @@ pub async fn retour_oauth(State(r): State<Partage>, h: HeaderMap, Chemin(nom): C
     };
     let (Some(id), Some(secret)) = (id, secret) else { return avec_effacement(erreur_page(&r, s.as_ref(), "Connexion non configurée.")) };
     let url_retour = retour(&r, &f);
-    let nom_f = f.nom;
-    let ident = tokio::task::spawn_blocking(move || identite(&f, &id, &secret, &url_retour, &code)).await.ok().flatten();
-    let Some(ident) = ident else { return avec_effacement(erreur_page(&r, s.as_ref(), "Le fournisseur n'a pas confirmé la connexion : recommencer.")) };
+    let (nom_f, libelle) = (f.nom, f.libelle);
+    let base_erp = if f.erp { url_eko(&r.base()) } else { None };
+    if f.erp && (base_erp.is_none() || verificateur.is_none()) {
+        return avec_effacement(erreur_page(&r, s.as_ref(), "Connexion interrompue ou expirée : recommencer."));
+    }
+    let ident = tokio::task::spawn_blocking(move || identite(&f, &id, &secret, &url_retour, &code, base_erp.as_deref(), verificateur.as_deref())).await.ok().flatten();
+    let Some(ident) = ident else { return avec_effacement(erreur_page(&r, s.as_ref(), &format!("{libelle} n'a pas confirmé la connexion : recommencer."))) };
     let issue = resoudre(&r.base(), nom_f, ident, s.as_ref().map(|s| &s.compte));
     avec_effacement(match issue {
         Issue::Connecter(id) => connecte(&r, id, &suite),
@@ -1611,6 +1689,54 @@ mod tests {
         // Suspendu → refus.
         base::suspendre(&b, existant, true).unwrap();
         assert!(matches!(resoudre(&b, "google", ident("g1", None, false), None), Issue::Refus(_)));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn fournisseur_eko_connu_et_adresse_de_l_erp() {
+        let f = fournisseur("eko").expect("fournisseur eko");
+        assert!(f.erp && f.portee == "openid profile email" && f.cle_id == "eko_client_id" && f.cle_secret == "eko_secret");
+        assert!(fournisseur("google").is_some_and(|f| !f.erp) && fournisseur("facebook").is_some_and(|f| !f.erp));
+        assert!(fournisseur("inconnu").is_none());
+        assert_eq!(url_eko_valide("https://app.e-ko.fr/").as_deref(), Some("https://app.e-ko.fr"));
+        assert_eq!(url_eko_valide("https://erp.exemple.fr:8443").as_deref(), Some("https://erp.exemple.fr:8443"));
+        for mauvaise in ["http://app.e-ko.fr", "app.e-ko.fr", "https://", "https://a.fr/chemin", "https://a.fr?x=1", "https://u@a.fr"] {
+            assert!(url_eko_valide(mauvaise).is_none(), "{mauvaise}");
+        }
+        let (d, b) = base_test();
+        assert_eq!(url_eko(&b).as_deref(), Some(ERP_PAR_DEFAUT));
+        base::regler(&b, "eko_url", "https://erp.exemple.fr").unwrap();
+        assert_eq!(url_eko(&b).as_deref(), Some("https://erp.exemple.fr"));
+        base::regler(&b, "eko_url", "http://erp.exemple.fr").unwrap();
+        assert!(url_eko(&b).is_none(), "http refusé");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn pkce_s256() {
+        // Exemple de la RFC 7636, annexe B.
+        assert_eq!(crate::applis::defi_de("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+        let (a, b) = (verificateur_pkce(), verificateur_pkce());
+        assert!(a.len() == 43 && a != b);
+    }
+
+    #[test]
+    fn oauth_eko_cree_et_reprend_un_compte() {
+        let (d, b) = base_test();
+        // E-mail inconnu : nouveau compte confirmé, sans mot de passe.
+        let Issue::Connecter(neuf) = resoudre(&b, "eko", ident("eko-42", Some("nouveau@atelier.fr"), true), None) else { panic!() };
+        let c = base::compte_par_id(&b, neuf).unwrap().unwrap();
+        assert!(!c.a_mot_de_passe && c.eko && c.email_verifie && !c.google);
+        assert!(matches!(resoudre(&b, "eko", ident("eko-42", None, false), None), Issue::Connecter(i) if i == neuf));
+        // E-mail d'un compte existant : repris seulement si l'ERP l'a vérifié.
+        let existant = base::creer_compte(&b, "chef@atelier.fr", "Chef", Some("x")).unwrap().unwrap();
+        assert!(matches!(resoudre(&b, "eko", ident("eko-7", Some("chef@atelier.fr"), false), None), Issue::Refus(_)));
+        assert!(base::compte_par_fournisseur(&b, "eko", "eko-7").unwrap().is_none());
+        assert!(matches!(resoudre(&b, "eko", ident("eko-7", Some("chef@atelier.fr"), true), None), Issue::Connecter(i) if i == existant));
+        assert!(!base::compte_par_id(&b, existant).unwrap().unwrap().a_mot_de_passe, "accès précédents retirés");
+        // Liaison depuis « Mon compte » ; identité déjà prise ailleurs → refus.
+        let chef = base::compte_par_id(&b, existant).unwrap().unwrap();
+        assert!(matches!(resoudre(&b, "eko", ident("eko-42", None, false), Some(&chef)), Issue::Refus(_)));
         let _ = std::fs::remove_dir_all(&d);
     }
 }

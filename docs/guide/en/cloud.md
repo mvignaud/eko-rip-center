@@ -27,7 +27,7 @@ The platform's portal is at <https://platform.e-ko.rip>.
 3. Enter the name (or the shop's name), the e-mail address and a password of at least 10 characters.
 4. Accept the terms of use, then confirm.
 
-If the page offers **Google** or **Facebook**, these buttons also let you sign up without a password.
+If the page offers **Google**, **Facebook** or **Suite E-KO**, these buttons also let you sign up without a password. The account created remains a platform account, separate from your E-KO Suite one.
 
 ### Confirming the e-mail address
 
@@ -39,7 +39,7 @@ A confirmation e-mail is sent when you sign up with a password.
 
 Until the address is confirmed, a banner says so on **My sites** (*Mes sites*) and **My account** (*Mon compte*). It offers **Resend the e-mail** (*Renvoyer l'e-mail*). Linking a server is refused until the address is confirmed. The rest of the portal works.
 
-An account created with Google is confirmed automatically.
+An account created with Google or with E-KO Suite is confirmed automatically.
 
 > [!TIP]
 > If the e-mail does not arrive, look in the spam folder, then ask for a new one from the banner.
@@ -112,7 +112,7 @@ Enter the site's address in the **Server** field, or use **Sign in to the cloud*
 The Mac, Linux and mobile apps have a **Sign in to the cloud** button (*Se connecter au cloud*) on their sign-in screen. It saves you from entering an address and a second password.
 
 1. Click **Sign in to the cloud**. The browser opens on the platform.
-2. Sign in with your account (password, Google or Facebook).
+2. Sign in with your account (password, Google, Facebook or E-KO Suite).
 3. Authorise the app when the portal asks.
 4. Go back to the app: it shows the list of the account's sites, online or not.
 5. Choose the site you want.
@@ -223,7 +223,7 @@ Each reply from the team is announced by the e-mail "Nouvelle réponse à votre 
 **My account** brings together:
 
 - the name, the e-mail address and the sign-up date;
-- the linked sign-in methods (password, Google, Facebook);
+- the linked sign-in methods (password, Google, Facebook, E-KO Suite); an existing account is linked from **My account** with **lier mon compte Suite E-KO** (*link my E-KO Suite account*);
 - the e-mail boxes and the **Notifications on this device** card;
 - the list of **Connected apps**;
 - account deletion.
