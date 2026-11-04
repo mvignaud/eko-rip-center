@@ -262,8 +262,12 @@ fn avec_contact<T>(d: &Demandes, r: &Partage, cl: &Client, f: impl Fn(&str) -> R
     };
     match f(&source) {
         Err(Echec::Introuvable) => {
-            if get(d, &format!("/contacts/{source}/conversations")).is_ok() {
-                return Err(Echec::Introuvable);
+            // Seul un 404 du contact lui-même prouve sa disparition ; une panne du support ne
+            // touche pas au lien enregistré.
+            match get(d, &format!("/contacts/{source}/conversations")) {
+                Ok(_) => return Err(Echec::Introuvable),
+                Err(Echec::Service(e)) => return Err(Echec::Service(e)),
+                Err(Echec::Introuvable) => {}
             }
             let neuf = {
                 let _seul = CREATIONS.lock().unwrap_or_else(|e| e.into_inner());

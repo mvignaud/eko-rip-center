@@ -323,6 +323,12 @@ async fn mes_demandes_de_bout_en_bout() {
             assert!(m.html.contains(&format!("{URL}/support/101")), "{}", m.html);
             assert!(!m.html.contains("TEXTE-DE-L-AGENT") && !m.texte.contains("TEXTE-DE-L-AGENT"));
         }
+
+        // Compte supprimé : ses demandes gardées ici partent avec lui.
+        let compter = || rb.base().query_row("SELECT COUNT(*) FROM demandes_support", [], |l| l.get::<_, i64>(0)).unwrap();
+        assert_eq!(compter(), 1);
+        base::supprimer_compte(&rb.base(), id).unwrap();
+        assert_eq!(compter(), 0);
     })
     .await
     .unwrap();
