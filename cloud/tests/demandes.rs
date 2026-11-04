@@ -25,6 +25,8 @@ const SOURCE: &str = "source-contact-1";
 struct Faux {
     contacts: Vec<Value>,
     conversations: Vec<Value>,
+    /// Attributs reçus à la création (l'API client du support ne les rend jamais).
+    attributs: Vec<Value>,
     messages: Vec<Value>,
     /// Corps bruts des messages envoyés (type de contenu, octets).
     envois: Vec<(String, Vec<u8>)>,
@@ -61,7 +63,9 @@ fn faux_support(etat: Etat) -> Router {
         assert_eq!(s, SOURCE);
         let mut f = e.lock().unwrap();
         let id = 101 + f.conversations.len() as u64;
-        let c = json!({ "id": id, "status": "open", "custom_attributes": v["custom_attributes"], "agent_last_seen_at": 0, "contact_last_seen_at": 0 });
+        // Comme le vrai support : pas de custom_attributes dans les réponses de l'API client.
+        let c = json!({ "id": id, "status": "open", "agent_last_seen_at": 0, "contact_last_seen_at": 0 });
+        f.attributs.push(v["custom_attributes"].clone());
         f.conversations.push(c.clone());
         Json(c)
     }
@@ -229,7 +233,7 @@ async fn mes_demandes_de_bout_en_bout() {
         {
             let f = e.lock().unwrap();
             assert_eq!(f.contacts.len(), 1, "contact réutilisé");
-            let a = &f.conversations[0]["custom_attributes"];
+            let a = &f.attributs[0];
             assert_eq!((a["type_demande"].as_str(), a["urgence"].as_str(), a["objet"].as_str(), a["appli"].as_str()), (Some("technique"), Some("bloquante"), Some("Le Kona ne coupe plus"), Some("rip-cloud")));
             let (genre, octets) = &f.envois[0];
             assert!(genre.starts_with("multipart/form-data"), "{genre}");
@@ -254,6 +258,10 @@ async fn mes_demandes_de_bout_en_bout() {
         assert!(fil.corps.contains("Marquer comme résolue"));
         // Une demande d'un autre contact n'est pas lisible.
         assert_eq!(page(&b, "/support/999", &c).lieu, "/support");
+        assert_eq!(e.lock().unwrap().contacts.len(), 1, "une demande introuvable ne recrée pas le contact");
+        // Type, urgence et objet gardés côté plate-forme, puisque le support ne les rend pas.
+        assert!(fil.corps.contains("Le Kona ne coupe plus") && fil.corps.contains("Question technique") && fil.corps.contains("urgence bloquante"), "{}", fil.corps);
+        assert!(liste.corps.contains("Question technique"), "{}", liste.corps);
 
         // Réponse du client, puis clôture.
         let jeton = csrf(&fil.corps);

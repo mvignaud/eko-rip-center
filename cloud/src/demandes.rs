@@ -216,7 +216,7 @@ pub fn compte_de_source(c: &Connection, source: &str) -> Option<i64> {
 }
 
 /// Crée le contact (une fois) et rend son `source_id`.
-fn creer_contact(d: &Demandes, c: &Connection, cl: &Client) -> Result<String, Echec> {
+fn creer_contact(d: &Demandes, r: &Partage, cl: &Client) -> Result<String, Echec> {
     let id = reference(cl.compte);
     let mut corps = json!({ "identifier": id, "identifier_hash": d.empreinte(&id), "name": if cl.nom.is_empty() { &cl.email } else { &cl.nom }, "email": cl.email });
     if !cl.societe.is_empty() {
@@ -224,21 +224,27 @@ fn creer_contact(d: &Demandes, c: &Connection, cl: &Client) -> Result<String, Ec
     }
     let v = post(d, "/contacts", &corps)?;
     let source = v["source_id"].as_str().or_else(|| v["payload"]["source_id"].as_str()).filter(|s| !s.is_empty()).ok_or_else(|| Echec::Service("support : contact sans source_id".into()))?;
-    retenir_source(c, cl.compte, Some(source));
+    // Base verrouillée seulement après l'appel au support : un support lent ne bloque pas le portail.
+    retenir_source(&r.base(), cl.compte, Some(source));
     Ok(source.to_string())
 }
 
-/// Appelle `f` avec le contact du compte ; s'il a disparu côté support, il est recréé une fois.
+/// Appelle `f` avec le contact du compte. Si `f` ne trouve rien, le contact n'est recréé (une
+/// fois) que s'il a disparu lui-même : une demande introuvable (supprimée, d'un autre compte)
+/// laisse le contact et ses demandes intacts.
 fn avec_contact<T>(d: &Demandes, r: &Partage, cl: &Client, f: impl Fn(&str) -> Result<T, Echec>) -> Result<T, Echec> {
     let connue = source_connue(&r.base(), cl.compte);
     let source = match connue {
         Some(s) => s,
-        None => creer_contact(d, &r.base(), cl)?,
+        None => creer_contact(d, r, cl)?,
     };
     match f(&source) {
-        Err(Echec::Introuvable) if !source.is_empty() => {
+        Err(Echec::Introuvable) => {
+            if get(d, &format!("/contacts/{source}/conversations")).is_ok() {
+                return Err(Echec::Introuvable);
+            }
             retenir_source(&r.base(), cl.compte, None);
-            let neuf = creer_contact(d, &r.base(), cl)?;
+            let neuf = creer_contact(d, r, cl)?;
             f(&neuf)
         }
         autre => autre,
@@ -253,15 +259,45 @@ fn liste_de(v: Value) -> Vec<Value> {
     }
 }
 
+/// Type, urgence, objet et « concerne » d'une demande : l'API client du support ne les rend
+/// pas, ils sont gardés ici à la création.
+fn retenir_attributs(c: &Connection, compte: i64, id: u64, attributs: &Value) {
+    let _ = c.execute(
+        "INSERT OR REPLACE INTO demandes_support (conversation, compte, attributs, cree_le) VALUES (?1, ?2, ?3, ?4)",
+        params![id as i64, compte, attributs.to_string(), crate::maintenant() as i64],
+    );
+}
+
+/// Complète `custom_attributes` avec ce qui a été gardé à la création.
+fn completer(c: &Connection, compte: i64, conv: &mut Value) {
+    let Some(id) = conv["id"].as_u64() else { return };
+    let garde: Option<String> = c.query_row("SELECT attributs FROM demandes_support WHERE conversation = ?1 AND compte = ?2", params![id as i64, compte], |l| l.get(0)).optional().ok().flatten();
+    let Some(Value::Object(garde)) = garde.and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { return };
+    if !conv["custom_attributes"].is_object() {
+        conv["custom_attributes"] = json!({});
+    }
+    for (k, v) in garde {
+        if conv["custom_attributes"].get(&k).is_none_or(Value::is_null) {
+            conv["custom_attributes"][k] = v;
+        }
+    }
+}
+
 /// Toutes les conversations du contact (demandes et discussions de la bulle).
 pub fn lister(d: &Demandes, r: &Partage, cl: &Client) -> Result<Vec<Value>, Echec> {
-    avec_contact(d, r, cl, |s| get(d, &format!("/contacts/{s}/conversations")).map(liste_de))
+    let mut v = avec_contact(d, r, cl, |s| get(d, &format!("/contacts/{s}/conversations")).map(liste_de))?;
+    let c = r.base();
+    for conv in &mut v {
+        completer(&c, cl.compte, conv);
+    }
+    Ok(v)
 }
 
 /// Une demande et tous ses messages (pages de 20, par `before`).
 pub fn detail(d: &Demandes, r: &Partage, cl: &Client, id: u64) -> Result<(Value, Vec<Value>), Echec> {
     avec_contact(d, r, cl, |s| {
-        let conv = get(d, &format!("/contacts/{s}/conversations/{id}"))?;
+        let mut conv = get(d, &format!("/contacts/{s}/conversations/{id}"))?;
+        completer(&r.base(), cl.compte, &mut conv);
         let mut messages: Vec<Value> = Vec::new();
         let mut avant: Option<u64> = None;
         for _ in 0..25 {
@@ -300,6 +336,7 @@ pub fn creer(d: &Demandes, r: &Partage, cl: &Client, n: &Nouvelle, pieces: &[Pie
         let attributs = json!({ "type_demande": n.type_demande, "urgence": n.urgence, "objet": n.objet, "module": n.module, "appli": "rip-cloud" });
         let conv = post(d, &format!("/contacts/{s}/conversations"), &json!({ "custom_attributes": attributs }))?;
         let id = conv["id"].as_u64().ok_or_else(|| Echec::Service("support : demande sans numéro".into()))?;
+        retenir_attributs(&r.base(), cl.compte, id, &attributs);
         post_message(d, &format!("/contacts/{s}/conversations/{id}/messages"), &n.message, pieces)?;
         Ok(id)
     })
