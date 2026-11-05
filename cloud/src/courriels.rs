@@ -741,12 +741,37 @@ fn env_processus(nom: &str) -> Option<String> {
     std::env::var(nom).ok()
 }
 
-/// Message `lettre` : texte + HTML, expéditeur « E-KO RIP Cloud <no-reply@e-ko.fr> ».
+/// Logo des e-mails (PNG 128 × 128 : les messageries n'affichent pas le SVG).
+pub const LOGO_PNG: &[u8] = include_bytes!("../static/logo-courriel.png");
+/// Identifiant de la pièce jointe en ligne qui porte le logo (`src="cid:…"`).
+const LOGO_CID: &str = "logo-courriel@e-ko.rip";
+
+/// Le HTML tel qu'il part : le logo pointe sur la pièce jointe en ligne au lieu de l'adresse
+/// de la plate-forme. Beaucoup de messageries bloquent les images distantes (ou les font passer
+/// par un relais qui n'atteint pas toujours le serveur) : le logo restait cassé. Une image en
+/// ligne s'affiche sans rien charger.
+fn html_logo_en_ligne(html: &str) -> String {
+    let Some(fin) = html.find("/logo-courriel.png\"") else { return html.to_string() };
+    let Some(debut) = html[..fin].rfind("src=\"") else { return html.to_string() };
+    format!("{}src=\"cid:{LOGO_CID}\"{}", &html[..debut], &html[fin + "/logo-courriel.png\"".len()..])
+}
+
+/// Message `lettre` : texte + HTML (avec le logo en pièce jointe en ligne), expéditeur
+/// « E-KO RIP Cloud <no-reply@e-ko.fr> ».
 fn construire(expediteur: &str, c: &Courriel) -> Result<lettre::Message, String> {
-    use lettre::message::{Mailbox, MultiPart};
+    use lettre::message::header::ContentType;
+    use lettre::message::{Attachment, Mailbox, MultiPart, SinglePart};
     let de = Mailbox::new(Some(NOM_EXPEDITEUR.into()), expediteur.parse().map_err(|_| "expéditeur invalide".to_string())?);
     let a = Mailbox::new((!c.nom.is_empty()).then(|| c.nom.clone()), c.a.parse().map_err(|_| "destinataire invalide".to_string())?);
-    lettre::Message::builder().from(de).to(a).subject(c.sujet.clone()).multipart(MultiPart::alternative_plain_html(c.texte.clone(), c.html.clone())).map_err(|e| format!("message invalide : {e}"))
+    let html = html_logo_en_ligne(&c.html);
+    let partie_html = if html.contains(&format!("cid:{LOGO_CID}")) {
+        let logo = Attachment::new_inline(LOGO_CID.to_string()).body(LOGO_PNG.to_vec(), ContentType::parse("image/png").expect("type PNG"));
+        MultiPart::related().singlepart(SinglePart::html(html)).singlepart(logo)
+    } else {
+        MultiPart::related().singlepart(SinglePart::html(html))
+    };
+    let corps = MultiPart::alternative().singlepart(SinglePart::plain(c.texte.clone())).multipart(partie_html);
+    lettre::Message::builder().from(de).to(a).subject(c.sujet.clone()).multipart(corps).map_err(|e| format!("message invalide : {e}"))
 }
 
 async fn envoyer_smtp(s: &Smtp, c: &Courriel) -> Result<(), String> {
@@ -919,6 +944,14 @@ mod tests {
         let m = construire("no-reply@e-ko.fr", &c).unwrap();
         let brut = String::from_utf8_lossy(&m.formatted()).to_string();
         assert!(brut.contains("no-reply@e-ko.fr") && brut.contains("multipart/alternative") && brut.contains("text/html"), "{brut}");
+        assert!(brut.contains("multipart/related") && brut.contains("image/png") && brut.contains("Content-ID: <logo-courriel@e-ko.rip>"), "logo joint en ligne : {brut}");
         assert!(construire("pas une adresse", &c).is_err());
+    }
+
+    #[test]
+    fn logo_en_ligne() {
+        let h = r#"<td><img src="https://platform.e-ko.rip/logo-courriel.png" width="40" alt="E-KO RIP"></td>"#;
+        assert_eq!(html_logo_en_ligne(h), r#"<td><img src="cid:logo-courriel@e-ko.rip" width="40" alt="E-KO RIP"></td>"#);
+        assert_eq!(html_logo_en_ligne("<p>sans logo</p>"), "<p>sans logo</p>");
     }
 }
