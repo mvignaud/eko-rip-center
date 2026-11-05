@@ -228,6 +228,10 @@ Each reply from the team is announced by the e-mail "Nouvelle réponse à votre 
 - the list of **Connected apps**;
 - account deletion.
 
+### Changing the language
+
+The portal is available in French, English, Spanish, Italian and German. On a first visit it follows the browser's language (English if that language is not offered). To change it, click **FR**, **EN**, **ES**, **IT** or **DE** at the bottom of any page: the page reloads in the chosen language, which this browser remembers for a year. Once you are signed in, the choice also applies to the platform's e-mails. The terms and conditions, the legal notice and the privacy policy stay in French, the only binding version.
+
 ### Deleting your account
 
 1. Open **My account**.

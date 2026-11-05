@@ -16,6 +16,12 @@ parité ; d'ici là, 0.Y.Z.
 ## [Non publié]
 
 ### Ajouté
+- **Cloud E-KO RIP en cinq langues.** Le portail platform.e-ko.rip, ses e-mails et la bulle du
+  support s'affichent en français, anglais, espagnol, italien ou allemand : langue du navigateur
+  au premier passage, sélecteur FR · EN · ES · IT · DE au pied des pages, choix gardé sur le
+  compte pour les e-mails. Les textes juridiques restent en français. Catalogues
+  `cloud/langues/*.json`, contrôlés par `cloud/tests/langues.rs`.
+  *E-KO RIP Cloud portal, e-mails and support bubble in French, English, Spanish, Italian and German.*
 - **Cloud E-KO RIP : « Mes demandes ».** La page Support liste les demandes écrites du compte
   (statut, type, réponse non lue), avec « Nouvelle demande » (type, urgence, objet, 5 pièces
   jointes de 10 Mo), le fil de chaque demande, la réponse et « Marquer comme résolue ». E-mails

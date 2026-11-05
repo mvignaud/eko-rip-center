@@ -149,7 +149,7 @@ const SCRIPT_CHAT: &str = r##"(function () {
   var d = balise.dataset;
   var ORIGINE = "https://help.suite-eko.com";
   var langue = (document.documentElement.lang || "fr").slice(0, 2).toLowerCase();
-  window.chatwootSettings = { locale: langue === "en" ? "en" : "fr", position: "right", type: "standard" };
+  window.chatwootSettings = { locale: ["fr", "en", "es", "it", "de"].indexOf(langue) >= 0 ? langue : "fr", position: "right", type: "standard" };
   window.addEventListener("chatwoot:ready", function () {
     if (!window.$chatwoot) return;
     // Attributs dans le même appel que l'identité : un setCustomAttributes séparé partirait
@@ -432,7 +432,7 @@ fn fil_html(d: &Value) -> String {
             continue;
         }
         let pj = if pj.is_empty() { String::new() } else { format!(r#"<div class="pj">Pièces jointes : {}</div>"#, pj.iter().map(|n| echapper(n)).collect::<Vec<_>>().join(", ")) };
-        sortie.push_str(&format!(r#"<div class="msg{}"><div class="qui">{} · {}</div><div class="corps">{}</div>{pj}</div>"#, if moi { " moi" } else { "" }, echapper(&qui), crate::temps::date_heure_fr(quand), echapper(&corps)));
+        sortie.push_str(&format!(r#"<div class="msg{}"><div class="qui">{} · {}</div><div class="corps" translate="no">{}</div>{pj}</div>"#, if moi { " moi" } else { "" }, echapper(&qui), crate::temps::date_heure_fr(quand), echapper(&corps)));
     }
     sortie
 }

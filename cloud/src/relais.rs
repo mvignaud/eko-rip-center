@@ -65,6 +65,9 @@ pub struct Relais {
     montant_post: std::sync::atomic::AtomicBool,
     /// Sites dont l'accès à distance est suspendu (offre dépassée), tenus par `abonnements`.
     suspendus: Mutex<std::collections::HashSet<String>>,
+    /// Langue des comptes qui ne sont pas en français (e-mail en minuscules → langue), pour
+    /// leurs e-mails. Verrou à part : un envoi peut partir pendant que la base est tenue.
+    langues: Mutex<HashMap<String, crate::langues::Langue>>,
 }
 
 pub type Partage = Arc<Relais>;
@@ -75,8 +78,9 @@ pub fn nouveau(config: Config) -> Partage {
     let base = crate::base::ouvrir(&config.donnees).expect("base du portail (portail.sqlite)");
     // Clés VAPID du Web Push : créées au premier démarrage.
     crate::notifications::cle_vapid(&base).expect("clés VAPID");
+    let langues = crate::base::langues_des_comptes(&base).unwrap_or_default().into_iter().filter_map(|(e, l)| crate::langues::Langue::depuis_code(&l).map(|l| (e, l))).collect();
     let suspendus = base.prepare("SELECT site FROM sites_suspendus").and_then(|mut q| q.query_map([], |l| l.get::<_, String>(0))?.collect::<rusqlite::Result<_>>()).unwrap_or_default();
-    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")), suspendus: Mutex::new(suspendus) })
+    Arc::new(Relais { config, tunnels: Default::default(), appairages: Default::default(), installations: Mutex::new(registre), generation: AtomicU64::new(0), base: Mutex::new(base), limites: Default::default(), codes_applis: Default::default(), courriels: Mutex::new(crate::courriels::Expediteur::Smtp), push: Mutex::new(crate::notifications::Transport::Reseau), montants: Default::default(), montant_post: std::sync::atomic::AtomicBool::new(std::env::var("EKO_CLOUD_MONTANT_POST").is_ok_and(|v| v == "1")), suspendus: Mutex::new(suspendus), langues: Mutex::new(langues) })
 }
 
 impl Relais {
@@ -133,6 +137,24 @@ impl Relais {
         }
         e.0 += 1;
         e.0 <= max
+    }
+
+    /// Enregistre la langue d'un compte (base et mémoire des envois).
+    pub fn regler_langue(&self, compte: i64, l: crate::langues::Langue) {
+        let email = crate::base::regler_langue(&self.base(), compte, l.code()).ok().flatten();
+        if let Some(e) = email {
+            let mut m = self.langues.lock().unwrap_or_else(|p| p.into_inner());
+            if l == crate::langues::Langue::Fr {
+                m.remove(&e.to_lowercase());
+            } else {
+                m.insert(e.to_lowercase(), l);
+            }
+        }
+    }
+
+    /// Langue des e-mails adressés à `email` (français à défaut).
+    pub fn langue_de(&self, email: &str) -> crate::langues::Langue {
+        self.langues.lock().unwrap_or_else(|p| p.into_inner()).get(&email.to_lowercase()).copied().unwrap_or(crate::langues::Langue::Fr)
     }
 
     pub fn code_en_attente(&self, code: &str) -> bool {
@@ -224,6 +246,7 @@ pub fn routes(relais: Partage) -> Router {
         .route("/admin/comptes/{id}/suspendre", post(portail::suspendre))
         .route("/auth/{fournisseur}", get(portail::partir_oauth))
         .route("/auth/{fournisseur}/retour", get(portail::retour_oauth))
+        .route("/langue/{code}", get(portail::choisir_langue))
         .route("/{page}", get(portail::legal))
         .route("/sante", get(|| async { "ok" }))
         .route("/logo-courriel.png", get(logo_courriel))
@@ -238,6 +261,7 @@ pub fn routes(relais: Partage) -> Router {
         .route("/s/{site}", any(relayer))
         .route("/s/{site}/", any(relayer))
         .route("/s/{site}/{*reste}", any(relayer))
+        .layer(axum::middleware::from_fn_with_state(relais.clone(), traduire_portail))
         .layer(axum::middleware::map_response(entetes_du_portail))
         .layer(axum::middleware::from_fn_with_state(relais.clone(), aiguiller))
         .with_state(relais)
@@ -314,6 +338,32 @@ async fn entetes_du_portail(mut rep: Response) -> Response {
         h.insert(header::REFERRER_POLICY, HeaderValue::from_static("same-origin"));
     }
     rep
+}
+
+/// Pages du portail dans la langue du visiteur (voir `langues`). Les réponses d'atelier, de
+/// l'API et du tunnel ne sont jamais touchées ; seul le HTML est traduit.
+async fn traduire_portail(State(relais): State<Partage>, mut requete: Request, suite: axum::middleware::Next) -> Response {
+    let chemin = requete.uri().path();
+    if chemin.starts_with("/s/") || chemin.starts_with("/api/") || chemin.starts_with(CHEMIN_TUNNEL) || chemin.starts_with("/webhooks/") {
+        return suite.run(requete).await;
+    }
+    let l = crate::langues::de_la_requete(requete.headers(), relais.config.url_publique.starts_with("https://"));
+    requete.extensions_mut().insert(l);
+    let rep = suite.run(requete).await;
+    let html = rep.headers().get(header::CONTENT_TYPE).is_some_and(|v| v.as_bytes().starts_with(b"text/html"));
+    if !html {
+        return rep;
+    }
+    let (mut parties, corps) = rep.into_parts();
+    parties.headers.append(header::VARY, HeaderValue::from_static("Accept-Language, Cookie"));
+    parties.headers.insert(header::CONTENT_LANGUAGE, HeaderValue::from_static(l.code()));
+    let Ok(octets) = axum::body::to_bytes(corps, 16 * 1024 * 1024).await else { return StatusCode::INTERNAL_SERVER_ERROR.into_response() };
+    let sortie = match std::str::from_utf8(&octets) {
+        Ok(page) => crate::langues::marquer(l, &crate::langues::html(l, page)),
+        Err(_) => return Response::from_parts(parties, axum::body::Body::from(octets)),
+    };
+    parties.headers.remove(header::CONTENT_LENGTH);
+    Response::from_parts(parties, axum::body::Body::from(sortie))
 }
 
 /// Tâche de fond : demandes expirées, validations orphelines, et tunnels des sites retirés

@@ -703,7 +703,7 @@ fn fil(messages: &[Value], base: &str) -> String {
                     r#"<div class="msg{}"><div class="qui">{} · {quand}</div>{}{}</div>"#,
                     if moi { " moi" } else { "" },
                     echapper(&qui),
-                    if contenu.is_empty() { String::new() } else { format!(r#"<div class="corps">{}</div>"#, echapper(contenu)) },
+                    if contenu.is_empty() { String::new() } else { format!(r#"<div class="corps" translate="no">{}</div>"#, echapper(contenu)) },
                     if pj.is_empty() { String::new() } else { format!(r#"<div class="pj">{pj}</div>"#) },
                 ));
             }

@@ -19,6 +19,7 @@ pub mod demandes;
 pub mod erp;
 pub mod evenements;
 pub mod installations;
+pub mod langues;
 pub mod montant;
 pub mod notifications;
 pub mod offres;

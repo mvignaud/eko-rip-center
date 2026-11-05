@@ -105,6 +105,7 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 
 ### Cloud et accès à distance
 - **Connexion avec un compte Suite E-KO** : vous vous connectez au Cloud, créez un compte ou liez le vôtre avec votre compte Suite E-KO, comme avec Google ou Facebook.
+- **Portail du Cloud en cinq langues** : le portail, ses e-mails et la bulle du support s'affichent en français, anglais, espagnol, italien ou allemand, au choix en pied de page.
 - **Support et discussion en direct dans le Cloud** : vous discutez avec l'équipe d'E-KO dans la bulle du portail, sans vous présenter, l'historique de vos échanges y reste et les réponses arrivent aussi par e-mail.
 
 ### Rapports et coûts
