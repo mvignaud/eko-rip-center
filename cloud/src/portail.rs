@@ -147,6 +147,9 @@ a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: un
 .laterale .bas button { width: 100%; }
 .liens { display: flex; flex-wrap: wrap; gap: .2rem .7rem; padding: 0 .4rem; color: var(--doux); font-size: 11px; }
 .liens a { color: inherit; }
+.langues { display: inline-flex; gap: .45rem; }
+.langues a { text-decoration: none; }
+.langues a[aria-current] { font-weight: 600; text-decoration: underline; }
 .contenu { min-width: 0; }
 .outils { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: center; height: 52px; padding: 0 1rem; background: var(--barre); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-bottom: .5px solid var(--trait); font-size: 14px; font-weight: 600; }
 .app main { max-width: 46rem; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
@@ -226,7 +229,7 @@ const ICONE_SUPPORT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="curr
 
 const ICONE_ABONNEMENT: &str = r#"<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="M2.5 8h15"/><path d="M5.5 12.2h3"/></svg>"#;
 
-const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a>"#;
+const LIENS_LEGAUX: &str = r#"<span>SAS GOLDEN PRINT</span><a href="https://e-ko.rip/documentation/cloud/">Aide</a><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a><span class="langues" aria-label="Langue"><a href="/langue/fr" hreflang="fr" lang="fr" translate="no">FR</a> <a href="/langue/en" hreflang="en" lang="en" translate="no">EN</a> <a href="/langue/es" hreflang="es" lang="es" translate="no">ES</a> <a href="/langue/it" hreflang="it" lang="it" translate="no">IT</a> <a href="/langue/de" hreflang="de" lang="de" translate="no">DE</a></span>"#;
 
 pub(crate) fn page(titre: &str, s: Option<&Session>, corps: &str) -> Html<String> {
     let tete = format!(r##"<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)"><title>{} · E-KO RIP Cloud</title><style>{STYLE}</style></head>"##, echapper(titre));
@@ -341,7 +344,7 @@ pub async fn inscription(State(r): State<Partage>, h: HeaderMap) -> Response {
     page("Créer un compte", None, &formulaire_inscription(&r, "", "", "")).into_response()
 }
 
-pub async fn inscrire(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -> Response {
+pub async fn inscrire(State(r): State<Partage>, h: HeaderMap, langue: Option<axum::Extension<crate::langues::Langue>>, Form(f): Champs) -> Response {
     if !origine_ok(&r, &h) {
         return refuse_origine();
     }
@@ -366,6 +369,9 @@ pub async fn inscrire(State(r): State<Partage>, h: HeaderMap, Form(f): Champs) -
     let cree = base::creer_compte(&r.base(), &email, &nom, Some(&hachage));
     match cree {
         Ok(Some(id)) => {
+            if let Some(axum::Extension(l)) = langue {
+                r.regler_langue(id, l);
+            }
             envoyer_confirmation(&r, id, &email, &nom);
             connecte(&r, id, "/sites")
         }
@@ -838,7 +844,7 @@ pub async fn mes_sites(State(r): State<Partage>, h: HeaderMap, Query(q): Query<H
         };
         let adresse = echapper(&crate::relais::adresse_du_site(&r.config.url_publique, id));
         lignes.push_str(&format!(
-            r#"<tr><td><strong>{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a><br><a class="meta" href="/sites/{}/sauvegardes">Sauvegardes</a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+            r#"<tr><td><strong translate="no">{}</strong><br><a href="{adresse}" rel="noopener"><code>{adresse}</code></a><br><a class="meta" href="/sites/{}/sauvegardes">Sauvegardes</a></td><td class="{}">{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
             echapper(&site.nom),
             echapper(id),
             if en_ligne { "ok" } else { "meta" },
@@ -1403,9 +1409,34 @@ pub async fn suspendre(State(r): State<Partage>, h: HeaderMap, Chemin(id): Chemi
     Redirect::to("/admin?ok=compte").into_response()
 }
 
+// ————— Langue —————
+
+/// `/langue/<code>` : retient la langue (cookie d'un an, et compte s'il y a une session) et
+/// revient à la page d'où vient le visiteur.
+pub async fn choisir_langue(State(r): State<Partage>, h: HeaderMap, Chemin(code): Chemin<String>) -> Response {
+    let Some(l) = crate::langues::Langue::depuis_code(&code).filter(|_| code.len() == 2) else { return StatusCode::NOT_FOUND.into_response() };
+    if let Some(s) = session(&r, &h) {
+        r.regler_langue(s.compte.id, l);
+    }
+    let base_url = format!("{}/", r.config.url_publique);
+    let retour = h
+        .get(header::REFERER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix(&base_url))
+        .map(|p| format!("/{p}"))
+        .filter(|p| !p.starts_with("//") && !p.contains('\\') && !p.starts_with("/langue/"))
+        .unwrap_or_else(|| "/".into());
+    let secure = if https(&r) { "; Secure" } else { "" };
+    let mut rep = Redirect::to(&retour).into_response();
+    if let Ok(v) = HeaderValue::from_str(&format!("{}={}; SameSite=Lax; Path=/; Max-Age=31536000{secure}", crate::langues::nom_cookie(https(&r)), l.code())) {
+        rep.headers_mut().append(header::SET_COOKIE, v);
+    }
+    rep
+}
+
 // ————— Pages légales —————
 
-pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<String>) -> Response {
+pub async fn legal(State(r): State<Partage>, h: HeaderMap, langue: Option<axum::Extension<crate::langues::Langue>>, Chemin(nom): Chemin<String>) -> Response {
     let (titre, contenu) = match nom.as_str() {
         "mentions-legales" => ("Mentions légales", include_str!("../static/legal/mentions-legales.html")),
         "cgu" => ("Conditions générales d'utilisation", include_str!("../static/legal/cgu.html")),
@@ -1414,7 +1445,9 @@ pub async fn legal(State(r): State<Partage>, h: HeaderMap, Chemin(nom): Chemin<S
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     let s = session(&r, &h);
-    page(titre, s.as_ref(), &format!(r#"<div class="carte texte">{contenu}</div>"#)).into_response()
+    // Les textes juridiques restent en français, seule version qui fait foi.
+    let avis = if langue.is_some_and(|l| l.0 != crate::langues::Langue::Fr) { r#"<p class="meta">Ce document n'existe qu'en français ; seule la version française fait foi.</p>"# } else { "" };
+    page(titre, s.as_ref(), &format!(r#"<div class="carte texte">{avis}<div translate="no" lang="fr">{contenu}</div></div>"#)).into_response()
 }
 
 // ————— Google et Facebook —————

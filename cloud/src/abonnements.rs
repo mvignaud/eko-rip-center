@@ -244,7 +244,7 @@ fn prevenir(r: &Partage, id: i64, courriel: Courriel, push: Option<Notification>
 
 fn libelle_prix(offre: Offre, cycle: Cycle, sieges: i64) -> String {
     let n = if offre == Offre::Machine { sieges.max(1) } else { 1 };
-    format!("{} par {}{}", offres::euros(offre.prix(cycle) * n), if cycle == Cycle::Annuel { "an" } else { "mois" }, if offre == Offre::Machine { format!(" ({n} machine{})", if n > 1 { "s" } else { "" }) } else { String::new() })
+    format!("{} par {}{}", offres::euros(offre.prix(cycle) * n), if cycle == Cycle::Annuel { "an" } else { "mois" }, if offre == Offre::Machine { if n > 1 { format!(" ({n} machines)") } else { " (1 machine)".to_string() } } else { String::new() })
 }
 
 // ————— ERP : abonnement, sièges —————
@@ -842,7 +842,9 @@ pub async fn page_abonnement(State(r): State<Partage>, h: HeaderMap, Query(q): Q
     } else {
         String::new()
     };
-    let mut faits = format!("<p><strong>Offre {}</strong>{}</p>", ab.offre.nom(), if ab.actif() { format!(" · {}", offres::libelle_statut(&ab.statut)) } else { String::new() });
+    // « Offre … » à part : la phrase se traduit seule, statut ou non (voir `langues`).
+    let nom_offre = format!("Offre {}", ab.offre.nom());
+    let mut faits = format!("<p><strong>{nom_offre}</strong>{}</p>", if ab.actif() { format!(" · {}", offres::libelle_statut(&ab.statut)) } else { String::new() });
     if ab.actif() {
         faits.push_str(&format!("<p>{} · facturation {}</p>", libelle_prix(ab.offre, ab.cycle, ab.seats), ab.cycle.libelle()));
         if let Some(e) = ab.essai_fin.filter(|e| *e > crate::maintenant()) {
@@ -1251,7 +1253,7 @@ fn libelle_coupon(d: &Value) -> String {
     let quoi = match d["kind"].as_str().unwrap_or("") {
         "discount_percent" => format!("{v} % de remise"),
         "discount_amount" => format!("{v} € HT de remise"),
-        "free_period" => format!("{v} mois offert{}", if valeur > 1.0 { "s" } else { "" }),
+        "free_period" => if valeur > 1.0 { format!("{v} mois offerts") } else { format!("{v} mois offert") },
         _ => "remise".into(),
     };
     let duree = if d["is_recurring"].as_bool().unwrap_or(false) { " sur chaque facture" } else { " sur la première facture" };

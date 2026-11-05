@@ -228,6 +228,10 @@ Chaque réponse de l'équipe est annoncée par l'e-mail « Nouvelle réponse à 
 - la liste des **Apps connectées** ;
 - la suppression du compte.
 
+### Changer de langue
+
+Le portail existe en français, anglais, espagnol, italien et allemand. Au premier passage, il suit la langue du navigateur (anglais si elle n'est pas proposée). Pour en changer, cliquer sur **FR**, **EN**, **ES**, **IT** ou **DE** au pied de n'importe quelle page : la page se recharge dans la langue choisie, retenue sur ce navigateur pendant un an. Une fois connecté, ce choix vaut aussi pour les e-mails de la plate-forme. Les conditions générales, les mentions légales et la politique de confidentialité restent en français, seule version qui fait foi.
+
 ### Supprimer son compte
 
 1. Ouvrir **Mon compte**.

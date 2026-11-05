@@ -405,7 +405,9 @@ pub fn noter_travail(donnees: &Path, id: Uuid, etat: &str, code_erreur: Option<&
     }
     match o.e.travaux.get(&id) {
         Some(s) if *s == signe => return,
-        None if cree_le < o.e.depuis => {}
+        // Un travail antérieur à l'ouverture du journal n'y entre pas, sauf s'il est né d'un
+        // envoi de l'ERP : l'état peut être créé dans la seconde qui suit sa création.
+        None if cree_le < o.e.depuis && lien.is_none() => {}
         _ => {
             let mut d = json!({ "travail_uuid": id, "ref_erp": lien.map(|l| &l.ref_erp), "etat": etat, "code_erreur": code_erreur, "pages": pages });
             if let Some(l) = lien {

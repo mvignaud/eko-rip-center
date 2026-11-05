@@ -255,6 +255,10 @@ fn migrer(c: &Connection) -> rusqlite::Result<()> {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN support_source_id TEXT;")?;
     }
     c.execute_batch("CREATE TABLE IF NOT EXISTS webhooks_support (empreinte TEXT PRIMARY KEY, recu_le INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS demandes_support (conversation INTEGER PRIMARY KEY, compte INTEGER NOT NULL REFERENCES comptes(id) ON DELETE CASCADE, attributs TEXT NOT NULL, cree_le INTEGER NOT NULL);")?;
+    // Langue choisie sur le portail (e-mails dans cette langue) ; vide : français.
+    if !a("langue") {
+        c.execute_batch("ALTER TABLE comptes ADD COLUMN langue TEXT;")?;
+    }
     if !a("eko") {
         c.execute_batch("ALTER TABLE comptes ADD COLUMN eko TEXT;")?;
     }
@@ -573,6 +577,17 @@ pub fn marquer_email_verifie(c: &Connection, compte: i64) -> rusqlite::Result<()
 }
 
 /// Cases « Recevoir les alertes » et « Recevoir le résumé hebdomadaire ».
+/// Langue du compte (code `fr`, `en`, `es`, `it`, `de`).
+pub fn regler_langue(c: &Connection, compte: i64, langue: &str) -> rusqlite::Result<Option<String>> {
+    c.execute("UPDATE comptes SET langue = ?1 WHERE id = ?2", params![langue, compte])?;
+    c.query_row("SELECT email FROM comptes WHERE id = ?1", [compte], |l| l.get(0)).optional()
+}
+
+/// Langue de chaque compte qui en a choisi une : (e-mail en minuscules, code).
+pub fn langues_des_comptes(c: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    c.prepare("SELECT lower(email), langue FROM comptes WHERE langue IS NOT NULL AND langue <> 'fr'")?.query_map([], |l| Ok((l.get(0)?, l.get(1)?)))?.collect()
+}
+
 pub fn regler_preferences(c: &Connection, compte: i64, alertes: bool, resume: bool) -> rusqlite::Result<()> {
     c.execute("UPDATE comptes SET alertes = ?1, resume = ?2 WHERE id = ?3", params![alertes, resume, compte])?;
     Ok(())

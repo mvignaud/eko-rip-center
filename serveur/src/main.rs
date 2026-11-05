@@ -6262,8 +6262,8 @@ mod tests {
             let reglages = || reglages::lire(&e.config.donnees).len();
             assert_eq!(reglages(), 0);
 
-            // Sans signature, mauvaise clé, corps modifié, trop vieille ou trop neuve : 401, rien ne change.
-            for entete in [None, Some(abonnement::signature("autre-cle", maintenant, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant, br#"{"id":"autre"}"#)), Some(abonnement::signature("cle-secrete", maintenant - 301, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant + 301, corps.as_bytes())), Some("t=1,v1=zz".to_string())] {
+            // Sans signature, mauvaise clé, corps modifié, trop vieille ou trop neuve : 401, rien ne change. Marge de 60 s au-delà de la tolérance : le test peut prendre plusieurs secondes sur la CI.
+            for entete in [None, Some(abonnement::signature("autre-cle", maintenant, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant, br#"{"id":"autre"}"#)), Some(abonnement::signature("cle-secrete", maintenant - abonnement::TOLERANCE_S - 60, corps.as_bytes())), Some(abonnement::signature("cle-secrete", maintenant + abonnement::TOLERANCE_S + 60, corps.as_bytes())), Some("t=1,v1=zz".to_string())] {
                 let r = envoyer(entete.clone(), corps, true).await.unwrap();
                 assert_eq!(r.status(), StatusCode::UNAUTHORIZED, "{entete:?}");
                 assert_eq!(code(r).await, "signature_cloud_invalide");

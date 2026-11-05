@@ -146,7 +146,7 @@ a {{ color: {ACCENT}; }}
 </style>
 </head>
 <body class="fond" style="margin:0;padding:0;background-color:#f5f5f7;-webkit-text-size-adjust:100%">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">{resume}{bourrage}</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;mso-hide:all">{resume}<!-- -->{bourrage}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="fond" style="background-color:#f5f5f7"><tr><td align="center" style="padding:32px 12px">
 <table role="presentation" class="conteneur" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px">
 <tr><td style="padding:0 8px 18px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="padding-right:12px;vertical-align:middle"><img src="{url}/logo-courriel.png" width="40" height="40" alt="E-KO RIP" style="display:block;width:40px;height:40px;border:0;border-radius:9px"></td><td class="marque texte" style="vertical-align:middle;font:700 20px/1.2 {FONTE};color:#1d1d1f;letter-spacing:-.01em">E-KO RIP <span style="font-weight:400;color:{ACCENT}">Cloud</span></td></tr></table></td></tr>
@@ -452,7 +452,7 @@ pub fn paiement_refuse(url: &str, a: &str, nom: &str, etape: u8, montant_ttc: Op
         url,
         a,
         nom,
-        &Contenu { sujet: sujet.into(), resume: texte.chars().take(90).collect(), titre: titre.into(), blocs, bouton: Some(("Mettre à jour mon moyen de paiement".into(), format!("{url}/abonnement/paiement"))), lien_en_clair: false, raison: RAISON_FACTURATION.into(), preferences: false },
+        &Contenu { sujet: sujet.into(), resume: texte.into(), titre: titre.into(), blocs, bouton: Some(("Mettre à jour mon moyen de paiement".into(), format!("{url}/abonnement/paiement"))), lien_en_clair: false, raison: RAISON_FACTURATION.into(), preferences: false },
     )
 }
 
@@ -769,7 +769,21 @@ pub enum Expediteur {
     Memoire(Arc<Mutex<Vec<Courriel>>>),
 }
 
+/// Le message dans la langue `l` (rédigé en français).
+pub fn traduire(c: Courriel, l: crate::langues::Langue) -> Courriel {
+    if l == crate::langues::Langue::Fr {
+        return c;
+    }
+    Courriel { sujet: crate::langues::texte(l, &c.sujet), texte: crate::langues::lignes(l, &c.texte), html: crate::langues::html(l, &c.html), ..c }
+}
+
 impl Relais {
+    /// Le message dans la langue choisie par son destinataire sur le portail.
+    fn dans_sa_langue(&self, c: Courriel) -> Courriel {
+        let l = self.langue_de(&c.a);
+        traduire(c, l)
+    }
+
     /// Pour les tests : garde les messages en mémoire au lieu de les envoyer. Rend la boîte.
     pub fn utiliser_memoire(&self) -> Arc<Mutex<Vec<Courriel>>> {
         let boite = Arc::new(Mutex::new(Vec::new()));
@@ -788,6 +802,7 @@ impl Relais {
 
     /// Envoie hors de la requête. Sans SMTP, le message est ignoré (une ligne de journal).
     pub fn envoyer(&self, c: Courriel) {
+        let c = self.dans_sa_langue(c);
         let smtp = {
             let e = self.courriels.lock().unwrap_or_else(|p| p.into_inner());
             if let Expediteur::Memoire(boite) = &*e {
@@ -810,6 +825,7 @@ impl Relais {
 
     /// Comme `envoyer`, mais attend le résultat (e-mail d'essai de l'administration).
     pub async fn envoyer_et_attendre(&self, c: Courriel) -> Result<(), String> {
+        let c = self.dans_sa_langue(c);
         let smtp = {
             let e = self.courriels.lock().unwrap_or_else(|p| p.into_inner());
             if let Expediteur::Memoire(boite) = &*e {
