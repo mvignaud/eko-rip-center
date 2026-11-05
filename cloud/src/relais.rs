@@ -452,7 +452,7 @@ async fn statistiques_installations(State(relais): State<Partage>, entetes: Head
 async fn logo_courriel() -> Response {
     (
         [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=604800")],
-        &include_bytes!("../static/logo-courriel.png")[..],
+        crate::courriels::LOGO_PNG,
     )
         .into_response()
 }

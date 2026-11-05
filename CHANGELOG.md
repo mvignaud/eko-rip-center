@@ -56,6 +56,11 @@ parité ; d'ici là, 0.Y.Z.
   stay readable for 30 days.*
 
 ### Corrigé
+- **Cloud E-KO RIP : logo des e-mails cassé.** Le logo en tête des e-mails de la plate-forme
+  part désormais joint au message (image en ligne) au lieu d'être chargé depuis
+  platform.e-ko.rip : les messageries qui bloquent les images distantes ou les font passer par
+  un relais l'affichaient cassé. *Cloud: the e-mail header logo is now embedded in the message,
+  so it shows even when remote images are blocked.*
 - **App mobile : alertes des machines en français.** Les messages de l'imprimante (« printer
   initializing », « pause », « ink low »…) arrivaient en anglais dans les notifications et
   l'onglet Machines : le serveur les traduit. Le démarrage de l'imprimante ne notifie plus.
