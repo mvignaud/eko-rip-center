@@ -18,7 +18,10 @@
       "violenceRealisticProlongedGraphicOrSadistic": "NONE",
       "gambling": false,
       "unrestrictedWebAccess": false,
-      "seventeenPlus": false
+      "seventeenPlus": false,
+      "kidsAgeBand": null,
+      "ageRatingOverride": "NONE",
+      "koreaAgeRatingOverride": "NONE"
     },
     "info": {
       "fr-FR": {
