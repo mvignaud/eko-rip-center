@@ -1,7 +1,7 @@
 ---
 titre: Feuille de route
 description: Ce que le RIP libre E-KO RIP Center a fait, ce qui est en cours et ce qui est planifié. Page publique, mise à jour à chaque version, sans date promise.
-maj: 2026-11-04
+maj: 2026-11-05
 ---
 La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à chaque version : une fonction passe de « Planifié » à « En cours », puis à « Fait ». Les dates ne sont pas promises, car beaucoup de points attendent un essai sur une vraie machine à l'atelier. Il vous manque une fonction ? Demandez-la par [/contact/](/contact/). Il vous manque une machine ? Dites-le sur [/compatibilite/](/compatibilite/). Le code et les tickets sont sur [GitHub](https://github.com/mvignaud/eko-rip-center).
 
@@ -33,6 +33,7 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 
 ### Cloud et accès à distance
 - **Accès à distance sans VPN ni port ouvert** : vous retrouvez votre atelier depuis l'extérieur avec un compte, sans toucher à la box de l'atelier.
+- **Portail du Cloud en cinq langues** : le portail, ses e-mails et la bulle du support s'affichent en français, anglais, espagnol, italien ou allemand, au choix en pied de page.
 
 ### Rapports et coûts
 - **Consommation réelle par travail** : encre en millilitres, longueur de support et gâche sont relevées sur la machine et comparées à l'estimation, avec export CSV.
@@ -105,7 +106,6 @@ La feuille de route d'E-KO RIP Center est publique. Nous la tenons à jour à ch
 
 ### Cloud et accès à distance
 - **Connexion avec un compte Suite E-KO** : vous vous connectez au Cloud, créez un compte ou liez le vôtre avec votre compte Suite E-KO, comme avec Google ou Facebook.
-- **Portail du Cloud en cinq langues** : le portail, ses e-mails et la bulle du support s'affichent en français, anglais, espagnol, italien ou allemand, au choix en pied de page.
 - **Support et discussion en direct dans le Cloud** : vous discutez avec l'équipe d'E-KO dans la bulle du portail, sans vous présenter, l'historique de vos échanges y reste et les réponses arrivent aussi par e-mail.
 
 ### Rapports et coûts
