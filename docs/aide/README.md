@@ -51,9 +51,10 @@ article (les liens entre articles restent donc identiques), sous-rubriques dans 
 (mêmes slugs qu'en français, une catégorie étant unique par langue). L'en-tête ajoute `slug`, le slug
 anglais (unique dans tout le centre d'aide, préfixé `rip-` ou `rip-cloud-`), et `traduction_de`, le
 nom de l'article français, qui relie les deux versions dans le centre d'aide. Sections : `## Before
-you start`, `## Steps`, `## Good to know`, `## See also`. L'interface du RIP n'existe qu'en
-français : un libellé d'écran s'écrit en anglais en gras puis, à sa première mention, en français
-en italique entre parenthèses (**Print** (*Imprimer*)). Les captures sont communes aux deux langues
+you start`, `## Steps`, `## Good to know`, `## See also`. L'interface du serveur et des clients RIP
+n'existe qu'en français : un libellé d'écran s'écrit en anglais en gras puis, à sa première mention,
+en français en italique entre parenthèses (**Print** (*Imprimer*)). Le portail du Cloud, lui, est
+traduit : un nouvel article le cite avec ses libellés anglais, sans parenthèses. Les captures sont communes aux deux langues
 (`../../images/`). Un article français modifié ou ajouté l'est aussi en anglais, dans la même PR.
 
 ## Ancienne documentation d'e-ko.rip
